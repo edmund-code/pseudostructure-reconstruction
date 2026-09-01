@@ -23,6 +23,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install anndata scanpy matplotlib pytest
+      - run: pip install -e .
       - run: pytest tests
 
   segmentation-unit:

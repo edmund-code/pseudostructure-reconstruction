@@ -1,0 +1,435 @@
+================================================================================
+KIDNEY PANOPTIC SEGMENTATION — MODEL SUMMARY (v4 checkpoint)
+================================================================================
+Written 2026-07-30.
+Checkpoint:  runs/v4_panoptic/best_pq.pt   (epoch 35 of 54 run)
+Config:      configs/default.yaml  <- configs/data.yaml
+Manifest:    data/manifest_v4.csv
+
+A note on names: the CHECKPOINT is called v4 because it is the fourth training round
+of this system. The code was developed in a `model_v2/` subtree (the second-generation
+rewrite) and was promoted to the repository root once the first-generation HoVer-Net
+model was retired; the two numbers were never the same and the v2 name is now gone.
+
+
+--------------------------------------------------------------------------------
+1. WHAT IT DOES
+--------------------------------------------------------------------------------
+Input:   an H&E mouse-kidney whole-slide image at ~0.44 um/px (20x).
+Output:  every tubule and glomerulus on the slide as a SEPARATE, individually
+         outlined object, with a class label, exported as QuPath-loadable GeoJSON
+         plus a slide-wide instance map.
+
+"Panoptic instance segmentation" means two things at once:
+  - SEMANTIC: which class is this pixel?
+  - INSTANCE: which specific object is this pixel part of?
+
+The second is the hard one and the reason this is not just a pixel classifier. Two
+tubules that touch are one connected blob of "tubule" pixels. Splitting that blob
+into two counted objects is the entire problem.
+
+Classes (5, index 0 is background):
+    background
+    tubule_proximal      (annotation label "Tubules")
+    tubule_distal        (annotation label "Tubules2")
+    tubule_collecting    (annotation label "Tubules3")
+    glomerulus           (annotation label "Glomeruli")
+
+Vessel / Blood Cells / Nerve are IGNORED — see section 8.
+
+Class labels are an AUXILIARY task, not the deliverable. The stated goal is
+segmentation quality. The classes exist because the extra supervision helps the
+shared decoder and because they make the output readable in QuPath. This is why
+checkpoint selection uses a CLASS-AGNOSTIC score (section 6).
+
+
+--------------------------------------------------------------------------------
+2. ARCHITECTURE — three parts
+--------------------------------------------------------------------------------
+
+  WSI ──> [ 512 px patch ]
+             │
+             ├──> FROZEN ENCODER (OpenMidnight ViT-g/14 with registers)
+             │       518 px input -> 37x37 tokens, 1536-dim
+             │       intermediate blocks [9, 19, 29, 39] pulled out as a pyramid
+             │       0 trainable parameters
+             │
+             ├──> TRAINABLE RGB STEM (strides 1, 2, 4, 8, 16)
+             │       channels [32, 64, 128, 192, 256]
+             │
+             v
+        FPN FUSION + DECODER  (7.31 M trainable parameters)
+             ViT tokens enter at stride 16; decoder climbs back to STRIDE 1
+             decoder channels [192, 128, 96, 64], GroupNorm, dropout 0.10
+             │
+             ├──> SEMANTIC HEAD    5 channels  (per-pixel class)
+             ├──> BOUNDARY HEAD    4 channels  (see below)
+             └──> CENTER HEAD      1 channel   (glomerulus only)
+
+2a. Why a frozen foundation encoder
+    OpenMidnight is a pathology-pretrained DINOv2 ViT-g/14. It already knows what
+    H&E tissue looks like. Freezing it means the 6-slide training set only has to
+    fit 7.31 M decoder parameters instead of ~1.1 B, which is the difference
+    between "trainable" and "hopeless" at this data scale.
+
+2b. Why the RGB stem exists (ADR 0002)
+    A ViT at patch size 14 sees nothing finer than 14 px. A tubule wall is 3-5 px.
+    The stem is a parallel convolutional path over the RAW image that carries
+    full-resolution detail into the decoder as skip connections. Without it the
+    output is a blurry stride-8 blob map. Output stride is 1 — predictions are at
+    the same resolution as the input, not upsampled from a coarse grid.
+
+2c. The boundary head is the instance mechanism (ADR 0001)
+    4 channels per pixel:
+        0  background
+        1  interior              <- the seed
+        2  boundary-to-background  (the object's outer contour)
+        3  boundary-to-INSTANCE    (the wall where two objects touch)
+
+    Channel 3 is the important one. The wall between two touching tubules is the
+    single thing that must fire to prevent them being merged into one object, so
+    it gets its own output rather than being a slightly upweighted subset of a
+    channel dominated by ordinary outer contours.
+
+    This REPLACES the HoVer-Net centroid-offset (HV) representation used by the
+    older system in the repo root. HV predicts, for each pixel, a vector to its
+    object's centre; instances then fall out of the discontinuities in that field.
+    It works, but it is non-local — the correct value at a pixel depends on where
+    the object's far side is — which breaks when tiles disagree, and it cannot be
+    averaged across tiles or orientations without inventing values. The boundary
+    formulation is purely local. That single property is what makes both seamless
+    tiling (section 5) and test-time augmentation (section 5b) possible.
+
+
+--------------------------------------------------------------------------------
+3. SUPERVISION — the three-way ignore mask (ADR 0003)
+--------------------------------------------------------------------------------
+The annotations are PARTIAL. Nobody drew every tubule on a 32000x18000 slide.
+Treating unannotated pixels as background would teach the model that real tubules
+are background. Every pixel therefore gets one of three labels:
+
+    TRUSTED FOREGROUND  annotated instances
+    TRUSTED BACKGROUND  a 5 px ring around each instance, PLUS all off-tissue glass
+    IGNORED             tissue with no annotation — contributes no gradient at all
+
+Including glass as trusted background is what stops the model hallucinating
+objects on blank slide. It was measured: the earlier strategy that left glass
+ignored produced 42.6 instances covering 25.5% of a CONSTANT grey image. With
+glass supervised, the same probe returns 0.
+
+All losses are masked and normalised over valid pixels only. A consequence worth
+remembering: validation loss is NOT comparable across runs that use different
+ignore strategies, because each normalises over a different denominator.
+
+
+--------------------------------------------------------------------------------
+4. HOW AN INSTANCE IS PRODUCED (decode)
+--------------------------------------------------------------------------------
+Marker-controlled watershed, run on the predicted probability maps:
+
+  1. FOREGROUND    (1 - p_background) >= 0.50
+  2. SEEDS         connected components of p_interior >= 0.40, area >= 24 px
+  3. FLOOD         watershed from those seeds, using boundary probability as the
+                   elevation, so the cut lands on image evidence
+  4. CLASSIFY      majority vote of the semantic map over each instance's core
+                   (boundary band excluded, so wall pixels do not vote)
+  5. FILTER        drop instances below a per-class minimum area
+
+One seed becomes exactly one object. This is why merging is a SEEDING failure,
+not a flooding failure: if two touching tubules produce a single connected
+interior region, no amount of ridge height can split them afterwards.
+
+Per-class minimum area (px^2 at 0.44 um/px):
+    default            950
+    tubule_proximal   1950
+    tubule_distal     1000
+    tubule_collecting  950
+    glomerulus        2300
+
+These were RECALIBRATED and the previous values were wrong by ~10x. They had been
+set from the 5th percentile of instance areas measured INSIDE 512 px training
+patches — a distribution dominated by objects the patch border had cut in half.
+Measured on whole polygons instead, the 5th percentiles are 3885 / 2026 / 1948 /
+4564. The floors are set at half of those: a floor at p5 would discard 5% of real
+objects by construction, while half still removes watershed slivers, which sit an
+order of magnitude lower.
+
+Two mechanisms exist but are OFF by default, both for measured reasons:
+  - semantic_split: splits a blob spanning two tubule classes. Costs 1.6 PQ and
+    raises the split rate to buy one merge. Implemented and tested; not enabled.
+  - merge_fragments: re-merges adjacent fragments. Merging is the dominant error,
+    so a mechanism that merges more is the wrong tool.
+
+
+--------------------------------------------------------------------------------
+5. WHOLE-SLIDE INFERENCE
+--------------------------------------------------------------------------------
+5a. Seamless tiling
+    Prediction tiles are 512 px with 128 px overlap, combined with a Gaussian
+    window so a tile contributes least where it is least reliable. Tiles sit on a
+    single slide-global grid, and each decode window is run with a halo of one
+    FULL tile — so every pixel receives exactly the contributions it would have
+    received from one slide-wide pass. Instances crossing window borders are
+    stitched by IoU >= 0.50.
+
+    The halo roughly doubles the forward passes on a 2048 window. It buys an
+    exactly seam-free map, which the older root-directory system does not have:
+    there, disjoint tile cores create a hard discontinuity in the HV field at
+    every seam, producing a measured 3-5x excess of straight cuts on seam lines.
+
+5b. Test-time augmentation (--tta d4)
+    The image is predicted 8 times — 4 rotations x 2 mirrors — and the probability
+    maps are averaged back in the original orientation.
+
+    Sound ONLY because every predicted field is a per-channel SCALAR map: rotating
+    the input rotates each map and nothing else. An HV field could not be averaged
+    this way; its vector components would need rotating too, and averaging two
+    disagreeing offset fields invents values neither pass predicted.
+
+    Cost is linear: a full slide goes from ~8 min to ~45 min. It is worth it —
+    see section 7, where TTA is a larger improvement than the retrain was.
+
+5c. Tissue gate
+    A saturation-based tissue mask skips whole tiles of glass. Deliberately
+    DISABLED for the constant-input canary, so that test measures the model rather
+    than the gate.
+
+
+--------------------------------------------------------------------------------
+6. TRAINING
+--------------------------------------------------------------------------------
+Data:     6475 patches of 512 px, stride 256, from 7 slide-regions
+          Nx_4wk_001 1717 | Nx_24h_1 1132 | Nx_4wk_100 1049 | Nx_4wk_050 1009
+          Nx_24h_100 495 | Nx_24h_50 453 | Ctrl_1A2 449 | Ctrl_1A2_val 171
+Objects:  tubule_proximal 7981 | tubule_distal 2395 | tubule_collecting 1752 |
+          glomerulus 1088   (instance-in-patch counts, objects recur across patches)
+
+Optimiser: AdamW, lr 3e-4 cosine to 1e-6, 2 warmup epochs, weight decay 0.03,
+           batch 8, AMP, grad clip 1.0, 60 epochs planned.
+
+Augmentation (heavy, because 7 slides overfits fast): full rotation, flips,
+anisotropic scale 0.80-1.25, aspect 0.90-1.11, shear 6 deg, translation 128 px,
+HED stain jitter (multiplicative alpha 0.10 + additive beta 0.004 OD), HSV,
+brightness/contrast, blur, Gaussian noise, JPEG recompression, cutout, elastic
+deformation, and copy-paste of rare classes.
+
+  A caution recorded here because it was got wrong once: the HED additive term is
+  in OPTICAL-DENSITY units and hed2rgb is EXPONENTIAL. Reasoning about its size in
+  OD space badly understates its effect in RGB. Measured mean |dRGB| on real
+  patches: alpha-only 3.00, beta as shipped 3.25, beta without the 0.05 scaling
+  37.07 (destructive). Measure in RGB, not OD.
+
+CHECKPOINT SELECTION (ADR 0004): best validation PQ, never validation loss.
+Ties within 0.005 PQ break toward lower merge rate.
+
+  The PQ used for selection is CLASS-AGNOSTIC — it scores the instance maps alone,
+  so a correctly outlined tubule scores the same whether it was called proximal or
+  distal. That matches the actual goal. A class-aware score would let a model that
+  segments perfectly but confuses two tubule segments lose to one that segments
+  worse.
+
+  Validation decodes with min_area scaled to 0.25. Validation runs on 512 px
+  patches where border truncation makes many objects undersized; applying the
+  slide-scale floor there would delete those predictions while their ground truth
+  still counted as a miss. The shipped decode uses the full values.
+
+VALIDATION SET — the biggest measurement change in this round.
+  Nx_4wk_050        fully held-out slide
+  Ctrl_1A2_val      interleaved 2048 px blocks of Ctrl_1A2
+
+  Ctrl_1A2 contributes to BOTH splits via complementary block sets. A patch is kept
+  only if it lies ENTIRELY inside one block, so patches straddling the interface are
+  dropped by both — that containment rule is the only thing preventing a validation
+  patch from sharing pixels with a training patch at stride 256. It is asserted
+  directly in tests/test_roi_split.py, because that leakage would silently RAISE
+  validation PQ and look like success.
+
+  Blocks are INTERLEAVED, not one contiguous band. A band split was tried first and
+  was wrong: kidney anatomy is spatially organised, the medulla sits at one end of
+  the tissue, and the held-out band came out 85% collecting duct — it would have
+  measured the medulla and nothing else.
+
+  Honest limitation: adjacent blocks share staining and section artefacts, so
+  Ctrl_1A2_val is NOT an independent test of cross-slide generalisation.
+  Nx_4wk_050 is the slide that tests that.
+
+  Effect: validation went from 109 objects to 1298. Differences that were
+  previously unresolvable now are.
+
+
+--------------------------------------------------------------------------------
+7. MEASURED PERFORMANCE
+--------------------------------------------------------------------------------
+7a. Training-time validation (1298 objects, 512 px patches)
+
+    epoch    PQ      SQ      DQ      AJI    split   merge
+        1  0.529   0.819   0.645   0.496    1.4%   38.2%
+        5  0.713   0.843   0.846   0.741    2.5%   17.9%
+       21  0.719   0.852   0.844   0.746    3.5%   16.9%
+    -> 35  0.727   0.863   0.843   0.792    4.4%   12.4%   <- SELECTED
+       43  0.713   0.860   0.829   0.773    4.3%   13.0%
+       53  0.700   0.860   0.813   0.764    4.2%   12.7%
+
+    Epoch 35 is the joint peak on PQ and AJI and near the merge-rate floor. PQ then
+    declined for nine consecutive evaluations with the LR already at 8e-6, so the
+    run was stopped at 54. The previous round peaked at epoch 21; this one at 35.
+
+7b. Held-out region evaluation — Nx_4wk_050, 5 regions of 4096 px
+
+                              PQ     SQ     DQ    AJI   split  merge  TP/FP/FN
+    v3, as reported         0.806  0.893  0.902  0.788   2.8%  10.1%  97/9/12
+    v3, fair comparison     0.822  0.896  0.918  0.836   2.0%   7.1%  90/7/9
+    v4                      0.837  0.906  0.923  0.850   4.1%   4.1%  90/7/8
+    v4 + 8x TTA             0.880  0.913  0.963  0.851   1.0%   6.1%  92/1/6
+
+    READ THE "FAIR COMPARISON" ROW, NOT 0.806. v4's scoring no longer contains the
+    other_structure objects, because those annotations are now ignored. Comparing
+    to v3's all-class number would credit v4 for deleting the class it was worst
+    at. Rescored on the same 98-object subset, v3 reads 0.822 — so the retrain
+    gain is 0.822 -> 0.837, and roughly half the apparent improvement was
+    bookkeeping.
+
+    TTA is worth more than the retrain was: +0.043 PQ, driven by false positives
+    collapsing from 7 to 1 and the split rate from 4.1% to 1.0%. Averaging over 8
+    orientations kills predictions that only survive in one orientation.
+
+    TTA's merge rate rising 4.1% -> 6.1% is 4 objects versus 6 at n=98. Not a real
+    effect.
+
+    Caveat on all of 7b: 98 objects. The 1298-object set in 7a is the one that
+    resolves small differences, and it tells the same story — merging 38% -> 12%.
+
+7c. Slide-wide output, v4 + 8x TTA
+
+    slide          inst   mm2  |  per mm2: prox  dist  coll  glom
+    Ctrl_1A2      13630  32.4  |          178.7  66.6 168.6   6.7
+    Ctrl_1A4      14592  30.8  |          216.9  82.2 169.1   5.5
+    IR_2A2        18359  36.8  |          248.3 103.0 139.6   8.4
+    IR_2A4        17691  35.4  |          315.3 131.7  41.9  10.6
+
+    Ctrl_1A2 is NOT a held-out demo — it is partly training data.
+
+    The IR slides are a DIFFERENT INJURY MODEL from anything in training (which is
+    nephrectomy plus one control). Their proximal-tubule density is 1.4-1.8x the
+    controls and mean object area is ~20% smaller, and IR_2A4's collecting-duct
+    density is 4x lower than every other slide. That may be real biology, or it may
+    be that decode thresholds calibrated on control and nephrectomy morphology do
+    not transfer to injured tubules. It has not been checked against ground truth.
+    Treat cross-condition comparisons as unvalidated until it is.
+
+
+--------------------------------------------------------------------------------
+8. WHAT WAS DELIBERATELY REMOVED, AND WHY
+--------------------------------------------------------------------------------
+Vessel / Blood Cells / Nerve. Previously folded into one "other_structure" class.
+It collapsed onto its smallest member: predicted areas capped at p95 = 1847 px
+while the annotations run to 26022 px, meaning it learned blood cells and never
+predicted a vessel — while emitting 3162 objects on Ctrl_1A2, 14% of the slide
+output, that are not per-object interpretable. They are now IGNORED, so those
+pixels contribute no gradient in either direction and the decoder capacity goes to
+the tubules and glomeruli that are the actual deliverable.
+
+Consequence: v4 does not detect vessels, blood cells or nerves at all. If those
+are wanted later they need their own annotation effort, not a folded class.
+
+
+--------------------------------------------------------------------------------
+9. KNOWN LIMITATIONS
+--------------------------------------------------------------------------------
+- MERGING IS STILL THE DOMINANT ERROR. 4.1% of ground-truth objects on the held-out
+  regions, 12.4% on the patch-level validation set. Down from 7.1% / 38.2%, but
+  still the thing most worth fixing. The merges that remain are predominantly
+  SAME-subtype, which no class-based mechanism can reach.
+
+- Objects are predicted SMALLER than annotated. Median predicted/annotated area
+  ratio ran 0.47-0.82 per class on the v3 checkpoint. Partly fixed by the min_area
+  recalibration; not re-measured on v4. If you compute areas or morphometrics from
+  this output, that bias is a direct bias in your numbers.
+
+- Seven slides, one scanner, two conditions. Nothing here has been validated across
+  scanners, stains, species or organs.
+
+- Encoder never adapted. 7.31 M trainable parameters sit on a completely frozen
+  ViT-g/14 that has never seen mouse kidney. This is the largest untapped capacity
+  in the system.
+
+- The touching channel under-fires. Measured p(touching) = 0.142 on true walls
+  versus 0.014 on ordinary contours — 10x discriminative where it fires, but the
+  merges that survive happen exactly where it is silent. That is a recall problem
+  on one channel.
+
+
+--------------------------------------------------------------------------------
+10. HOW TO RUN IT
+--------------------------------------------------------------------------------
+Always use the `tubule_segmentation` conda env. Never set PYTHONNOUSERSITE=1 — it
+breaks skimage/cv2/shapely in this environment.
+
+Whole slide, best quality (8x TTA, ~45 min for a 32000x18000 slide):
+
+    conda run --no-capture-output -n tubule_segmentation python -u \
+      scripts/wsi_infer.py \
+      --checkpoint runs/v4_panoptic/best_pq.pt \
+      --slide /path/to/slide.tif \
+      --out-dir results/<name> \
+      --tta d4 --save-viz --gpu 1 \
+      --set wsi.level=0 wsi.manual_mpp=0.44068
+
+    Drop --tta for a ~8 min run at lower quality. For .ndpi slides in this cohort
+    the 0.44 um/px plane is LEVEL 1, so use wsi.level=1 and omit manual_mpp. The
+    flat .tif exports are level 0 and REQUIRE manual_mpp — their only resolution
+    tag is a 300-DPI print artefact that the reader refuses on purpose.
+
+Outputs in results/<name>/:
+    instances.geojson   QuPath-loadable; exterior rings only, repaired via shapely
+    instance_map.npz    slide-wide int32 label map + class_of_id + score_of_id
+    summary.json        counts, areas, densities per class
+    overlay.png         downsampled visual check
+    tissue_mask.png
+
+Held-out evaluation:
+
+    python scripts/eval_regions.py \
+      --checkpoint runs/v4_panoptic/best_pq.pt \
+      --config configs/data.yaml \
+      --manifest data/manifest_eval_nx050.csv \
+      --split val --size 4096 --n-regions 5 --gpu 1 --set infer.tta=d4
+
+    Use the Nx_4wk_050-only manifest. eval_regions does not understand the `roi`
+    block columns, so pointing it at the full val split lets it sample regions
+    overlapping Ctrl_1A2's TRAINING blocks and quietly inflate the score.
+
+Retrain:  bash run_v4_train.sh   (run it in tmux; ~3.5 h)
+Tests:    python -m pytest tests/     (164 tests)
+Gate:     python scripts/overfit.py --config configs/data.yaml --gpu 1
+          Must reach >=10x loss reduction and mean PQ >=0.80 before any long run.
+
+
+--------------------------------------------------------------------------------
+11. WHAT TO TRY NEXT
+--------------------------------------------------------------------------------
+Ranked, given that merging is the priority and no further annotation is planned:
+
+1. LoRA-adapt the top encoder blocks. Largest untapped capacity. Rank 8-16 on the
+   last 2-4 blocks adds adaptable parameters at controlled overfit risk; a full
+   unfreeze would overfit on 7 slides.
+
+2. Recall-biased loss on the touching channel alone. The wall channel is
+   discriminative but under-fires (section 9). A Tversky loss weighted toward
+   recall on channel 3 specifically targets that. One retrain, one variable.
+
+3. Weight EMA / snapshot ensembling. Epoch 35 of 54 was the peak; 19 epochs were
+   thrown away. An EMA of the weights is nearly free.
+
+4. Re-measure the predicted/annotated size ratio on v4. It was measured on v3 and
+   the min_area recalibration should have moved it, but "should have" is not a
+   measurement.
+
+5. Validate on an IR slide before trusting any cross-condition comparison
+   (section 7c).
+
+Deliberately NOT recommended: replacing the watershed with a query-based instance
+decoder, or a learned-affinity graph cut. Both are defensible methods and both
+want far more than 7 slides.
+
+================================================================================

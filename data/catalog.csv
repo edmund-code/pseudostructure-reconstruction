@@ -1,0 +1,8 @@
+artifact,format,consumer,distribution,integrity_or_access_note
+mouse_tubule_gene_matrices,H5AD,analysis/mouse_only_pseudospace.py,private,One file per mouse sample; obtain from the authorized project store
+mouse_v4_segmentations,GeoJSON,analysis/scripts,private,Use only Ctrl_1A2/Ctrl_1A4/IR_2A2/IR_2A4 v4 files; verify centroids before export
+pathway_gene_sets,JSON,analysis/mouse_only_pseudospace.py,private,GO Reactome Hallmark and KEGG libraries from the authorized project store
+visium_hd_source_outputs,H5/Parquet,analysis/notebooks/01_segmentation_to_gene_matrix.ipynb,private,Required only to regenerate tubule matrices
+whole_slide_images,TIFF/NDPI,segmentation/scripts,private,Required for training or whole-slide inference
+segmentation_annotations,GeoJSON,segmentation/scripts,private,Required for patch extraction and evaluation
+v4_model_checkpoint,PyTorch checkpoint,segmentation/scripts,private,Not tracked; request from maintainer or retrain

@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this work, cite the repository and contact the maintainers for the associated data."
+title: "Kidney pseudospace reconstruction"
+type: software
+authors:
+  - family-names: "Hallinan"
+    given-names: "Caleb"
+repository-code: "https://github.com/edmund-code/pseudospace-reconstruction"
+date-released: "2026-09-01"
+version: "0.1.0"

@@ -1,0 +1,3 @@
+slide_id,image_path,geojson_path,stain,species,split,level,manual_mpp,roi
+example_train,/path/to/train_slide.ndpi,/path/to/train_annotations.geojson,H&E,mouse,train,,,
+example_val,/path/to/validation_slide.ndpi,/path/to/validation_annotations.geojson,H&E,mouse,val,,,

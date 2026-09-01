@@ -1,0 +1,28 @@
+name: kidney-pseudospace
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - anndata
+  - scanpy
+  - python-igraph
+  - leidenalg
+  - statsmodels
+  - patsy
+  - h5py
+  - numba
+  - r-base
+  - r-harmony
+  - rpy2
+  - jupyterlab
+  - nbformat
+  - pytest
+  - pip:
+      - shapely>=2

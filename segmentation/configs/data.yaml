@@ -1,0 +1,29 @@
+# Template dataset binding for a private mouse-kidney cohort.
+#
+# The slide manifest is a CSV with the columns:
+#     slide_id,image_path,geojson_path,split
+# (extra columns such as `stain` / `species` are carried through untouched).
+#
+# These annotations were drawn on the exported LEVEL-1 image, so their coordinates
+# are already in the chosen level's pixel space -> patch.annotations_space: level.
+#
+# Copy this file or override `manifest` to point at a private manifest made from
+# `segmentation/data/manifest_v4.example.csv`. Never commit real slide or annotation paths.
+_base_: default.yaml
+
+# Relative to THIS file (configs/) -> segmentation/data/
+manifest: ../data/manifest_v4.example.csv
+
+wsi:
+  level: 1
+  manual_mpp: null
+
+patch:
+  size: 512
+  stride: 256
+  annotations_space: level
+  restrict_to_annotations: true
+  annotation_margin: 512
+
+paths:
+  patches_dir: ../data/patches_v4

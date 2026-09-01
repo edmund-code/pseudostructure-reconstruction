@@ -1,0 +1,397 @@
+# kidney_panoptic v2 — default configuration.
+#
+# Panoptic instance segmentation of H&E mouse kidney at ~0.44 µm/px (20x).
+# Instance representation is SEMANTIC + INTERIOR/BOUNDARY + CENTER heatmaps.
+# There is deliberately no centroid-HV field in the default decode path
+# (docs/adr/0001-boundary-vs-hv.md).
+#
+# Load order: this file -> child `_base_: default.yaml` -> CLI `--set a.b=c`.
+
+seed: 1337
+device: cuda
+
+mpp: 0.44068
+patch_size: 512
+
+# ---------------------------------------------------------------------------
+# Classes
+# ---------------------------------------------------------------------------
+# `classes` is the canonical, ordered semantic vocabulary. Index 0 MUST be
+# background. `class_map` renames incoming GeoJSON labels onto it.
+#
+# The three tubule labels are ANATOMICAL SEGMENTS (proximal / distal / collecting duct),
+# confirmed by the annotator. That is what makes a semantic cue meaningful inside an
+# object: segments differ in epithelium (brush border, cytoplasm eosinophilia, lumen
+# calibre), so the class is stable across a single tubule's cross-section. Had they been
+# an injury grade, a continuous change could flicker within one tubule.
+#
+# CLASS LABELS ARE AN AUXILIARY TASK, not the deliverable. The stated goal is segmentation
+# quality; the classes exist because the multi-task signal helps the shared decoder, and
+# because they make the output readable in QuPath. This is why selection runs on
+# CLASS-AGNOSTIC PQ (train.select_metric) -- see the note there.
+classes: [background, tubule_proximal, tubule_distal, tubule_collecting, glomerulus]
+compact_classes: [glomerulus]
+elongated_classes: [tubule_proximal, tubule_distal, tubule_collecting]
+
+class_map:
+  Tubules: tubule_proximal        # 867 + 571 objects
+  Tubules2: tubule_distal         # 306 + 151
+  Tubules3: tubule_collecting     # 132 + 204
+  Glomeruli: glomerulus           # 162 + 29
+
+# Annotated polygons that are TRUSTED BACKGROUND rather than instances. They are
+# rasterized into the valid mask as background — free negatives.
+background_names: [Background]
+# Annotated polygons that mark a fully-annotated (dense) ROI: ignore = 0 inside.
+dense_roi_names: [ROI, DenseROI, "Region*"]
+# Dropped entirely (neither instance nor supervision -- the pixels become IGNORED, which is
+# the point: the model is told nothing about them rather than told they are background).
+#
+# Vessel / Blood Cells / Nerve were an `other_structure` class in v3 and it collapsed. Its
+# predicted areas capped at p95 1847 px while the annotations run to 26022 px -- i.e. it
+# learned the smallest member (blood cells) and never predicted a vessel at all, while
+# emitting 3162 objects on Ctrl_1A2 (14% of the slide output) that are not per-object
+# interpretable. Ignoring them frees decoder capacity for the tubules and glomeruli that
+# are the actual deliverable, and stops the export carrying objects nobody can use.
+ignore_names: [ignore, unlabeled, Vessel, "Blood Cells", Nerve]
+
+# ---------------------------------------------------------------------------
+# WSI reading
+# ---------------------------------------------------------------------------
+wsi:
+  level: 1              # read this pyramid level NATIVELY (no resampling)
+  target_mpp: 0.44068   # used only when level is null
+  prefer: finer
+  manual_mpp: null      # required for flat TIFFs with no real resolution metadata
+  anisotropy_tol: 0.02
+
+# ---------------------------------------------------------------------------
+# Patch extraction
+# ---------------------------------------------------------------------------
+patch:
+  size: 512
+  stride: 256
+  min_fg_fraction: 0.02   # below this instance coverage a patch counts as "background"
+  # Background patches are kept SELECTIVELY. Inside the annotated bounding box most
+  # unannotated tiles are pure tissue, where the three-way mask ignores nearly every pixel —
+  # they cost a full forward pass and supply almost no gradient. The background patches
+  # worth keeping are the ones containing GLASS, because off-tissue pixels are trusted
+  # background and are what stops the foreground head hallucinating on blank slide.
+  bg_min_glass_frac: 0.20   # a background patch counts as "glassy" above this glass fraction
+  bg_glass_keep_ratio: 0.60 # keep this fraction of glassy background patches
+  bg_keep_ratio: 0.03       # ...and this fraction of tissue-only background patches
+  annotations_space: level   # 'full' (level-0 QuPath) | 'level' (already in chosen level px)
+  restrict_to_annotations: true
+  annotation_margin: 512
+  multipolygon: largest      # largest | each_part_separate
+  multipolygon_min_area_frac: 0.05
+  # Rare-class oversampling: a patch containing any of these is emitted `factor` times
+  # into the training index (the sampler duplicates, augmentation decorrelates them).
+  # Factors REDUCED for v4. Ctrl_1A2 added 204 collecting + 151 distal objects, so
+  # tubule_collecting is no longer the 93-patch outlier that justified a factor of 6 --
+  # over-duplicating it now would just teach the model that the medulla is everywhere.
+  oversample:
+    tubule_collecting: 3
+    tubule_distal: 2
+    glomerulus: 2
+
+# ---------------------------------------------------------------------------
+# Tissue detection (trusted background + inference gate)
+# ---------------------------------------------------------------------------
+tissue:
+  method: saturation      # saturation | otsu
+  sat_threshold: 0.12
+  gray_threshold: 215
+  open_px: 5              # OPEN BEFORE CLOSE — reversing these silently loses glass
+  close_px: 9
+  min_object_px: 4096
+  fill_holes_px: 65536
+  dilate_px: 16           # keeps the tissue EDGE out of trusted background
+
+# ---------------------------------------------------------------------------
+# Supervision targets
+# ---------------------------------------------------------------------------
+targets:
+  boundary_width_px: 3      # contour band half-width at 0.44 µm/px; sweep 2-3
+  interior_erode_px: 0      # extra erosion of interior beyond the boundary band
+  center_sigma_scale: 0.125 # gaussian sigma = scale * sqrt(area); clamped below
+  center_sigma_min: 2.0
+  center_sigma_max: 24.0
+
+ignore_strategy: dilated_gt_two_radius_plus_tissue
+# dilated_gt_two_radius_plus_tissue : trusted FG = instances; trusted BG = a thin ring
+#     around each instance PLUS everything off tissue; ignore = tissue without annotation.
+# dilated_gt_two_radius : same minus the off-tissue term (glass stays ignored).
+# dense_roi : ignore = 0 inside dense ROIs, everything else ignored.
+# none      : every pixel valid (only correct for fully-annotated data).
+annotation:
+  dilate_px_inner: 5      # trusted-background ring width (px) ~ tubule wall thickness
+  dilate_px: 30           # legacy single-radius collar
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+encoder:
+  name: openmidnight_vitg14_reg   # openmidnight_vitg14_reg | dinov2_vitg14_reg | random (tests)
+  input_size: 518        # must be a multiple of 14 (37x37 tokens)
+  embed_dim: 1536
+  layers: [9, 19, 29, 39]  # intermediate blocks pulled out as a token pyramid
+  freeze: true
+
+decoder:
+  out_stride: 1          # 1 or 2, relative to the training patch
+  stem_channels: [32, 64, 128, 192, 256]   # strides 1, 2, 4, 8, 16
+  fuse_dim: 256          # channel width at the ViT fusion level (stride 16)
+  decoder_channels: [192, 128, 96, 64]     # strides 8, 4, 2, 1
+  norm: gn
+  dropout: 0.10          # the 7.3M decoder is what overfits; the encoder is frozen
+
+model:
+  legacy_hv: false       # experimental centroid-HV branch; NOT used by the default decode
+  # 3 = bg / interior / boundary
+  # 4 = bg / interior / boundary-to-background / boundary-to-INSTANCE  (default)
+  # The wall between two touching objects is the single thing that must fire to prevent a
+  # merge, and it is a tiny fraction of pixels. At 3 classes it is a slightly upweighted
+  # subset of a channel dominated by object-to-background contours; at 4 it is its own
+  # learned output. `targets.boundary_target` already computes the mask either way.
+  boundary_classes: 4
+
+# ---------------------------------------------------------------------------
+# Losses
+# ---------------------------------------------------------------------------
+loss:
+  semantic:
+    ce: 1.0
+    dice: 1.0
+    class_weight_mode: inverse_sqrt_freq   # none | inverse_freq | inverse_sqrt_freq
+    class_weight_clip: 12.0
+  boundary:
+    ce: 1.0
+    dice: 1.0
+    boundary_class_weight: 3.0   # weight on boundary-to-background
+    # Weight on the boundary-to-INSTANCE channel (boundary_classes: 4 only). Higher than
+    # the plain boundary weight because these pixels are rarer still and decide every
+    # merge. With 4 classes this replaces the old per-pixel `touching_weight`.
+    touching_class_weight: 6.0
+    touching_weight: 1.0         # per-pixel multiplier; only used when boundary_classes: 3
+  center:
+    mse: 25.0            # heatmaps are sparse and small-amplitude; scale to be comparable
+  # Tversky is available for the boundary/interior head but starts near-balanced —
+  # extreme recall bias is only safe with trusted background everywhere.
+  tversky:
+    enabled: false
+    alpha: 0.45
+    beta: 0.55
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+train:
+  epochs: 60
+  batch_size: 8
+  accum_steps: 1
+  lr: 3.0e-4
+  min_lr: 1.0e-6
+  weight_decay: 0.03     # decoder + heads only; the encoder is frozen
+  warmup_epochs: 2
+  schedule: cosine       # cosine | poly
+  num_workers: 8
+  amp: true
+  grad_clip: 1.0
+  # Checkpoint selection metric — NOT val loss (ADR 0004).
+  #
+  # This PQ is CLASS-AGNOSTIC: validate() calls evaluate_instances() on the id maps alone,
+  # so a correctly delineated tubule scores the same whether it was called proximal or
+  # distal. That is the right target here — the deliverable is segmentation quality and the
+  # class labels are an auxiliary task. A class-aware PQ would let a model that segments
+  # perfectly but confuses two tubule segments lose to one that segments worse.
+  # Per-class PQ is still REPORTED by scripts/eval_regions.py; it is diagnostic, not the
+  # objective.
+  select_metric: pq
+  # Validation decodes 512 px patches, where border-truncated objects fall below the
+  # WSI-calibrated decode.min_area floors. Scale them down for validation only, so the
+  # epoch-ranking signal is not dominated by truncation artefacts. See validate().
+  val_min_area_scale: 0.25
+  # PQ differences smaller than this are inside the measurement noise of a few hundred
+  # validation objects (the previous run sat in a 0.745-0.748 band for ten epochs). Within
+  # that band prefer the lower merge_rate. This resolves ties; it does NOT change what is
+  # optimised — adding a merge penalty to PQ would double-charge an error DQ already
+  # charges twice.
+  select_tie_eps: 0.005
+  select_tie_break: merge_rate
+  bg_patch_ratio: 0.5    # keep at most this many background-only patches per foreground
+                         # patch. Extraction is generous with glassy background; this is
+                         # where the training mix is actually decided. null = keep all.
+  eval_every: 2
+  save_every: 10
+  augment: true
+
+augment:
+  hflip: 0.5
+  vflip: 0.5
+  rot90: 0.5
+  rotate_deg: 180        # full rotation
+  # Exactly half the extraction stride (256/2), which is all the decorrelation requires.
+  # Measured mean in-frame fraction of an augmented patch: 160 px -> 71.2%, 128 px -> 75.7%.
+  # Out-of-frame content is marked ignored, so the extra 32 px of jitter was buying nothing
+  # and costing 4.5% of the usable supervision in every patch.
+  translate_px: 128
+  scale: [0.80, 1.25]    # was [0.85, 1.15]
+  aspect: [0.90, 1.11]   # anisotropic scale — tubules are sectioned at varying obliquity
+  shear_deg: 6
+  # --- stain ---
+  # These were ONE key (`hed_sigma`) driving two terms on incommensurate scales, which
+  # made the additive term look negligible when it is not. Measured mean |dRGB| on real
+  # patches: alpha-only 3.00, beta-as-shipped 3.25, beta without the internal 0.05 factor
+  # 37.07. They are now separate and correctly dimensioned.
+  hed_p: 0.8                # was applied to 100% of samples
+  hed_alpha_sigma: 0.10     # multiplicative, dimensionless
+  hed_beta_od: 0.004        # ADDITIVE, in skimage optical-density units (shipped: 0.0025)
+  hsv_p: 0.5
+  brightness_contrast_p: 0.5
+  blur_p: 0.25
+  blur_sigma: [0.3, 1.6]
+  noise_p: 0.25
+  noise_sigma: [2.0, 8.0]
+  jpeg_p: 0.15              # NDPI/SVS tiles are JPEG; Ctrl_1A2 came via another export
+  jpeg_quality: [55, 90]
+  # Erased regions are marked IGNORED via `inbounds`, never painted as background —
+  # teaching the net that a flat patch is background is exactly the label noise the
+  # inbounds mechanism exists to prevent (see the design rules in data/augment.py).
+  cutout_p: 0.25
+  cutout_n: [1, 3]
+  cutout_frac: [0.02, 0.08]
+  elastic_p: 0.20
+  elastic_alpha: 28.0
+  elastic_sigma: 7.0
+  copy_paste:
+    p: 0.5               # probability of attempting a paste at all
+    max_objects: 3
+    classes: [tubule_collecting, glomerulus]   # the rare ones
+    blend_px: 3          # feathered alpha border
+
+# ---------------------------------------------------------------------------
+# Instance decode (postprocess/decode.py)
+# ---------------------------------------------------------------------------
+decode:
+  fg_threshold: 0.50        # 1 - p_bg from the boundary head
+  # 0.40, not 0.50. Swept on the v3 checkpoint over 109 GT objects with the semantic split
+  # off: 0.50 -> PQ 0.796 / split 3.7%; 0.40 -> PQ 0.806 / split 2.8%; 0.30 and 0.20 -> merge
+  # rate jumps to 13.8%. 0.40 is the interior point, not an edge of the swept range.
+  interior_threshold: 0.40  # seed threshold on p_interior
+  min_seed_area: 24         # px^2; drop specks before they become instances
+  watershed_line: false
+  # Per-class minimum instance area, px^2 at working mpp.
+  #
+  # RECALIBRATED for v4, and the v3 numbers were wrong by ~10x. They were taken as the 5th
+  # percentile of instance areas measured INSIDE 512 px training patches -- a distribution
+  # dominated by objects the patch border cut in half. The v3 comment even said so ("the
+  # sub-p5 tail is dominated by patch-border truncation") while computing p5 over exactly
+  # that tail, so the floor landed below any real object and never fired at slide scale.
+  #
+  # Measured both ways, on whole polygons from the 7 annotation files (n=1438/457/336/191):
+  #                      patch fragments p5   interior-only p5   WHOLE OBJECT p5
+  #   tubule_proximal            322               3595              3885
+  #   tubule_distal              465               1587              2026
+  #   tubule_collecting          182               1715              1948
+  #   glomerulus                 389               6537              4564
+  # Whole-object p5 is the right reference for a WSI decode, where nothing is truncated.
+  #
+  # Set at HALF the whole-object p5, not at p5 itself: a floor at p5 discards 5% of real
+  # objects by construction. Half keeps the genuine small tail while still cutting the
+  # watershed slivers, which sit an order of magnitude lower.
+  min_area:
+    default: 950
+    tubule_proximal: 1950
+    tubule_distal: 1000
+    tubule_collecting: 950
+    glomerulus: 2300
+  # ---- semantic-aware split (docs/adr/0006) ------------------------------------
+  # Split an instance whose confident interior holds >= 2 sizeable regions of DIFFERENT
+  # semantic classes. This is the second separation signal, independent of the boundary
+  # head: two touching tubules of different segments get cut even where the boundary head
+  # missed the wall.
+  #
+  # CEILING, measured on GT contacts: only ~1/3 of touching instance pairs are cross-class
+  # (proximal<->proximal alone is ~50% of all contacts). This mechanism cannot reach the
+  # same-class majority -- that is what the 4-class boundary head is for.
+  #
+  # DEFAULT OFF, and the measurement is why (v3, same checkpoint, 109 GT objects):
+  #   enabled:false  PQ 0.796  split 3.7%  merge 10.1%  FP 10
+  #   enabled:true   PQ 0.780  split 4.6%  merge  9.2%  FP 13
+  # It buys one merge for three false positives and 1.6 PQ. Since the deliverable is
+  # segmentation quality rather than class labels, spending shape accuracy on a class-
+  # derived cut is the wrong trade. Kept implemented and tested -- it may pay off once the
+  # semantic head is stronger -- but it does not run by default. See docs/adr/0006.
+  semantic_split:
+    enabled: false
+    min_class_prob: 0.50      # a pixel must be this confident to seed its class
+    open_px: 2                # binary-opening radius per class mask -- the speckle guard
+    min_component_area: 600   # px^2; ~10% of a median tubule (measured p50 = 6230)
+    min_minor_frac: 0.15      # 2nd-largest class must hold this share of the instance
+    max_parts: 4              # refuse to shatter one blob into more than this
+    # boundary | ambiguity | boundary_plus_ambiguity
+    # Not `boundary` alone: by hypothesis the boundary head FAILED here (that is why the
+    # blob merged), so p_bnd is flat exactly where the cut is needed. The ambiguity term
+    # (1 - max class prob) places the cut where the two class probabilities cross.
+    elevation: boundary_plus_ambiguity
+    ambiguity_weight: 1.0
+    # Class pairs eligible to trigger a split; null => any cross-class pair. Restricted to
+    # the tubule set: those are the contacts that actually occur (proximal<->distal is
+    # 27% of all contacts and 82% of cross-class ones), and an unrestricted rule risks
+    # inventing splits, which would spend a 2.9% split rate we currently do well on.
+    pairs:
+      - [tubule_proximal, tubule_distal]
+      - [tubule_proximal, tubule_collecting]
+      - [tubule_distal, tubule_collecting]
+
+  # Compact-class (center-peak) refinement
+  center_threshold: 0.35
+  center_min_distance: 20      # px between accepted peaks
+  center_nms_iou: 0.60         # IoU above which two compact instances are deduped
+  # Conservative tubule re-merge. Both conditions must hold, and parallel glue
+  # (large minor-axis growth) is hard-rejected. Off unless explicitly enabled.
+  merge_fragments: false
+  merge_max_boundary_prob: 0.30   # mean p_boundary along the shared interface
+  merge_max_minor_axis_growth: 1.15
+  merge_max_area_ratio: 4.0
+  fill_holes: false          # tubule lumina are real holes; do not fill by default
+
+# ---------------------------------------------------------------------------
+# WSI inference
+# ---------------------------------------------------------------------------
+infer:
+  tissue_gate: true
+  tissue_min_instance_frac: 0.5
+  tissue_downsample: 32        # slide-wide tissue mask built at 1/N resolution
+  tile: 512
+  overlap: 128                 # blended with a Gaussian window
+  batch_size: 12
+  blend_sigma_scale: 0.25      # gaussian sigma = scale * tile
+  # Test-time augmentation: none | rot4 (4x) | d4 (8x, the full dihedral group).
+  # Averages the probability maps over orientations, which mainly sharpens the
+  # instance-instance wall -- the channel that decides whether two touching tubules
+  # separate. Sound here ONLY because every predicted field is a per-channel scalar map;
+  # see dihedral_transforms() for why an HV field could not be averaged this way.
+  # Cost is linear: a full slide goes from ~8 min to ~65 min at d4.
+  tta: none
+  decode_window: 2048
+  decode_overlap: 256
+  stitch_iou: 0.50             # seam match threshold for joining window-local instances
+  skip_empty_tiles: true       # tiles with no tissue are written as background, not run
+  save_instance_map: true      # results/<run>/instance_map.npz (int32, slide-wide)
+  save_viz: false
+  viz_downsample: 16
+  geojson_max_vertices: 400
+  polygon_simplify_px: 1.0
+  # Coordinate space of the exported GeoJSON.
+  #   full  : level-0 pixels — the usual QuPath convention when annotating from the WSI.
+  #   level : the working level's own pixels — correct when the annotations were drawn on
+  #           an exported level image (this cohort) or the slide is a flat export.
+  #   auto  : follow patch.annotations_space, so predictions land on top of the training
+  #           annotations instead of being off by the level downsample factor.
+  output_space: auto
+
+paths:
+  # Relative paths in a config resolve against THAT config file's directory.
+  patches_dir: ../data/patches_v3

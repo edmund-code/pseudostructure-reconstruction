@@ -1,0 +1,30 @@
+# Pinned to the verified-working `tubule_segmentation` conda env (source of truth:
+# the live env, captured 2026-06-10). Reuse that env directly:
+#     conda activate tubule_segmentation
+# This file documents/reproduces it. SAM2 (`sam2` package) must be installed
+# separately from its source repo and is NOT on PyPI/conda; see MODELS.md.
+name: kidney-panoptic
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pytorch=2.5.1
+  - pytorch-cuda=12.1
+  - torchvision
+  - numpy=1.26.4
+  - scipy=1.15.3
+  - pyyaml=6.0.3
+  - pip
+  - pip:
+      - opencv-python==4.8.0.74
+      - scikit-image==0.21.0
+      - shapely==2.1.2
+      - tifffile==2025.5.10
+      - openslide-python==1.4.3
+      - rasterio==1.4.4
+      - albumentations==2.0.8
+      - huggingface_hub
+      # sam2: install from source, e.g.
+      #   pip install -e /path/to/segment-anything-2

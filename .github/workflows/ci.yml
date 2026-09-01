@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install nbformat
+      - run: python tools/check_repository_hygiene.py
+
+  pseudospace-synthetic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install anndata scanpy matplotlib pytest
+      - run: pytest tests
+
+  segmentation-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r segmentation/requirements.txt pytest
+      - run: pip install -e segmentation
+      - run: PYTHONPATH=segmentation/src pytest segmentation/tests -m "not slow"

@@ -1,0 +1,17 @@
+# Mirror of environment.yml pip section (verified working in `tubule_segmentation` env).
+# torch/torchvision are assumed provided by the conda env (CUDA build); pin here if
+# installing via pip:
+#   torch==2.5.1
+torch==2.5.1
+numpy==1.26.4
+scipy==1.15.3
+PyYAML==6.0.3
+opencv-python==4.8.0.74
+scikit-image==0.21.0
+shapely==2.1.2
+tifffile==2025.5.10
+openslide-python==1.4.3
+rasterio==1.4.4
+albumentations==2.0.8
+huggingface_hub
+# sam2 installed from source (not on PyPI) — see MODELS.md

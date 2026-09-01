@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kidney-panoptic"
+version = "0.4.0"
+description = "Panoptic instance segmentation and classification of kidney structures in H&E whole-slide images."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Optional editable install:  pip install -e .
+# Scripts also self-bootstrap src/ onto sys.path, so installation is not required.
+
+[tool.pytest.ini_options]
+markers = ["slow: heavyweight (loads the frozen 1.1B-param encoder)"]
+pythonpath = ["src"]

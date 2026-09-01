@@ -3,7 +3,7 @@
 Private, reproducible research workspace for two connected kidney-spatial workflows:
 
 1. **Pseudospace analysis** reconstructs nephron position from Visium HD tubule aggregates and
-   describes control-versus-AKI changes along that coordinate.
+   describes control-versus-AKI and human-versus-healthy-mouse changes along that coordinate.
 2. **Panoptic segmentation** produces the v4 tubule/glomerulus GeoJSON segmentations consumed by
    the analysis workflow.
 
@@ -36,6 +36,17 @@ python analysis/mouse_only_pseudospace.py \
 
 The workflow intentionally pauses at the documented cluster-label review checkpoint. It is not a
 one-command black box. Read [docs/workflows/pseudospace.md](docs/workflows/pseudospace.md) first.
+
+For the cross-species comparison, use:
+
+```bash
+python analysis/human_vs_healthy_mouse.py \
+  --data-root /path/to/private/pseudospace-data \
+  --results-root /path/to/private/pseudospace-results
+```
+
+Read [the human-versus-healthy-mouse workflow guide](docs/workflows/human_vs_healthy_mouse.md)
+before interpreting its descriptive curves.
 
 For synthetic regression checks that need no research data:
 

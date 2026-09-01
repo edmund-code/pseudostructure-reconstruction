@@ -116,6 +116,21 @@ HEATMAP_MARKERS = {
     "DCT": ["Slc12a3", "Trpm6"],
     "CD": ["Aqp2", "Aqp4"],
 }
+SUBSEGMENT_MARKERS = {
+    "PT": {
+        "PT-S1": ["Slc5a2", "Slc5a12"],
+        "PT-S2": ["Slc22a6", "Slc13a3"],
+        "PT-S3": ["Slc7a13", "Slc22a7"],
+    },
+    "TAL": {
+        "mTAL": ["Slc12a1", "Umod", "Cldn10"],
+        "cTAL": ["Slc12a1", "Umod", "Cldn16"],
+    },
+    "DCT": {
+        "DCT1": ["Slc12a3", "Trpm6"],
+        "DCT2": ["Slc12a3", "Trpv5"],
+    },
+}
 
 
 def _marker_dict_for_heatmap(markers: dict[str, list[str]]) -> dict[str, list[dict[str, object]]]:
@@ -303,6 +318,50 @@ print(f"Embedding: {rep_key}; integration: {integration_method}")
 print(adata.obs["broad_tubule_marker_call"].value_counts().to_string())
 
 # %% [markdown]
+# ## 2b. Pass-2 integration on the retained tubule continuum
+#
+# Labels are intentionally not recomputed after this pass, matching the mouse-only workflow.
+# Human and mouse are still represented in the shared ortholog space, and sample is the batch
+# variable for Harmony. The pass-2 embedding is used only for neighbors/DPT.
+
+# %%
+tubule_mask = adata.obs["broad_tubule_marker_call"].astype(str).ne("Unknown").to_numpy()
+adata_tubule = adata[tubule_mask].copy()
+adata_tubule_hvg = adata_tubule[:, hvg].copy()
+adata_tubule_hvg.X = adata_tubule_hvg.layers["lognorm"].copy()
+sc.pp.scale(adata_tubule_hvg, zero_center=True, max_value=10)
+sc.tl.pca(
+    adata_tubule_hvg,
+    n_comps=min(N_PCS, adata_tubule.n_obs - 1, int(hvg.sum()) - 1),
+    random_state=RANDOM_STATE,
+)
+adata_tubule.obsm["X_pca"] = adata_tubule_hvg.obsm["X_pca"].copy()
+pass2_method = "PCA fallback"
+if USE_HARMONY:
+    try:
+        pass2_result = run_harmony_rpy2(
+            adata_tubule_hvg,
+            batch_key="sample",
+            n_pcs=min(N_PCS, adata_tubule_hvg.obsm["X_pca"].shape[1]),
+            theta=HARMONY_THETA,
+            lambda_val=1,
+            max_iter=30,
+            tau=0,
+        )
+        adata_tubule.obsm["X_harmony"] = pass2_result.obsm["X_harmony"].copy()
+        pass2_method = "Harmony (sample batch)"
+    except Exception as exc:
+        print(f"WARNING: pass-2 Harmony unavailable; retaining PCA ({type(exc).__name__}: {exc})")
+pass2_rep = "X_harmony" if "X_harmony" in adata_tubule.obsm else "X_pca"
+for key in ("X_pca", "X_harmony"):
+    if key in adata_tubule.obsm:
+        adata.obsm[key] = np.full((adata.n_obs, adata_tubule.obsm[key].shape[1]), np.nan, dtype=float)
+        adata.obsm[key][tubule_mask] = adata_tubule.obsm[key]
+adata.uns["cross_species_pass2_integration"] = {"method": pass2_method, "representation": pass2_rep}
+adata_tubule.write_h5ad(RESULTS_DIR / "cross_species_harmony_pass2.h5ad")
+print(f"Pass-2 embedding: {pass2_rep}; retained tubules: {adata_tubule.n_obs:,}")
+
+# %% [markdown]
 # ## 3. Shared diffusion pseudotime and orientation checks
 
 # %%
@@ -316,6 +375,8 @@ axis = compute_total_marker_axis(
     layer="lognorm",
     min_markers_per_group=2,
 )
+rep_key = pass2_rep
+sc.pp.neighbors(adata, n_neighbors=min(N_NEIGHBORS, adata.n_obs - 1), use_rep=rep_key, random_state=RANDOM_STATE)
 sc.tl.diffmap(adata)
 root = choose_root_global(adata.obs["total_marker_axis"].to_numpy(), adata, rep_key, bottom_quantile=0.01)
 adata.uns["iroot"] = int(root)
@@ -334,6 +395,29 @@ pd.DataFrame({
     "segment": adata.obs["broad_tubule_marker_call"].astype(str),
     "shared_pseudospace": adata.obs["shared_pseudospace"].to_numpy(),
 }).to_csv(RESULTS_DIR / "dpt_by_tubule.csv", index=False)
+
+# Recompute family-specific axes where the marker panel has at least two ordered modules.
+# Failures are recorded rather than hidden: a small/low-quality family should not invalidate
+# the global trajectory or be mistaken for a biological absence of an axis.
+from pseudospace.trajectory import recompute_subset_dpt
+
+subset_dpt_rows = []
+for family, family_markers in SUBSEGMENT_MARKERS.items():
+    try:
+        family_report = recompute_subset_dpt(
+            adata,
+            family,
+            _marker_dict_for_heatmap(family_markers),
+            list(family_markers),
+            output_col=f"{family.lower()}_subset_dpt",
+            n_neighbors=min(N_NEIGHBORS, adata.n_obs - 1),
+            random_state=RANDOM_STATE,
+        )
+        subset_dpt_rows.append(family_report)
+    except (KeyError, ValueError) as exc:
+        subset_dpt_rows.append({"segment": family, "status": f"skipped: {exc}"})
+        print(f"WARNING: {family} subset DPT skipped: {exc}")
+pd.DataFrame(subset_dpt_rows).to_csv(RESULTS_DIR / "dpt_by_segment.csv", index=False)
 
 # %% [markdown]
 # ## 4. Marker heatmaps and species profile similarity
@@ -363,6 +447,31 @@ for species in ("mouse", "human"):
         )
     except ValueError as exc:
         print(f"WARNING: {species} heatmap skipped: {exc}")
+
+for family, family_markers in SUBSEGMENT_MARKERS.items():
+    pseudotime_col = f"{family.lower()}_subset_dpt"
+    if pseudotime_col not in adata.obs:
+        continue
+    for species in ("mouse", "human"):
+        try:
+            plot_marker_heatmap(
+                adata,
+                _marker_dict_for_heatmap(family_markers),
+                list(family_markers),
+                {name: color for name, color in zip(family_markers, ["#2166ac", "#67a9cf", "#b2182b"])},
+                pseudotime_col=pseudotime_col,
+                cluster_col=None,
+                mask=(adata.obs["comparison_species"].astype(str).eq(species)
+                      & adata.obs["broad_tubule_marker_call"].astype(str).eq(family)).to_numpy(),
+                title=f"{species.title()} {family} subset marker gradients",
+                output_name=f"{species}_{family.lower()}_subset_heatmap.png",
+                strip_col="sample",
+                n_bins=min(N_BINS, 80),
+                output_dir=RESULTS_DIR / "heatmaps",
+                project_dir=PROJECT_DIR,
+            )
+        except ValueError as exc:
+            print(f"WARNING: {species} {family} subset heatmap skipped: {exc}")
 
 profile_genes = [gene for genes in HEATMAP_MARKERS.values() for gene in genes if gene in adata.var_names]
 profile_genes = list(dict.fromkeys(profile_genes))
@@ -441,6 +550,20 @@ for species, curves in (("mouse", ls["curve_healthy"]), ("human", ls["curve_aki"
             curve_rows.append({"gene": gene, "species": species, "pseudospace": x, "fitted_lognorm": value})
 pd.DataFrame(curve_rows).to_csv(RESULTS_DIR / "curves" / "top_gene_fitted_curves.csv", index=False)
 
+from pseudospace.levelshape import fit_single_condition_curves
+
+sample_curve_rows = []
+for sample in sorted(adata_pt.obs["sample"].astype(str).unique()):
+    sample_mask = adata_pt.obs["sample"].astype(str).eq(sample).to_numpy()
+    sample_curves, _ = fit_single_condition_curves(
+        Y_genes[sample_mask], s[sample_mask], knots, grid, GAM_LAMBDA_GRID, ls["lam_idx"], support_pct=(0, 100)
+    )
+    species = str(adata_pt.obs.loc[sample_mask, "comparison_species"].iloc[0])
+    for gene_i, gene in zip(top_idx, top_genes):
+        for x, value in zip(grid, sample_curves[gene_i]):
+            sample_curve_rows.append({"gene": gene, "sample": sample, "species": species, "pseudospace": x, "fitted_lognorm": value})
+pd.DataFrame(sample_curve_rows).to_csv(RESULTS_DIR / "curves" / "top_gene_per_sample_curves.csv", index=False)
+
 # %% [markdown]
 # ## 6. Pathway/module curves and sample sensitivity
 
@@ -480,6 +603,46 @@ sample_summary = (
     .reset_index()
 )
 sample_summary.to_csv(RESULTS_DIR / "diagnostics" / "sample_support.csv", index=False)
+
+# %% [markdown]
+# ## 6b. Three-axis concordance (secondary fidelity check)
+#
+# When centroid coordinates and Podocyte calls are present, distance to the nearest Podocyte
+# provides a coarse physical cortex-to-medulla proxy. It is not used to fit expression curves;
+# it only checks whether the molecular axis agrees with an independent spatial ordering.
+
+# %%
+from scipy.spatial import cKDTree
+from scipy.stats import spearmanr
+
+concordance_rows = []
+if {"x_centroid", "y_centroid"}.issubset(adata.obs.columns):
+    xy = adata.obs[["x_centroid", "y_centroid"]].to_numpy(dtype=float)
+    podocyte = adata.obs["broad_tubule_marker_call"].astype(str).eq("Podocyte").to_numpy()
+    if podocyte.any() and np.isfinite(xy).all(axis=1).any():
+        for sample in sorted(adata.obs["sample"].astype(str).unique()):
+            sample_mask = adata.obs["sample"].astype(str).eq(sample).to_numpy()
+            valid = sample_mask & np.isfinite(xy).all(axis=1)
+            anchors = valid & podocyte
+            if anchors.sum() < 2 or valid.sum() < 10:
+                continue
+            distances = np.full(adata.n_obs, np.nan)
+            distances[valid] = cKDTree(xy[anchors]).query(xy[valid], k=1)[0]
+            # Larger distance is the putative later/deeper direction; this is a diagnostic only.
+            for axis_name, values in {
+                "marker_axis": adata.obs["total_marker_axis"].to_numpy(dtype=float),
+                "shared_pseudospace": adata.obs["shared_pseudospace"].to_numpy(dtype=float),
+            }.items():
+                finite = valid & np.isfinite(values) & np.isfinite(distances)
+                rho = spearmanr(values[finite], distances[finite]).correlation if finite.sum() >= 10 else np.nan
+                concordance_rows.append({
+                    "sample": sample,
+                    "axis": axis_name,
+                    "physical_proxy": "distance_to_nearest_podocyte",
+                    "n_tubules": int(finite.sum()),
+                    "spearman": float(rho),
+                })
+pd.DataFrame(concordance_rows).to_csv(RESULTS_DIR / "diagnostics" / "three_axis_concordance.csv", index=False)
 
 # %% [markdown]
 # ## 7. Summary and publication caveats

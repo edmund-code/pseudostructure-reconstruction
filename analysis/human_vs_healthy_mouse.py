@@ -27,6 +27,12 @@ script from an interactive kernel.
 # cross-species conversion explicit. Raw matrices and segmentations remain outside
 # Git; use `--data-root` and `--results-root` when running locally.
 
+# %% [markdown]
+# # Section 0 - configuration
+#
+# Paths, cohort scope, integration parameters, and shared marker panels. Human expression is
+# converted into mouse-symbol space before any marker or trajectory operation.
+
 # %%
 from __future__ import annotations
 
@@ -202,7 +208,10 @@ def _binned_profiles(adata, genes: list[str], species: str, n_bins: int = N_BINS
 
 
 # %% [markdown]
-# ## 1. Load, QC, and convert to shared ortholog space
+# # Section 1 - pass-1 Harmony integration
+#
+# Load the two healthy mouse controls and human samples, run species-aware QC, and construct the
+# shared one-to-one ortholog matrix. This replaces the mouse-only native-symbol loading step.
 
 # %%
 from pseudospace.cross_species import (
@@ -259,7 +268,7 @@ print(f"Shared matrix: {adata.n_obs:,} tubules x {adata.n_vars:,} mouse-ortholog
 print(cohort_summary.to_string(index=False))
 
 # %% [markdown]
-# ## 2. Shared embedding, integration, and cell/segment labels
+# # Section 2 - cell typing, pass-2 Harmony, Scanpy DPT
 #
 # HVGs are selected separately in mouse and human and intersected before PCA. Harmony
 # integrates sample labels when R/harmony is available. If it is unavailable, the
@@ -318,7 +327,7 @@ print(f"Embedding: {rep_key}; integration: {integration_method}")
 print(adata.obs["broad_tubule_marker_call"].value_counts().to_string())
 
 # %% [markdown]
-# ## 2b. Pass-2 integration on the retained tubule continuum
+# ## Pass-2 Harmony on the retained tubule continuum
 #
 # Labels are intentionally not recomputed after this pass, matching the mouse-only workflow.
 # Human and mouse are still represented in the shared ortholog space, and sample is the batch
@@ -362,7 +371,7 @@ adata_tubule.write_h5ad(RESULTS_DIR / "cross_species_harmony_pass2.h5ad")
 print(f"Pass-2 embedding: {pass2_rep}; retained tubules: {adata_tubule.n_obs:,}")
 
 # %% [markdown]
-# ## 3. Shared diffusion pseudotime and orientation checks
+# ## Shared marker axis and diffusion pseudotime
 
 # %%
 from pseudospace.markers import compute_total_marker_axis
@@ -396,6 +405,14 @@ pd.DataFrame({
     "shared_pseudospace": adata.obs["shared_pseudospace"].to_numpy(),
 }).to_csv(RESULTS_DIR / "dpt_by_tubule.csv", index=False)
 
+# %% [markdown]
+# ## Family-specific diffusion pseudotime
+#
+# Recompute family-specific axes where the marker panel has at least two ordered modules.
+# Failures are recorded rather than hidden: a small/low-quality family should not invalidate
+# the global trajectory or be mistaken for a biological absence of an axis.
+
+# %%
 # Recompute family-specific axes where the marker panel has at least two ordered modules.
 # Failures are recorded rather than hidden: a small/low-quality family should not invalidate
 # the global trajectory or be mistaken for a biological absence of an axis.
@@ -420,7 +437,10 @@ for family, family_markers in SUBSEGMENT_MARKERS.items():
 pd.DataFrame(subset_dpt_rows).to_csv(RESULTS_DIR / "dpt_by_segment.csv", index=False)
 
 # %% [markdown]
-# ## 4. Marker heatmaps and species profile similarity
+# # Section 3 - marker heatmaps
+#
+# Global and family-specific marker heatmaps use the shared DPT and the same binned/smoothed
+# plotting utility as the mouse-only analysis.
 
 # %%
 import matplotlib.pyplot as plt
@@ -488,11 +508,14 @@ if len(profile_genes) >= 3:
     pd.DataFrame(profile_rows).to_csv(RESULTS_DIR / "curves" / "marker_profile_similarity.csv", index=False)
 
 # %% [markdown]
-# ## 5. Gene-level level/shape curves
+# # Section 4 - human versus healthy mouse PT trajectories
 #
 # The nested GAM is retained as a descriptive decomposition. Its cellwise F quantities are
 # not presented as confirmatory p-values because one human donor is compared with two mouse
 # specimens and species is inseparable from donor/region in this cohort.
+
+# %% [markdown]
+# ## Gene-level nested level/shape decomposition and effect-size curves
 
 # %%
 from scipy import sparse
@@ -565,7 +588,7 @@ for sample in sorted(adata_pt.obs["sample"].astype(str).unique()):
 pd.DataFrame(sample_curve_rows).to_csv(RESULTS_DIR / "curves" / "top_gene_per_sample_curves.csv", index=False)
 
 # %% [markdown]
-# ## 6. Pathway/module curves and sample sensitivity
+# ## Pathway/module curves and per-sample sensitivity
 
 # %%
 pathway_rows = []
@@ -604,12 +627,12 @@ sample_summary = (
 )
 sample_summary.to_csv(RESULTS_DIR / "diagnostics" / "sample_support.csv", index=False)
 
-# %% [markdown]
-# ## 6b. Three-axis concordance (secondary fidelity check)
-#
 # When centroid coordinates and Podocyte calls are present, distance to the nearest Podocyte
 # provides a coarse physical cortex-to-medulla proxy. It is not used to fit expression curves;
 # it only checks whether the molecular axis agrees with an independent spatial ordering.
+
+# %% [markdown]
+# # Section 5 - three-axis concordance (non-circular fidelity check)
 
 # %%
 from scipy.spatial import cKDTree
@@ -645,7 +668,7 @@ if {"x_centroid", "y_centroid"}.issubset(adata.obs.columns):
 pd.DataFrame(concordance_rows).to_csv(RESULTS_DIR / "diagnostics" / "three_axis_concordance.csv", index=False)
 
 # %% [markdown]
-# ## 7. Summary and publication caveats
+# # Section 6 - validation and summary
 
 # %%
 notes = f"""# Human versus healthy-mouse run

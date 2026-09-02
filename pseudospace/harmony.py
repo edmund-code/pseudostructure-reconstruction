@@ -15,12 +15,46 @@ before trusting a full run.
 """
 from __future__ import annotations
 
+import re
 from typing import Literal, Optional
 
 import anndata as ad
 import numpy as np
 import pandas as pd
 import scanpy as sc
+
+
+# The bridge below is written for the modern RunHarmony API. Older 1.x releases
+# may accept a superficially similar call but do not reproduce the same embedding.
+MIN_HARMONY_VERSION = (2, 0, 5)
+
+
+def _parse_version(version: str) -> tuple[int, ...]:
+    """Return a numeric package-version tuple, rejecting ambiguous strings."""
+    normalized = re.sub(r"^\[\d+\]\s*", "", version.strip())
+    match = re.match(r"^(\d+(?:\.\d+)*)", normalized)
+    if not match:
+        raise ValueError(f"Cannot parse R harmony version {version!r}.")
+    text = match.group(1)
+    if "." in text:
+        return tuple(int(part) for part in text.split("."))
+    return tuple(int(part) for part in normalized.split())
+
+
+def require_supported_harmony_version(
+    version: str,
+    minimum: tuple[int, ...] = MIN_HARMONY_VERSION,
+) -> None:
+    """Fail before integration when R's ``harmony`` package is too old."""
+    parsed = _parse_version(version)
+    padded = parsed + (0,) * max(0, len(minimum) - len(parsed))
+    if padded < minimum:
+        required = ".".join(map(str, minimum))
+        raise RuntimeError(
+            f"R package 'harmony' {version} is unsupported; this workflow requires "
+            f"harmony >= {required}. Use the conda environment's pinned r-harmony package "
+            "and do not prepend a user-level R library to .libPaths()."
+        )
 
 
 def select_harmony_hvgs_by_condition(
@@ -310,6 +344,7 @@ def run_harmony_rpy2(
     lambda_val: float = 1,
     max_iter: int = 30,
     tau: int = 1000,  # NOT harmony>=2.0's own default (0) -- preserved intentionally, see docstring.
+    ncores: int = 1,
 ) -> ad.AnnData:
     """Bridges to R's harmony::RunHarmony via rpy2.
 
@@ -386,8 +421,9 @@ def run_harmony_rpy2(
     # --- Diagnostics ---------------------------------------------------------
     try:
         harmony_version = str(utils.packageVersion('harmony')[0])
-    except Exception:
-        harmony_version = 'unknown'
+    except Exception as exc:
+        raise RuntimeError("Could not determine the installed R package 'harmony' version.") from exc
+    require_supported_harmony_version(harmony_version)
 
     try:
         exported_functions = sorted(str(x) for x in base.getNamespaceExports('harmony'))
@@ -435,6 +471,7 @@ def run_harmony_rpy2(
 
     print(f'  Requested: theta={theta}, lambda={lambda_val}, max_iter={max_iter}, tau={tau} '
           f'(harmony>=2.0 package default for tau is 0 -- see docstring note).')
+    print(f'  Requested ncores={ncores} (pinned to one core for reproducibility).')
 
     # Resolve tau routing BEFORE entering the localconverter context below.
     # harmony_options() must be built outside that context: calling it *inside*
@@ -512,6 +549,7 @@ def run_harmony_rpy2(
             'theta': float(theta),
             'lambda': float(lambda_val),
             'max_iter': int(max_iter),
+            'ncores': int(ncores),
             'verbose': True,
         }
         if 'do_pca' in accepted_args:
@@ -533,6 +571,7 @@ def run_harmony_rpy2(
             'theta': float(theta),
             'lambda': float(lambda_val),
             'max_iter': int(max_iter),
+            'ncores': int(ncores),
             'do_pca': run_harmony_kwargs.get('do_pca', '<omitted, arg not accepted>'),
             'tau_requested': float(tau),
             'tau_route': tau_route,

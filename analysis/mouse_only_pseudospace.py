@@ -137,9 +137,9 @@ for directory in [RESULTS_DIR, CELLTYPING_DIR, HEATMAP_OUTPUT_DIR,
                   HEALTHY_VS_AKI_OUTPUT_DIR, CONCORDANCE_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
-R_LIB_DIR = PROJECT_DIR / 'r_libs'
-R_LIB_DIR.mkdir(exist_ok=True)
-os.environ.setdefault('R_LIBS_USER', str(R_LIB_DIR))
+# Do not inherit a personal R package library. rpy2 must resolve Harmony from the
+# active conda environment, whose r-harmony version is pinned in environment.yml.
+os.environ.pop('R_LIBS_USER', None)
 # NOTE: the matplotlib/numba/XDG cache redirects live at the top of this file, above the first
 # matplotlib import -- they are no-ops if set here.
 
@@ -182,7 +182,7 @@ N_DIFFMAP_COMPONENTS_TO_TEST = 8
 MIN_VALID_FOR_SPEARMAN = 100
 EIGENVALUE_FLOOR = 0.5
 
-COARSE_RESOLUTION = 0.5              # the ONLY clustering run; labelled at the manual checkpoint
+COARSE_RESOLUTION = 0.7              # the ONLY clustering run; labelled at the manual checkpoint
 
 # ---------------------------------------------------------------------------
 # Topology check (Section 2f.1). DPT assumes the population is a genuine continuum; nothing in
@@ -955,7 +955,8 @@ from pseudospace.trajectory import (
     save_total_pseudotime_anndata,
 )
 
-ro.r('.libPaths(c("~/R/library", .libPaths()))')
+# Keep R on the active conda environment's library path. Prepending ~/R/library here
+# silently selected an incompatible user-installed harmony 1.x package on some machines.
 plt.rcParams['figure.dpi'] = 120
 
 # The cache redirects at the top of this file only work if they run BEFORE matplotlib and numba
@@ -1035,13 +1036,13 @@ print(adata_combined.var['hvg_condition_count'].value_counts().sort_index())
 # Uncorrected PCA + pre-Harmony UMAP (the "before" panel for the integration check).
 adata_hvg = adata_combined[:, adata_combined.var[hvg_col]].copy()
 adata_hvg.X = adata_hvg.layers['lognorm'].copy()
-sc.tl.pca(adata_hvg, n_comps=HARMONY_PCA_N_COMPS)
+sc.tl.pca(adata_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
 
 adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
 sc.pp.neighbors(adata_combined, use_rep='X_pca', n_neighbors=HARMONY_NEIGHBORS_N,
-                key_added='pre_harmony')
+                key_added='pre_harmony', random_state=RANDOM_STATE)
 sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-           neighbors_key='pre_harmony')
+           neighbors_key='pre_harmony', random_state=RANDOM_STATE)
 adata_combined.obsm['X_umap_pre_harmony'] = adata_combined.obsm['X_umap'].copy()
 
 sc.pl.umap(adata_combined, color=['sample', 'condition'], ncols=2, frameon=False,
@@ -1064,8 +1065,10 @@ adata_hvg = run_harmony_rpy2(
 adata_combined.obsm['X_harmony'] = adata_hvg.obsm['X_harmony'].copy()
 adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
 
-sc.pp.neighbors(adata_combined, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N)
-sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD)
+sc.pp.neighbors(adata_combined, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
+                random_state=RANDOM_STATE)
+sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+           random_state=RANDOM_STATE)
 sc.pl.umap(adata_combined, color=['sample', 'condition'], ncols=2, frameon=False)
 
 # %%
@@ -1246,65 +1249,33 @@ print('}')
 # tubule subset but does NOT re-cluster or re-label.
 
 # %%
-# MANUAL: map each Leiden cluster id -> a label from LABEL_VOCABULARY.
-# Labelled at COARSE granularity, from the top-5 Wilcoxon markers of clustering 5590d379a8c7.
-# At res=0.5 these 11 clusters carry family identity only -- nothing here separates S1 from S2
-# from S3, or mTAL from cTAL, so a fine label would be invention. See the note above.
-#   0  Pck1, Slc34a1, Slc4a4, Alpl, Miox        pan-PT
-#   1  Slc6a18, Kap, Napsa, Mep1a, Slc27a2      PT
-#   2  Hsd11b2, Aqp2, Ly6e, Aqp3                principal cell / CD
-#   3  Klk1, Car15, Umod, Clcnkb, Slc12a1       TAL (Umod + NKCC2)
-#   4  Tmem52b, Klk1, Tmem213, Clcnkb, Slc8a1   DCT/CNT boundary -- JUDGEMENT CALL, see below
-#   5  Sema3g, Podxl, Synpo, Nphs2, Plat        podocyte
-#   6  Krt19, Sprr1a, Krt18, Ahnak              NOT a nephron segment -- see below
-#   7  Plet1, Aqp2, Akr1b3, Bcam                CD
-#   8  Cryab, Vim, Tnc, Thbs1                   stroma (the argmax called this cTAL; it is not)
-#   9  Umod, Slc5a3, Defb1, Ppp1r1a             TAL
-#  10  Acta2, Tpm2, Tagln, Myh11, Cald1         smooth muscle
-#
-# TWO CALLS THAT ARE YOURS, NOT MINE:
-#   '4' -> Slc8a1 + Klk1 read DCT2/CNT, but Tmem213/Tmem52b are intercalated-cell genes. 'DCT'
-#          is the reading below; 'CNT_CD' is defensible. Check Slc12a3 vs Aqp2 in the dotplot.
-#   '6' -> Krt19/Krt18/Sprr1a is urothelium or injured/de-differentiated epithelium, expected in
-#          an IR cohort. Parked as 'Unassigned' (dropped) rather than forced into a segment.
-#          If it is injured PT it belongs in the PT cohort and changes Section 4 materially.
+# Manual labels for the reference run recorded in results/mouse_only_v5. They are valid ONLY
+# with the fingerprint directly below; a changed cluster numbering must be reviewed, not reused.
 COARSE_LABELS = {
     '0': 'PT-S1',
-    '1': 'PT-S3',
-    '2': 'CCD',
-    '3': 'cTAL',
-    '4': 'DCT2',
-    '5': 'Podocyte',
-    '6': 'ATL',
-    '7': 'IMCD',
-    '8': 'cTAL',
-    '9': 'mTAL',
-    '10': 'SmoothMuscle',
+    '1': 'PT-S2',
+    '2': 'PT-S3',
+    '3': 'DCT2',
+    '4': 'CCD',
+    '5': 'cTAL',
+    '6': 'Podocyte',
+    '7': 'ATL',
+    '8': 'IMCD',
+    '9': 'SmoothMuscle',
+    '10': 'mTAL',
+    '11': 'SmoothMuscle',
+    '12': 'mTAL',
 }
 
-# The clustering COARSE_LABELS above was written against: 43,848 tubules, 11 Leiden clusters,
-# labels taken from the auto-suggestion (argmax panel score) rather than a dotplot read.
-#
-# HISTORY -- why this moved. The previous pin was 12 clusters / 1b7ec40a8685, from the
-# 2026-08-12 run. It did not reproduce, because R harmony was never seeded (see the set.seed
-# added at both run_harmony_rpy2 call sites in Sections 1 and 2d): harmony's soft-kmeans
-# initialisation is random, so X_harmony differed run to run, which moved the neighbour graph,
-# which moved Leiden. With the seed in place the embedding is reproducible -- but the FIRST run
-# after adding it will produce yet another clustering, so expect to update this hash once more
-# and then never again.
-#
-# Only the keys listed here are compared, so you can pin as much or as little as you trust
-# (`n_features` is deliberately omitted -- it depends on HVG selection, which drifts with the
-# scanpy version, and it does not by itself invalidate a label). A mismatch means the cluster ids
-# have moved and every label above is suspect. To proceed anyway, re-read the dotplot, fix the
-# labels, then update the hash here -- or set this to None to downgrade the check to a warning.
+# The reference run used R harmony 2.0.5 and Scanpy/Leiden resolution 0.7. Do not disable this
+# guard: the labels above are keyed by Leiden ID, not by marker identity.
 COARSE_LABELS_FINGERPRINT = {
     'n_cells': 43848,
-    'n_clusters': 11,
-    'resolution': 0.5,
+    'n_clusters': 13,
+    'resolution': 0.7,
     'n_neighbors': 30,
     'random_state': 0,
-    'membership_sha1': '5590d379a8c7',
+    'membership_sha1': 'c1b43b7af63a',
 }
 
 if not COARSE_LABELS:
@@ -1430,7 +1401,7 @@ print(f'Pass-2 HVGs (intersection, tubule-only): {int(adata_tubule.var[tub_hvg].
 
 adata_tubule_hvg = adata_tubule[:, adata_tubule.var[tub_hvg]].copy()
 adata_tubule_hvg.X = adata_tubule_hvg.layers['lognorm'].copy()
-sc.tl.pca(adata_tubule_hvg, n_comps=HARMONY_PCA_N_COMPS)
+sc.tl.pca(adata_tubule_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
 adata_tubule.obsm['X_pca'] = adata_tubule_hvg.obsm['X_pca'].copy()
 
 ro.r(f'set.seed({RANDOM_STATE})')          # see the note at the Section 1 harmony call
@@ -1441,7 +1412,8 @@ adata_tubule.obsm['X_harmony'] = adata_tubule_hvg.obsm['X_harmony'].copy()
 
 sc.pp.neighbors(adata_tubule, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
                 random_state=RANDOM_STATE)
-sc.tl.umap(adata_tubule, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD)
+sc.tl.umap(adata_tubule, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+           random_state=RANDOM_STATE)
 adata_tubule.write(PASS2_HARMONY_OUTPUT_PATH)
 
 sc.pl.embedding(adata_tubule, basis='umap', color=['sample', 'condition', 'coarse_class', 'segment_class'],
@@ -1573,7 +1545,7 @@ else:
           'threshold: the anatomical ordering is supported by a connected graph.')
 
 # %%
-sc.tl.diffmap(adata_total, neighbors_key=neighbors_key)
+sc.tl.diffmap(adata_total, neighbors_key=neighbors_key, random_state=RANDOM_STATE)
 # DIAGNOSTIC ONLY. This reports which diffusion component tracks the marker axis best; it does
 # NOT feed sc.tl.dpt below, which uses scanpy's default n_dcs across all components. To let the
 # selected component drive the pseudotime instead, pass n_dcs=diagnostic_component + 1 to

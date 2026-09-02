@@ -14,9 +14,13 @@ The data root must follow [data/README.md](../../data/README.md). The result roo
 
 1. Regenerate tubule matrices with `analysis/notebooks/01_segmentation_to_gene_matrix.ipynb` only
    when the private Visium and v4 segmentation inputs change.
-2. Run the mouse-only script or notebook from a clean kernel.
+2. Create the pinned `kidney-pseudospace` environment from `environment.yml`, then run the
+   mouse-only script or notebook from a clean kernel. The workflow requires R `harmony` 2.0.5;
+   it deliberately refuses older user-level R installations.
 3. At the coarse-label checkpoint, inspect the dotplot and explicitly confirm every Leiden
-   cluster. Do not bypass the fingerprint guard.
+   cluster. The reference labels are pinned to the 13-cluster reference fingerprint; if it
+   changes, the workflow stops before any cells are retained for DPT. Re-read the dotplot and
+   update both the labels and fingerprint together—do not bypass the guard.
 4. Review Harmony integration diagnostics, PAGA connectivity, DPT-by-segment ordering, and the
    physical-axis sensitivity analysis before interpreting condition effects.
 5. Use the QuPath scripts with the same roots to export labels or perform spatial validation.

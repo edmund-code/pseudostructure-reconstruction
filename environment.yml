@@ -19,7 +19,7 @@ dependencies:
   - h5py
   - numba
   - r-base
-  - r-harmony
+  - r-harmony=2.0.5
   - rpy2
   - jupyterlab
   - nbformat

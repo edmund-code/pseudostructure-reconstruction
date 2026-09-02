@@ -32,9 +32,9 @@ These are real and worth resolving before drawing firm conclusions:
    The notebook prints a suggested `COARSE_LABELS` dict from per-cluster marker-panel scores,
    with the instruction to *verify against the dotplot*. The dict in the notebook is
    character-identical to that suggestion. Two assignments look wrong (§1.2).
-2. **The `COARSE_LABELS_FINGERPRINT` guard is commented out.** That block existed to verify the
-   hand-written labels still match the clustering they were written against. Nothing currently
-   checks this.
+2. **The historical notebook had its `COARSE_LABELS_FINGERPRINT` guard commented out.** The
+   active workflow now enforces the reference fingerprint and rejects stale labels before DPT.
+   Any new clustering must be reviewed and relabelled rather than reusing these numeric IDs.
 3. **Permutation p-values have a hard floor of 1/6 ≈ 0.167.** With n = 2 vs 2 there are only
    C(4,2) = 6 sample-level relabelings. The minimum achievable p is 0.167 and **no result here
    can be significant at conventional thresholds.** Every ranking below is by *effect size*.

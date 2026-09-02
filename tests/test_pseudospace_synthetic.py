@@ -10,10 +10,18 @@ ad = pytest.importorskip("anndata")
 pytest.importorskip("scanpy")
 
 from pseudospace.heatmaps import binned_interpolated_expression
+from pseudospace.harmony import require_supported_harmony_version
 from pseudospace.io_qc import annotate_mito_ribo_mouse_symbols, sample_name_from_path
 from pseudospace.levelshape import loso_shape_stability, run_level_shape
 from pseudospace.markers import assign_cluster_labels, resolve_available_marker_groups
 from pseudospace.trajectory import orient_and_normalize
+
+
+def test_harmony_version_guard_rejects_legacy_r_package():
+    require_supported_harmony_version("2.0.5")
+    require_supported_harmony_version("[1] 2 0 5")
+    with pytest.raises(RuntimeError, match="requires harmony >= 2.0.5"):
+        require_supported_harmony_version("1.2.4")
 
 
 def _adata(n_obs: int = 24):

@@ -75,10 +75,15 @@ tables under `docs/results/`.
   to the `PSEUDOSPACE_*` env vars; CLI arguments win. The hygiene checker rejects any tracked file
   containing a machine-local absolute home directory (never spell one out in tracked text — that is
   what makes the checker fail).
-- **Notebooks are jupytext pairs — edit only the `.py`, never the `.ipynb`.** Every `.ipynb` is
-  paired with a `# %%`-marked `.py` twin (`jupytext.toml`, percent format). Make every change in
-  the `.py` and let it sync outward; hand-editing or executing the `.ipynb` diverges the pair and
-  commits cell outputs/execution counts, which fail the hygiene gate.
+- **Notebooks are the canonical artifact; the `.py` is their jupytext mirror.** You (the human) may
+  execute `analysis/notebooks/*.ipynb` freely for visualization — running cells never touches the
+  `.py`. The **agent edits only the `.py`**, never the `.ipynb`. After either side changes, run
+  `jupytext --sync <notebook>` so the two agree: sync is timestamp-based and bidirectional, so never
+  force a one-way regeneration (`jupytext --to py` / `--to ipynb`) — that silently discards the
+  other side's edits.
+- **Committed notebooks must be output-free.** Strip before committing with
+  `python -m nbconvert --clear-output --inplace <notebook>`; tracked cell outputs or execution
+  counts fail the hygiene gate.
 - **Tests must not need private data.** Use synthetic fixtures; gate heavy imports with
   `pytest.importorskip(...)` (see `tests/test_pseudospace_synthetic.py`).
 - **Scientific guardrails** (do not bypass):
@@ -103,6 +108,13 @@ tables under `docs/results/`.
   uncommitted — and never push private data or executed notebooks.
 
 ## Notes
+
+- **The `.py` ↔ `.ipynb` pairing is not wired yet.** `jupytext.toml` sets a default `ipynb,py:percent`
+  pair, but `jupytext --paired-paths` resolves to files that do not exist: the notebooks live in
+  `analysis/notebooks/` with a `NN_` prefix, while the scripts are `analysis/<name>.py`. Jupytext
+  cannot infer these pairs (basenames and directories differ), so today **no `.py` edit reaches a
+  notebook automatically** and `jupytext --sync <notebook>` has no partner to sync with. Wire each
+  pair explicitly with `--set-formats`, or rename to matching basenames, before relying on sync.
 
 <!-- Leave a clean house: no stray scratch files, temp scripts, or vendored archives at the repo
      root. Anything that isn't project source belongs outside the workspace. -->

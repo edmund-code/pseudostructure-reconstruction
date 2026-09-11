@@ -1249,33 +1249,35 @@ print('}')
 # tubule subset but does NOT re-cluster or re-label.
 
 # %%
-# Manual labels for the reference run recorded in results/mouse_only_v5. They are valid ONLY
-# with the fingerprint directly below; a changed cluster numbering must be reviewed, not reused.
+# Manual labels for the reproducible R-harmony 2.0.5 run (fingerprint below).  These calls were
+# reviewed against celltyping/coarse_marker_dotplot.png and coarse_cluster_top_markers.csv:
+#   4 = Cryab/Vim/Tnc/Thbs1 (Stroma); 8 = Krt19/Sprr1a/Krt18 (Unassigned), rather than
+# assigning either cluster to a nephron segment.  The remaining IDs carry the expected segment
+# markers.  They are valid ONLY for the fingerprint below; a changed clustering must be reviewed.
 COARSE_LABELS = {
     '0': 'PT-S1',
     '1': 'PT-S2',
-    '2': 'PT-S3',
-    '3': 'DCT2',
-    '4': 'CCD',
-    '5': 'cTAL',
-    '6': 'Podocyte',
-    '7': 'ATL',
-    '8': 'IMCD',
-    '9': 'SmoothMuscle',
-    '10': 'mTAL',
-    '11': 'SmoothMuscle',
-    '12': 'mTAL',
+    '2': 'DCT2',
+    '3': 'PT-S3',
+    '4': 'Stroma',
+    '5': 'CCD',
+    '6': 'cTAL',
+    '7': 'Podocyte',
+    '8': 'Unassigned',
+    '9': 'IMCD',
+    '10': 'SmoothMuscle',
+    '11': 'mTAL',
 }
 
 # The reference run used R harmony 2.0.5 and Scanpy/Leiden resolution 0.7. Do not disable this
 # guard: the labels above are keyed by Leiden ID, not by marker identity.
 COARSE_LABELS_FINGERPRINT = {
     'n_cells': 43848,
-    'n_clusters': 13,
+    'n_clusters': 12,
     'resolution': 0.7,
     'n_neighbors': 30,
     'random_state': 0,
-    'membership_sha1': 'c1b43b7af63a',
+    'membership_sha1': 'a233dd755087',
 }
 
 if not COARSE_LABELS:
@@ -3597,6 +3599,541 @@ csvs = ['gene_level_shape_results.csv', 'pathway_level_shape_results.csv', 'pseu
 if physical_sensitivity is not None:
     csvs += ['physical_axis_sensitivity_genes.csv', 'physical_axis_sensitivity_pathways.csv']
 print('CSVs written:', ', '.join(csvs))
+
+# %% [markdown]
+# ## 4.11 - collaborator shortlist: robust S1/S2/S3-peaking PT gene programs
+#
+# **Question.** Which reproducible PT expression programs peak in S1, S2 or S3, and which show
+# the largest descriptive Control-versus-AKI trajectory remodeling?
+#
+# This is an exploratory prioritization layer for kidney collaborators, not a new significance
+# analysis. It balances sample-consistent segment specificity, `shape_rms`, and detection; it
+# excludes axis-defining markers, known sex-biased PT genes, and mitochondrial/ribosomal genes
+# from the primary shortlist. Similar sample-balanced trajectories are clustered *within* each
+# peak segment. The exports include the full candidate table and plotted source data so every
+# inclusion can be audited. All selection, clustering, plotting, and export code is defined in
+# the notebook cells below; this section has no external analysis-helper dependency.
+
+# %%
+"""Build a collaborator-facing summary of spatially patterned PT genes.
+
+The primary shortlist is exploratory.  It prioritizes genes with a reproducible S1/S2/S3 peak
+across specimens and a large healthy-versus-AKI trajectory-shape effect, then clusters similar
+sample-balanced expression profiles within each peak segment.  It does not treat tubules as
+independent biological replicates and does not convert the 2-vs-2 design into significance claims.
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Iterable
+
+import anndata as ad
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy import sparse
+from scipy.cluster.hierarchy import fcluster, leaves_list, linkage
+from scipy.ndimage import gaussian_filter1d
+from scipy.spatial.distance import pdist
+
+
+SEGMENTS = ("PT-S1", "PT-S2", "PT-S3")
+SEGMENT_COLORS = {"PT-S1": "#3B6FB6", "PT-S2": "#D88932", "PT-S3": "#3D9970"}
+CONDITION_COLORS = {"Control": "#0072B2", "AKI": "#D55E00"}
+
+mpl.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
+    "font.size": 7,
+    "axes.titlesize": 8,
+    "axes.labelsize": 7,
+    "xtick.labelsize": 6.5,
+    "ytick.labelsize": 6.5,
+    "axes.spines.right": False,
+    "axes.spines.top": False,
+    "axes.linewidth": 0.7,
+    "legend.frameon": False,
+    "pdf.fonttype": 42,
+    "svg.fonttype": "none",
+})
+
+
+def _norm_gene(gene: str) -> str:
+    return str(gene).strip().upper()
+
+
+def _as_csr(matrix):
+    return matrix.tocsr() if sparse.issparse(matrix) else sparse.csr_matrix(np.asarray(matrix))
+
+
+def _dense_mean(matrix, mask: np.ndarray) -> np.ndarray:
+    if not np.any(mask):
+        return np.full(matrix.shape[1], np.nan)
+    return np.asarray(matrix[mask].mean(axis=0)).ravel()
+
+
+def _rank01(values: pd.Series) -> pd.Series:
+    return values.rank(method="average", pct=True).fillna(0.0)
+
+
+def _interpolate_and_smooth(curve: np.ndarray, sigma: float = 1.0) -> np.ndarray:
+    x = np.arange(curve.size)
+    finite = np.isfinite(curve)
+    if finite.sum() == 0:
+        return np.zeros_like(curve)
+    if finite.sum() == 1:
+        curve = np.full_like(curve, curve[finite][0])
+    elif not finite.all():
+        if not np.all(np.diff(x[finite]) > 0):
+            raise ValueError("Interpolation coordinates must be strictly increasing.")
+        curve = np.interp(x, x[finite], curve[finite])
+    return gaussian_filter1d(curve, sigma=sigma, mode="nearest")
+
+
+def _load_alignment_gate():
+    """Load the render-time figure QA gate from its standard installation or an override."""
+    override = os.environ.get("NATURE_FIGURE_QA_DIR")
+    qa_dir = Path(override).expanduser() if override else (
+        Path.home() / ".codex" / "skills" / "nature-figure" / "scripts"
+    )
+    if not (qa_dir / "audit_panel_alignment.py").exists():
+        raise FileNotFoundError(
+            "Figure alignment QA is unavailable. Set NATURE_FIGURE_QA_DIR to the directory "
+            "containing audit_panel_alignment.py."
+        )
+    if str(qa_dir) not in sys.path:
+        sys.path.insert(0, str(qa_dir))
+    from audit_panel_alignment import require_matplotlib_panel_alignment
+
+    return require_matplotlib_panel_alignment
+
+
+def _export_figure(fig, stem: Path, *, axes, panel_ids, row_groups, exclude_axes=()):
+    """Run alignment QA, then export editable and collaborator-preview formats."""
+    require_matplotlib_panel_alignment = _load_alignment_gate()
+    fig.canvas.draw()
+    require_matplotlib_panel_alignment(
+        fig,
+        axes=axes,
+        panel_ids=panel_ids,
+        row_groups=row_groups,
+        exclude_axes=exclude_axes,
+        require_panel_labels=True,
+        strict=True,
+        tolerance_pt=1.5,
+        gutter_tolerance_pt=1.5,
+        json_out=stem.with_suffix(".alignment.json"),
+        overlay_svg=stem.with_suffix(".alignment.svg"),
+    )
+    fig.savefig(stem.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(stem.with_suffix(".svg"), bbox_inches="tight")
+    fig.savefig(stem.with_suffix(".png"), dpi=600, bbox_inches="tight")
+    fig.savefig(stem.with_suffix(".tiff"), dpi=600, bbox_inches="tight",
+                pil_kwargs={"compression": "tiff_lzw"})
+
+
+def _cluster_within_segments(shortlist: pd.DataFrame, profiles: np.ndarray,
+                             modules_per_segment: int) -> tuple[pd.DataFrame, list[int]]:
+    """Cluster genes within their robust peak segment and return a stable display order."""
+    shortlist = shortlist.copy()
+    shortlist["module"] = ""
+    display_order: list[int] = []
+    for segment in SEGMENTS:
+        positions = np.flatnonzero(shortlist["peak_segment"].to_numpy() == segment)
+        if positions.size == 0:
+            continue
+        local = profiles[positions]
+        if positions.size < 3:
+            raw_clusters = np.ones(positions.size, dtype=int)
+            leaves = np.arange(positions.size)
+        else:
+            distances = np.nan_to_num(pdist(local, metric="correlation"), nan=0.0)
+            tree = linkage(distances, method="average", optimal_ordering=True)
+            raw_clusters = fcluster(tree, t=min(modules_per_segment, positions.size),
+                                    criterion="maxclust")
+            leaves = leaves_list(tree)
+            # A one- or two-gene branch is an outlier, not a collaborator-facing program. Keep
+            # the hierarchical gene order but collapse such unstable splits to the segment module.
+            cluster_sizes = np.bincount(raw_clusters)[1:]
+            if modules_per_segment == 1 or np.any(cluster_sizes < 3):
+                raw_clusters = np.ones(positions.size, dtype=int)
+
+        cluster_ids = sorted(
+            np.unique(raw_clusters),
+            key=lambda cluster: np.argmax(np.mean(local[raw_clusters == cluster], axis=0)),
+        )
+        cluster_to_letter = {cluster: chr(ord("A") + i) for i, cluster in enumerate(cluster_ids)}
+        for local_i, global_i in enumerate(positions):
+            shortlist.loc[global_i, "module"] = f"{segment.replace('PT-', '')}-{cluster_to_letter[raw_clusters[local_i]]}"
+
+        for cluster in cluster_ids:
+            members = [i for i in leaves if raw_clusters[i] == cluster]
+            display_order.extend(positions[members].tolist())
+    return shortlist, display_order
+
+# %%
+def build_pt_collaborator_summary(
+    dpt_path: str | Path,
+    shape_results_path: str | Path,
+    output_dir: str | Path,
+    *,
+    axis_basis_genes: Iterable[str] = (),
+    known_sex_biased_genes: Iterable[str] = (),
+    n_per_segment: int = 12,
+    modules_per_segment: int = 2,
+    n_bins: int = 48,
+    minimum_detection_fraction: float = 0.10,
+    minimum_peak_agreement: float = 0.75,
+) -> dict[str, object]:
+    """Create the PT program shortlist, source-data tables, and two presentation figures."""
+    dpt_path = Path(dpt_path)
+    shape_results_path = Path(shape_results_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    adata = ad.read_h5ad(dpt_path)
+    pt_mask = adata.obs["broad_tubule_marker_call"].astype(str).eq("PT").to_numpy()
+    pt = adata[pt_mask].copy()
+    if pt.n_obs == 0:
+        raise ValueError("The DPT file contains no PT observations.")
+    if "lognorm" not in pt.layers:
+        raise KeyError("The DPT file must contain layers['lognorm'] for expression summaries.")
+
+    segment = pt.obs["segment_class"].astype(str).to_numpy()
+    unexpected = sorted(set(segment) - set(SEGMENTS))
+    if unexpected:
+        raise ValueError(f"PT subset contains unexpected segment labels: {unexpected}")
+    sample = pt.obs["sample"].astype(str).to_numpy()
+    condition_raw = pt.obs["condition"].astype(str).str.lower().to_numpy()
+    condition = np.where(condition_raw == "ir", "AKI", "Control")
+    position = pt.obs["total_scanpy_dpt"].to_numpy(dtype=float)
+    if not np.all(np.isfinite(position)):
+        raise ValueError("PT DPT positions must all be finite.")
+
+    shape = pd.read_csv(shape_results_path).drop_duplicates("gene").set_index("gene")
+    var_lookup = {str(gene): i for i, gene in enumerate(pt.var_names)}
+    genes = np.array([gene for gene in shape.index.astype(str) if gene in var_lookup], dtype=object)
+    if genes.size == 0:
+        raise ValueError("No genes overlap between the DPT file and shape-results table.")
+    indices = np.array([var_lookup[gene] for gene in genes], dtype=int)
+    expression = _as_csr(pt.layers["lognorm"][:, indices])
+    detection_fraction = np.asarray((expression > 0).sum(axis=0)).ravel() / pt.n_obs
+
+    sample_names = sorted(set(sample))
+    balanced = np.full((len(sample_names), len(SEGMENTS), genes.size), np.nan)
+    for sample_i, sample_name in enumerate(sample_names):
+        for segment_i, segment_name in enumerate(SEGMENTS):
+            mask = (sample == sample_name) & (segment == segment_name)
+            balanced[sample_i, segment_i] = _dense_mean(expression, mask)
+    segment_means = np.nanmean(balanced, axis=0)
+    if np.any(~np.isfinite(segment_means)):
+        raise ValueError("At least one sample/segment combination is empty; balanced peak calls fail.")
+
+    segment_sd = segment_means.std(axis=0)
+    segment_sd[segment_sd == 0] = 1.0
+    segment_z = (segment_means - segment_means.mean(axis=0)) / segment_sd
+    peak_index = np.argmax(segment_means, axis=0)
+    peak_segment = np.array(SEGMENTS, dtype=object)[peak_index]
+    sorted_z = np.sort(segment_z, axis=0)
+    peak_margin = sorted_z[-1] - sorted_z[-2]
+    per_sample_peak = np.argmax(balanced, axis=1)
+    peak_agreement = np.mean(per_sample_peak == peak_index[None, :], axis=0)
+
+    metrics = pd.DataFrame({
+        "gene": genes,
+        "peak_segment": peak_segment,
+        "peak_agreement": peak_agreement,
+        "segment_specificity_z_margin": peak_margin,
+        "detection_fraction": detection_fraction,
+    })
+    for segment_i, segment_name in enumerate(SEGMENTS):
+        metrics[f"balanced_mean_{segment_name}"] = segment_means[segment_i]
+    metrics = metrics.join(shape.reset_index().set_index("gene"), on="gene", rsuffix="_shape")
+
+    axis_set = {_norm_gene(gene) for gene in axis_basis_genes}
+    sex_set = {_norm_gene(gene) for gene in known_sex_biased_genes}
+    gene_upper = metrics["gene"].map(_norm_gene)
+    metrics["axis_basis_gene"] = gene_upper.isin(axis_set)
+    metrics["known_sex_biased_gene"] = gene_upper.isin(sex_set)
+    metrics["technical_gene"] = metrics["gene"].str.match(r"^(mt-|Rpl|Rps)", case=False)
+    metrics["specificity_percentile"] = _rank01(metrics["segment_specificity_z_margin"])
+    metrics["shape_percentile"] = _rank01(metrics["shape_rms"])
+    metrics["detection_percentile"] = _rank01(metrics["detection_fraction"])
+    metrics["priority_score"] = (
+        0.55 * metrics["specificity_percentile"]
+        + 0.35 * metrics["shape_percentile"]
+        + 0.10 * metrics["detection_percentile"]
+    )
+    metrics["primary_eligible"] = (
+        (metrics["detection_fraction"] >= minimum_detection_fraction)
+        & (metrics["peak_agreement"] >= minimum_peak_agreement)
+        & ~metrics["axis_basis_gene"]
+        & ~metrics["known_sex_biased_gene"]
+        & ~metrics["technical_gene"]
+    )
+
+    chosen = []
+    for segment_name in SEGMENTS:
+        group = metrics[metrics["primary_eligible"] & metrics["peak_segment"].eq(segment_name)]
+        chosen.append(group.nlargest(n_per_segment, "priority_score"))
+    shortlist = pd.concat(chosen, ignore_index=True)
+    if shortlist.empty:
+        raise ValueError("No genes passed the collaborator-shortlist filters.")
+
+    selected_lookup = {gene: i for i, gene in enumerate(genes)}
+    selected_columns = np.array([selected_lookup[gene] for gene in shortlist["gene"]], dtype=int)
+    selected_expression = expression[:, selected_columns].tocsr()
+    gene_mean = np.asarray(selected_expression.mean(axis=0)).ravel()
+    gene_sq = np.asarray(selected_expression.multiply(selected_expression).mean(axis=0)).ravel()
+    gene_std = np.sqrt(np.maximum(gene_sq - gene_mean ** 2, 1e-12))
+
+    # The figure compares specimens only over their shared p1-p99 PT support. Selection metrics
+    # above still use every PT observation; this trim only prevents extrapolated visual curves.
+    low = max(np.percentile(position[sample == name], 1) for name in sample_names)
+    high = min(np.percentile(position[sample == name], 99) for name in sample_names)
+    if not low < high:
+        raise ValueError("Specimens have no shared p1-p99 PT DPT support.")
+    edges = np.linspace(low, high, n_bins + 1)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    sample_curves = np.full((len(sample_names), len(shortlist), n_bins), np.nan)
+    source_rows = []
+    for sample_i, sample_name in enumerate(sample_names):
+        for bin_i in range(n_bins):
+            right = position <= edges[bin_i + 1] if bin_i == n_bins - 1 else position < edges[bin_i + 1]
+            mask = (sample == sample_name) & (position >= edges[bin_i]) & right
+            raw = _dense_mean(selected_expression, mask)
+            sample_curves[sample_i, :, bin_i] = raw
+        for gene_i in range(len(shortlist)):
+            sample_curves[sample_i, gene_i] = _interpolate_and_smooth(
+                sample_curves[sample_i, gene_i], sigma=1.0
+            )
+
+    z_curves = (sample_curves - gene_mean[None, :, None]) / gene_std[None, :, None]
+    pooled_profile = np.nanmean(z_curves, axis=0)
+    shortlist, display_order = _cluster_within_segments(
+        shortlist, pooled_profile, modules_per_segment
+    )
+    shortlist["display_order"] = np.arange(len(shortlist))
+    shortlist.loc[display_order, "display_order"] = np.arange(len(display_order))
+    shortlist = shortlist.sort_values("display_order").reset_index(drop=True)
+
+    # Reindex all trajectory arrays to the final clustered order.
+    inverse = np.array(display_order, dtype=int)
+    sample_curves = sample_curves[:, inverse]
+    z_curves = z_curves[:, inverse]
+    pooled_profile = pooled_profile[inverse]
+
+    for sample_i, sample_name in enumerate(sample_names):
+        sample_condition = condition[sample == sample_name][0]
+        for gene_i, row in shortlist.iterrows():
+            for bin_i, center in enumerate(centers):
+                source_rows.append({
+                    "sample": sample_name,
+                    "condition": sample_condition,
+                    "gene": row["gene"],
+                    "peak_segment": row["peak_segment"],
+                    "module": row["module"],
+                    "dpt_bin_center": center,
+                    "smoothed_log_normalized_mean": sample_curves[sample_i, gene_i, bin_i],
+                    "smoothed_gene_z_score": z_curves[sample_i, gene_i, bin_i],
+                })
+    source_data = pd.DataFrame(source_rows)
+
+    shortlist.to_csv(output_dir / "pt_gene_program_shortlist.csv", index=False)
+    metrics.sort_values("priority_score", ascending=False).to_csv(
+        output_dir / "pt_gene_program_all_candidates.csv", index=False
+    )
+    source_data.to_csv(output_dir / "pt_gene_program_binned_source_data.csv", index=False)
+
+    # Figure 1: hero heatmap plus aligned evidence bars.
+    fig = plt.figure(figsize=(7.2, 8.6), constrained_layout=True)
+    grid_spec = fig.add_gridspec(1, 7, width_ratios=[1, 1, 1, 1, 1, 0.9, 0.9])
+    ax_heat = fig.add_subplot(grid_spec[0, :5])
+    ax_shape = fig.add_subplot(grid_spec[0, 5], sharey=ax_heat)
+    ax_specificity = fig.add_subplot(grid_spec[0, 6], sharey=ax_heat)
+    row_positions = np.arange(len(shortlist))
+    image = ax_heat.imshow(
+        pooled_profile, aspect="auto", interpolation="nearest", cmap="RdBu_r", vmin=-2.5, vmax=2.5,
+        extent=[centers[0], centers[-1], len(shortlist) - 0.5, -0.5], rasterized=True,
+    )
+    module_start = ~shortlist["module"].duplicated()
+    display_labels = [
+        f"{module}  {gene}" if is_start else f"      {gene}"
+        for gene, module, is_start in zip(shortlist["gene"], shortlist["module"], module_start)
+    ]
+    ax_heat.set_yticks(row_positions)
+    ax_heat.set_yticklabels(display_labels)
+    for label, peak in zip(ax_heat.get_yticklabels(), shortlist["peak_segment"]):
+        label.set_color(SEGMENT_COLORS[peak])
+    ax_heat.set_xlabel("Total DPT within shared PT support")
+    ax_heat.set_ylabel("Exploratory gene shortlist")
+
+    segment_medians = {name: float(np.median(position[segment == name])) for name in SEGMENTS}
+    boundaries = [(segment_medians[SEGMENTS[i]] + segment_medians[SEGMENTS[i + 1]]) / 2
+                  for i in range(2)]
+    for boundary in boundaries:
+        ax_heat.axvline(boundary, color="black", lw=0.6, ls="--", alpha=0.7)
+    zone_edges = [centers[0], *boundaries, centers[-1]]
+    for i, segment_name in enumerate(SEGMENTS):
+        middle = 0.5 * (zone_edges[i] + zone_edges[i + 1])
+        ax_heat.text(middle, -1.35, segment_name.replace("PT-", ""), ha="center", va="bottom",
+                     color=SEGMENT_COLORS[segment_name], fontweight="bold", clip_on=False)
+
+    changes = np.flatnonzero(shortlist["module"].to_numpy()[1:] != shortlist["module"].to_numpy()[:-1]) + 0.5
+    for boundary in changes:
+        for axis in (ax_heat, ax_shape, ax_specificity):
+            axis.axhline(boundary, color="white" if axis is ax_heat else "0.75", lw=1.0)
+    bar_colors = [SEGMENT_COLORS[value] for value in shortlist["peak_segment"]]
+    ax_shape.barh(row_positions, shortlist["shape_rms"], color=bar_colors, height=0.72)
+    ax_specificity.barh(row_positions, shortlist["segment_specificity_z_margin"],
+                        color=bar_colors, height=0.72)
+    ax_shape.set_title("AKI shape\neffect", pad=9)
+    ax_specificity.set_title("Segment\nspecificity", pad=9)
+    ax_shape.set_xlabel("RMS")
+    ax_specificity.set_xlabel("z margin")
+    for axis in (ax_shape, ax_specificity):
+        axis.tick_params(axis="y", left=False, labelleft=False)
+        axis.set_ylim(len(shortlist) - 0.5, -0.5)
+        axis.grid(axis="x", color="0.9", lw=0.5)
+        axis.set_axisbelow(True)
+
+    colorbar_axis = ax_heat.inset_axes([0.02, -0.11, 0.36, 0.018])
+    colorbar = fig.colorbar(image, cax=colorbar_axis, orientation="horizontal")
+    colorbar.set_label("Gene-wise z-score", labelpad=1)
+    colorbar.ax.tick_params(labelsize=6, pad=1)
+    for panel, axis in zip("abc", (ax_heat, ax_shape, ax_specificity)):
+        axis.text(-0.08, 1.025, panel, transform=axis.transAxes, fontsize=8,
+                  fontweight="bold", va="bottom", ha="left")
+    fig.suptitle(
+        "Robust PT gene programs for collaborator review",
+        fontsize=10, fontweight="bold",
+    )
+    heatmap_stem = output_dir / "pt_gene_program_heatmap"
+    _export_figure(
+        fig, heatmap_stem,
+        axes=[ax_heat, ax_shape, ax_specificity],
+        panel_ids=["a", "b", "c"],
+        row_groups=[["a", "b", "c"]],
+        exclude_axes=[colorbar_axis],
+    )
+    plt.show()
+    plt.close(fig)
+
+    # Figure 2: one curve panel per module, retaining all four specimen trajectories.
+    modules = list(dict.fromkeys(shortlist["module"]))
+    n_columns = len(modules) if len(modules) <= 3 else 2
+    n_rows = int(np.ceil(len(modules) / n_columns))
+    fig, axes = plt.subplots(
+        n_rows, n_columns, figsize=(7.2, max(2.8, 2.25 * n_rows)),
+        sharex=True, sharey=True, constrained_layout=True, squeeze=False,
+    )
+    flat_axes = axes.ravel()
+    panel_ids = []
+    module_rows = []
+    for panel_i, (axis, module) in enumerate(zip(flat_axes, modules)):
+        members = np.flatnonzero(shortlist["module"].to_numpy() == module)
+        per_sample_module = np.nanmean(z_curves[:, members], axis=1)
+        for sample_i, sample_name in enumerate(sample_names):
+            sample_condition = condition[sample == sample_name][0]
+            axis.plot(centers, per_sample_module[sample_i], ls="--", lw=0.8, alpha=0.62,
+                      color=CONDITION_COLORS[sample_condition])
+            for bin_i, center in enumerate(centers):
+                module_rows.append({
+                    "module": module,
+                    "sample": sample_name,
+                    "condition": sample_condition,
+                    "dpt_bin_center": center,
+                    "module_mean_gene_z_score": per_sample_module[sample_i, bin_i],
+                })
+        for condition_name in ("Control", "AKI"):
+            sample_indices = [i for i, name in enumerate(sample_names)
+                              if condition[sample == name][0] == condition_name]
+            axis.plot(centers, np.nanmean(per_sample_module[sample_indices], axis=0),
+                      lw=2.0, color=CONDITION_COLORS[condition_name], label=condition_name)
+        for boundary in boundaries:
+            axis.axvline(boundary, color="0.75", lw=0.55, ls=":")
+        peak_segment_name = shortlist.loc[members[0], "peak_segment"]
+        axis.set_title(f"{module} · {len(members)} genes", color=SEGMENT_COLORS[peak_segment_name])
+        axis.axhline(0, color="0.8", lw=0.5)
+        axis.set_xlabel("Total DPT")
+        axis.set_ylabel("Module mean z-score")
+        panel_id = chr(ord("a") + panel_i)
+        panel_ids.append(panel_id)
+        axis.text(-0.08, 1.03, panel_id, transform=axis.transAxes, fontsize=8,
+                  fontweight="bold", va="bottom", ha="left")
+    for axis in flat_axes[len(modules):]:
+        axis.set_visible(False)
+    flat_axes[0].text(0.98, 0.92, "Control", transform=flat_axes[0].transAxes,
+                      color=CONDITION_COLORS["Control"], ha="right", fontweight="bold")
+    flat_axes[0].text(0.98, 0.85, "AKI", transform=flat_axes[0].transAxes,
+                      color=CONDITION_COLORS["AKI"], ha="right", fontweight="bold")
+    fig.suptitle("PT gene programs across Control and AKI specimens\n"
+                 "Dashed lines show individual specimens",
+                 fontsize=9, fontweight="bold")
+    curves_stem = output_dir / "pt_gene_program_module_curves"
+    visible_axes = list(flat_axes[:len(modules)])
+    row_groups = []
+    for row_i in range(n_rows):
+        group = panel_ids[row_i * n_columns:(row_i + 1) * n_columns]
+        if len(group) > 1:
+            row_groups.append(group)
+    _export_figure(
+        fig, curves_stem,
+        axes=visible_axes,
+        panel_ids=panel_ids,
+        row_groups=row_groups,
+    )
+    plt.show()
+    plt.close(fig)
+    module_source = pd.DataFrame(module_rows)
+    module_source.to_csv(output_dir / "pt_gene_program_module_source_data.csv", index=False)
+
+    notes = (
+        "PT collaborator gene-program summary\n"
+        f"PT observations used for selection: {pt.n_obs:,}\n"
+        f"Specimens: {len(sample_names)} ({', '.join(sample_names)})\n"
+        f"Genes selected: {len(shortlist)} ({n_per_segment} requested per segment)\n"
+        f"Curve display support: p1-p99 intersection across specimens [{low:.4f}, {high:.4f}]\n"
+        f"Primary filters: detection >= {minimum_detection_fraction:.0%}; peak agreement >= "
+        f"{minimum_peak_agreement:.0%}; exclude axis-basis, known sex-biased, mitochondrial, "
+        "and ribosomal genes.\n"
+        "Priority score: 55% segment-specificity percentile + 35% AKI shape-effect percentile "
+        "+ 10% detection percentile.\n"
+        "Inference boundary: exploratory effect-size ranking from 2 Control and 2 AKI specimens; "
+        "not a significance screen. Selection and visualization use the same cohort.\n"
+    )
+    (output_dir / "README.txt").write_text(notes)
+    print(notes)
+    print("Modules:")
+    print(shortlist.groupby(["peak_segment", "module"], sort=False)["gene"]
+          .apply(lambda values: ", ".join(values)).to_string())
+
+    return {
+        "shortlist": shortlist,
+        "all_candidates": metrics,
+        "binned_source_data": source_data,
+        "module_source_data": module_source,
+        "output_dir": output_dir,
+    }
+
+# %%
+PT_COLLABORATOR_DIR = RESULTS_DIR / 'pt_collaborator_summary'
+pt_collaborator_results = build_pt_collaborator_summary(
+    DPT_OUTPUT_PATH,
+    HEALTHY_VS_AKI_OUTPUT_DIR / 'gene_level_shape_results.csv',
+    PT_COLLABORATOR_DIR,
+    axis_basis_genes=ADJ_AXIS_BASIS_GENES,
+    known_sex_biased_genes=SEX_BIASED_PT_GENES,
+    n_per_segment=12,
+    modules_per_segment=2,
+)
+display(pt_collaborator_results['shortlist'][[
+    'gene', 'peak_segment', 'module', 'peak_agreement',
+    'segment_specificity_z_margin', 'shape_rms', 'level_effect', 'priority_score',
+]])
 
 # %% [markdown]
 # # Section 5 - three-axis concordance (non-circular fidelity check)

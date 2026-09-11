@@ -14,9 +14,9 @@ subproject that produces its GeoJSON inputs.
 - **No private data in Git.** No slides, Visium matrices, H5AD, GeoJSON, checkpoints, or executed
   notebooks — enforced by `tools/check_repository_hygiene.py`. Real data lives outside the repo and
   is passed in by path; see [data/README.md](data/README.md) and [docs/data/access.md](docs/data/access.md).
-- Entry points: `analysis/mouse_only_pseudospace.py` (active mouse-only workflow),
-  `analysis/human_vs_healthy_mouse.py` (cross-species), and the paired notebooks in
-  `analysis/notebooks/`.
+- Entry points: the notebooks in `analysis/notebooks/`, with generated `.py` mirrors at
+  `analysis/mouse_only_pseudospace.py` (active mouse-only workflow) and
+  `analysis/human_vs_healthy_mouse.py` (cross-species).
 - **Cohort**: 2 control mouse specimens, 2 AKI mouse specimens, and 2 human kidney slices. The two
   human slices are *named* cortex and medulla, but **both are in reality healthy human cortex** —
   do not treat the medulla-labelled slice as medullary tissue in any analysis or write-up.
@@ -58,7 +58,7 @@ CI (`.github/workflows/ci.yml`) runs three jobs: `hygiene`, `pseudospace-synthet
 | Path | Role |
 | --- | --- |
 | `pseudospace/` | Reusable, data-location-agnostic analysis logic: `markers` (alias resolution, marker axis, DE cluster annotation), `harmony` (R integration + version guard), `trajectory` (DPT root/orientation), `levelshape` + `stats_gam` (level/shape GAM decomposition, LOSO stability), `cross_species`, `heatmaps`, `io_qc`, `scprisma_pseudospace`. |
-| `analysis/` | Workflow orchestration that depends on the study-specific data contract: `*.py` scripts and their paired `notebooks/*.ipynb`. |
+| `analysis/` | Canonical `notebooks/*.ipynb` workflows plus their generated `.py` mirrors and the study-specific data contract. |
 | `analysis/scripts/` | QuPath label export and spatial validation of the pseudospace. |
 | `segmentation/` | Self-contained `kidney_panoptic` project (`src/kidney_panoptic/{data,models,losses,postprocess,eval,utils,infer}`, `scripts/`, `configs/`). Frozen encoder + native-resolution decoder + watershed decode. |
 | `docs/` | `architecture/000N-*.md` decision records, `workflows/` run guides, `results/` curated tables, `publication-readiness.md`. |
@@ -66,7 +66,7 @@ CI (`.github/workflows/ci.yml`) runs three jobs: `hygiene`, `pseudospace-synthet
 | `legacy/` | Superseded notebooks, provenance only. Unsupported; never mix with current results. |
 
 Data flow: private Visium HD + v4 GeoJSON → `notebooks/01_segmentation_to_gene_matrix.ipynb` →
-private tubule-by-gene H5AD → `mouse_only_pseudospace.py` → private Harmony/DPT outputs + curated
+private tubule-by-gene H5AD → the mouse-only workflow → private Harmony/DPT outputs + curated
 tables under `docs/results/`.
 
 ## Conventions
@@ -75,12 +75,14 @@ tables under `docs/results/`.
   to the `PSEUDOSPACE_*` env vars; CLI arguments win. The hygiene checker rejects any tracked file
   containing a machine-local absolute home directory (never spell one out in tracked text — that is
   what makes the checker fail).
-- **Notebooks are the canonical artifact; the `.py` is their jupytext mirror.** You (the human) may
-  execute `analysis/notebooks/*.ipynb` freely for visualization — running cells never touches the
-  `.py`. The **agent edits only the `.py`**, never the `.ipynb`. After either side changes, run
-  `jupytext --sync <notebook>` so the two agree: sync is timestamp-based and bidirectional, so never
-  force a one-way regeneration (`jupytext --to py` / `--to ipynb`) — that silently discards the
-  other side's edits.
+- **Notebooks are the canonical artifact; the `.py` files are generated mirrors.** You (the human)
+  execute `analysis/notebooks/*.ipynb` — that is where the workflow lives, and running cells is
+  always fine. The `.py` exists only as a token-efficient plain-text surface for agents. The **agent
+  edits only the `.py`**, never the `.ipynb`. Regeneration is one-way, notebook → script (see ## Notes),
+  so a `.py` edit survives only until the next regeneration: anything durable must reach the notebook.
+- **`comment_magics = true`** (`jupytext.toml`): IPython magics appear as comments
+  (`# %load_ext autoreload`) in the mirror, keeping the `.py` valid, parseable Python that agents can
+  syntax-check. jupytext restores them as live magics in the notebook, so the notebook is unaffected.
 - **Committed notebooks must be output-free.** Strip before committing with
   `python -m nbconvert --clear-output --inplace <notebook>`; tracked cell outputs or execution
   counts fail the hygiene gate.
@@ -109,13 +111,26 @@ tables under `docs/results/`.
 
 ## Notes
 
-- **The `.py` ↔ `.ipynb` pairing is not wired yet.** `jupytext.toml` sets a default `ipynb,py:percent`
-  pair, but `jupytext --paired-paths` resolves to files that do not exist: the notebooks live in
-  `analysis/notebooks/` with a `NN_` prefix, while the scripts are `analysis/<name>.py`. Jupytext
-  cannot infer these pairs (basenames and directories differ), so today **no `.py` edit reaches a
-  notebook automatically** and `jupytext --sync <notebook>` has no partner to sync with. Wire each
-  pair explicitly with `--set-formats`, or rename to matching basenames, before relying on sync.
+- **Regenerating the mirrors is a manual, one-way step — the pairs are not auto-wired.** `jupytext.toml`
+  declares a default `ipynb,py:percent` pair, but `jupytext --paired-paths` resolves to files that do
+  not exist (the notebooks sit in `analysis/notebooks/` behind a `NN_` prefix; the scripts are
+  `analysis/<name>.py`), so jupytext cannot infer the pairs and `jupytext --sync` has no partner.
+  Pairing:
+  `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py` and
+  `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`.
+
+  ```bash
+  jupytext --to py:percent --output analysis/mouse_only_pseudospace.py \
+    analysis/notebooks/02_mouse_only_pseudospace.ipynb
+  jupytext --to py:percent --output analysis/human_vs_healthy_mouse.py \
+    analysis/notebooks/03_human_vs_healthy_mouse.ipynb
+  ```
+
+  Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.
+  Then confirm both compile: `python -m py_compile <script>`.
+- **Notebook 02 owns the `_workflow_roots` helper** (`argparse` + `PSEUDOSPACE_*` fallback) that keeps
+  `--data-root` / `--results-root` working in the regenerated mouse script. Restore it in the
+  notebook, never in the generated `.py`, or those flags silently disappear from the script.
 
 <!-- Leave a clean house: no stray scratch files, temp scripts, or vendored archives at the repo
      root. Anything that isn't project source belongs outside the workspace. -->
-

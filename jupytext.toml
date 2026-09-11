@@ -1,0 +1,11 @@
+# Automatically pair every .ipynb file with a .py script using the percent format (# %%)
+formats = "ipynb,py:percent"
+
+# Strip all execution metadata and kernel specs to keep the .py file clean and save AI tokens
+notebook_metadata_filter = "-all"
+cell_metadata_filter = "-all"
+
+# Comment IPython magics out (e.g. '# %load_ext autoreload') so the .py mirror stays valid,
+# parseable Python that agents and linters can check. jupytext restores them as live magics when
+# syncing back to the notebook, so the canonical .ipynb is unaffected.
+comment_magics = true

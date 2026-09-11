@@ -1,48 +1,50 @@
-"""Mouse-only nephron pseudospace reconstruction (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4).
+# %% [markdown]
+# # Mouse-only nephron pseudospace reconstruction
+#
+# Samples: `Ctrl1A2`, `Ctrl1A4` (Control) and `IR2A2`, `IR2A4` (AKI / ischemia-reperfusion).
+#
+# Notebook port of `6_mouse_only_pseudospace.py`; the code is identical and this notebook is
+# run top-to-bottom from the repository root in the `pseudospace` kernel.
+#
+# ```
+# Pipeline
+#     Section 0  config: paths, parameters, marker panels
+#     Section 1  pass-1 Harmony integration over the 4 mouse samples (theta = HARMONY_THETA)
+#     Section 2  cell typing on the pass-1 embedding (ONE manual checkpoint), non-tubule removal,
+#                pass-2 Harmony on the tubule subset (labels are NOT recomputed), Scanpy DPT
+#     Section 3  marker heatmaps on the global DPT and on per-family subset DPTs
+#     Section 4  healthy vs AKI level/shape decomposition over the PT cohort
+#     Section 5  three-axis concordance (DPT vs marker axis vs distance-to-glomerulus)
+#     Section 6  QuPath export + spatial validation hooks (opt-in)
+#
+# Differences from the v4 notebook
+#     * NEPHRON_AXIS_MARKERS is the cell-typing panel and the source of the fine `segment_class`
+#       vocabulary, the coarse rollup, and the early->late trajectory axis.
+#     * Cell typing happens ONCE, on the pass-1 embedding. The pass-2 Harmony re-integrates the
+#       tubule subset for a cleaner DPT graph but does not re-cluster or re-label anything.
+#     * The injury / failed-repair diagnostics section is removed.
+#     * The curated chart-derived heatmap panels are carried over verbatim, and all six of them
+#       (PT, thin limb, TAL, DCT, collecting region, collecting-duct cell type) are plotted.
+#
+# Labels written to obs
+#     segment_class               fine call, one of NEPHRON_SEGMENT_ORDER or a non-tubule class
+#     coarse_class                rollup, one of COARSE_ORDER (or a non-tubule class in pass-1)
+#     broad_tubule_marker_call    alias of coarse_class; the name the pseudospace package,
+#                                 the QuPath export and the spatial validation script expect
+#     celltype_primary/_secondary per-cell marker-score argmax (coarse vocabulary) - an
+#                                 independent second opinion on the cluster-level label
+#     celltype_*_segment          the same argmax at fine resolution
+#     celltype_margin             score gap between the best and runner-up panel (confidence)
+# ```
 
-Port of `6_mouse_only_pseudospace_v4.ipynb` to a `# %%` cell-marked script. Run it
-interactively (VS Code "Run Cell" / Jupyter) exactly like the notebook, or top-to-bottom with
-`python 6_mouse_only_pseudospace.py` once COARSE_LABELS is filled in.
-
-Pipeline
-    Section 0  config: paths, parameters, marker panels
-    Section 1  pass-1 Harmony integration over the 4 mouse samples (theta = HARMONY_THETA)
-    Section 2  cell typing on the pass-1 embedding (ONE manual checkpoint), non-tubule removal,
-               pass-2 Harmony on the tubule subset (labels are NOT recomputed), Scanpy DPT
-    Section 3  marker heatmaps on the global DPT and on per-family subset DPTs
-    Section 4  healthy vs AKI level/shape decomposition over the PT cohort
-    Section 5  three-axis concordance (DPT vs marker axis vs distance-to-glomerulus)
-    Section 6  QuPath export + spatial validation hooks (opt-in)
-
-Differences from the v4 notebook
-    * NEPHRON_AXIS_MARKERS is the cell-typing panel and the source of the fine `segment_class`
-      vocabulary, the coarse rollup, and the early->late trajectory axis.
-    * Cell typing happens ONCE, on the pass-1 embedding. The pass-2 Harmony re-integrates the
-      tubule subset for a cleaner DPT graph but does not re-cluster or re-label anything.
-    * The injury / failed-repair diagnostics section is removed.
-    * The curated chart-derived heatmap panels are carried over verbatim, and all six of them
-      (PT, thin limb, TAL, DCT, collecting region, collecting-duct cell type) are plotted.
-
-Labels written to obs
-    segment_class               fine call, one of NEPHRON_SEGMENT_ORDER or a non-tubule class
-    coarse_class                rollup, one of COARSE_ORDER (or a non-tubule class in pass-1)
-    broad_tubule_marker_call    alias of coarse_class; the name the pseudospace package,
-                                the QuPath export and the spatial validation script expect
-    celltype_primary/_secondary per-cell marker-score argmax (coarse vocabulary) - an
-                                independent second opinion on the cluster-level label
-    celltype_*_segment          the same argmax at fine resolution
-    celltype_margin             score gap between the best and runner-up panel (confidence)
-"""
 # %% [markdown]
 # # Section 0 - configuration
 #
 # Every path, parameter and marker panel used below. Later sections reference these names only.
 
 # %%
-from __future__ import annotations
-
-import argparse
 import os
+import argparse
 import re
 import sys
 import warnings
@@ -100,27 +102,10 @@ def _find_project_dir() -> Path:
     )
 
 
-def _workflow_roots(project_dir: Path) -> tuple[Path, Path]:
-    """Resolve private inputs and generated outputs without baking in a machine path.
-
-    Command-line values take precedence over environment variables. ``parse_known_args`` keeps
-    the cell-marked script usable in Jupyter, whose kernel adds arguments of its own.
-    """
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--data-root', type=Path)
-    parser.add_argument('--results-root', type=Path)
-    args, _ = parser.parse_known_args()
-    data_root = args.data_root or os.environ.get('PSEUDOSPACE_DATA_ROOT') or project_dir / 'data'
-    results_root = (args.results_root or os.environ.get('PSEUDOSPACE_RESULTS_ROOT')
-                    or project_dir / 'results')
-    return Path(data_root).expanduser().resolve(), Path(results_root).expanduser().resolve()
-
-
 PROJECT_DIR = _find_project_dir()
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))            # makes `import pseudospace` work anywhere
 
-DATA_DIR, RESULTS_ROOT = _workflow_roots(PROJECT_DIR)
 TUBULE_BY_GENE_DIR = DATA_DIR / 'tubule_by_gene'                          # input
 PATHWAY_LIBRARY_DIR = DATA_DIR / 'mouse_vs_human' / 'pathway_gene_sets'   # input (read-only)
 
@@ -137,8 +122,7 @@ for directory in [RESULTS_DIR, CELLTYPING_DIR, HEATMAP_OUTPUT_DIR,
                   HEALTHY_VS_AKI_OUTPUT_DIR, CONCORDANCE_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
-# Do not inherit a personal R package library. rpy2 must resolve Harmony from the
-# active conda environment, whose r-harmony version is pinned in environment.yml.
+# Do not inherit a personal R package library; use the active conda environment's pinned Harmony.
 os.environ.pop('R_LIBS_USER', None)
 # NOTE: the matplotlib/numba/XDG cache redirects live at the top of this file, above the first
 # matplotlib import -- they are no-ops if set here.
@@ -209,6 +193,29 @@ TRIM_FRACTION = 0.05
 N_BINS = 120
 SMOOTH_SIGMA = 2.5
 Z_CLIP = 2
+
+
+def _workflow_roots(project_dir: Path) -> tuple[Path, Path]:
+    """Resolve private inputs and generated outputs without baking in a machine path.
+
+    Command-line values take precedence over environment variables. ``parse_known_args`` keeps
+    the cell-marked script usable in Jupyter, whose kernel adds arguments of its own.
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--data-root', type=Path)
+    parser.add_argument('--results-root', type=Path)
+    args, _ = parser.parse_known_args()
+    data_root = args.data_root or os.environ.get('PSEUDOSPACE_DATA_ROOT') or project_dir / 'data'
+    results_root = (args.results_root or os.environ.get('PSEUDOSPACE_RESULTS_ROOT')
+                    or project_dir / 'results')
+    return Path(data_root).expanduser().resolve(), Path(results_root).expanduser().resolve()
+
+
+DATA_DIR, RESULTS_ROOT = _workflow_roots(PROJECT_DIR)
+
+
+# %%
+TUBULE_BY_GENE_DIR
 
 # %% [markdown]
 # ## Section 0.1 - nephron axis markers and the label vocabulary
@@ -955,8 +962,7 @@ from pseudospace.trajectory import (
     save_total_pseudotime_anndata,
 )
 
-# Keep R on the active conda environment's library path. Prepending ~/R/library here
-# silently selected an incompatible user-installed harmony 1.x package on some machines.
+# Keep R on the active conda environment's library path; do not prepend ~/R/library.
 plt.rcParams['figure.dpi'] = 120
 
 # The cache redirects at the top of this file only work if they run BEFORE matplotlib and numba
@@ -1126,6 +1132,9 @@ adata_all_expression_filtered = adata_all.copy()
 print(f'After gene filter + normalization: {adata_all.n_obs:,} tubules x {adata_all.n_vars:,} genes')
 
 # %%
+COARSE_RESOLUTION
+
+# %%
 # --- Section 2b: the ONE clustering run, on the pass-1 Harmony embedding ---
 gene_lookup = build_gene_lookup(adata_all)
 
@@ -1249,11 +1258,11 @@ print('}')
 # tubule subset but does NOT re-cluster or re-label.
 
 # %%
-# Manual labels for the reproducible R-harmony 2.0.5 run (fingerprint below).  These calls were
+# Manual labels for the reproducible R-harmony 2.0.5 run (fingerprint below). These calls were
 # reviewed against celltyping/coarse_marker_dotplot.png and coarse_cluster_top_markers.csv:
-#   4 = Cryab/Vim/Tnc/Thbs1 (Stroma); 8 = Krt19/Sprr1a/Krt18 (Unassigned), rather than
-# assigning either cluster to a nephron segment.  The remaining IDs carry the expected segment
-# markers.  They are valid ONLY for the fingerprint below; a changed clustering must be reviewed.
+# 4 = Cryab/Vim/Tnc/Thbs1 (Stroma); 8 = Krt19/Sprr1a/Krt18 (Unassigned), rather than
+# assigning either cluster to a nephron segment. The remaining IDs carry expected markers.
+# They are valid ONLY for the fingerprint below; a changed clustering must be reviewed.
 COARSE_LABELS = {
     '0': 'PT-S1',
     '1': 'PT-S2',
@@ -1281,49 +1290,25 @@ COARSE_LABELS_FINGERPRINT = {
 }
 
 if not COARSE_LABELS:
-    raise ValueError(
-        'Fill in COARSE_LABELS from the dotplot before proceeding. Start from the suggestion '
-        'printed by the previous cell.'
-    )
-
+    raise ValueError('Fill in COARSE_LABELS from the marker dotplot before proceeding.')
 _unknown = sorted(set(COARSE_LABELS.values()) - set(LABEL_VOCABULARY))
 if _unknown:
     raise ValueError(f'COARSE_LABELS contains labels outside LABEL_VOCABULARY: {_unknown}')
 _unlabelled = sorted(set(adata_cluster.obs['leiden_coarse'].astype(str)) - set(COARSE_LABELS))
 if _unlabelled:
-    raise ValueError(
-        f'Clusters {_unlabelled} have no entry in COARSE_LABELS. Label every cluster explicitly '
-        "(use 'Unassigned' for anything you want dropped)."
-    )
+    raise ValueError(f'Clusters {_unlabelled} have no entry in COARSE_LABELS; review the dotplot.')
 _stale = sorted(set(COARSE_LABELS) - set(adata_cluster.obs['leiden_coarse'].astype(str)))
 if _stale:
+    raise ValueError(f'COARSE_LABELS has stale cluster IDs {_stale}; review the dotplot.')
+_diff = {k: (v, CLUSTERING_FINGERPRINT[k]) for k, v in COARSE_LABELS_FINGERPRINT.items()
+         if v != CLUSTERING_FINGERPRINT[k]}
+if _diff:
     raise ValueError(
-        f'COARSE_LABELS has entries {_stale} for cluster ids that this Leiden run did not '
-        'produce. The dict was written against a different clustering -- re-read the dotplot.'
+        'This clustering does not match the one COARSE_LABELS was written against. '
+        + '; '.join(f'{k}: {a} -> {b}' for k, (a, b) in sorted(_diff.items()))
+        + '. Re-read celltyping/coarse_marker_dotplot.png and update both labels and fingerprint.'
     )
-
-if COARSE_LABELS_FINGERPRINT is None:
-    warnings.warn(
-        'COARSE_LABELS_FINGERPRINT is None: the labels below are not pinned to any particular '
-        'clustering. Copy the fingerprint printed by the Leiden cell into it so a changed '
-        'clustering cannot silently reuse these labels.', stacklevel=2)
-else:
-    _unknown_keys = sorted(set(COARSE_LABELS_FINGERPRINT) - set(CLUSTERING_FINGERPRINT))
-    if _unknown_keys:
-        raise ValueError(f'COARSE_LABELS_FINGERPRINT pins unknown keys {_unknown_keys}; valid '
-                         f'keys are {sorted(CLUSTERING_FINGERPRINT)}.')
-    _diff = {k: (v, CLUSTERING_FINGERPRINT[k]) for k, v in COARSE_LABELS_FINGERPRINT.items()
-             if v != CLUSTERING_FINGERPRINT[k]}
-    if _diff:
-        raise ValueError(
-            'This clustering does not match the one COARSE_LABELS was written against, so the '
-            'cluster ids no longer mean what the dict says. Differences (pinned -> current): '
-            + '; '.join(f'{k}: {a} -> {b}' for k, (a, b) in sorted(_diff.items()))
-            + '. Re-read celltyping/coarse_marker_dotplot.png, relabel if needed, then update '
-              'COARSE_LABELS_FINGERPRINT (or set it to None to downgrade this to a warning).'
-        )
-    print(f'COARSE_LABELS pinned to clustering {CLUSTERING_FINGERPRINT["membership_sha1"]} '
-          f'({len(COARSE_LABELS_FINGERPRINT)} fields checked) -- match.')
+print(f'COARSE_LABELS pinned to clustering {CLUSTERING_FINGERPRINT["membership_sha1"]}.')
 
 # %%
 # --- Section 2c: fine label -> coarse rollup -> drop non-tubule cells ---
@@ -1647,7 +1632,7 @@ if (_positions < 0).any():
 
 # save_total_pseudotime_anndata's `extra_obs_cols` only KEEPS columns that are already on the
 # expression snapshot -- and that snapshot was taken in Section 2a, before any label existed. So
-# copy the label columns across from adata_total explicitly.
+# # copy the label columns across from adata_total explicitly.
 for _col in DPT_EXTRA_OBS_COLS:
     if _col not in adata_total.obs.columns or _col in adata_dpt_saved.obs.columns:
         continue
@@ -2053,6 +2038,7 @@ def binned_matrix_profile(mat, s_vals, lo_, hi_, n_bins, sigma):
             row = np.interp(centers, centers[finite], row[finite])
         out[i] = gaussian_filter1d(row, sigma)
     return out, centers
+
 
 # %%
 from pseudospace.levelshape import run_level_shape, sample_perm_pvalues
@@ -2644,9 +2630,6 @@ if len(matched):
     print('  * Set SPECIMEN_SEX = {"H1":"M",...} to activate the sex correction (currently '
           f'{"ON" if sex_code is not None else "OFF"}).')
 
-
-
-
 # %% [markdown]
 # ## 4.6d - Analysis C+: coordinate-defining vs coordinate-independent injury signal
 #
@@ -2898,12 +2881,6 @@ print(f"\nCoordinate-independent shortlist ({shortlist['gene'].nunique()} genes)
 print('Axis-basis genes excluded from that shortlist by construction: '
       f'{sorted(ADJ_AXIS_BASIS_GENES)}')
 
-
-
-
-
-
-
 # %%
 # ----------------------------------------------------------------------------
 # Section 4.7 -- result CSVs (ranked by shape_rms)
@@ -2972,6 +2949,7 @@ ax.invert_yaxis()
 fig.savefig(HEALTHY_VS_AKI_OUTPUT_DIR / 'loso_shape_stability_genes.png', dpi=130, bbox_inches='tight')
 plt.show()
 display(loso.head(12))
+
 
 # %% [markdown]
 # ## 4.8 - visualization layer (reuses fitted curves + result CSVs; no stat recompute)
@@ -3156,6 +3134,7 @@ fig.suptitle('Canonical PT S1/S2/S3 marker validation', y=1.02)
 _save(fig, 'marker_validation_S1S2S3.png')
 print('Group 1 figures written:', len(figure_index))
 
+
 # %%
 # ----------------------------------------------------------------------------
 # Group 2 -- level/shape decomposition views (the point of the method)
@@ -3272,6 +3251,7 @@ paired_condition_heatmaps(list(pt_labels), pt_h_z, pt_a_z,
                           'paired_condition_heatmaps_pathways.png',
                           'Paired condition heatmaps (top shape pathways, shared order)')
 print('Group 2 figures written; total so far:', len(figure_index))
+
 
 # %%
 # ----------------------------------------------------------------------------
@@ -3540,6 +3520,7 @@ else:
           f'modules have shape_rms > {CURVE_SPEARMAN_AMP_RATIO:g}x the smaller curve amplitude. '
           'curve_spearman is NOT interpretable for those rows.')
 
+
 # %% [markdown]
 # ## 4.10 - summary
 
@@ -3773,6 +3754,8 @@ def _cluster_within_segments(shortlist: pd.DataFrame, profiles: np.ndarray,
             members = [i for i in leaves if raw_clusters[i] == cluster]
             display_order.extend(positions[members].tolist())
     return shortlist, display_order
+
+
 
 # %%
 def build_pt_collaborator_summary(
@@ -4119,6 +4102,8 @@ def build_pt_collaborator_summary(
         "output_dir": output_dir,
     }
 
+
+
 # %%
 PT_COLLABORATOR_DIR = RESULTS_DIR / 'pt_collaborator_summary'
 pt_collaborator_results = build_pt_collaborator_summary(
@@ -4205,8 +4190,8 @@ fig.savefig(CONCORDANCE_DIR / 'three_axis_concordance.png', dpi=130, bbox_inches
 # round of manual curation in QuPath between its `--dry-run` and its real run.
 
 # %%
-RUN_QUPATH_EXPORT = False
-RUN_SPATIAL_VALIDATION = False
+RUN_QUPATH_EXPORT = True
+RUN_SPATIAL_VALIDATION = True
 SPATIAL_VALIDATION_DRY_RUN = True      # seed the manual-review GeoJSON, then curate in QuPath
 
 import importlib.util
@@ -4248,3 +4233,6 @@ if RUN_SPATIAL_VALIDATION:
 
 if not (RUN_QUPATH_EXPORT or RUN_SPATIAL_VALIDATION):
     print('Section 6 skipped. Set RUN_QUPATH_EXPORT / RUN_SPATIAL_VALIDATION to True to run it.')
+
+# %%
+PROJECT_DIR

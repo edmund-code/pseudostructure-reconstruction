@@ -77,9 +77,10 @@ tables under `docs/results/`.
   what makes the checker fail).
 - **Notebooks are the canonical artifact; the `.py` files are generated mirrors.** You (the human)
   execute `analysis/notebooks/*.ipynb` — that is where the workflow lives, and running cells is
-  always fine. The `.py` exists only as a token-efficient plain-text surface for agents. The **agent
-  edits only the `.py`**, never the `.ipynb`. Regeneration is one-way, notebook → script (see ## Notes),
-  so a `.py` edit survives only until the next regeneration: anything durable must reach the notebook.
+  always fine. The `.py` exists as a token-efficient plain-text surface for agents to read and
+  propose edits in. Regeneration is one-way, notebook → script (see ## Notes), so a **`.py`-only edit
+  is discarded by the next regeneration: durable code changes belong in the `.ipynb`**. After
+  changing a notebook, regenerate its mirror so the two never diverge.
 - **`comment_magics = true`** (`jupytext.toml`): IPython magics appear as comments
   (`# %load_ext autoreload`) in the mirror, keeping the `.py` valid, parseable Python that agents can
   syntax-check. jupytext restores them as live magics in the notebook, so the notebook is unaffected.

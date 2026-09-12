@@ -941,8 +941,8 @@ else:
 SEGMENTATION_GEOJSON_BY_SAMPLE = {
     'Ctrl1A2': DATA_ROOT / 'Ctrl_1A2_v4.geojson',
     'Ctrl1A4': DATA_ROOT / 'Ctrl_1A4_v4.geojson',
-    'HUK1_COR1': DATA_ROOT / 'HUK1_COR1_tubules_processed_caleb.geojson',
-    'HUK1_MED1': DATA_ROOT / 'HUK1_MED1_tubules_processed_caleb.geojson',
+    'HUK1_COR1': DATA_ROOT / 'HUK1_COR1_v2.geojson',
+    'HUK1_MED1': DATA_ROOT / 'HUK1_MED1_v2.geojson',
 }
 N_SEGMENTATION_EXAMPLES_PER_CLUSTER = 3
 # Full-resolution TIFFs use the same pixel coordinate system as the segmentation GeoJSON.

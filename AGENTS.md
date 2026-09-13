@@ -117,14 +117,18 @@ tables under `docs/results/`.
   not exist (the notebooks sit in `analysis/notebooks/` behind a `NN_` prefix; the scripts are
   `analysis/<name>.py`), so jupytext cannot infer the pairs and `jupytext --sync` has no partner.
   Pairing:
-  `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py` and
-  `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`.
+  `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py`,
+  `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`, and
+  `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`.
+  (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
   jupytext --to py:percent --output analysis/mouse_only_pseudospace.py \
     analysis/notebooks/02_mouse_only_pseudospace.ipynb
   jupytext --to py:percent --output analysis/human_vs_healthy_mouse.py \
     analysis/notebooks/03_human_vs_healthy_mouse.ipynb
+  jupytext --to py:percent --output analysis/mouse_workflow_comparison.py \
+    analysis/notebooks/04_mouse_workflow_comparison.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.

@@ -416,26 +416,30 @@ print(f'Saved pass-1 object: {HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
 # These calls were reviewed from the current run's DE heatmap, reference-gene
 # dotplot/evidence panel, and sample composition. They are broad labels only.
 REVIEWED_CLUSTER_LABELS = {
-    '0': 'PT',           # PT S1/S2 program
-    '1': 'DCT',          # DCT/CNT-boundary program; assigned to DCT broadly
-    '2': 'PT',           # PT S2 program
-    '3': 'CNT_CD',       # CCD-like program
-    '4': 'CNT_CD',       # CNT-like acid-base program
-    '5': 'TAL',          # TAL program
-    '6': 'Glomerulus',  # mixed glomerular/perivascular structure
-    '7': 'Unassigned',   # stressed/mixed epithelial program
-    '8': 'PT',           # PT S3 program
+    '0': 'PT',           # PT-S1/S2 (Slc5a2, Gatm, Slc5a12, Slc22a8)
+    '1': 'PT',           # PT-S1/S2 (Slc22a6, Slc13a3, Lrp2, Slc34a1) - previously called DCT
+    '2': 'CNT_CD',       # CNT/collecting duct (Hsd11b2, Rhcg, Calb1, Atp6v1g3) - previously called PT
+    '3': 'CNT_CD',       # CCD principal cells (Aqp2, Aqp3, Cdh16)
+    '4': 'DCT',          # DCT (Slc12a3, Trpm7, Wnk1, Klhl3) - previously called CNT_CD
+    '5': 'TAL',          # TAL (Umod, Slc12a1, Atp1b1)
+    '6': 'Glomerulus',   # mixed glomerular/perivascular structure
+    '7': 'PT',           # PT-S3 (Slc22a7, Slc7a13, Slc6a18, Acsm3) - previously left unassigned
+    '8': 'Unassigned',   # stress/matrix program, no reference-gene support in the top 20 DE
+    '9': 'SmoothMuscle', # Acta2/Myh11/Tagln/Rgs5; non-nephron, excluded via REMOVE_CLASSES
+    '10': 'TAL',         # TAL (Slc12a1, Umod, Kcnj1, Cldn10) - added by the current clustering
 }
 ASSIGNMENT_INTERPRETATION = {
     '0': 'PT S1/S2: solute transport and proximal metabolic program.',
-    '1': 'DCT/CNT boundary program; recorded broadly as DCT.',
-    '2': 'PT S2: proximal solute transport and metabolic program.',
-    '3': 'CCD-like: collecting-duct principal-cell program.',
-    '4': 'CNT-like: distal/connecting program with acid-base genes.',
-    '5': 'TAL program; strongly mouse-enriched.',
+    '1': 'PT S1/S2: proximal solute transport (Slc22a6, Slc13a3, Lrp2, Slc34a1); the previous DCT call no longer matched this cluster DE.',
+    '2': 'CNT/collecting duct: distal acid-base and principal-cell program (Hsd11b2, Rhcg, Calb1, Atp6v1g3).',
+    '3': 'CCD-like: collecting-duct principal-cell program (Aqp2, Aqp3).',
+    '4': 'DCT: distal convoluted tubule program (Slc12a3, Trpm7, Wnk1, Klhl3).',
+    '5': 'TAL program (Umod, Slc12a1, Atp1b1); strongly mouse-enriched.',
     '6': 'Mixed glomerular structure: podocyte genes plus endothelial/perivascular signal.',
-    '7': 'Stressed or mixed epithelial program; intentionally unresolved.',
-    '8': 'PT S3: late proximal program.',
+    '7': 'PT S3: late proximal program (Slc22a7, Slc7a13, Slc6a18, Acsm3) - four of the five PT-S3 reference genes.',
+    '8': 'Stressed or matrix-associated epithelial program with no reference-gene support; intentionally unresolved.',
+    '9': 'Smooth-muscle/perivascular program (Acta2, Myh11, Tagln, Rgs5); non-nephron.',
+    '10': 'TAL: thick ascending limb program (Slc12a1, Umod, Kcnj1, Cldn10).',
 }
 
 # Reference genes are visualization aids only. They are never used to cluster, score,
@@ -527,6 +531,8 @@ sc.tl.rank_genes_groups(
     adata_all, 'leiden_coarse', method='wilcoxon', pts=True,
     key_added='rank_coarse',
 )
+import hashlib
+
 CLUSTERING_FINGERPRINT = {
     'n_structures': int(adata_cluster.n_obs),
     'n_reporting_genes': int(adata_cluster.n_vars),
@@ -534,6 +540,10 @@ CLUSTERING_FINGERPRINT = {
     'n_neighbors': N_NEIGHBORS,
     'random_state': RANDOM_STATE,
     'n_clusters': int(adata_cluster.obs['leiden_coarse'].nunique()),
+    # Recorded for provenance only -- nothing compares against it. It ties the reviewed labels
+    # to the exact membership they were written against.
+    'membership_sha1': hashlib.sha1(
+        ','.join(adata_cluster.obs['leiden_coarse'].astype(str)).encode()).hexdigest()[:12],
 }
 display(pd.Series(CLUSTERING_FINGERPRINT, name='value'))
 

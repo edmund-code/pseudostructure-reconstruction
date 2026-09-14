@@ -1624,7 +1624,13 @@ DPT_EXTRA_OBS_COLS = ['comparison_species', 'region', 'x_centroid', 'y_centroid'
 adata_total.write(GLOBAL_DPT_OUTPUT_PATH)
 print(f'Saved global nephron DPT: {GLOBAL_DPT_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
 
-current_pt_clusters = sorted(cluster for cluster, label in current_labels.items() if label == TRAJECTORY_COMPARTMENT)
+# Compare the ROLLED-UP family, not the raw label: a cluster reviewed as PT-S1/PT-S2/PT-S3 is
+# still the PT compartment. Comparing the raw label against 'PT' silently stopped matching once
+# the review map started carrying fine segment labels.
+current_pt_clusters = sorted(
+    cluster for cluster, label in current_labels.items()
+    if segment_vocabulary.coarse_for(label) == TRAJECTORY_COMPARTMENT
+)
 if not current_pt_clusters:
     raise ValueError('No current cluster is manually labeled PT; update the review map after inspecting the cluster evidence.')
 adata_pt_global = adata_total[adata_total.obs['coarse_class'].astype(str).eq(TRAJECTORY_COMPARTMENT)].copy()

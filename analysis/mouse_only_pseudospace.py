@@ -4231,10 +4231,10 @@ def _load_script_module(name: str, path: Path):
 
 
 if RUN_QUPATH_EXPORT:
-    sys.path.insert(0, str(PROJECT_DIR / 'scripts'))
+    sys.path.insert(0, str(PROJECT_DIR / 'analysis' / 'scripts'))
     qupath_export = _load_script_module(
         'export_kept_tubules_to_qupath_geojson',
-        PROJECT_DIR / 'scripts' / 'export_kept_tubules_to_qupath_geojson.py')
+        PROJECT_DIR / 'analysis' / 'scripts' / 'export_kept_tubules_to_qupath_geojson.py')
     # The label source is the pass-1 file: it still carries Glomerulus and Vessel.
     qupath_export.HARMONY_RELATIVE_PATH = HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)
     qupath_export.OUTPUT_RELATIVE_DIR = (RESULTS_DIR / 'qupath_geojson').relative_to(PROJECT_DIR)
@@ -4244,10 +4244,10 @@ if RUN_QUPATH_EXPORT:
     ])
 
 if RUN_SPATIAL_VALIDATION:
-    sys.path.insert(0, str(PROJECT_DIR / 'scripts'))
+    sys.path.insert(0, str(PROJECT_DIR / 'analysis' / 'scripts'))
     spatial_validation = _load_script_module(
         'spatial_validation_of_pseudospace',
-        PROJECT_DIR / 'scripts' / 'spatial_validation_of_pseudospace.py')
+        PROJECT_DIR / 'analysis' / 'scripts' / 'spatial_validation_of_pseudospace.py')
     spatial_validation.HARMONY_RELATIVE_PATH = HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)
     spatial_validation.DPT_RELATIVE_PATH = DPT_OUTPUT_PATH.relative_to(PROJECT_DIR)
     spatial_validation.OUTPUT_RELATIVE_DIR = (RESULTS_DIR / 'spatial_validation').relative_to(PROJECT_DIR)

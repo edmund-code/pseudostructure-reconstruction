@@ -83,13 +83,18 @@ print("Both pass-1 objects found.")
 def load_run(path: Path) -> pd.DataFrame:
     """obs for the healthy mouse controls, keyed so a tubule can be matched across runs."""
     obj = ad.read_h5ad(path, backed="r")
-    missing = [c for c in ("sample", "feature_index", "coarse_class") if c not in obj.obs.columns]
+    missing = [c for c in ("sample", "feature_index") if c not in obj.obs.columns]
     if missing:
         raise KeyError(f"{path.name} is missing obs columns {missing}")
+    # Labels are OPTIONAL: a workflow that stopped before its cluster review has none, and the
+    # retained-tubule-set and geometry sections are still meaningful without them. An empty string
+    # means "this run has no labels" and is reported as such by the label section.
+    labels = (obj.obs["coarse_class"].astype(str).to_numpy()
+              if "coarse_class" in obj.obs.columns else np.array([""] * obj.n_obs))
     obs = pd.DataFrame({
         "sample": obj.obs["sample"].astype(str).to_numpy(),
         "feature_index": obj.obs["feature_index"].astype(int).to_numpy(),
-        "coarse_class": obj.obs["coarse_class"].astype(str).to_numpy(),
+        "coarse_class": labels,
     })
     del obj
     obs["tubule_key"] = obs["sample"] + "|" + obs["feature_index"].astype(str)
@@ -175,50 +180,62 @@ else:
 # segments such as `PT-S1`/`mTAL`, notebook 03 stops at the broad class).
 
 # %%
-paired = pd.DataFrame({"tubule_key": shared_keys})
-paired = paired.merge(
-    mouse_only[["tubule_key", "coarse_class"]].rename(columns={"coarse_class": "label_02"}),
-    on="tubule_key", how="left",
-).merge(
-    cross_species[["tubule_key", "coarse_class"]].rename(columns={"coarse_class": "label_03"}),
-    on="tubule_key", how="left",
+labels_available = (
+    mouse_only["coarse_class"].replace("", pd.NA).notna().any()
+    and cross_species["coarse_class"].replace("", pd.NA).notna().any()
 )
-paired["label_02_bridged"] = paired["label_02"].replace(COARSE_BRIDGE)
-paired["is_nephron_02"] = paired["label_02_bridged"].isin(NEPHRON_CLASSES)
-paired["is_nephron_03"] = paired["label_03"].isin(NEPHRON_CLASSES)
-paired.to_csv(OUTPUT_DIR / "paired_tubule_labels.csv", index=False)
+if not labels_available:
+    _missing_run = ("notebook 02" if not mouse_only["coarse_class"].replace("", pd.NA).notna().any()
+                    else "notebook 03")
+    print(f"SKIPPING the label comparison: {_missing_run} carries no coarse_class. Its run stopped "
+          "before the cluster review, so the clusters are unlabelled. Re-review and re-run that "
+          "workflow, then run this notebook again.")
+    print("The retained-tubule-set, geometry and parameter sections below are unaffected.")
+else:
+    paired = pd.DataFrame({"tubule_key": shared_keys})
+    paired = paired.merge(
+        mouse_only[["tubule_key", "coarse_class"]].rename(columns={"coarse_class": "label_02"}),
+        on="tubule_key", how="left",
+    ).merge(
+        cross_species[["tubule_key", "coarse_class"]].rename(columns={"coarse_class": "label_03"}),
+        on="tubule_key", how="left",
+    )
+    paired["label_02_bridged"] = paired["label_02"].replace(COARSE_BRIDGE)
+    paired["is_nephron_02"] = paired["label_02_bridged"].isin(NEPHRON_CLASSES)
+    paired["is_nephron_03"] = paired["label_03"].isin(NEPHRON_CLASSES)
+    paired.to_csv(OUTPUT_DIR / "paired_tubule_labels.csv", index=False)
 
-print("vocabulary 02:", sorted(mouse_only["coarse_class"].unique()))
-print("vocabulary 03:", sorted(cross_species["coarse_class"].unique()))
-print()
-print(f"coarse label agreement, raw                 : {(paired['label_02'] == paired['label_03']).mean():7.1%}")
-print(f"coarse label agreement, AL bridged to TAL   : {(paired['label_02_bridged'] == paired['label_03']).mean():7.1%}")
-print(f"nephron-tubule vs not, agreement            : {(paired['is_nephron_02'] == paired['is_nephron_03']).mean():7.1%}")
+    print("vocabulary 02:", sorted(mouse_only["coarse_class"].unique()))
+    print("vocabulary 03:", sorted(cross_species["coarse_class"].unique()))
+    print()
+    print(f"coarse label agreement, raw                 : {(paired['label_02'] == paired['label_03']).mean():7.1%}")
+    print(f"coarse label agreement, AL bridged to TAL   : {(paired['label_02_bridged'] == paired['label_03']).mean():7.1%}")
+    print(f"nephron-tubule vs not, agreement            : {(paired['is_nephron_02'] == paired['is_nephron_03']).mean():7.1%}")
 
-cross_tab = pd.crosstab(paired["label_02_bridged"], paired["label_03"], margins=True)
-cross_tab.to_csv(OUTPUT_DIR / "coarse_label_crosstab.csv")
-print()
-print("rows = notebook 02 (AL -> TAL), columns = notebook 03")
-print(cross_tab.to_string())
+    cross_tab = pd.crosstab(paired["label_02_bridged"], paired["label_03"], margins=True)
+    cross_tab.to_csv(OUTPUT_DIR / "coarse_label_crosstab.csv")
+    print()
+    print("rows = notebook 02 (AL -> TAL), columns = notebook 03")
+    print(cross_tab.to_string())
 
-per_class = (paired.assign(match=paired["label_02_bridged"] == paired["label_03"])
-             .groupby("label_02_bridged")
-             .agg(n_tubules=("match", "size"), agreement=("match", "mean"))
-             .sort_values("n_tubules", ascending=False))
-per_class.to_csv(OUTPUT_DIR / "per_class_agreement.csv")
-print()
-print(per_class.to_string())
+    per_class = (paired.assign(match=paired["label_02_bridged"] == paired["label_03"])
+                 .groupby("label_02_bridged")
+                 .agg(n_tubules=("match", "size"), agreement=("match", "mean"))
+                 .sort_values("n_tubules", ascending=False))
+    per_class.to_csv(OUTPUT_DIR / "per_class_agreement.csv")
+    print()
+    print(per_class.to_string())
 
-fig, ax = plt.subplots(figsize=(7, 3.6))
-ax.barh(per_class.index, 100 * per_class["agreement"], color="#4c72b0")
-ax.set_xlabel("% of notebook 02 tubules labelled the same way in notebook 03")
-ax.set_xlim(0, 100)
-for y, (n, a) in enumerate(zip(per_class["n_tubules"], per_class["agreement"])):
-    ax.text(100 * a + 1, y, f"n={n:,}", va="center", fontsize=8)
-ax.invert_yaxis()
-fig.tight_layout()
-fig.savefig(OUTPUT_DIR / "per_class_agreement.png", dpi=160)
-plt.show()
+    fig, ax = plt.subplots(figsize=(7, 3.6))
+    ax.barh(per_class.index, 100 * per_class["agreement"], color="#4c72b0")
+    ax.set_xlabel("% of notebook 02 tubules labelled the same way in notebook 03")
+    ax.set_xlim(0, 100)
+    for y, (n, a) in enumerate(zip(per_class["n_tubules"], per_class["agreement"])):
+        ax.text(100 * a + 1, y, f"n={n:,}", va="center", fontsize=8)
+    ax.invert_yaxis()
+    fig.tight_layout()
+    fig.savefig(OUTPUT_DIR / "per_class_agreement.png", dpi=160)
+    plt.show()
 
 
 # %% [markdown]

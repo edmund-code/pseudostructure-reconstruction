@@ -106,6 +106,24 @@ PROJECT_DIR = _find_project_dir()
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))            # makes `import pseudospace` work anywhere
 
+def _workflow_roots(project_dir: Path) -> tuple[Path, Path]:
+    """Resolve private inputs and generated outputs without baking in a machine path.
+
+    Command-line values take precedence over environment variables. ``parse_known_args`` keeps
+    the cell-marked script usable in Jupyter, whose kernel adds arguments of its own.
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--data-root', type=Path)
+    parser.add_argument('--results-root', type=Path)
+    args, _ = parser.parse_known_args()
+    data_root = args.data_root or os.environ.get('PSEUDOSPACE_DATA_ROOT') or project_dir / 'data'
+    results_root = (args.results_root or os.environ.get('PSEUDOSPACE_RESULTS_ROOT')
+                    or project_dir / 'results')
+    return Path(data_root).expanduser().resolve(), Path(results_root).expanduser().resolve()
+
+
+DATA_DIR, RESULTS_ROOT = _workflow_roots(PROJECT_DIR)
+
 TUBULE_BY_GENE_DIR = DATA_DIR / 'tubule_by_gene'                          # input
 PATHWAY_LIBRARY_DIR = DATA_DIR / 'mouse_vs_human' / 'pathway_gene_sets'   # input (read-only)
 
@@ -193,25 +211,6 @@ TRIM_FRACTION = 0.05
 N_BINS = 120
 SMOOTH_SIGMA = 2.5
 Z_CLIP = 2
-
-
-def _workflow_roots(project_dir: Path) -> tuple[Path, Path]:
-    """Resolve private inputs and generated outputs without baking in a machine path.
-
-    Command-line values take precedence over environment variables. ``parse_known_args`` keeps
-    the cell-marked script usable in Jupyter, whose kernel adds arguments of its own.
-    """
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--data-root', type=Path)
-    parser.add_argument('--results-root', type=Path)
-    args, _ = parser.parse_known_args()
-    data_root = args.data_root or os.environ.get('PSEUDOSPACE_DATA_ROOT') or project_dir / 'data'
-    results_root = (args.results_root or os.environ.get('PSEUDOSPACE_RESULTS_ROOT')
-                    or project_dir / 'results')
-    return Path(data_root).expanduser().resolve(), Path(results_root).expanduser().resolve()
-
-
-DATA_DIR, RESULTS_ROOT = _workflow_roots(PROJECT_DIR)
 
 
 # %%
@@ -1017,6 +1016,26 @@ print(f'Before cell filtering: {adata_combined.n_obs} tubules x {adata_combined.
 sc.pp.filter_cells(adata_combined, min_genes=100)
 print(f'After cell filtering:  {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
 
+# --- Low-support gene filter, now BEFORE Harmony ---------------------------------------------
+# This ran after Harmony, on the object read back from disk, so X_harmony was built with genes the
+# later gene-level analysis then discarded. Notebook 03 filters ahead of Harmony; this matches it.
+# The whitelist is unchanged mouse-specific content: curated and diagnostic markers stay in the
+# matrix even when they fail the support thresholds.
+_gene_counts = adata_combined.X if sparse.issparse(adata_combined.X) else np.asarray(adata_combined.X)
+_gene_expressed = np.asarray((_gene_counts > 0).sum(axis=0)).ravel()
+_gene_total_counts = np.asarray(_gene_counts.sum(axis=0)).ravel()
+_min_cells = max(1, int(np.ceil(MIN_GENE_TUBULE_FRACTION * adata_combined.n_obs)))
+gene_keep = (_gene_expressed >= _min_cells) & (_gene_total_counts >= MIN_GENE_TOTAL_COUNTS)
+_whitelist_hits = adata_combined.var_names.str.upper().isin({g.upper() for g in GENE_FILTER_WHITELIST})
+gene_keep = gene_keep | np.asarray(_whitelist_hits)
+adata_combined.var['n_tubules_expressed'] = _gene_expressed
+adata_combined.var['total_counts'] = _gene_total_counts
+adata_combined.var['passes_expression_count_filter'] = gene_keep
+print(f'Gene filter before Harmony keeps {int(gene_keep.sum()):,}/{adata_combined.n_vars:,} genes '
+      f'(>= {MIN_GENE_TUBULE_FRACTION:.0%} of tubules and >= {MIN_GENE_TOTAL_COUNTS} counts, '
+      f'plus {int(np.asarray(_whitelist_hits).sum())} whitelisted markers)')
+adata_combined = adata_combined[:, gene_keep].copy()
+
 adata_combined.layers['counts'] = adata_combined.X.copy()
 sc.pp.normalize_total(adata_combined, target_sum=NORMALIZE_TARGET_SUM)
 sc.pp.log1p(adata_combined)
@@ -1105,21 +1124,22 @@ else:
     print('No counts layer found; using current X as the raw-count source')
 adata_all.layers['counts'] = counts.copy()
 
-counts_matrix = counts if sparse.issparse(counts) else np.asarray(counts)
-expressed = np.asarray((counts_matrix > 0).sum(axis=0)).ravel()
-total_counts = np.asarray(counts_matrix.sum(axis=0)).ravel()
-min_cells = max(1, int(np.ceil(MIN_GENE_TUBULE_FRACTION * adata_all.n_obs)))
-gene_keep = (expressed >= min_cells) & (total_counts >= MIN_GENE_TOTAL_COUNTS)
-whitelist_hits = adata_all.var_names.str.upper().isin({g.upper() for g in GENE_FILTER_WHITELIST})
-gene_keep = gene_keep | np.asarray(whitelist_hits)
-
-adata_all.var['n_tubules_expressed'] = expressed
-adata_all.var['total_counts'] = total_counts
-adata_all.var['passes_expression_count_filter'] = gene_keep
-print(f'Gene filter keeps {int(gene_keep.sum()):,}/{adata_all.n_vars:,} genes '
+# The low-support gene filter now runs BEFORE Harmony (Section 1), matching notebook 03, so this
+# object arrives already filtered. Assert that rather than re-applying the filter: a silent
+# re-application would hide a Section 1 mistake instead of failing on it.
+if 'passes_expression_count_filter' not in adata_all.var.columns:
+    raise RuntimeError(
+        'Pass-1 object carries no gene filter: Section 1 must apply it before Harmony. '
+        f'Rebuild {HARMONY_OUTPUT_PATH.name} before continuing.'
+    )
+_still_filtered = int((~adata_all.var['passes_expression_count_filter'].astype(bool)).sum())
+if _still_filtered:
+    raise RuntimeError(
+        f'Pass-1 object still holds {_still_filtered:,} filtered genes; Section 1 did not subset them.'
+    )
+print(f'Gene filter already applied before Harmony: {adata_all.n_vars:,} genes retained '
       f'(>= {MIN_GENE_TUBULE_FRACTION:.0%} of tubules and >= {MIN_GENE_TOTAL_COUNTS} counts, '
-      f'plus {int(np.asarray(whitelist_hits).sum())} whitelisted markers)')
-adata_all = adata_all[:, gene_keep].copy()
+      f'plus whitelisted markers)')
 
 adata_all.X = adata_all.layers['counts'].copy()
 adata_all.uns.pop('log1p', None)

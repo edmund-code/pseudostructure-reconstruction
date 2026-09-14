@@ -416,30 +416,30 @@ print(f'Saved pass-1 object: {HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
 # These calls were reviewed from the current run's DE heatmap, reference-gene
 # dotplot/evidence panel, and sample composition. They are broad labels only.
 REVIEWED_CLUSTER_LABELS = {
-    '0': 'PT',           # PT-S1/S2 (Slc5a2, Gatm, Slc5a12, Slc22a8)
-    '1': 'PT',           # PT-S1/S2 (Slc22a6, Slc13a3, Lrp2, Slc34a1) - previously called DCT
-    '2': 'CNT_CD',       # CNT/collecting duct (Hsd11b2, Rhcg, Calb1, Atp6v1g3) - previously called PT
-    '3': 'CNT_CD',       # CCD principal cells (Aqp2, Aqp3, Cdh16)
-    '4': 'DCT',          # DCT (Slc12a3, Trpm7, Wnk1, Klhl3) - previously called CNT_CD
-    '5': 'TAL',          # TAL (Umod, Slc12a1, Atp1b1)
-    '6': 'Glomerulus',   # mixed glomerular/perivascular structure
-    '7': 'PT',           # PT-S3 (Slc22a7, Slc7a13, Slc6a18, Acsm3) - previously left unassigned
-    '8': 'Unassigned',   # stress/matrix program, no reference-gene support in the top 20 DE
-    '9': 'SmoothMuscle', # Acta2/Myh11/Tagln/Rgs5; non-nephron, excluded via REMOVE_CLASSES
-    '10': 'TAL',         # TAL (Slc12a1, Umod, Kcnj1, Cldn10) - added by the current clustering
+    '0': 'PT-S1',        # PT-S1 +2.67, next PT-S2 +1.38
+    '1': 'PT-S2',        # PT-S2 +2.39, next PT-S1 +0.94
+    '2': 'CNT_CD',       # OMCD +2.13 vs CNT +2.09 -- panels do not separate; family call
+    '3': 'CNT_CD',       # IMCD +2.61 vs CCD +1.97, but DE is Aqp2+Aqp3 (CCD) -- family call
+    '4': 'DCT1',         # DCT1 +2.42, next DCT2 +1.92; DE Slc12a3/Trpm6
+    '5': 'AL',           # cTAL +1.76 vs mTAL +1.46 and 921/955 of the cluster is mouse -- family call
+    '6': 'Glomerulus',   # Podocyte +3.14 with Vessel +2.87: mixed glomerular structure
+    '7': 'PT-S3',        # PT-S3 +2.73, next +0.06
+    '8': 'Unassigned',   # best panel only +0.65 -- no segment identity
+    '9': 'SmoothMuscle', # SmoothMuscle +3.13
+    '10': 'mTAL',        # mTAL +2.07 at full panel coverage; DE Slc12a1/Umod/Kcnj1/Cldn10
 }
 ASSIGNMENT_INTERPRETATION = {
-    '0': 'PT S1/S2: solute transport and proximal metabolic program.',
-    '1': 'PT S1/S2: proximal solute transport (Slc22a6, Slc13a3, Lrp2, Slc34a1); the previous DCT call no longer matched this cluster DE.',
-    '2': 'CNT/collecting duct: distal acid-base and principal-cell program (Hsd11b2, Rhcg, Calb1, Atp6v1g3).',
-    '3': 'CCD-like: collecting-duct principal-cell program (Aqp2, Aqp3).',
-    '4': 'DCT: distal convoluted tubule program (Slc12a3, Trpm7, Wnk1, Klhl3).',
-    '5': 'TAL program (Umod, Slc12a1, Atp1b1); strongly mouse-enriched.',
-    '6': 'Mixed glomerular structure: podocyte genes plus endothelial/perivascular signal.',
-    '7': 'PT S3: late proximal program (Slc22a7, Slc7a13, Slc6a18, Acsm3) - four of the five PT-S3 reference genes.',
-    '8': 'Stressed or matrix-associated epithelial program with no reference-gene support; intentionally unresolved.',
-    '9': 'Smooth-muscle/perivascular program (Acta2, Myh11, Tagln, Rgs5); non-nephron.',
-    '10': 'TAL: thick ascending limb program (Slc12a1, Umod, Kcnj1, Cldn10).',
+    '0': 'PT S1: S1 solute transport and proximal metabolic program (PT-S1 panel best, PT-S2 second).',
+    '1': 'PT S2: proximal solute transport (Slc22a6, Slc13a3); the S1 call that preceded the v2 re-segmentation no longer matched.',
+    '2': 'Collecting duct: CNT and OMCD panels tie and the DE mixes Calb1/Hsd11b2/Slc8a1 (CNT) with Rhcg (OMCD), so the family is reported.',
+    '3': 'Collecting duct: the IMCD panel scores highest but the DE is Aqp2+Aqp3 (CCD-like), so the family is reported rather than a contested fine call.',
+    '4': 'DCT: distal convoluted tubule, DCT1 panel best (Slc12a3, Trpm6).',
+    '5': 'Ascending limb; 921 of 955 structures are mouse, so this is a mouse-driven cluster and gets the family rather than a thin/thick call.',
+    '6': 'Mixed glomerular structure: podocyte genes plus endothelial/perivascular signal (Vessel panel second).',
+    '7': 'PT S3: late proximal program (Slc22a7, Slc7a13); four of five PT-S3 panel genes are top DE.',
+    '8': 'No segment identity: the best panel reaches only +0.65 and the top DE is a stress/matrix program, so it stays unresolved.',
+    '9': 'Smooth-muscle/perivascular program (Acta2, Myh11, Tagln); non-nephron.',
+    '10': 'TAL, medullary: thick ascending limb, full panel coverage with Cldn10 (the medullary marker) in the DE.',
 }
 
 # Reference genes are visualization aids only. They are never used to cluster, score,
@@ -463,9 +463,26 @@ SEGMENT_REFERENCE_PANEL = {
     'Immune': ['Ptprc', 'Lyz2', 'C1qa'],
 }
 
-COARSE_ORDER = ['PT', 'DTL', 'AL', 'TAL', 'DCT', 'CNT_CD']
-KEEP_TUBULE_CLASSES = list(COARSE_ORDER)
-REMOVE_CLASSES = ['Glomerulus', 'Vessel', 'Stroma', 'SmoothMuscle', 'Immune', 'Unassigned']
+# Segment vocabulary, families and rollup come from the shared package definition so this
+# workflow and the mouse-only one cannot drift apart. See pseudospace/vocabulary.py.
+from pseudospace import vocabulary as segment_vocabulary
+
+COARSE_ORDER = list(segment_vocabulary.COARSE_FAMILIES)
+KEEP_TUBULE_CLASSES = list(segment_vocabulary.KEEP_TUBULE_CLASSES)
+REMOVE_CLASSES = list(segment_vocabulary.REMOVE_CLASSES)
+LABEL_VOCABULARY = list(segment_vocabulary.LABEL_VOCABULARY)
+
+# Family palette. Fine labels inherit their family colour, so a map holding a mix of fine and
+# coarse labels stays legible -- and the family is what the coarse continuum reports anyway.
+FAMILY_COLORS = {
+    'PT': '#4C9BD3', 'DTL': '#9575CD', 'AL': '#F58518', 'DCT': '#D81B60', 'CNT_CD': '#76B7B2',
+    'Glomerulus': '#F2C94C', 'Vessel': '#E15759', 'Stroma': '#B07AA1',
+    'SmoothMuscle': '#7E57C2', 'Immune': '#59A14F', 'Unassigned': '#9E9E9E',
+}
+
+
+def label_color(label: str) -> str:
+    return FAMILY_COLORS.get(segment_vocabulary.coarse_for(str(label)), '#BDBDBD')
 TRAJECTORY_COMPARTMENT = 'PT'
 N_NEIGHBORS = 30
 
@@ -681,9 +698,12 @@ display(cluster_composition)
 # No label is inferred here. Update REVIEWED_CLUSTER_LABELS only after reviewing
 # coarse_cluster_top_markers.csv, the UMAP, and the cluster composition table above.
 cluster_ids = sorted(adata_cluster.obs['leiden_coarse'].astype(str).unique())
-invalid_labels = sorted(set(REVIEWED_CLUSTER_LABELS.values()) - set(COARSE_ORDER + REMOVE_CLASSES))
-if invalid_labels:
-    raise ValueError(f'Unsupported manually reviewed labels: {invalid_labels}')
+unsupported_labels = segment_vocabulary.invalid_labels(REVIEWED_CLUSTER_LABELS.values())
+if unsupported_labels:
+    raise ValueError(
+        f'Unsupported manually reviewed labels: {unsupported_labels}. '
+        f'Valid labels are {list(segment_vocabulary.LABEL_VOCABULARY)}.'
+    )
 
 # A previous-resolution map is allowed but never applied to IDs absent from this run.
 # This is a warning, not an error, so cluster exploration is always available.
@@ -718,7 +738,9 @@ for obj in (adata_cluster, adata_all):
     # Current clusters without an explicit review stay unassigned but remain available
     # in the saved pass-1 object and all cluster-level exploration outputs.
     obj.obs['segment_class'] = obj.obs['leiden_coarse'].astype(str).map(current_labels)
-    obj.obs['coarse_class'] = obj.obs['segment_class'].astype(str)
+    # Roll the fine label up to its family rather than copying it, so a cluster labelled PT-S1
+    # still reports PT on the coarse continuum.
+    obj.obs['coarse_class'] = obj.obs['segment_class'].astype(str).map(segment_vocabulary.coarse_for)
     obj.obs['broad_tubule_marker_call'] = obj.obs['coarse_class']
     obj.obs['review_status'] = np.where(
         obj.obs['leiden_coarse'].astype(str).isin(REVIEWED_CLUSTER_LABELS),
@@ -864,20 +886,11 @@ else:
         np.isfinite(spatial['x_centroid']) & np.isfinite(spatial['y_centroid'])
     ].copy()
 
-    label_order = [
-        'PT', 'TAL', 'DCT', 'CNT_CD', 'SmoothMuscle', 'Unassigned',
-    ]
     observed_labels = list(dict.fromkeys(spatial['segment_class'].astype(str)))
     label_order = [
-        label for label in label_order if label in observed_labels
-    ] + [label for label in observed_labels if label not in label_order]
-    label_colors = {
-        'PT': '#4C9BD3', 'TAL': '#F58518', 'DCT': '#D81B60', 'Glomerulus': '#F2C94C',
-        'CNT_CD': '#76B7B2', 'SmoothMuscle': '#7E57C2',
-        'Unassigned': '#9E9E9E',
-    }
-    for label in label_order:
-        label_colors.setdefault(label, '#BDBDBD')
+        label for label in SEGMENT_DISPLAY_ORDER if label in observed_labels
+    ] + [label for label in observed_labels if label not in SEGMENT_DISPLAY_ORDER]
+    label_colors = {label: label_color(label) for label in label_order}
 
     cluster_order = sorted(spatial['leiden_coarse'].astype(str).unique(), key=int)
     cluster_cmap = plt.get_cmap('tab20', max(len(cluster_order), 1))
@@ -1031,9 +1044,8 @@ else:
 
     cluster_order = sorted(crop_obs['leiden_coarse'].unique(), key=int)
     label_colors = {
-        'PT': '#4C9BD3', 'TAL': '#F58518', 'DCT': '#D81B60', 'Glomerulus': '#F2C94C',
-        'CNT_CD': '#76B7B2', 'SmoothMuscle': '#7E57C2',
-        'Glomerulus': '#F2C94C', 'Unassigned': '#9E9E9E',
+        label: label_color(label)
+        for label in dict.fromkeys(crop_obs['segment_class'].astype(str))
     }
     selected_rows = []
     for cluster in cluster_order:
@@ -1273,9 +1285,7 @@ TOTAL_POSITION_MARKERS = {
     'early': sorted({gene for group in ('PT-S1', 'PT-S2') for gene in NEPHRON_AXIS_MARKERS[group]}),
     'late': sorted(NEPHRON_AXIS_MARKERS['PT-S3']),
 }
-SEGMENT_DISPLAY_ORDER = ['PT', 'PT-S1', 'PT-S2', 'PT-S3', 'DTL', 'DTL1', 'DTL2', 'DTL3',
-                         'AL', 'ATL', 'TAL', 'mTAL', 'cTAL', 'Macula-densa', 'DCT', 'DCT1', 'DCT2',
-                         'CNT_CD', 'CNT', 'CCD', 'OMCD', 'IMCD', *REMOVE_CLASSES]
+SEGMENT_DISPLAY_ORDER = list(segment_vocabulary.SEGMENT_DISPLAY_ORDER)
 PAGA_CONNECTIVITY_THRESHOLD = 0.01
 N_DIFFMAP_COMPONENTS_TO_TEST, EIGENVALUE_FLOOR, MIN_VALID_FOR_SPEARMAN = 10, 1e-8, 20
 print('PT reference axis for global-DPT orientation:', {key: len(value) for key, value in TOTAL_POSITION_MARKERS.items()})
@@ -1544,8 +1554,7 @@ for species in SPECIES_GROUPS:
         output_name=f'{species}_global_dpt_fine_marker_heatmap.png',
         strip_col='coarse_class',
         strip_order=COARSE_ORDER,
-        strip_colors={'PT': '#4C9BD3', 'DTL': '#7E57C2', 'AL': '#F58518',
-                      'TAL': '#E8A33D', 'DCT': '#D81B60', 'CNT_CD': '#8D6E63'},
+        strip_colors=FAMILY_COLORS,
         n_bins=120,
         output_dir=CELLTYPING_DIR,
         project_dir=PROJECT_DIR,

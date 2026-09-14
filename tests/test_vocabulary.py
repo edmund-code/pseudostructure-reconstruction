@@ -101,9 +101,16 @@ def test_coarse_for_maps_known_labels(label, family):
     assert coarse_for(label) == family
 
 
-def test_coarse_for_falls_back_to_unassigned():
-    # Unmapped labels are reported, not raised: a cluster may carry a label this module does not
-    # know and still needs to appear in the pass-1 object.
+def test_coarse_for_passes_non_tubule_labels_through():
+    # Non-tubule labels are reported as themselves. Folding them into Unassigned would merge two
+    # reported classes and hide, for example, every smooth-muscle structure.
+    for label in ("SmoothMuscle", "Stroma", "Vessel", "Immune", "Unassigned", "Glomerulus"):
+        assert coarse_for(label) == label, label
+
+
+def test_coarse_for_falls_back_to_unassigned_only_for_unknown_labels():
+    # A label this module does not know at all is reported as unresolved rather than raising: the
+    # structure still has to appear in the pass-1 object.
     assert coarse_for("NotASegment") == "Unassigned"
 
 

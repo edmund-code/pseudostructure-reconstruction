@@ -89,8 +89,15 @@ SEGMENT_DISPLAY_ORDER: tuple[str, ...] = _build_display_order()
 
 
 def coarse_for(label: str) -> str:
-    """Coarse family for any label. Unmapped labels become ``Unassigned`` rather than raising."""
-    return SEGMENT_TO_COARSE.get(label, "Unassigned")
+    """Coarse family for any label.
+
+    Non-tubule labels pass through unchanged -- ``SmoothMuscle`` stays ``SmoothMuscle``, it does not
+    become ``Unassigned`` -- and only a label this module does not know at all falls back to
+    ``Unassigned``. This matches the mouse-only workflow's rollup exactly, and the distinction
+    matters: collapsing the non-tubule classes into ``Unassigned`` would silently merge two
+    reported classes and hide, for example, every smooth-muscle structure.
+    """
+    return SEGMENT_TO_COARSE.get(label, label if label in REMOVE_CLASSES else "Unassigned")
 
 
 def invalid_labels(labels) -> list[str]:

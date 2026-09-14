@@ -1278,24 +1278,29 @@ print('}')
 # tubule subset but does NOT re-cluster or re-label.
 
 # %%
-# Manual labels for the reproducible R-harmony 2.0.5 run (fingerprint below). These calls were
-# reviewed against celltyping/coarse_marker_dotplot.png and coarse_cluster_top_markers.csv:
-# 4 = Cryab/Vim/Tnc/Thbs1 (Stroma); 8 = Krt19/Sprr1a/Krt18 (Unassigned), rather than
-# assigning either cluster to a nephron segment. The remaining IDs carry expected markers.
+# Manual labels for the reproducible R-harmony 2.0.5 run (fingerprint below). Re-reviewed against
+# celltyping/coarse_marker_dotplot.png and coarse_cluster_top_markers.csv after the low-support gene
+# filter moved ahead of Harmony (Section 1), which changed the clustering while leaving the cell set
+# and the cluster count unchanged. The Leiden IDs shifted, so every entry was re-derived from the
+# current run's panel scores and DE; the non-nephron programs are unchanged, only renumbered:
+#   9 = Cryab/Vim/Tnc/Thbs1 (Stroma), 8 = Krt19/Sprr1a/Krt18 (Unassigned).
+# Two calls are the least certain and worth your eye: 6/7 split the thick ascending limb (cTAL +1.63
+# vs mTAL +1.48; mTAL +1.59 vs cTAL +1.40) and 10 is the weakest collecting-duct call (IMCD +1.15
+# over ATL +0.95, with Aqp2 in the DE).
 # They are valid ONLY for the fingerprint below; a changed clustering must be reviewed.
 COARSE_LABELS = {
-    '0': 'PT-S1',
-    '1': 'PT-S2',
-    '2': 'DCT2',
-    '3': 'PT-S3',
-    '4': 'Stroma',
-    '5': 'CCD',
-    '6': 'cTAL',
-    '7': 'Podocyte',
-    '8': 'Unassigned',
-    '9': 'IMCD',
-    '10': 'SmoothMuscle',
-    '11': 'mTAL',
+    '0': 'PT-S1',        # panel +1.66; DE Alpl/Slc5a2/Gatm/Slc34a1
+    '1': 'PT-S2',        # panel +1.32; DE Slc22a6/Slc13a3
+    '2': 'Podocyte',     # panel +2.33; DE Podxl/Synpo/Nphs2
+    '3': 'DCT2',         # panel DCT2 +1.44 over CNT +1.10; DE Slc8a1/Clcnkb
+    '4': 'PT-S3',        # panel +0.91; DE Slc6a18/Napsa/Mep1a
+    '5': 'CCD',          # panel +1.26; DE Aqp2/Aqp3/Hsd11b2
+    '6': 'cTAL',         # panel cTAL +1.63 vs mTAL +1.48; DE Umod/Slc12a1
+    '7': 'mTAL',         # panel mTAL +1.59 vs cTAL +1.40; DE Umod/Ppp1r1a
+    '8': 'Unassigned',   # DE Krt19/Sprr1a/Krt18; best panel only ATL +0.80
+    '9': 'Stroma',       # DE Cryab/Vim/Tnc/Thbs1; all panels <= +0.40
+    '10': 'IMCD',        # panel IMCD +1.15 over ATL +0.95; DE Aqp2 -- weakest call
+    '11': 'SmoothMuscle',  # panel +2.44; DE Acta2/Myh11/Tagln
 }
 
 # The reference run used R harmony 2.0.5 and Scanpy/Leiden resolution 0.7. Do not disable this
@@ -1306,7 +1311,7 @@ COARSE_LABELS_FINGERPRINT = {
     'resolution': 0.7,
     'n_neighbors': 30,
     'random_state': 0,
-    'membership_sha1': 'a233dd755087',
+    'membership_sha1': '86657cf8af29',
 }
 
 if not COARSE_LABELS:

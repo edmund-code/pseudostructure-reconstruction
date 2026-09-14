@@ -341,6 +341,87 @@ inputs.to_csv(OUTPUT_DIR / "workflow_input_summary.csv", index=False)
 print()
 print(inputs.to_string(index=False))
 
+
+# %% [markdown]
+# ### 5b. Preprocessing: what differs, step by step
+#
+# Section 5 compares constant *values* and finds them nearly identical. The preprocessing **steps**
+# still differ, and three of those differences drive everything else in this notebook:
+#
+# 1. **The gene space.** Notebook 03 restricts the matrix to shared human-mouse orthologs before
+#    anything else, so its pass-1 object is ~10,060 genes against notebook 02's ~19,059. Every
+#    downstream step -- HVG selection, PCA, the neighbour graph, Leiden -- operates on a different
+#    feature set. This is the largest single cause of the divergence.
+# 2. **Where the low-support gene filter sits relative to Harmony.** Notebook 03 removes genes that
+#    fail `>= 5% of structures and >= 20 counts` *before* Harmony, so they cannot influence the
+#    corrected embedding. Notebook 02 removes the equivalent genes *after* Harmony, from the
+#    post-Harmony clustering object -- so its `X_harmony` was computed with those genes still present
+#    and they only disappear for clustering. The two embeddings are therefore not the same kind of
+#    object, even though every Harmony parameter matches.
+# 3. **What the Harmony HVGs are stratified by.** Both call `select_harmony_hvgs_by_condition` with
+#    `mode='intersection'` and identical thresholds, but notebook 02 asks for genes variable in both
+#    `Control` and `IR`, while notebook 03 asks for genes variable in both `mouse` and `human`. Same
+#    question shape, different question -- so different HVG sets.
+#
+# Two smaller ones: notebook 02 keeps whitelisted markers that fail the support filter
+# (`GENE_FILTER_WHITELIST`) and adds curated markers to the clustering feature space
+# (`CURATED_MARKER_WHITELIST`); notebook 03 has neither override. And notebook 03 adds an ortholog
+# mapping step and a Harmony version guard, which notebook 02 does not need.
+#
+# The table below is read out of the two generated `.py` mirrors rather than transcribed, so the
+# ordering and arguments cannot drift from the code. Note what is *identical*: normalisation target
+# 1e4, `log1p`, PCA `n_comps=50`/`random_state=0`, neighbour count 25, UMAP 0.3/1.0, every Harmony
+# parameter, `N_HVGS=2000`, the HVG thresholds and `mode='intersection'`, `COARSE_RESOLUTION=0.7` and
+# `RANDOM_STATE=0`. The tuning matches; the inputs and the step ordering do not.
+
+# %%
+# Read the preprocessing sequence out of the two generated mirrors instead of transcribing it.
+def preprocessing_facts(path: Path) -> dict:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    text = "\n".join(lines)
+
+    def first_line(pattern: str):
+        return next((i for i, line in enumerate(lines, 1) if re.search(pattern, line)), None)
+
+    filter_line = first_line(r"sc\.pp\.filter_cells\(")
+    gene_filter_line = first_line(r"^\s*gene_keep = \(")
+    harmony_line = first_line(r"run_harmony_rpy2\(")
+    hvg_line = first_line(r"select_harmony_hvgs_by_condition\(")
+    hvg_call = "\n".join(lines[hvg_line - 1: hvg_line + 14]) if hvg_line else ""
+
+    if gene_filter_line is None or harmony_line is None:
+        ordering = "not found"
+    else:
+        ordering = "before Harmony" if gene_filter_line < harmony_line else "after Harmony"
+    key = re.search(r"group_key='([^']+)'", hvg_call)
+    groups = re.search(r"^\s*groups=([^\n]+?)\s*,?\s*$", hvg_call, re.M)
+    return {
+        "tubule filter": (re.search(r"min_genes=([^)]+)\)", lines[filter_line - 1]).group(1)
+                          if filter_line else "-"),
+        "low-support gene filter": ordering,
+        "gene-filter whitelist override": "yes" if "GENE_FILTER_WHITELIST" in text else "no",
+        "clustering marker whitelist": "yes" if "CURATED_MARKER_WHITELIST" in text else "no",
+        "Harmony HVG stratified by": (f"group_key={key.group(1)}, groups={groups.group(1)}"
+                                      if key and groups else "-"),
+    }
+
+def pass1_gene_space(path: Path) -> int:
+    obj = ad.read_h5ad(path, backed="r")
+    n_vars = obj.n_vars
+    del obj
+    return n_vars
+
+facts_02 = preprocessing_facts(MIRROR_02)
+facts_03 = preprocessing_facts(MIRROR_03)
+steps = pd.DataFrame({
+    "step": (["gene space (pass-1 var)"] + list(facts_02)),
+    "notebook_02": ([f"{pass1_gene_space(MOUSE_ONLY_RUN):,} genes (mouse)"] + list(facts_02.values())),
+    "notebook_03": ([f"{pass1_gene_space(CROSS_SPECIES_RUN):,} genes (shared orthologs)"]
+                    + list(facts_03.values())),
+})
+steps.to_csv(OUTPUT_DIR / "preprocessing_steps.csv", index=False)
+print(steps.to_string(index=False))
+
 # %% [markdown]
 # ## 6. How to read this
 #

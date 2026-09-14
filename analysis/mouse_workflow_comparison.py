@@ -49,6 +49,7 @@ def _results_root(project_dir: Path) -> Path:
     return Path(root).expanduser().resolve()
 
 PROJECT_DIR = _find_project_dir()
+DATA_ROOT = Path(os.environ.get("PSEUDOSPACE_DATA_ROOT", PROJECT_DIR / "data")).expanduser().resolve()
 RESULTS_ROOT = _results_root(PROJECT_DIR)
 
 MOUSE_ONLY_RUN = RESULTS_ROOT / "mouse_only_v5" / "all_mouse_tubules_harmony_pass1.h5ad"
@@ -103,6 +104,68 @@ shared_keys = np.intersect1d(mouse_only["tubule_key"], cross_species["tubule_key
 print(f"healthy-mouse tubules retained   02 = {len(mouse_only):,}   03 = {len(cross_species):,}")
 print(f"present in both runs             {len(shared_keys):,}"
       f"   (02-only {len(mouse_only) - len(shared_keys)}, 03-only {len(cross_species) - len(shared_keys)})")
+
+# %% [markdown]
+# ### 2b. Explaining any tubule-set difference
+#
+# The two workflows do not filter tubules the same way. Notebook 03 applies an absolute cutoff --
+# `sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)`, with `MIN_GENES_PER_TUBULE = 100`
+# -- and it runs that on the **ortholog-restricted shared matrix**, not on the mouse gene space.
+# Notebook 02 has no tubule-level gene filter at all, only gene-level ones (`MIN_GENE_TUBULE_FRACTION`,
+# `MIN_GENE_TOTAL_COUNTS`).
+#
+# A tubule therefore differs only when it is sparse enough that both hold: the ortholog mapping and the
+# combined matrix's gene-level filters shrink its gene count, and the result lands below 100. In the
+# current data that is a single tubule, `Ctrl1A4|5556`, with 102 counts over exactly 100 nonzero genes:
+# `Atp5b` and `Cyp2j5` have no one-to-one ortholog, and four more are too rare to survive the combined
+# cohort's gene filters, leaving 94 shared genes -- just under the cutoff.
+#
+# That direction favours notebook 03: a tubule with roughly one UMI per gene is a segmentation sliver
+# rather than tissue, so dropping it is the more defensible behaviour. Treat the two retained sets as
+# equivalent for everything meaningfully populated, and read the cell below before comparing counts
+# across runs. Note also that `MIN_GENES_PER_TUBULE` is a hard cliff with no margin -- 99 shared genes
+# is dropped, 100 is kept -- so the number of tubules lost will move sharply if the gene space or the
+# combined-cohort filters ever change.
+
+# %%
+# Identify the tubules only one workflow kept, and attribute each to the step that removed it.
+only_02 = sorted(set(mouse_only["tubule_key"]) - set(cross_species["tubule_key"]))
+only_03 = sorted(set(cross_species["tubule_key"]) - set(mouse_only["tubule_key"]))
+print(f"tubules only in 02: {len(only_02)}   only in 03: {len(only_03)}")
+
+if not only_02 and not only_03:
+    print("the retained tubule sets are identical")
+else:
+    shared_obj = ad.read_h5ad(CROSS_SPECIES_RUN, backed="r")
+    shared_genes = set(map(str, shared_obj.var_names))
+    del shared_obj
+    ortholog = pd.read_csv(RESULTS_ROOT / "human_vs_healthy_mouse" / "ortholog_map_used.csv")
+    mapped_mouse = set(ortholog["mouse_symbol"].astype(str))
+
+    matrices, rows = {}, []
+    for key in only_02 + only_03:
+        sample, feature_index = key.split("|")
+        if sample not in matrices:
+            matrices[sample] = ad.read_h5ad(
+                DATA_ROOT / "tubule_by_gene" / f"{sample}_tubule_by_gene_caleb.h5ad")
+        obj = matrices[sample]
+        values = obj.X[obj.obs["feature_index"].to_numpy() == int(feature_index)]
+        values = np.asarray(values.todense()).ravel() if hasattr(values, "todense") else np.asarray(values).ravel()
+        genes = np.array(list(map(str, obj.var_names)))[values > 0]
+        rows.append({
+            "tubule": key,
+            "kept_by": "02 only" if key in only_02 else "03 only",
+            "total_counts": int(values.sum()),
+            "genes_mouse_space": int(len(genes)),
+            "genes_shared_space": int(sum(g in shared_genes for g in genes)),
+            "no_one_to_one_ortholog": int(sum(g not in mapped_mouse for g in genes)),
+            "too_rare_in_combined": int(sum(g in mapped_mouse and g not in shared_genes for g in genes)),
+        })
+    delta = pd.DataFrame(rows)
+    delta.to_csv(OUTPUT_DIR / "tubule_set_delta.csv", index=False)
+    print(delta.to_string(index=False))
+    print("\nnotebook 03 keeps a tubule only when genes_shared_space >= MIN_GENES_PER_TUBULE; "
+          "notebook 02 applies no tubule-level gene cutoff.")
 
 # %% [markdown]
 # ## 3. Coarse label agreement

@@ -108,24 +108,24 @@ print(f"present in both runs             {len(shared_keys):,}"
 # %% [markdown]
 # ### 2b. Explaining any tubule-set difference
 #
-# The two workflows do not filter tubules the same way. Notebook 03 applies an absolute cutoff --
-# `sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)`, with `MIN_GENES_PER_TUBULE = 100`
-# -- and it runs that on the **ortholog-restricted shared matrix**, not on the mouse gene space.
-# Notebook 02 has no tubule-level gene filter at all, only gene-level ones (`MIN_GENE_TUBULE_FRACTION`,
-# `MIN_GENE_TOTAL_COUNTS`).
+# Both workflows apply the **same** tubule filter at the **same** threshold --
+# `sc.pp.filter_cells(adata_combined, min_genes=100)`, written as a literal `100` in notebook 02 and
+# as `MIN_GENES_PER_TUBULE` in notebook 03. What differs is the **gene space each applies it to**:
+# notebook 03 builds its matrix in the shared human-mouse ortholog space (10,060 genes in the current
+# data), while notebook 02 uses the mouse gene space. The same tubule is therefore measured against a
+# smaller gene set in 03, and the cutoff sits exactly where sparse tubules pile up.
 #
-# A tubule therefore differs only when it is sparse enough that both hold: the ortholog mapping and the
-# combined matrix's gene-level filters shrink its gene count, and the result lands below 100. In the
-# current data that is a single tubule, `Ctrl1A4|5556`, with 102 counts over exactly 100 nonzero genes:
-# `Atp5b` and `Cyp2j5` have no one-to-one ortholog, and four more are too rare to survive the combined
-# cohort's gene filters, leaving 94 shared genes -- just under the cutoff.
+# In the current data one tubule differs, `Ctrl1A4|5556`, with 102 counts over exactly 100 nonzero
+# mouse genes: `Atp5b` and `Cyp2j5` have no one-to-one ortholog, and four more are too rare to survive
+# the combined cohort's gene filters, leaving 94 shared genes -- just under the cutoff. Notebook 02
+# sees 100 and keeps the tubule; notebook 03 sees 94 and drops it.
 #
 # That direction favours notebook 03: a tubule with roughly one UMI per gene is a segmentation sliver
 # rather than tissue, so dropping it is the more defensible behaviour. Treat the two retained sets as
 # equivalent for everything meaningfully populated, and read the cell below before comparing counts
-# across runs. Note also that `MIN_GENES_PER_TUBULE` is a hard cliff with no margin -- 99 shared genes
-# is dropped, 100 is kept -- so the number of tubules lost will move sharply if the gene space or the
-# combined-cohort filters ever change.
+# across runs. Note also that the threshold is a hard cliff with no margin -- 99 shared genes is
+# dropped, 100 is kept -- so the number of tubules lost will move sharply if the shared gene space or
+# the combined-cohort gene filters ever change.
 
 # %%
 # Identify the tubules only one workflow kept, and attribute each to the step that removed it.
@@ -164,8 +164,9 @@ else:
     delta = pd.DataFrame(rows)
     delta.to_csv(OUTPUT_DIR / "tubule_set_delta.csv", index=False)
     print(delta.to_string(index=False))
-    print("\nnotebook 03 keeps a tubule only when genes_shared_space >= MIN_GENES_PER_TUBULE; "
-          "notebook 02 applies no tubule-level gene cutoff.")
+    print("\nBoth workflows filter tubules with min_genes=100; notebook 02 applies it in the "
+          "mouse gene space and notebook 03 in the shared ortholog space, so a sparse tubule "
+          "can pass in one and fail in the other.")
 
 # %% [markdown]
 # ## 3. Coarse label agreement

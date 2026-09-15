@@ -2036,6 +2036,11 @@ from pseudospace.levelshape import (
     run_level_shape,
     summarize_curve_effects,
 )
+from pseudospace.pathways import (
+    build_pathway_membership,
+    member_gene_evidence,
+    summarize_pathway_redundancy,
+)
 from pseudospace.stats_gam import as_csr, gam_internal_knots, resolve_present
 
 # This input is needed only for the pathway comparison below.
@@ -2050,7 +2055,11 @@ SECTION4_CONFIG = {
     'min_detected_fraction': 0.02,
     'min_mean_expression': 0.0,
     'pathway_min_genes': 10,
+    # No longer applied to membership: kept so the walkthrough can report which pathways an
+    # upper bound of this size would have removed.
     'pathway_max_genes': 150,
+    'pathway_overlap_threshold': 0.6,
+    'redundancy_prioritized_pathways': 40,
     'pathway_libraries': [
         'Reactome_2022', 'MSigDB_Hallmark_2020', 'KEGG_2019_Mouse',
     ],
@@ -2449,58 +2458,55 @@ print('Completed:', 'pt_marker_groups = {')
 gene_mean = np.asarray(Y_genes.mean(axis=0)).ravel()
 gene_sq = np.asarray(Y_genes.multiply(Y_genes).mean(axis=0)).ravel()
 gene_std = np.sqrt(np.maximum(gene_sq - gene_mean ** 2, 1e-12))
-background_lookup = {gene.upper(): gene for gene in gene_names}
-pathway_rows = []
-pathway_mapping_rows = []
 
+# Pathway membership through the same accepted ortholog map that built the matrix, with every
+# coverage stage recorded. `adata_pt.var_names` is the assayed matrix and `gene_names` the genes
+# that passed the detection filter, so "never in the library", "no accepted ortholog", "assayed but
+# filtered" and "used in the score" stay distinguishable. Matching by uppercase alone cannot.
+pathway_coverage = []
+pathway_mapping_rows = []
 for library in SECTION4_CONFIG['pathway_libraries']:
     library_path = PATHWAY_LIBRARY_DIR / f'{library}.json'
     if not library_path.exists():
         print(f'WARNING: missing pathway library {library_path.name}')
         continue
     library_sets = json.loads(library_path.read_text())
-    requested_symbols = set()
-    matched_symbols = set()
-    kept_count = 0
-    for pathway, members in library_sets.items():
-        if isinstance(members, dict):
-            members = members.get('genes', [])
-        requested = {str(gene).upper() for gene in members}
-        present = sorted({
-            background_lookup[gene]
-            for gene in requested
-            if gene in background_lookup
-        })
-        requested_symbols |= requested
-        matched_symbols |= {gene for gene in requested if gene in background_lookup}
-        if (
-            SECTION4_CONFIG['pathway_min_genes']
-            <= len(present)
-            <= SECTION4_CONFIG['pathway_max_genes']
-        ):
-            pathway_rows.append({
-                'library': library,
-                'pathway': pathway,
-                'genes_present': present,
-                'n_genes_present': len(present),
-            })
-            kept_count += 1
+    membership = build_pathway_membership(
+        library_sets,
+        adata_pt.var_names,
+        ortholog_map=ortholog_map,
+        library_name=library,
+        min_genes=SECTION4_CONFIG['pathway_min_genes'],
+        # The old 150-member cap removed whole Hallmark sets before they were ever scored. Pathways
+        # are kept and the ones an upper bound would remove are counted and named instead.
+        max_genes=None,
+        tested=gene_names,
+    )
+    pathway_coverage.append(membership)
     pathway_mapping_rows.append({
         'library': library,
-        'n_pathways_retained': kept_count,
-        'unique_symbols_requested': len(requested_symbols),
-        'unique_symbols_matched': len(matched_symbols),
-        'symbol_match_rate': (
-            len(matched_symbols) / max(len(requested_symbols), 1)
+        'n_pathways_total': int(len(membership)),
+        'n_pathways_retained': int(membership['retained'].sum()),
+        'n_pathway_members_requested': int(membership['n_requested'].sum()),
+        'n_pathway_members_assayed': int(membership['n_assayed'].sum()),
+        'n_pathway_members_with_ortholog': int(membership['n_with_ortholog'].sum()),
+        'n_pathways_over_previous_cap': int(
+            (membership['n_assayed'] > SECTION4_CONFIG['pathway_max_genes']).sum()
         ),
     })
 
-retained_pathways = pd.DataFrame(pathway_rows)
+pathway_coverage = pd.concat(pathway_coverage, ignore_index=True)
+pathway_coverage.to_csv(CURVE_OUTPUT_DIR / 'pathway_membership_coverage.csv', index=False)
 pathway_mapping = pd.DataFrame(pathway_mapping_rows)
-pathway_mapping.to_csv(
-    CURVE_OUTPUT_DIR / 'pathway_symbol_mapping_report.csv', index=False
-)
-display(pathway_mapping.round(3))
+pathway_mapping.to_csv(CURVE_OUTPUT_DIR / 'pathway_symbol_mapping_report.csv', index=False)
+display(pathway_mapping)
+
+retained_pathways = pathway_coverage[pathway_coverage['retained']].reset_index(drop=True)
+print(f'Pathways retained: {len(retained_pathways):,} of {len(pathway_coverage):,}; excluded '
+      f'{int((~pathway_coverage["retained"]).sum()):,} '
+      f'{pathway_coverage.loc[~pathway_coverage["retained"], "exclusion_reason"].value_counts().to_dict()}')
+print(f'Pathways a {SECTION4_CONFIG["pathway_max_genes"]}-member upper bound would remove: '
+      f'{int((pathway_coverage["n_assayed"] > SECTION4_CONFIG["pathway_max_genes"]).sum()):,}')
 
 if retained_pathways.empty:
     pathway_results = pd.DataFrame()
@@ -2560,6 +2566,57 @@ display(pathway_results.head(20)[[
     'difference_type',
 ]] if len(pathway_results) else pathway_results)
 
+# Member-gene evidence beside every prioritized pathway: how many members move with the aggregate
+# trend, and whether a single gene carries it. A pathway name is not evidence of a distinct program
+# when its member set is another pathway's member set.
+if len(pathway_results):
+    prioritized_pathways = pathway_results.head(
+        SECTION4_CONFIG['redundancy_prioritized_pathways']
+    ).copy()
+    prioritized_pathways['member_list'] = prioritized_pathways['genes_present'].map(
+        lambda value: [gene for gene in str(value).split('; ') if gene]
+    )
+
+    # Redundancy is grouped on the prioritized subset, not the whole library: Reactome is a
+    # hierarchy of nested parent/child sets, so a library-wide grouping collapses into one group
+    # and says nothing about the specific claims on the shortlist.
+    redundancy_pairs, redundancy_groups = summarize_pathway_redundancy(
+        prioritized_pathways,
+        gene_column='member_list',
+        label_columns=('library', 'pathway'),
+        overlap_threshold=SECTION4_CONFIG['pathway_overlap_threshold'],
+    )
+    redundancy_pairs.to_csv(CURVE_OUTPUT_DIR / 'pathway_redundancy_pairs.csv', index=False)
+    redundancy_groups.to_csv(CURVE_OUTPUT_DIR / 'pathway_redundancy_groups.csv', index=False)
+    print(f'Overlapping prioritized pairs (>= '
+          f'{SECTION4_CONFIG["pathway_overlap_threshold"]:.0%} of the smaller member set): '
+          f'{len(redundancy_pairs):,}; largest group: '
+          f'{int(redundancy_groups["group_size"].max()) if len(redundancy_groups) else 0}')
+    if len(redundancy_pairs):
+        display(redundancy_pairs.sort_values('n_shared', ascending=False).head(10))
+
+    top_pathway_evidence = []
+    for row in pathway_results.head(SECTION4_CONFIG['top_pathway_plots']).itertuples():
+        members = [gene for gene in str(row.genes_present).split('; ') if gene]
+        evidence = member_gene_evidence(
+            members, gene_results, effect_column='level_effect_human_minus_mouse'
+        )
+        top_pathway_evidence.append({
+            'library': row.library,
+            'pathway': row.pathway,
+            'species_effect_rms': row.species_effect_rms,
+            'level_effect_human_minus_mouse': row.level_effect_human_minus_mouse,
+            **evidence.to_dict(),
+        })
+    top_pathway_evidence = pd.DataFrame(top_pathway_evidence)
+    top_pathway_evidence.to_csv(
+        CURVE_OUTPUT_DIR / 'pathway_top_member_evidence.csv', index=False
+    )
+    display(top_pathway_evidence[[
+        'pathway', 'n_members_present', 'fraction_members_agreeing', 'strongest_member',
+        'strongest_member_effect', 'member_effect_mean',
+        'member_effect_mean_without_strongest', 'sign_flips_without_strongest',
+    ]].round(3))
 
 
 # %%

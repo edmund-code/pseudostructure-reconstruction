@@ -3346,6 +3346,35 @@ delta_pseudospace_heatmap(list(pt_labels), module_scores[:, path_top],
 
 
 def paired_condition_heatmaps(labels, curve_h, curve_a, name, suptitle):
+    """Paired condition heatmaps, twice: a common scale and a shape-only view.
+
+    Standardising each condition on its own (the previous behaviour) removes that condition's level
+    and amplitude, so a collapsed AKI gradient can look as strong as the control gradient. The two
+    views answer different questions and must be read together:
+      * ``<name>`` - both conditions on ONE colour scale in fitted lognorm units: level and amplitude
+        survive, so a weaker AKI gradient reads as weaker;
+      * ``<name>_shape`` - each condition standardised on its own: patterns are comparable in shape
+        only, and colour is NOT an expression amount.
+    """
+    stem, dot, extension = str(name).rpartition('.')
+    stem = stem if dot else str(name)
+    extension = extension if dot else 'png'
+
+    common_vmin = float(np.nanmin([np.nanmin(curve_h), np.nanmin(curve_a)]))
+    common_vmax = float(np.nanmax([np.nanmax(curve_h), np.nanmax(curve_a)]))
+    fig, axes = plt.subplots(2, 1, figsize=(11, 0.32 * len(labels) + 2.5), sharex=True)
+    for ax, mat, title in [(axes[0], curve_h, 'healthy'), (axes[1], curve_a, 'aki')]:
+        im = ax.imshow(mat, aspect='auto', cmap='viridis', vmin=common_vmin, vmax=common_vmax,
+                       extent=[lo, hi, len(labels), 0])
+        ax.set_yticks(np.arange(len(labels)) + 0.5)
+        ax.set_yticklabels([str(x)[:40] for x in labels], fontsize=7)
+        ax.set_ylabel(title)
+        fig.colorbar(im, ax=ax, label='fitted log-normalised expression')
+    axes[1].set_xlabel('Shared pseudospace')
+    fig.suptitle(suptitle + '\ncommon expression scale: level and amplitude preserved',
+                 y=1.01, fontsize=12)
+    _save(fig, f'{stem}.{extension}')
+
     zh = zscore_rows(curve_h)
     za = zscore_rows(curve_a)
     fig, axes = plt.subplots(2, 1, figsize=(11, 0.32 * len(labels) + 2.5), sharex=True)
@@ -3357,8 +3386,9 @@ def paired_condition_heatmaps(labels, curve_h, curve_a, name, suptitle):
         ax.set_ylabel(title)
         fig.colorbar(im, ax=ax, label='per-row z-score')
     axes[1].set_xlabel('Shared pseudospace')
-    fig.suptitle(suptitle, y=1.01, fontsize=12)
-    _save(fig, name)
+    fig.suptitle(suptitle + '\nshape only: each condition standardised on its own '
+                            '(colour is not an expression amount)', y=1.01, fontsize=12)
+    _save(fig, f'{stem}_shape.{extension}')
 
 
 paired_condition_heatmaps(list(gt_names), gt_h_raw, gt_a_raw,

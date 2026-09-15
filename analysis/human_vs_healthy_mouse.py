@@ -2420,19 +2420,41 @@ heatmap_idx = np.array(
 )
 mouse_heat = gene_fit['curve_healthy'][heatmap_idx]
 human_heat = gene_fit['curve_aki'][heatmap_idx]
-pooled = np.concatenate([mouse_heat, human_heat], axis=1)
-row_mean = pooled.mean(axis=1, keepdims=True)
-row_std = pooled.std(axis=1, keepdims=True)
-row_std[row_std < 1e-8] = 1.0
-mouse_z = np.clip((mouse_heat - row_mean) / row_std, -2.5, 2.5)
-human_z = np.clip((human_heat - row_mean) / row_std, -2.5, 2.5)
 
-fig, axes = plt.subplots(
-    1, 2, figsize=(9.5, max(6, 0.19 * len(heatmap_rows))),
-    sharey=True,
-)
+# Two coordinated views of the same genes, because one heatmap cannot answer both questions:
+#   (1) common scale - fitted curves in lognorm units with ONE colour scale for both species, so a
+#       species-wide level or amplitude difference stays visible;
+#   (2) shape only - each curve standardised over the grid, so peak position and profile similarity
+#       are readable even where one species expresses the gene lower overall.
+# A single pooled z-score (the previous version) mixes the two: it removes the between-species level
+# difference by construction and then hides it inside the standardisation.
+common_vmin = float(np.nanmin([mouse_heat.min(), human_heat.min()]))
+common_vmax = float(np.nanmax([mouse_heat.max(), human_heat.max()]))
+fig, axes = plt.subplots(1, 2, figsize=(9.5, max(6, 0.19 * len(heatmap_rows))), sharey=True)
+for axis, values, title in zip(axes, (mouse_heat, human_heat), ('Healthy mouse', 'Human')):
+    image = axis.imshow(
+        values, aspect='auto', interpolation='nearest', cmap='viridis',
+        vmin=common_vmin, vmax=common_vmax,
+        extent=[grid[0], grid[-1], len(heatmap_rows) - 0.5, -0.5],
+    )
+    axis.set_title(title)
+    axis.set_xlabel('Shared PT DPT')
+axes[0].set_yticks(np.arange(len(heatmap_rows)))
+axes[0].set_yticklabels(heatmap_rows['gene'])
+fig.colorbar(image, ax=axes, label='Fitted log-normalised expression (shared scale)', shrink=0.65)
+fig.suptitle('Paired fitted PT trajectories on a common expression scale\n'
+             'level and amplitude preserved; colour is comparable across species')
+_save_figure(fig, 'paired_top_gene_heatmap_lognorm.png')
+
+def _shape_only(curves):
+    mean = np.nanmean(curves, axis=1, keepdims=True)
+    spread = np.nanstd(curves, axis=1, keepdims=True)
+    spread[~np.isfinite(spread) | (spread < 1e-8)] = 1.0
+    return np.clip((curves - mean) / spread, -2.5, 2.5)
+
+fig, axes = plt.subplots(1, 2, figsize=(9.5, max(6, 0.19 * len(heatmap_rows))), sharey=True)
 for axis, values, title in zip(
-    axes, (mouse_z, human_z), ('Healthy mouse', 'Human')
+    axes, (_shape_only(mouse_heat), _shape_only(human_heat)), ('Healthy mouse', 'Human')
 ):
     image = axis.imshow(
         values, aspect='auto', interpolation='nearest', cmap='bwr',
@@ -2443,9 +2465,9 @@ for axis, values, title in zip(
     axis.set_xlabel('Shared PT DPT')
 axes[0].set_yticks(np.arange(len(heatmap_rows)))
 axes[0].set_yticklabels(heatmap_rows['gene'])
-fig.colorbar(image, ax=axes, label='Pooled gene-wise z-score', shrink=0.65)
-fig.suptitle('Paired fitted PT trajectories ranked by mouse-human effect size')
-_save_figure(fig, 'paired_top_gene_heatmap.png')
+fig.colorbar(image, ax=axes, label='Within-curve z-score over pseudospace', shrink=0.65)
+fig.suptitle('Same genes, shape only\nlevel and amplitude removed: peak position and width only')
+_save_figure(fig, 'paired_top_gene_heatmap_shape.png')
 
 
 print('Completed:', '# Paired standardized fitted-curve heatmap for the broader collaborato')

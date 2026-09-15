@@ -3119,6 +3119,171 @@ else:
 
 
 # %% [markdown]
+# ## 4.7 - Magnitude checks: detection, abundance bias, within-species gradients, matched regions
+#
+# Before any top-ranked gene is described as a species difference, four magnitude checks make the
+# confounders visible:
+#
+# 1. **Retained orthologs must actually be assayed in both species.** Detection fractions and mean
+#    abundance per species, with the share of genes detected on both sides, written to
+#    `between_species_detection_abundance.csv`.
+# 2. **Abundance-dependent bias.** Expression ratio against abundance (`ratio_vs_abundance.png`): a
+#    trend means the ratio carries a technical component, not only biology.
+# 3. **Within-species gradients.** Comparing the early-to-late rise *inside* each species removes a
+#    constant gene-specific offset between species, which is what dominates the pooled level term. It
+#    cannot remove position-dependent capture differences or the donor confound.
+# 4. **Matched-region, per-specimen contrasts.** Each human specimen is compared with each mouse
+#    specimen within the same pseudospace bin, so the comparison needs no shared absolute scale and the
+#    spread across the four specimen pairs says how reproducible the direction is.
+#
+
+# %%
+# Purpose: magnitude checks before any species claim.
+# 1. Detection and abundance per species: a retained ortholog that is not assayed on one side cannot
+#    support a cross-species statement.
+species_is_mouse = (species == 'mouse')
+detection_abundance = pd.DataFrame({
+    'gene': gene_names,
+    'detected_fraction_mouse': np.asarray((Y_genes[species_is_mouse] > 0).mean(axis=0)).ravel(),
+    'detected_fraction_human': np.asarray((Y_genes[~species_is_mouse] > 0).mean(axis=0)).ravel(),
+    'mean_lognorm_mouse': np.asarray(Y_genes[species_is_mouse].mean(axis=0)).ravel(),
+    'mean_lognorm_human': np.asarray(Y_genes[~species_is_mouse].mean(axis=0)).ravel(),
+})
+detection_abundance['log2_ratio_human_over_mouse'] = np.log2(
+    (detection_abundance['mean_lognorm_human'] + 1e-3)
+    / (detection_abundance['mean_lognorm_mouse'] + 1e-3)
+)
+detection_abundance['mean_abundance'] = 0.5 * (
+    detection_abundance['mean_lognorm_mouse'] + detection_abundance['mean_lognorm_human']
+)
+detection_abundance['detected_in_both'] = (
+    (detection_abundance['detected_fraction_mouse'] > 0)
+    & (detection_abundance['detected_fraction_human'] > 0)
+)
+detection_abundance.to_csv(CURVE_OUTPUT_DIR / 'between_species_detection_abundance.csv', index=False)
+print(f'Genes tested: {len(detection_abundance):,}; detected in both species: '
+      f'{int(detection_abundance["detected_in_both"].sum()):,} '
+      f'({detection_abundance["detected_in_both"].mean():.1%}); median log2 human/mouse ratio '
+      f'{detection_abundance["log2_ratio_human_over_mouse"].median():.2f}')
+
+# 2. Abundance-dependent bias: bin by abundance and look at the median ratio per bin, so a systematic
+#    trend cannot be mistaken for a gene-specific species difference.
+abundance_bins = pd.qcut(detection_abundance['mean_abundance'], 10, duplicates='drop')
+ratio_by_abundance = detection_abundance.groupby(abundance_bins, observed=True)[
+    'log2_ratio_human_over_mouse'
+].agg(['size', 'median', 'mean', 'std']).reset_index()
+ratio_by_abundance['abundance_midpoint'] = ratio_by_abundance['mean_abundance'].apply(
+    lambda interval: float(interval.mid)
+)
+ratio_by_abundance.to_csv(CURVE_OUTPUT_DIR / 'ratio_vs_abundance_bins.csv', index=False)
+display(ratio_by_abundance.round(3))
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
+axes[0].scatter(detection_abundance['mean_abundance'],
+                detection_abundance['log2_ratio_human_over_mouse'], s=3, alpha=0.25,
+                color='#4C72B0', linewidths=0)
+axes[0].axhline(0.0, color='black', lw=0.8)
+axes[0].plot(ratio_by_abundance['abundance_midpoint'], ratio_by_abundance['median'],
+             color='crimson', lw=2, marker='o', ms=4, label='median per abundance decile')
+axes[0].legend(frameon=False, fontsize=8)
+axes[0].set_xlabel('Mean fitted lognorm expression (both species)')
+axes[0].set_ylabel('log2(human / mouse)')
+axes[0].set_title('Ratio versus abundance')
+axes[1].hist(detection_abundance['log2_ratio_human_over_mouse'].dropna(), bins=80,
+             color='#4C72B0')
+axes[1].axvline(0.0, color='black', lw=0.8)
+axes[1].set_xlabel('log2(human / mouse)')
+axes[1].set_title('Distribution of mean-expression ratios')
+fig.suptitle('Magnitude checks: is the ratio abundance-dependent?')
+fig.tight_layout()
+fig.savefig(CURVE_OUTPUT_DIR / 'ratio_vs_abundance.png', dpi=180, bbox_inches='tight')
+plt.show()
+
+# 3. Within-species early-to-late gradients (constant offset cancels).
+early_third = grid <= np.quantile(grid, 1 / 3)
+late_third = grid >= np.quantile(grid, 2 / 3)
+within_species_gradients = pd.DataFrame({
+    'gene': gene_names,
+    'mouse_early_to_late': np.nanmean(balanced_reference[:, late_third], axis=1)
+        - np.nanmean(balanced_reference[:, early_third], axis=1),
+    'human_early_to_late': np.nanmean(balanced_comparison[:, late_third], axis=1)
+        - np.nanmean(balanced_comparison[:, early_third], axis=1),
+})
+within_species_gradients['gradient_difference_human_minus_mouse'] = (
+    within_species_gradients['human_early_to_late']
+    - within_species_gradients['mouse_early_to_late']
+)
+within_species_gradients = within_species_gradients.merge(
+    gene_results[['gene', 'level_effect_human_minus_mouse', 'difference_type']], on='gene', how='left'
+)
+within_species_gradients.to_csv(CURVE_OUTPUT_DIR / 'within_species_gradients.csv', index=False)
+finite_gradients = within_species_gradients.dropna(subset=['mouse_early_to_late', 'human_early_to_late'])
+print('Within-species early-to-late gradients: Spearman(mouse, human) =',
+      round(spearmanr(finite_gradients['mouse_early_to_late'],
+                      finite_gradients['human_early_to_late']).correlation, 3),
+      '; opposite-sign gradients:', int((np.sign(finite_gradients['mouse_early_to_late'])
+                                         != np.sign(finite_gradients['human_early_to_late'])).sum()),
+      'of', len(finite_gradients))
+highest_ratio = detection_abundance.nlargest(20, 'log2_ratio_human_over_mouse')['gene']
+display(within_species_gradients.set_index('gene').loc[highest_ratio].round(3))
+
+# 4. Matched-region, per-specimen contrast: compare each human specimen with each mouse specimen
+#    inside the same pseudospace bin, on within-row fractions so no shared absolute scale is assumed.
+pseudobulk_counts = pseudobulk[[c for c in pseudobulk.columns if c.startswith('count_')]].to_numpy(dtype=float)
+row_totals = np.maximum(pseudobulk_counts.sum(axis=1), 1.0)
+pseudobulk_fraction = pd.DataFrame(
+    pseudobulk_counts / row_totals[:, None],
+    columns=[c.replace('count_', '') for c in pseudobulk.columns if c.startswith('count_')],
+)
+pseudobulk_fraction['specimen'] = pseudobulk['specimen'].to_numpy()
+pseudobulk_fraction['pseudospace_bin'] = pseudobulk['pseudospace_bin'].to_numpy()
+human_pseudobulk = pseudobulk_fraction['specimen'].isin(HUMAN_SAMPLES)
+pair_ratios = []
+for bin_index, block in pseudobulk_fraction.groupby('pseudospace_bin', observed=True):
+    human_rows = block[block['specimen'].isin(HUMAN_SAMPLES)]
+    mouse_rows = block[~block['specimen'].isin(HUMAN_SAMPLES)]
+    if human_rows.empty or mouse_rows.empty:
+        continue
+    genes = [column for column in block.columns if column not in ('specimen', 'pseudospace_bin')]
+    human_values = human_rows[genes].to_numpy(dtype=float)
+    mouse_values = mouse_rows[genes].to_numpy(dtype=float)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratios = np.log2((human_values[:, None, :] + 1e-6) / (mouse_values[None, :, :] + 1e-6))
+    for human_index, human_name in enumerate(human_rows['specimen']):
+        for mouse_index, mouse_name in enumerate(mouse_rows['specimen']):
+            pair_ratios.append(pd.DataFrame({
+                'bin': int(bin_index),
+                'human_specimen': human_name,
+                'mouse_specimen': mouse_name,
+                'gene': genes,
+                'log2_ratio': ratios[human_index, mouse_index],
+            }))
+if pair_ratios:
+    matched_region_ratios = pd.concat(pair_ratios, ignore_index=True)
+    matched_region_ratios.to_csv(CURVE_OUTPUT_DIR / 'matched_region_specimen_ratios.csv', index=False)
+    per_gene = matched_region_ratios.groupby('gene')['log2_ratio'].agg(
+        ['median', 'std', 'size']).reset_index()
+    # Every gene is measured in the same specimen pairs, so the unit count is a single number.
+    per_gene['n_specimen_pairs'] = matched_region_ratios[
+        ['human_specimen', 'mouse_specimen']].drop_duplicates().shape[0]
+    per_gene.to_csv(CURVE_OUTPUT_DIR / 'matched_region_per_gene.csv', index=False)
+    display(per_gene.sort_values('median', ascending=False).head(10).round(3))
+    print('Matched-region contrast: bins x specimen pairs =',
+          len(matched_region_ratios), 'rows; genes with a consistent direction across bins and pairs:',
+          int((per_gene['median'].abs() > 0.25).sum()))
+else:
+    print('Matched-region contrast skipped: no bin holds both a human and a mouse specimen.')
+
+# 5. Capture summary, so an abundance difference can be read against the measurement itself.
+capture_columns = [c for c in ('n_genes_by_counts', 'total_counts', 'n_spots', 'pct_counts_mt',
+                              'x_centroid')
+                   if c in adata_pt.obs.columns]
+capture_summary = adata_pt.obs.groupby(['comparison_species', 'sample', 'region'], observed=True)[
+    capture_columns].median().reset_index()
+capture_summary.to_csv(CURVE_OUTPUT_DIR / 'capture_summary.csv', index=False)
+display(capture_summary)
+
+
+# %% [markdown]
 # # Section 5 - exploratory PT spatial concordance
 #
 # Distance to reviewed glomerular anchors is a diagnostic proxy, computed separately by sample. Broad marker suggestions alone do not establish a reviewed glomerulus; this comparison is skipped without explicit reviewed anchors.

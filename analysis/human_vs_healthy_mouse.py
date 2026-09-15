@@ -2056,6 +2056,8 @@ print('Completed:', 'adata_heatmap = sc.read_h5ad(DPT_OUTPUT_PATH)')
 #
 # **Output:** descriptive (not inferential) gene and pathway trajectory comparisons, with figure files in `curves/`.
 #
+# Peak positions are coordinates on THIS notebook's DPT construction (the PT-specific recomputed DPT), so they are not comparable with notebook 02's global-nephron PT coordinate.
+#
 
 # %%
 # Purpose: from pseudospace.levelshape import fit_single_condition_curves, run_level_shape, summarize_curve_effects
@@ -3387,6 +3389,7 @@ analysis_notes = f"""# Human versus healthy-mouse pseudospace
 - Reviewed labels are keyed by Leiden cluster ID and are not pinned to `CLUSTERING_FINGERPRINT` in this notebook; re-read `REVIEWED_CLUSTER_LABELS` after any change to the clustering inputs.
 - Fine-program diagnostic figure (`global_nephron_dpt_by_fine_reference_program.png`): panel = mean lognormalised expression of the panel genes detected in >= 5% of that species' structures (>= 2 usable genes), z-scored within species, argmax with a 0.15 SD margin. It is a marker check, not a label source, and its counts are not reviewed segment counts; see global_dpt_fine_program_vs_reviewed_segment.csv, global_dpt_fine_program_eligibility.csv and global_dpt_fine_program_species_bias.csv.
 - Columns ending cellwise_uncalibrated are diagnostics and must not be interpreted as species tests.
+- Peak positions are coordinates on this notebook's own DPT construction (PT-specific, recomputed after global-DPT review and not comparable with the mouse-only workflow's global-nephron coordinate).
 """
 (RESULTS_DIR / 'analysis_notes.md').write_text(analysis_notes)
 

@@ -349,6 +349,22 @@ background, attributed to PT detection filtering.
 6. **Nothing here reaches conventional significance and nothing can**, given the 2/6 permutation
    floor at n = 2 vs 2. This is an effect-size-ranked, descriptive result.
 
+## 4b. How the effect sizes are broken down
+
+The ranking metric is `shape_rms`, which counts a weaker gradient as a shape change and mixes a
+vertical offset with a redistribution. Every gene and pathway table therefore also carries
+`level_fraction` / `shape_fraction` (an exact orthogonal split of the fitted difference), an
+amplitude column and a `difference_type` label. When quoting a top gene or pathway, say which of the
+three it is: on the cross-species fits 98-99 % of the top-20 effect is a vertical offset.
+
+Related outputs written by the current workflows: pathway coverage per stage
+(`pathway_membership_coverage.csv`, with the pathways a size bound would remove), pathway redundancy
+groups and member-gene evidence, positional/response curve modules with specimen-omission stability
+(`module_*.csv`), signed per-question enrichments with a correlation-aware p
+(`signed_enrichment_*.csv`), specimen-balanced curves, pseudobulk profiles, and the magnitude checks
+(detection/abundance, ratio-versus-abundance, within-side gradients, matched-position per-specimen
+contrast, capture summary).
+
 ## 5. Open questions for interpretation
 
 1. **Cluster 7 (`Krt19`/`Sprr1a`/`Krt18`, 250 tubules).** Injured/de-differentiated PT, urothelial

@@ -68,9 +68,11 @@ def curve_descriptors(curves, grid):
         half = np.min(y) + amplitude / 2.0
         above = x[y >= half]
         half_width = float(above.max() - above.min()) if above.size else 0.0
-        # A constant curve has no rank correlation; report NaN rather than a spurious 0.
+        # A constant curve has no rank correlation; report NaN rather than a spurious 0. The
+        # tolerance is scale-relative because float noise can make a constant curve non-constant.
         monotonicity = (float(spearmanr(x, y).correlation)
-                        if y.size > 2 and np.ptp(y) > 0 else np.nan)
+                        if y.size > 2 and np.ptp(y) > 1e-9 * max(1.0, float(np.max(np.abs(y))))
+                        else np.nan)
         if amplitude < 1e-12:
             direction = 'flat'
         elif peak_position > 0.66 * x.max():

@@ -57,7 +57,7 @@ CI (`.github/workflows/ci.yml`) runs three jobs: `hygiene`, `pseudospace-synthet
 
 | Path | Role |
 | --- | --- |
-| `pseudospace/` | Reusable, data-location-agnostic analysis logic: `markers` (alias resolution, marker axis, DE cluster annotation), `harmony` (R integration + version guard), `trajectory` (DPT root/orientation), `levelshape` + `stats_gam` (level/shape GAM decomposition, LOSO stability), `cross_species`, `heatmaps`, `io_qc`, `scprisma_pseudospace`. |
+| `pseudospace/` | Reusable, data-location-agnostic analysis logic: `markers` (alias resolution, marker axis, DE cluster annotation), `harmony` (R integration + version guard), `trajectory` (DPT root/orientation), `levelshape` + `stats_gam` (level/shape GAM decomposition, inclusive-tail permutation p-values, LOSO stability, level/amplitude/pattern split), `modules` (positional and response curve modules + module enrichment), `enrichment` (signed rankings, competitive correlation-aware set tests, signed signatures), `pathways` (ortholog-aware membership, coverage stages, redundancy, member evidence), `specimen` (balanced curves, pseudobulk, coordinate agreement), `cross_species`, `heatmaps`, `io_qc`, `scprisma_pseudospace`. |
 | `analysis/` | Canonical `notebooks/*.ipynb` workflows plus their generated `.py` mirrors and the study-specific data contract. |
 | `analysis/scripts/` | QuPath label export and spatial validation of the pseudospace. |
 | `segmentation/` | Self-contained `kidney_panoptic` project (`src/kidney_panoptic/{data,models,losses,postprocess,eval,utils,infer}`, `scripts/`, `configs/`). Frozen encoder + native-resolution decoder + watershed decode. |

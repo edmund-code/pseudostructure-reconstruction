@@ -34,3 +34,49 @@ The data root must follow [data/README.md](../../data/README.md). The result roo
   descriptions, not significant confirmatory findings.
 - The PT arm is currently the defensible trajectory. Treat the non-PT limitations detailed in
   [the results interpretation](../results/current-mouse-run.md) as active constraints.
+
+## How results are reported (level, amplitude, pattern)
+
+`levelshape.summarize_curve_effects` splits every fitted curve pair into a **level** offset, an
+**amplitude** change and a **shape/pattern** change, with `level_fraction + shape_fraction = 1` from
+the exact orthogonal split of the difference. Report all three: on the current mouse-human fits the
+top of the ranking is 98-99 % vertical offset, and a pure amplitude loss keeps a non-zero
+`shape_rms`. Every figure that compares two conditions is written twice — a common-scale view
+(fitted lognorm units, one colour scale) and a shape-only view (each curve standardised) — because
+one pooled z-score answers neither question.
+
+## Pathways
+
+Membership is resolved through the accepted ortholog map (not by case-collision), each pathway
+carries its coverage stages (`n_requested`, `n_with_ortholog`, `n_assayed`, `n_tested`), excluded
+pathways are kept with a reason, and no upper size bound is applied to membership — the number of
+pathways such a bound would remove is reported instead. Pathways whose member sets largely coincide
+are grouped in `pathway_redundancy_*.csv`, and each prioritized pathway ships member-gene evidence
+(agreement fraction, strongest contributor, sign flip without it). Enrichment is competitive, uses
+the genes eligible for the analysis as background, and reports both a label-permutation p and a
+correlation-aware p; correction is applied across all tested pairs.
+
+## Curve modules
+
+`pseudospace.modules` discovers **positional** modules from the reference curves and **response**
+modules from the mean-centred difference curves by correlation distance on standardised curves.
+Peaks are annotations, never the grouping key, and dynamic time warping is not used. Stability is
+reported under specimen omission and under a different data mixture.
+
+## Specimen weighting and magnitude
+
+Specimen-balanced curves (equal weight per specimen) are the primary descriptive summary; the pooled
+fit and individual specimen curves stay visible. Pseudobulk profiles are written per specimen and
+pseudospace bin for count-based modelling — bins from one specimen are repeats along one coordinate,
+so the independent units remain the specimens. Before any condition or species claim, check
+detection/abundance per side, ratio-versus-abundance, within-side gradients, the matched-position
+per-specimen contrast, and the capture summary.
+
+## Caveats that must travel with the numbers
+
+- The 2-vs-2 permutation p-floor is **2/6**, not 1/6: six relabelings form three mirror-image pairs
+  whose statistic is identical, and ties count as "at least as extreme".
+- Peak positions are coordinates on one notebook's own DPT construction (notebook 02: global-nephron
+  PT coordinate; notebook 03: PT-specific recomputed DPT) and are **not comparable across the two**.
+- Normalisation divides by the retained panel's total after the expression filter; the native
+  denominator is recomputed as a sensitivity check (`normalisation_sensitivity.csv`).

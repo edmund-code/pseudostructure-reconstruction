@@ -2050,6 +2050,9 @@ print(f'Wrote {len(list(HEATMAP_OUTPUT_DIR.glob("*.png")))} PNGs and '
 # > **Cohort disclaimer.** 2 control + 2 IR specimens. Results are descriptive and
 # > effect-size-ranked, not confirmatory; the exact permutation p-floor is 2/6 (a feature and its condition-swapped mirror tie), so `sample_perm_p` is
 # > a calibration/sanity check only.
+#
+# Peak positions are coordinates on THIS notebook's DPT construction (the mouse global-nephron graph), so they are not comparable with notebook 03's PT-specific recomputed DPT.
+#
 
 # %%
 # NB: bh_adjust is deliberately NOT imported. With 2v2 specimens sample_perm_p is floored at
@@ -3621,6 +3624,46 @@ else:
         'rank_dpt').reset_index(drop=True)
     physical_sensitivity_paths.to_csv(
         HEALTHY_VS_AKI_OUTPUT_DIR / 'physical_axis_sensitivity_pathways.csv', index=False)
+
+    # Extend the physical-axis check to the prioritized response modules: a module that only exists
+    # on the DPT axis is a property of the coordinate, not of the tissue.
+    _module_members = {
+        str(module): list(members.index)
+        for module, members in response_labels.groupby(response_labels, observed=True)
+        if str(module) != 'unassigned'
+    }
+    _prioritized_modules = sorted(_module_members, key=lambda name: -len(_module_members[name]))[:N_TOP]
+    if _prioritized_modules:
+        _module_scores = np.empty((adata_pt.n_obs, len(_prioritized_modules)))
+        for _position, _module in enumerate(_prioritized_modules):
+            _idxs = [gene_lookup_tested[gene.upper()] for gene in _module_members[_module]
+                     if gene.upper() in gene_lookup_tested]
+            _block = np.asarray(Y_genes[:, _idxs].todense())
+            _module_scores[:, _position] = (
+                (_block - gene_mean[_idxs]) / gene_std[_idxs]).mean(axis=1)
+        _module_dpt_ls = run_level_shape(
+            _module_scores, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'])
+        _module_physical_ls = run_level_shape(
+            _module_scores[_ok], _depth[_ok], c[_ok], _dknots, _dgrid, SECTION4_CONFIG['lambda_grid'])
+        physical_sensitivity_modules = pd.DataFrame({
+            'module': _prioritized_modules,
+            'n_genes': [len(_module_members[name]) for name in _prioritized_modules],
+            'shape_rms_dpt_axis': _module_dpt_ls['shape_rms'],
+            'shape_rms_physical_axis': _module_physical_ls['shape_rms'],
+            'level_effect_dpt_axis': _module_dpt_ls['level_effect'],
+            'level_effect_physical_axis': _module_physical_ls['level_effect'],
+        })
+        physical_sensitivity_modules['rank_dpt'] = (
+            -physical_sensitivity_modules['shape_rms_dpt_axis']).rank(method='min')
+        physical_sensitivity_modules['rank_physical'] = (
+            -physical_sensitivity_modules['shape_rms_physical_axis']).rank(method='min')
+        physical_sensitivity_modules.to_csv(
+            HEALTHY_VS_AKI_OUTPUT_DIR / 'physical_axis_sensitivity_modules.csv', index=False)
+        print('Response modules (largest ' f'{len(_prioritized_modules)}) on the physical axis: '
+              'Spearman(shape_rms) =',
+              round(safe_spearman(physical_sensitivity_modules['shape_rms_dpt_axis'],
+                                  physical_sensitivity_modules['shape_rms_physical_axis']), 3))
+        display(physical_sensitivity_modules.round(3))
 
     _rho_path = safe_spearman(physical_sensitivity_paths['shape_rms_dpt_axis'].to_numpy(),
                               physical_sensitivity_paths['shape_rms_physical_axis'].to_numpy())

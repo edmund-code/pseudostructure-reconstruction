@@ -1331,16 +1331,6 @@ sc.pl.embedding(
 )
 plt.savefig(CELLTYPING_DIR / 'pass2_umap.png', dpi=180, bbox_inches='tight')
 plt.show()
-# Side-by-side (Human vs Mouse) canonical marker alignment on the Pass-2 coordinates
-import importlib
-import pseudospace.cross_species
-importlib.reload(pseudospace.cross_species)
-from pseudospace.cross_species import plot_cross_species_marker_alignment
-plot_cross_species_marker_alignment(
-    adata_tubule,
-    output_path=CELLTYPING_DIR / 'cross_species_marker_alignment_pass2.png',
-)
-plt.show()
 
 
 # %%
@@ -1532,6 +1522,30 @@ plt.savefig(CELLTYPING_DIR / 'global_nephron_dpt_umap.png', dpi=180, bbox_inches
 plt.show()
 
 
+# %% [markdown]
+# ### Global-DPT summary figures: reviewed segments versus marker programs
+#
+# Three different quantities share this section, and two of them put the same `PT-S1`/`PT-S2`/`PT-S3`
+# labels on their x-axis. Read this table before comparing any two bars.
+#
+# | Figure | x-axis labels | How it is made | Counts mean |
+# | --- | --- | --- | --- |
+# | `global_nephron_dpt_umap.png` | — (colour only) | embedding coloured by `total_scanpy_dpt`, `segment_class`, `comparison_species` | — |
+# | `global_nephron_dpt_by_segment.png` (next cell) | reviewed `segment_class`: `PT-S1/S2/S3`, `AL`, `mTAL`, `DCT1`, `CNT_CD` | the manual cluster review map `REVIEWED_CLUSTER_LABELS`, keyed by Leiden cluster ID | structures carrying that reviewed label |
+# | `global_nephron_dpt_by_fine_reference_program.png` (below) | marker programs: `PT-S1` ... `IMCD` | per-structure argmax of marker-panel scores: mean lognorm per panel over the genes detected in >= 5% of that species' structures, z-scored **within species**, >= 2 usable genes per species, `Unresolved` when the winner is within 0.15 SD of the runner-up | structures whose strongest *marker program* is that program — a diagnostic, not a label |
+#
+# `Unresolved` is never drawn; it is counted in each panel title and audited in the CSV. The reviewed
+# figure is the one that reports segment sizes. The program figure must not be read as segment counts
+# and must not be compared bar-for-bar with the reviewed figure: the same label appears on both axes
+# with two different meanings.
+#
+# Two standing caveats: (1) the reviewed map is keyed by Leiden cluster ID and this notebook records
+# `CLUSTERING_FINGERPRINT` without pinning the map to it, so re-read `REVIEWED_CLUSTER_LABELS` after
+# any change to the clustering inputs; (2) the marker programs are reference panels, not annotations,
+# and panels that lost genes to ortholog mapping (for example `ATL`, which keeps only `Clcnka`) cannot
+# separate the segments they name.
+#
+
 # %%
 # Purpose: segment_dpt = (
 segment_dpt = (
@@ -1663,50 +1677,184 @@ print('Saved broad-label UMAP and species-specific fine-marker global-DPT heatma
 
 # %%
 # Purpose: summarize global DPT by the dominant fine reference program.
-# This is a marker-expression diagnostic, not an automated fine-segment annotation.
-# Each structure is shown under its strongest standardized fine-program score only when
-# that score is positive and exceeds the second strongest score by 0.15 SD.
-fine_program_scores = pd.DataFrame(index=adata_total.obs_names)
-expression_for_fine_scores = adata_total.layers['lognorm'] if 'lognorm' in adata_total.layers else adata_total.X
-for program, genes in global_fine_panel.items():
+# HOW THIS FIGURE IS BUILT -- keep this in sync with the markdown above and the notes cell:
+#   1. panel score = mean lognorm expression of that program's usable panel genes
+#   2. a gene is usable in a species only when it is detected in >= MIN_PANEL_GENE_DETECTED_FRACTION
+#      of that species' structures, so a panel that is silent there cannot outrank one that is not
+#      (human loses Cyp2e1, Slc14a2, most PT-S3 genes, and the whole IMCD panel)
+#   3. a program needs >= MIN_PROGRAM_GENES_FOR_CALL usable genes in that species to be callable
+#   4. scores are z-scored WITHIN each species, so the species-wide expression offset cannot decide
+#      the call (mouse sits up to 0.7 SD above human on PT-S3/IMCD before standardisation)
+#   5. call = strongest program only when its z is positive and beats the runner-up by
+#      MARGIN_TO_SECOND SD, otherwise 'Unresolved'
+# This is a marker-expression diagnostic, not an automated fine-segment annotation, and it is not a
+# reviewed-segment count: the reviewed labels are `segment_class` (figure above).
+MIN_PROGRAM_GENES_FOR_CALL = 2
+MIN_PANEL_GENE_DETECTED_FRACTION = MIN_GENE_TUBULE_FRACTION
+MARGIN_TO_SECOND = 0.15
+
+expression_for_fine_scores = (
+    adata_total.layers['lognorm'] if 'lognorm' in adata_total.layers else adata_total.X
+)
+species_for_fine_scores = adata_total.obs['comparison_species'].astype(str)
+
+
+def _panel_mean_expression(genes: list[str]) -> np.ndarray:
+    """Mean lognorm expression over `genes`, sparse or dense."""
     values = expression_for_fine_scores[:, [adata_total.var_names.get_loc(gene) for gene in genes]]
-    fine_program_scores[program] = np.asarray(values.mean(axis=1)).ravel()
-standardized_fine_scores = (fine_program_scores - fine_program_scores.mean()) / fine_program_scores.std(ddof=0).replace(0, np.nan)
+    return np.asarray(values.mean(axis=1)).ravel()
+
+
+def _gene_detected_fraction(gene: str) -> pd.Series:
+    """Fraction of each species' structures with a non-zero value for `gene`."""
+    column = expression_for_fine_scores[:, adata_total.var_names.get_loc(gene)]
+    dense = np.asarray(column.todense()).ravel() if hasattr(column, 'todense') else np.asarray(column).ravel()
+    return pd.Series(dense > 0, index=adata_total.obs_names).groupby(
+        species_for_fine_scores, observed=True
+    ).mean()
+
+
+fine_panel_gene_detected_fraction = {
+    gene: _gene_detected_fraction(gene)
+    for gene in sorted({gene for genes in global_fine_panel.values() for gene in genes})
+}
+
+# Eligibility is per species: the diagnostic must not rank a panel that is silent in that species.
+callable_fine_panels = {species: {} for species in SPECIES_GROUPS}
+eligibility_rows = []
+for program, genes in global_fine_panel.items():
+    for species in SPECIES_GROUPS:
+        usable = [
+            gene for gene in genes
+            if float(fine_panel_gene_detected_fraction[gene].get(species, 0.0))
+            >= MIN_PANEL_GENE_DETECTED_FRACTION
+        ]
+        callable_here = len(usable) >= MIN_PROGRAM_GENES_FOR_CALL
+        if callable_here:
+            callable_fine_panels[species][program] = usable
+        eligibility_rows.append({
+            'program': program,
+            'species': species,
+            'panel_genes_present': len(genes),
+            'panel_genes_usable': len(usable),
+            'usable_genes': '; '.join(usable) if usable else 'none',
+            'callable': callable_here,
+        })
+fine_program_eligibility = pd.DataFrame(eligibility_rows)
+fine_program_eligibility.to_csv(CELLTYPING_DIR / 'global_dpt_fine_program_eligibility.csv', index=False)
+display(fine_program_eligibility)
+
+for species in SPECIES_GROUPS:
+    if len(callable_fine_panels[species]) < 2:
+        raise ValueError(
+            f'Fewer than two fine programs are callable in {species}; '
+            'a dominant-program call is not defined there.'
+        )
+
+fine_program_scores = pd.DataFrame(
+    np.nan, index=adata_total.obs_names, columns=list(global_fine_panel)
+)
+for species in SPECIES_GROUPS:
+    species_mask = species_for_fine_scores.eq(species).to_numpy()
+    for program, usable_genes in callable_fine_panels[species].items():
+        fine_program_scores.loc[species_mask, program] = _panel_mean_expression(usable_genes)[species_mask]
+
+
+def _within_species_zscore(column: pd.Series) -> pd.Series:
+    spread = column.std(ddof=0)
+    return (column - column.mean()) / spread if spread > 0 else column * np.nan
+
+
+# Panels that are not callable in a species stay NaN there, so they are excluded from that
+# species' argmax instead of being ranked against a baseline they cannot meet.
+standardized_fine_scores = fine_program_scores.groupby(
+    species_for_fine_scores, observed=True
+).transform(_within_species_zscore)
 ordered_scores = np.sort(standardized_fine_scores.fillna(-np.inf).to_numpy(), axis=1)
 max_program = standardized_fine_scores.idxmax(axis=1)
 max_score = ordered_scores[:, -1]
 margin_to_second = ordered_scores[:, -1] - ordered_scores[:, -2]
 adata_total.obs['dominant_fine_reference_program'] = np.where(
-    (max_score > 0) & (margin_to_second >= 0.15), max_program, 'Unresolved'
+    (max_score > 0) & (margin_to_second >= MARGIN_TO_SECOND), max_program, 'Unresolved'
 )
 
-# The boxplot is deliberately separate from the reviewed broad-label plot above: it asks
-# whether fine marker programs occupy sensible portions of the already constructed DPT.
-# Display only fine tubular-nephron programs. `Unresolved` remains in the CSV audit table
-# but is omitted from the figure so it cannot be mistaken for an anatomical segment.
+# Audit 1: within-species standardisation must leave no program with a species head start.
+program_species_bias = (
+    standardized_fine_scores.groupby(species_for_fine_scores, observed=True).mean().T
+)
+program_species_bias['human_minus_mouse'] = (
+    program_species_bias['human'] - program_species_bias['mouse']
+)
+program_species_bias.round(3).to_csv(CELLTYPING_DIR / 'global_dpt_fine_program_species_bias.csv')
+display(program_species_bias.round(3))
+
+# Audit 2: the diagnostic is not allowed to replace the reviewed labels, so it is reported
+# against them instead of being presented alone.
+diagnostic_vs_reviewed = (
+    adata_total.obs.assign(
+        diagnostic_program=adata_total.obs['dominant_fine_reference_program'].astype(str)
+    )
+    .groupby(['comparison_species', 'segment_class', 'diagnostic_program'], observed=True)
+    .size().rename('n_structures').reset_index()
+)
+diagnostic_vs_reviewed.to_csv(
+    CELLTYPING_DIR / 'global_dpt_fine_program_vs_reviewed_segment.csv', index=False
+)
+diagnostic_agreement = (
+    adata_total.obs['segment_class'].astype(str)
+    .eq(adata_total.obs['dominant_fine_reference_program'].astype(str))
+    .groupby(adata_total.obs['comparison_species'].astype(str), observed=True).mean()
+)
+print('Exact agreement with the reviewed segment_class:',
+      ', '.join(f'{species}={value:.1%}' for species, value in diagnostic_agreement.items()))
+print('Programs not tested per species:',
+      {species: sorted(set(global_fine_panel) - set(callable_fine_panels[species]))
+       for species in SPECIES_GROUPS})
+
+# The boxplot is deliberately separate from the reviewed broad-label plot above: it asks whether
+# fine marker programs occupy sensible portions of the already constructed DPT. `Unresolved` is
+# counted in each panel title and audited in the CSV, never drawn, so it cannot be mistaken for an
+# anatomical segment.
+called_fine_programs = set(adata_total.obs['dominant_fine_reference_program'].astype(str))
 fine_boxplot_order = [
     program for program in FINE_NEPHRON_PROGRAM_ORDER
-    if program in global_fine_order and program in set(adata_total.obs['dominant_fine_reference_program'])
+    if program in global_fine_panel and program in called_fine_programs
 ]
-fine_dpt_summary = (adata_total.obs.groupby(['comparison_species', 'dominant_fine_reference_program'], observed=True)['total_scanpy_dpt']
-    .agg(['size', 'median', 'mean']).reset_index())
+fine_dpt_summary = (
+    adata_total.obs.groupby(['comparison_species', 'dominant_fine_reference_program'], observed=True)['total_scanpy_dpt']
+    .agg(['size', 'median', 'mean']).reset_index()
+)
 fine_dpt_summary.to_csv(CELLTYPING_DIR / 'global_dpt_by_dominant_fine_reference_program.csv', index=False)
 display(fine_dpt_summary.round(3))
 
-fig, axes = plt.subplots(1, 2, figsize=(max(15, 1.05 * len(fine_boxplot_order)), 5), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(max(15, 1.05 * len(fine_boxplot_order)), 5.4), sharey=True)
 for axis, species in zip(axes, SPECIES_GROUPS):
     species_mask = adata_total.obs['comparison_species'].astype(str).eq(species)
     data = [adata_total.obs.loc[
-        species_mask & adata_total.obs['dominant_fine_reference_program'].eq(program),
+        species_mask & adata_total.obs['dominant_fine_reference_program'].astype(str).eq(program),
         'total_scanpy_dpt'
     ].dropna().to_numpy(dtype=float) for program in fine_boxplot_order]
     axis.boxplot([values if len(values) else np.array([np.nan]) for values in data], showfliers=False)
     axis.set_xticks(range(1, len(fine_boxplot_order) + 1))
-    axis.set_xticklabels([f'{program}\n(n={len(values):,})' for program, values in zip(fine_boxplot_order, data)])
+    axis.set_xticklabels([
+        f'{program}\n(n={len(values):,})' if callable_fine_panels[species].get(program)
+        else f'{program}\n(not tested)'
+        for program, values in zip(fine_boxplot_order, data)
+    ])
     plt.setp(axis.get_xticklabels(), rotation=45, ha='right')
-    axis.set_title(f'{species.title()}')
+    n_unresolved = int(
+        (species_mask & adata_total.obs['dominant_fine_reference_program'].astype(str).eq('Unresolved')).sum()
+    )
+    axis.set_title(f'{species.title()} (unresolved {n_unresolved:,} of {int(species_mask.sum()):,})')
+    axis.set_xlabel('reference program (marker-panel argmax, not a segment label)')
     axis.set_ylabel('Global-nephron DPT' if axis is axes[0] else '')
-fig.suptitle('Global DPT by dominant fine reference program (diagnostic, not a fine label)', y=1.02)
+fig.suptitle('Global DPT by dominant fine reference program (diagnostic, not a fine label)', y=1.07)
+fig.text(
+    0.5, 1.005,
+    'panel = mean lognorm of the genes detected in >= 5% of that species; z-scored within species; '
+    '>= 2 usable genes; argmax with a 0.15 SD margin; "not tested" = panel not expressed in that species',
+    ha='center', va='bottom', fontsize=8.5,
+)
 fig.tight_layout()
 fig.savefig(CELLTYPING_DIR / 'global_nephron_dpt_by_fine_reference_program.png', dpi=180, bbox_inches='tight')
 plt.show()
@@ -2546,7 +2694,9 @@ analysis_notes = f"""# Human versus healthy-mouse pseudospace
 - Human cortex/medulla sampling and donor identity are inseparable from species in this cohort.
 - Human cortex and medulla curves are sensitivity views, not independent biological replicates.
 - Ambiguous and non-tubular structures are retained in pass 1 but excluded before pass-2 nephron Harmony; the glomerular cluster is excluded because it is not part of the tubular continuum.
-- Global DPT is inspected before PT is selected; legacy total_* columns denote that global-nephron coordinate.
+- Global DPT is inspected before PT is selected. `cross_species_nephron_global_dpt.h5ad` carries it as `total_scanpy_dpt`; in `cross_species_pt_dpt.h5ad` that column is the PT-specific coordinate and the global one is kept as `global_nephron_dpt`.
+- Reviewed labels are keyed by Leiden cluster ID and are not pinned to `CLUSTERING_FINGERPRINT` in this notebook; re-read `REVIEWED_CLUSTER_LABELS` after any change to the clustering inputs.
+- Fine-program diagnostic figure (`global_nephron_dpt_by_fine_reference_program.png`): panel = mean lognormalised expression of the panel genes detected in >= 5% of that species' structures (>= 2 usable genes), z-scored within species, argmax with a 0.15 SD margin. It is a marker check, not a label source, and its counts are not reviewed segment counts; see global_dpt_fine_program_vs_reviewed_segment.csv, global_dpt_fine_program_eligibility.csv and global_dpt_fine_program_species_bias.csv.
 - Columns ending cellwise_uncalibrated are diagnostics and must not be interpreted as species tests.
 """
 (RESULTS_DIR / 'analysis_notes.md').write_text(analysis_notes)

@@ -215,11 +215,16 @@ def loso_shape_stability(Y, s, c, samples, knots, grid, lambda_grid, top_idx, fe
 
 def sample_perm_pvalues(Y, s, samples, knots, grid, lambda_grid, lam_idx, sl2, p_b, control_samples):
     """Honest 2v2 significance: permute the healthy/aki label across the 4 SAMPLES.
-    All C(4,2)=6 relabelings; p = #{splits with permuted shape_rms >= observed}/6, with the
-    observed labeling counted among the 6 (so p is never 0). The 6 splits form 3 mirror-image
-    (healthy/aki swap) pairs and shape_rms is symmetric under swap -> effectively 3 distinct
-    values. Each response's GCV-selected lambda* is held FIXED across all 6 relabelings
-    (computational choice; mildly conservative). Pseudospace is NEVER shuffled."""
+
+    All C(4,2)=6 relabelings form the exhaustive (exact) reference set, and the observed labeling
+    is one of them, so p is the inclusive tail ``#{splits with statistic >= observed} / 6``.
+    Ties are counted as >=, which is what an exact test requires: if all six splits produced the
+    same statistic, every split is "at least as extreme" and p = 1. The 6 splits form 3
+    mirror-image (healthy/aki swap) pairs and shape_rms is symmetric under that swap -> a maximal
+    feature lands on 2/6, not 1/6; 2/6 is the floor this design can reach. A magnitude-relative
+    tolerance keeps the comparison deterministic against float noise on those near-tied twins.
+    Each response's GCV-selected lambda* is held FIXED across all 6 relabelings (computational
+    choice; mildly conservative). Pseudospace is NEVER shuffled."""
     n = Y.shape[0]
     g = Y.shape[1]
     ar = np.arange(g)
@@ -252,16 +257,17 @@ def sample_perm_pvalues(Y, s, samples, knots, grid, lambda_grid, lam_idx, sl2, p
     obs_shape = perm_shape[true_idx]
     obs_level = np.abs(perm_level[true_idx])
     n_splits = len(splits)
-    # Add-one permutation p over the 6 relabelings: p = (#{perm > observed} + 1) / 6, so p is
-    # never 0 and the minimum is 1/6 (matches the coarse 2v2 floor). The 6 splits form 3
-    # mirror-image (healthy/aki swap) pairs: shape_rms is exactly invariant under the swap in the
-    # UNPENALIZED limit (diff -> -diff leaves the offset-removed RMS unchanged), so the 6 values
-    # collapse toward ~3 distinct pairs; the GCV P-spline penalty on the condition-specific block
-    # only slightly breaks that symmetry. A magnitude-relative tolerance keeps the strict-greater
-    # comparison DETERMINISTIC against float noise on the near-tied twins. Each response's
-    # GCV-selected lambda* is held FIXED across all 6 relabelings (computational; mildly conservative).
+    # Inclusive-tail exhaustive p-value: p = #{relabelings with statistic >= observed} / 6, the
+    # observed labeling included among the six. Counting ties as "at least as extreme" is the
+    # exact-test definition; the previous strict-greater count returned 1/6 for a statistic that
+    # all six relabelings reproduced, where the correct value is 1. Because the six splits form
+    # three mirror-image (healthy/aki swap) pairs and shape_rms is symmetric under the swap, a
+    # maximal feature stops at 2/6 rather than 1/6: that is the floor of this design. A
+    # magnitude-relative tolerance keeps the comparison deterministic against float noise on the
+    # near-tied twins. Each response's GCV-selected lambda* is held FIXED across all 6 relabelings
+    # (computational; mildly conservative). Pseudospace is NEVER shuffled.
     tol_shape = 1e-9 * np.maximum(np.abs(obs_shape), 1.0)
     tol_level = 1e-9 * np.maximum(obs_level, 1.0)
-    shape_p = (np.sum(perm_shape > (obs_shape + tol_shape)[None, :], axis=0) + 1) / n_splits
-    level_p = (np.sum(np.abs(perm_level) > (obs_level + tol_level)[None, :], axis=0) + 1) / n_splits
+    shape_p = np.sum(perm_shape >= (obs_shape - tol_shape)[None, :], axis=0) / n_splits
+    level_p = np.sum(np.abs(perm_level) >= (obs_level - tol_level)[None, :], axis=0) / n_splits
     return shape_p, level_p, splits, true_idx

@@ -2048,12 +2048,12 @@ print(f'Wrote {len(list(HEATMAP_OUTPUT_DIR.glob("*.png")))} PNGs and '
 # sample.
 #
 # > **Cohort disclaimer.** 2 control + 2 IR specimens. Results are descriptive and
-# > effect-size-ranked, not confirmatory; the permutation p-floor is 1/6, so `sample_perm_p` is
+# > effect-size-ranked, not confirmatory; the exact permutation p-floor is 2/6 (a feature and its condition-swapped mirror tie), so `sample_perm_p` is
 # > a calibration/sanity check only.
 
 # %%
 # NB: bh_adjust is deliberately NOT imported. With 2v2 specimens sample_perm_p is floored at
-# 1/6 and takes ~3 distinct values, so BH over it is meaningless; results are ranked by the
+# 2/6 and takes ~3 distinct values, so BH over it is meaningless; results are ranked by the
 # shape_rms effect size instead (see Section 4.7).
 from pseudospace.stats_gam import (
     as_csr,
@@ -2280,9 +2280,10 @@ gene_shape_p, gene_level_p, splits, true_idx = sample_perm_pvalues(
 print('=' * 78)
 print('SAMPLE-LEVEL PERMUTATION -- CALIBRATION/SANITY CHECK, NOT A POWERED TEST.')
 print('With 2 healthy vs 2 AKI specimens there are only C(4,2)=6 sample relabelings;')
-print('p = #{splits with permuted shape_rms >= observed}/6 (observed included -> p never 0).')
-print('The 6 splits form 3 mirror-image (healthy/aki swap) pairs; shape_rms is symmetric under')
-print('swap -> effectively 3 distinct values. RANK BY EFFECT SIZE (shape_rms), not by p.')
+print('p = #{splits with permuted shape_rms >= observed}/6 (inclusive tail; ties count, so the')
+print('observed labeling is included and p is never 0). The 6 splits form 3 mirror-image')
+print('(healthy/aki swap) pairs; shape_rms is symmetric under swap, so a maximal feature stops at')
+print('2/6 -- RANK BY EFFECT SIZE (shape_rms), not by p.')
 print('=' * 78)
 print('distinct gene sample_perm_p values:', np.unique(np.round(gene_shape_p, 4)))
 
@@ -3017,7 +3018,7 @@ gene_results = pd.DataFrame({
     'curve_spearman': gene_ls['curve_spearman'],
     'amplitude_healthy': gene_ls['amplitude_healthy'],
     'amplitude_aki': gene_ls['amplitude_aki'],
-    'sample_perm_p': gene_shape_p,  # FDR omitted: p floored at 1/6 (n=2v2) -> BH non-functional
+    'sample_perm_p': gene_shape_p,  # FDR omitted: p floored at 2/6 (n=2v2) -> BH non-functional
     'level_perm_p': gene_level_p,
     'n_cells_healthy': n_healthy,
     'n_cells_aki': n_aki,
@@ -3384,7 +3385,7 @@ def volcano(df, name, title):
                     fontsize=7, xytext=(3, 3), textcoords='offset points')
     ax.set_xlabel('shape_rms (effect size)')
     ax.set_ylabel('-log10(sample_perm_p)')
-    ax.text(0.02, 0.98, 'CAVEAT: 2v2 design -> permutation p-floor is coarse (~1/6);\n'
+    ax.text(0.02, 0.98, 'CAVEAT: 2v2 design -> exact permutation p-floor is coarse (2/6);\n'
                         'this axis is a calibration check, not a powered test. Rank by shape_rms.',
             transform=ax.transAxes, ha='left', va='top', fontsize=8,
             bbox=dict(boxstyle='round', fc='lightyellow', ec='grey', alpha=0.9))
@@ -3686,7 +3687,7 @@ else:
 
 print('\nCOHORT DISCLAIMER: 2 healthy + 2 AKI specimens. Results are DESCRIPTIVE and')
 print('EFFECT-SIZE-RANKED (shape_rms). A formal 2v2 significance test is not achievable')
-print('(permutation p-floor ~1/6); sample_perm_p is a calibration/sanity check only.')
+print('(exact permutation p-floor 2/6); sample_perm_p is a calibration/sanity check only.')
 print('Note also that *_F_cellwise_uncalibrated in the CSVs are CELL-level F statistics: their')
 print('effective n is 4 specimens, not the tubule count. Do not read them as tests.')
 print('\nFigures written to', str(HEALTHY_VS_AKI_OUTPUT_DIR.relative_to(PROJECT_DIR)) + ':')

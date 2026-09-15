@@ -35,10 +35,12 @@ These are real and worth resolving before drawing firm conclusions:
 2. **The historical notebook had its `COARSE_LABELS_FINGERPRINT` guard commented out.** The
    active workflow now enforces the reference fingerprint and rejects stale labels before DPT.
    Any new clustering must be reviewed and relabelled rather than reusing these numeric IDs.
-3. **Permutation p-values have a hard floor of 1/6 ≈ 0.167.** With n = 2 vs 2 there are only
-   C(4,2) = 6 sample-level relabelings. The minimum achievable p is 0.167 and **no result here
-   can be significant at conventional thresholds.** Every ranking below is by *effect size*.
-   This is a design limit, not a defect — but it means the work is descriptive, not confirmatory.
+3. **Permutation p-values have a hard floor of 2/6 ≈ 0.333.** With n = 2 vs 2 there are only
+   C(4,2) = 6 sample-level relabelings, and they form three mirror-image (healthy/AKI swap)
+   pairs whose statistic is identical. An exact inclusive-tail p therefore stops at 2/6, and
+   **no result here can be significant at conventional thresholds.** (The earlier 1/6 floor came
+   from counting strict-greater outcomes only, which under-counts ties.) Every ranking below is
+   by *effect size*. This is a design limit, not a defect — the work is descriptive.
 
 ---
 
@@ -344,7 +346,7 @@ background, attributed to PT detection filtering.
 5. **The metabolic finding is not an artifact of the coordinate** — it replicates on an
    independent physical axis (shape-effect ρ = 0.70). **The keratin finding is coordinate-dependent
    and needs adjudication.**
-6. **Nothing here reaches conventional significance and nothing can**, given the 1/6 permutation
+6. **Nothing here reaches conventional significance and nothing can**, given the 2/6 permutation
    floor at n = 2 vs 2. This is an effect-size-ranked, descriptive result.
 
 ## 5. Open questions for interpretation
@@ -381,5 +383,5 @@ background, attributed to PT detection filtering.
 | `healthy_vs_aki/physical_axis_sensitivity.png` | **the key circularity control** |
 | `healthy_vs_aki/pseudospace_structure_diagnostics.png` | is the coordinate condition-dependent |
 | `healthy_vs_aki/injury_matched_diagnostics.png` | position-matched injury contrast |
-| `healthy_vs_aki/volcano_shape_{genes,pathways}.png` | effect size vs permutation p (floor 1/6) |
+| `healthy_vs_aki/volcano_shape_{genes,pathways}.png` | effect size vs permutation p (floor 2/6) |
 | `concordance/three_axis_concordance.png` | DPT vs marker vs physical agreement per specimen |

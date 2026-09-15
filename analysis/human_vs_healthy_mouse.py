@@ -3007,6 +3007,118 @@ else:
 
 
 # %% [markdown]
+# ## 4.6 - Signed rankings and competitive enrichment
+#
+# Enrichment is only meaningful per question. One unsigned `shape_rms` ranking cannot tell "late-PT
+# induction" from "loss of an early-PT program", so five signed per-gene statistics are ranked
+# separately - level offset, amplitude change, redistribution towards late pseudospace, and the early
+# and late contrasts - and each is tested competitively against the pathway library with the
+# **discovery-eligible genes as the background**.
+#
+# Two p-values are reported per (question, gene set):
+#
+# * a label-permutation p over random gene sets of the same size, which ignores within-set correlation,
+# * a correlation-aware z-test that inflates the variance of the set mean by the average squared
+#   correlation of the set's genes measured in the expression matrix, which is the CAMERA point: genes
+#   in a pathway are not independent, and the naive mean overstates the evidence.
+#
+# Both are corrected across every tested pair. A pathway that shares most of its members with another
+# pathway is already flagged in the redundancy tables, and a pathway claim resting on one gene is
+# visible in the member-gene evidence, so neither has to be discovered again from an enrichment list.
+# Signed downstream signatures (PROGENy-style) are scored when a gene-to-weight matrix is supplied;
+# none is bundled, so that step is skipped unless one is present.
+#
+
+# %%
+# Purpose: signed rankings and competitive (correlation-aware) enrichment per question.
+from pseudospace.enrichment import (
+    camera_like_enrichment,
+    score_signed_signatures,
+    signed_gene_rankings,
+)
+
+signed_rankings = signed_gene_rankings(
+    gene_fit['curve_healthy'], gene_fit['curve_aki'], grid, gene_names=gene_names
+)
+signed_rankings = signed_rankings.merge(
+    gene_results[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'difference_type']],
+    on='gene', how='left',
+)
+signed_rankings.to_csv(CURVE_OUTPUT_DIR / 'gene_signed_rankings.csv', index=False)
+display(signed_rankings.head(10).round(3))
+
+ENRICHMENT_QUESTIONS = {
+    'level_shift': 'level_effect',
+    'amplitude_change': 'amplitude_log2_ratio',
+    'redistribution': 'redistribution',
+    'early_contrast': 'early_delta',
+    'late_contrast': 'late_delta',
+}
+N_ENRICHMENT_PERMUTATIONS = 500
+enrichment_summary = []
+for question, column in ENRICHMENT_QUESTIONS.items():
+    statistics = signed_rankings[['gene', column]].dropna().set_index('gene')[column]
+    table = camera_like_enrichment(
+        statistics,
+        module_gene_sets,
+        expression=Y_genes,
+        gene_names=gene_names,
+        background=gene_names,
+        n_permutations=N_ENRICHMENT_PERMUTATIONS,
+        min_set_size=SECTION4_CONFIG['pathway_min_genes'],
+    )
+    table.insert(0, 'question', question)
+    table.insert(2, 'ranking_column', column)
+    table.to_csv(CURVE_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)
+    significant = table[table['p_value_permutation_adjusted'] < 0.05]
+    enrichment_summary.append({
+        'question': question,
+        'n_genes_ranked': int(len(statistics)),
+        'n_sets_tested': int(table['p_value_permutation'].notna().sum()),
+        'n_significant_after_BH': int(len(significant)),
+        'median_correlation_inflation': float(table['correlation_inflation'].median()),
+    })
+    if len(significant):
+        display(significant.head(5)[[
+            'question', 'gene_set', 'n_genes_tested', 'set_mean_statistic',
+            'p_value_permutation', 'p_value_permutation_adjusted',
+            'p_value_correlation_aware', 'correlation_inflation',
+        ]].round(4))
+enrichment_summary = pd.DataFrame(enrichment_summary)
+enrichment_summary.to_csv(CURVE_OUTPUT_DIR / 'signed_enrichment_summary.csv', index=False)
+display(enrichment_summary)
+
+# Signed downstream-response signatures (PROGENy-style). No signature matrix is bundled: nothing
+# biological is invented here, and the step is skipped until one is supplied as
+# {"signature": {"GENE": weight}} where a negative weight means the gene represses the signature.
+SIGNATURE_PATH = DATA_ROOT / 'mouse_vs_human' / 'signed_signature_matrix.json'
+if SIGNATURE_PATH.exists():
+    signature_scores, signature_coverage = score_signed_signatures(
+        Y_genes, json.loads(SIGNATURE_PATH.read_text()), gene_names=gene_names,
+    )
+    signature_coverage.to_csv(CURVE_OUTPUT_DIR / 'signed_signature_coverage.csv', index=False)
+    usable_signatures = list(signature_coverage.loc[signature_coverage['usable'], 'signature'])
+    if usable_signatures:
+        signature_fit = run_level_shape(
+            signature_scores[usable_signatures].to_numpy(dtype=float),
+            s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+        )
+        signature_summary = pd.DataFrame({
+            'signature': usable_signatures,
+            'level_effect_human_minus_mouse': signature_fit['level_effect'],
+            'shape_rms': signature_fit['shape_rms'],
+            'curve_spearman': signature_fit['curve_spearman'],
+        })
+        signature_summary.to_csv(CURVE_OUTPUT_DIR / 'signed_signature_trajectories.csv', index=False)
+        display(signature_summary.round(3))
+    display(signature_coverage)
+else:
+    print(f'Signed-signature scoring skipped: {SIGNATURE_PATH.name} is not present. Supply a '
+          'PROGENy-style {"signature": {"GENE": weight}} matrix to enable it; pathway-component '
+          'expression alone does not establish pathway activity.')
+
+
+# %% [markdown]
 # # Section 5 - exploratory PT spatial concordance
 #
 # Distance to reviewed glomerular anchors is a diagnostic proxy, computed separately by sample. Broad marker suggestions alone do not establish a reviewed glomerulus; this comparison is skipped without explicit reviewed anchors.

@@ -2157,7 +2157,16 @@ def binned_matrix_profile(mat, s_vals, lo_, hi_, n_bins, sigma):
 
 
 # %%
-from pseudospace.levelshape import run_level_shape, sample_perm_pvalues
+from pseudospace.pathways import (
+    build_pathway_membership,
+    member_gene_evidence,
+    summarize_pathway_redundancy,
+)
+from pseudospace.levelshape import (
+    run_level_shape,
+    sample_perm_pvalues,
+    summarize_curve_effects,
+)
 
 # %% [markdown]
 # ## 4.1 - PT cohort, shared coordinate, common-support grid, tested genes
@@ -2297,34 +2306,40 @@ print('distinct gene sample_perm_p values:', np.unique(np.round(gene_shape_p, 4)
 # var_names by case-insensitive symbol collision, against the full tested mouse gene background.
 # Module score = mean of per-gene z-scored lognorm (z-scored over the PT subset only).
 # ----------------------------------------------------------------------------
-bg_lookup = {g_.upper(): g_ for g_ in gene_names}
-retained = []
+# Membership is built by the same helper the cross-species workflow uses, with the coverage stages
+# recorded. This notebook is mouse-only, so no ortholog table is needed; the upper bound is no longer
+# applied to membership (it removed whole Hallmark sets before they were scored) and the count of
+# pathways such a bound would remove is reported instead.
+pathway_coverage_frames = []
 symbol_mapping_report = []
 for library in SECTION4_CONFIG['pathway_libraries']:
     gene_sets = json.loads((PATHWAY_LIBRARY_DIR / f'{library}.json').read_text())
-    _requested_all, _matched_all = set(), set()
-    _n_sets, _n_too_small, _n_too_big = len(gene_sets), 0, 0
-    for pathway, requested in gene_sets.items():
-        _req = {str(x).upper() for x in requested if isinstance(x, str)}
-        present = sorted({bg_lookup[x] for x in _req if x in bg_lookup})
-        _requested_all |= _req
-        _matched_all |= {x for x in _req if x in bg_lookup}
-        if len(present) < SECTION4_CONFIG['pathway_min_genes']:
-            _n_too_small += 1
-        elif len(present) > SECTION4_CONFIG['pathway_max_genes']:
-            _n_too_big += 1
-        else:
-            retained.append({'library': library, 'pathway': pathway,
-                             'genes_present': present, 'n_genes_present': len(present)})
+    membership = build_pathway_membership(
+        gene_sets, adata_pt.var_names,
+        library_name=library,
+        min_genes=SECTION4_CONFIG['pathway_min_genes'],
+        max_genes=None,
+        tested=gene_names,
+    )
+    pathway_coverage_frames.append(membership)
     symbol_mapping_report.append({
-        'library': library, 'n_pathways': _n_sets,
-        'n_retained': _n_sets - _n_too_small - _n_too_big,
-        'n_dropped_too_few_genes': _n_too_small, 'n_dropped_too_many_genes': _n_too_big,
-        'unique_symbols_requested': len(_requested_all),
-        'unique_symbols_matched': len(_matched_all),
-        'symbol_match_rate': len(_matched_all) / max(len(_requested_all), 1)})
-retained_pathways = pd.DataFrame(retained).reset_index(drop=True)
+        'library': library,
+        'n_pathways': int(len(membership)),
+        'n_retained': int(membership['retained'].sum()),
+        'n_dropped_too_few_genes': int((~membership['retained']).sum()),
+        'n_over_previous_cap': int(
+            (membership['n_assayed'] > SECTION4_CONFIG['pathway_max_genes']).sum()),
+        'unique_symbols_requested': int(membership['n_requested'].sum()),
+        'unique_symbols_matched': int(membership['n_assayed'].sum()),
+        'symbol_match_rate': float(membership['n_assayed'].sum()
+                                   / max(membership['n_requested'].sum(), 1))})
+pathway_coverage = pd.concat(pathway_coverage_frames, ignore_index=True)
+pathway_coverage.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'pathway_membership_coverage.csv', index=False)
+retained_pathways = pathway_coverage[pathway_coverage['retained']].reset_index(drop=True)
 P = len(retained_pathways)
+print(f'Pathways retained: {P:,} of {len(pathway_coverage):,}; a '
+      f'{SECTION4_CONFIG["pathway_max_genes"]}-member upper bound would remove '
+      f'{int((pathway_coverage["n_assayed"] > SECTION4_CONFIG["pathway_max_genes"]).sum()):,}')
 
 # Symbols are matched to the TESTED PT gene background by case-insensitive collision, and a set
 # member can fail to match for two quite different reasons:
@@ -3022,7 +3037,19 @@ gene_results = pd.DataFrame({
     'level_perm_p': gene_level_p,
     'n_cells_healthy': n_healthy,
     'n_cells_aki': n_aki,
-}).sort_values('shape_rms', ascending=False).reset_index(drop=True)
+})
+# `shape_rms` alone counts a weaker gradient as a shape change, and `condition_effect_rms` mixes a
+# vertical offset with a redistribution. The split adds level, amplitude and pattern explicitly.
+gene_curve_effects = summarize_curve_effects(
+    gene_ls['curve_healthy'], gene_ls['curve_aki'], feature_names=gene_names
+)
+gene_results = gene_results.merge(
+    gene_curve_effects.rename(columns={'feature': 'gene'}), on='gene', how='left'
+).sort_values('shape_rms', ascending=False).reset_index(drop=True)
+top_shape_genes = gene_results.head(20)
+print('Top-20 shape-ranked genes: median level fraction '
+      f"{top_shape_genes['level_fraction'].median():.3f}; "
+      f"types {top_shape_genes['difference_type'].value_counts().to_dict()}")
 gene_results.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'gene_level_shape_results.csv', index=False)
 
 pathway_results = retained_pathways.drop(columns='genes_present').assign(
@@ -4266,6 +4293,327 @@ display(pt_collaborator_results['shortlist'][[
     'gene', 'peak_segment', 'module', 'peak_agreement',
     'segment_specificity_z_margin', 'shape_rms', 'level_effect', 'priority_score',
 ]])
+
+# %% [markdown]
+# ## 4.12 - Curve modules, signed rankings and pathway redundancy (mouse-only)
+#
+# The same shape-first machinery the cross-species workflow uses, applied to the control-vs-AKI
+# contrast:
+#
+# * **positional** modules cluster the **control** curves: which genes share a normal PT pattern,
+#   discovered before the injury effect is consulted, so a large injury effect is not a requirement for
+#   a positional program.
+# * **response** modules cluster the mean-centred **difference** curves, which separates broad
+#   suppression, selective loss of a late program, early induction and peak relocation.
+# * stability under specimen omission (recomputed without each specimen) and under a different data
+#   mixture (pooled fit vs specimen-balanced curves).
+# * module-pathway overlap tested against the genes eligible for module discovery, BH-corrected across
+#   all pairs. Five signed rankings (level, amplitude, redistribution, early, late) are tested
+#   competitively as well, with a correlation-aware p so a pathway is not credited for one correlated
+#   block.
+# * the prioritized pathways are checked for redundancy and for member-gene support, so a claim that
+#   rests on a single gene, or on a pathway that is another pathway's member set, is visible.
+#
+
+# %%
+# Purpose: curve modules, signed rankings and pathway redundancy for the mouse contrast.
+from pseudospace.enrichment import camera_like_enrichment, signed_gene_rankings
+from pseudospace.modules import (
+    difference_curves,
+    discover_curve_modules,
+    enrich_modules,
+    module_stability,
+)
+from pseudospace.specimen import specimen_balanced_curves
+
+# Per-specimen curves for every tested gene: a pooled fit cannot be split per specimen because the
+# condition indicator is constant inside one specimen.
+specimen_full_curves = {}
+for specimen in sorted(set(samples)):
+    mask = samples == specimen
+    curves, _ = fit_single_condition_curves(
+        Y_genes[mask], s[mask], knots, grid, SECTION4_CONFIG['lambda_grid'],
+        gene_ls['lam_idx'], support_pct=SECTION4_CONFIG['common_support_pct'],
+    )
+    specimen_full_curves[specimen] = curves
+balanced_healthy = specimen_balanced_curves(
+    {name: curves for name, curves in specimen_full_curves.items() if name in control_samples})
+balanced_aki = specimen_balanced_curves(
+    {name: curves for name, curves in specimen_full_curves.items() if name in aki_samples})
+
+MODULE_CONFIG = {'max_distance': 0.4, 'min_amplitude': 0.05, 'min_features': 10}
+positional_labels, positional_modules = discover_curve_modules(
+    gene_ls['curve_healthy'], grid, max_distance=MODULE_CONFIG['max_distance'],
+    min_amplitude=MODULE_CONFIG['min_amplitude'], min_features=MODULE_CONFIG['min_features'],
+    feature_names=gene_names,
+)
+response_delta = difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'])
+response_labels, response_modules = discover_curve_modules(
+    difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'], center=True), grid,
+    max_distance=MODULE_CONFIG['max_distance'], min_amplitude=MODULE_CONFIG['min_amplitude'],
+    min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
+)
+mouse_gene_modules = pd.DataFrame({
+    'gene': gene_names,
+    'positional_module': positional_labels.to_numpy(),
+    'response_module': response_labels.to_numpy(),
+    'delta_mean_aki_minus_healthy': np.nanmean(response_delta, axis=1),
+})
+mouse_gene_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_gene_assignment.csv', index=False)
+positional_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_positional_catalog.csv', index=False)
+response_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_catalog.csv', index=False)
+display(positional_modules)
+display(response_modules)
+
+
+def _response_modules(curve_reference, curve_comparison):
+    labels, _ = discover_curve_modules(
+        difference_curves(curve_reference, curve_comparison, center=True), grid,
+        max_distance=MODULE_CONFIG['max_distance'], min_amplitude=MODULE_CONFIG['min_amplitude'],
+        min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
+    )
+    return labels
+
+
+stability_runs = {'pooled_fit': response_labels}
+for dropped in sorted(specimen_full_curves):
+    kept = [name for name in specimen_full_curves if name != dropped]
+    kept_control = [name for name in kept if name in control_samples]
+    kept_aki = [name for name in kept if name in aki_samples]
+    if not kept_control or not kept_aki:
+        continue
+    stability_runs[f'without_{dropped}'] = _response_modules(
+        specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_control}),
+        specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_aki}),
+    )
+stability_runs['specimen_balanced_mixture'] = _response_modules(balanced_healthy, balanced_aki)
+response_stability = module_stability(stability_runs)
+response_stability.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_stability.csv', index=False)
+display(response_stability.round(3))
+
+pathway_gene_sets = {
+    f'{row.library}: {row.pathway}': row.genes_present
+    for row in retained_pathways.itertuples()
+}
+module_enrichment = enrich_modules(
+    {module: members.index
+     for module, members in response_labels.groupby(response_labels, observed=True)
+     if module != 'unassigned'},
+    pathway_gene_sets,
+    background=gene_names,
+)
+module_enrichment.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_pathway_enrichment.csv', index=False)
+print('Response modules:', int(response_labels[response_labels != 'unassigned'].nunique()),
+      'covering', int((response_labels != 'unassigned').sum()), 'genes; module-pathway pairs:',
+      len(module_enrichment), '; significant after BH:',
+      int((module_enrichment['p_value_adjusted'] < 0.05).sum()))
+display(module_enrichment.head(10)[[
+    'module', 'gene_set', 'n_module_genes', 'n_overlap', 'expected_overlap',
+    'p_value', 'p_value_adjusted',
+]].round(4))
+
+signed_rankings = signed_gene_rankings(
+    gene_ls['curve_healthy'], gene_ls['curve_aki'], grid, gene_names=gene_names
+).merge(gene_results[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z',
+                      'difference_type']], on='gene', how='left')
+signed_rankings.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'gene_signed_rankings.csv', index=False)
+SIGNED_QUESTIONS = {
+    'level_shift': 'level_effect',
+    'amplitude_change': 'amplitude_log2_ratio',
+    'redistribution': 'redistribution',
+    'early_contrast': 'early_delta',
+    'late_contrast': 'late_delta',
+}
+signed_enrichment_summary = []
+for question, column in SIGNED_QUESTIONS.items():
+    statistics = signed_rankings[['gene', column]].dropna().set_index('gene')[column]
+    table = camera_like_enrichment(
+        statistics, pathway_gene_sets, expression=Y_genes, gene_names=gene_names,
+        background=gene_names, n_permutations=500,
+        min_set_size=SECTION4_CONFIG['pathway_min_genes'],
+    )
+    table.insert(0, 'question', question)
+    table.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)
+    signed_enrichment_summary.append({
+        'question': question,
+        'n_genes_ranked': int(len(statistics)),
+        'n_sets_tested': int(table['p_value_permutation'].notna().sum()),
+        'n_significant_after_BH': int((table['p_value_permutation_adjusted'] < 0.05).sum()),
+        'median_correlation_inflation': float(table['correlation_inflation'].median()),
+    })
+signed_enrichment_summary = pd.DataFrame(signed_enrichment_summary)
+signed_enrichment_summary.to_csv(
+    HEALTHY_VS_AKI_OUTPUT_DIR / 'signed_enrichment_summary.csv', index=False)
+display(signed_enrichment_summary)
+
+# Redundancy and member-gene support for the prioritized pathways the visualization layer ranks.
+prioritized_pathways = pathway_results.head(40).copy()
+prioritized_pathways['member_list'] = prioritized_pathways['genes_present'].str.split('; ').map(
+    lambda members: [member for member in members if member])
+redundancy_pairs, redundancy_groups = summarize_pathway_redundancy(
+    prioritized_pathways, gene_column='member_list', label_columns=('library', 'pathway'),
+    overlap_threshold=0.6,
+)
+redundancy_pairs.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'pathway_redundancy_pairs.csv', index=False)
+redundancy_groups.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'pathway_redundancy_groups.csv', index=False)
+print(f'Overlapping prioritized pathway pairs: {len(redundancy_pairs)}; largest group: '
+      f'{int(redundancy_groups["group_size"].max()) if len(redundancy_groups) else 0}')
+if len(redundancy_pairs):
+    display(redundancy_pairs.sort_values('n_shared', ascending=False).head(10))
+
+member_evidence = []
+for row in prioritized_pathways.head(20).itertuples():
+    evidence = member_gene_evidence(row.member_list, gene_results, effect_column='level_effect')
+    member_evidence.append({'library': row.library, 'pathway': row.pathway,
+                            'shape_rms': row.shape_rms, **evidence.to_dict()})
+member_evidence = pd.DataFrame(member_evidence)
+member_evidence.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'pathway_top_member_evidence.csv', index=False)
+display(member_evidence[[
+    'pathway', 'n_members_present', 'fraction_members_agreeing', 'strongest_member',
+    'member_effect_mean', 'member_effect_mean_without_strongest', 'sign_flips_without_strongest',
+]].round(3))
+
+
+# %% [markdown]
+# ## 4.13 - Magnitude and matched-position checks (mouse-only)
+#
+# "AKI changed this gene" is also a magnitude claim, so the same checks the cross-species workflow
+# needs apply here: detection and abundance per condition, expression ratio against abundance,
+# within-condition early-to-late gradients (which cancel a constant gene-specific offset), a
+# pseudospace-matched contrast computed per specimen pair, and a capture summary.
+#
+
+# %%
+# Purpose: magnitude and matched-position checks for the mouse contrast.
+from pseudospace.specimen import pseudobulk_profiles
+
+condition_is_aki = (c == 1)
+detection_abundance = pd.DataFrame({
+    'gene': gene_names,
+    'detected_fraction_healthy': np.asarray((Y_genes[~condition_is_aki] > 0).mean(axis=0)).ravel(),
+    'detected_fraction_aki': np.asarray((Y_genes[condition_is_aki] > 0).mean(axis=0)).ravel(),
+    'mean_lognorm_healthy': np.asarray(Y_genes[~condition_is_aki].mean(axis=0)).ravel(),
+    'mean_lognorm_aki': np.asarray(Y_genes[condition_is_aki].mean(axis=0)).ravel(),
+})
+detection_abundance['log2_ratio_aki_over_healthy'] = np.log2(
+    (detection_abundance['mean_lognorm_aki'] + 1e-3)
+    / (detection_abundance['mean_lognorm_healthy'] + 1e-3)
+)
+detection_abundance['mean_abundance'] = 0.5 * (
+    detection_abundance['mean_lognorm_healthy'] + detection_abundance['mean_lognorm_aki']
+)
+detection_abundance.to_csv(
+    HEALTHY_VS_AKI_OUTPUT_DIR / 'condition_detection_abundance.csv', index=False)
+abundance_bins = pd.qcut(detection_abundance['mean_abundance'], 10, duplicates='drop')
+ratio_by_abundance = detection_abundance.groupby(abundance_bins, observed=True)[
+    'log2_ratio_aki_over_healthy'
+].agg(['size', 'median', 'mean', 'std']).reset_index()
+ratio_by_abundance['abundance_midpoint'] = ratio_by_abundance['mean_abundance'].apply(
+    lambda interval: float(interval.mid))
+ratio_by_abundance.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'ratio_vs_abundance_bins.csv', index=False)
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
+axes[0].scatter(detection_abundance['mean_abundance'],
+                detection_abundance['log2_ratio_aki_over_healthy'], s=3, alpha=0.25,
+                color='#4C72B0', linewidths=0)
+axes[0].axhline(0.0, color='black', lw=0.8)
+axes[0].plot(ratio_by_abundance['abundance_midpoint'], ratio_by_abundance['median'],
+             color='crimson', lw=2, marker='o', ms=4, label='median per abundance decile')
+axes[0].legend(frameon=False, fontsize=8)
+axes[0].set_xlabel('Mean fitted lognorm expression (both conditions)')
+axes[0].set_ylabel('log2(AKI / healthy)')
+axes[0].set_title('Ratio versus abundance')
+axes[1].hist(detection_abundance['log2_ratio_aki_over_healthy'].dropna(), bins=80,
+             color='#4C72B0')
+axes[1].axvline(0.0, color='black', lw=0.8)
+axes[1].set_xlabel('log2(AKI / healthy)')
+axes[1].set_title('Distribution of mean-expression ratios')
+fig.suptitle('Magnitude checks: is the ratio abundance-dependent?')
+_save(fig, 'ratio_vs_abundance.png')
+
+early_third = grid <= np.quantile(grid, 1 / 3)
+late_third = grid >= np.quantile(grid, 2 / 3)
+within_condition_gradients = pd.DataFrame({
+    'gene': gene_names,
+    'healthy_early_to_late': np.nanmean(balanced_healthy[:, late_third], axis=1)
+        - np.nanmean(balanced_healthy[:, early_third], axis=1),
+    'aki_early_to_late': np.nanmean(balanced_aki[:, late_third], axis=1)
+        - np.nanmean(balanced_aki[:, early_third], axis=1),
+})
+within_condition_gradients['gradient_difference_aki_minus_healthy'] = (
+    within_condition_gradients['aki_early_to_late']
+    - within_condition_gradients['healthy_early_to_late']
+)
+within_condition_gradients = within_condition_gradients.merge(
+    gene_results[['gene', 'level_effect', 'difference_type']], on='gene', how='left')
+within_condition_gradients.to_csv(
+    HEALTHY_VS_AKI_OUTPUT_DIR / 'within_condition_gradients.csv', index=False)
+finite_gradients = within_condition_gradients.dropna(
+    subset=['healthy_early_to_late', 'aki_early_to_late'])
+print('Within-condition early-to-late gradients: Spearman(healthy, aki) =',
+      round(spearmanr(finite_gradients['healthy_early_to_late'],
+                      finite_gradients['aki_early_to_late']).correlation, 3),
+      '; opposite-sign gradients:',
+      int((np.sign(finite_gradients['healthy_early_to_late'])
+           != np.sign(finite_gradients['aki_early_to_late'])).sum()),
+      'of', len(finite_gradients))
+
+# Pseudospace-matched, per-specimen contrast: each AKI specimen against each control specimen inside
+# the same pseudospace bin, on within-row fractions, so the units are specimens.
+pseudobulk = pseudobulk_profiles(
+    adata_pt.layers['counts'], samples, s, n_bins=20, gene_names=list(adata_pt.var_names)
+)
+pseudobulk.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'pseudobulk_profiles.csv', index=False)
+gene_columns = [column for column in pseudobulk if column.startswith('count_')]
+counts_block = pseudobulk[gene_columns].to_numpy(dtype=float)
+fractions = pd.DataFrame(
+    counts_block / np.maximum(counts_block.sum(axis=1), 1.0)[:, None],
+    columns=[column.replace('count_', '') for column in gene_columns],
+)
+fractions['specimen'] = pseudobulk['specimen'].to_numpy()
+fractions['pseudospace_bin'] = pseudobulk['pseudospace_bin'].to_numpy()
+pair_rows = []
+for bin_index, block in fractions.groupby('pseudospace_bin', observed=True):
+    aki_rows = block[block['specimen'].isin(aki_samples)]
+    control_rows = block[block['specimen'].isin(control_samples)]
+    if aki_rows.empty or control_rows.empty:
+        continue
+    genes = [column for column in block.columns if column not in ('specimen', 'pseudospace_bin')]
+    aki_values = aki_rows[genes].to_numpy(dtype=float)
+    control_values = control_rows[genes].to_numpy(dtype=float)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratios = np.log2((aki_values[:, None, :] + 1e-6) / (control_values[None, :, :] + 1e-6))
+    for aki_index, aki_name in enumerate(aki_rows['specimen']):
+        for control_index, control_name in enumerate(control_rows['specimen']):
+            pair_rows.append(pd.DataFrame({
+                'bin': int(bin_index),
+                'aki_specimen': aki_name,
+                'control_specimen': control_name,
+                'gene': genes,
+                'log2_ratio': ratios[aki_index, control_index],
+            }))
+if pair_rows:
+    matched_ratios = pd.concat(pair_rows, ignore_index=True)
+    matched_ratios.to_csv(
+        HEALTHY_VS_AKI_OUTPUT_DIR / 'matched_region_specimen_ratios.csv', index=False)
+    per_gene_matched = matched_ratios.groupby('gene')['log2_ratio'].agg(
+        ['median', 'std', 'size']).reset_index()
+    per_gene_matched['n_specimen_pairs'] = matched_ratios[
+        ['aki_specimen', 'control_specimen']].drop_duplicates().shape[0]
+    per_gene_matched.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'matched_region_per_gene.csv', index=False)
+    display(per_gene_matched.sort_values('median', ascending=False).head(10).round(3))
+    print('Matched-position contrast rows:', len(matched_ratios), '; specimen pairs:',
+          int(per_gene_matched['n_specimen_pairs'].iloc[0]))
+else:
+    print('Matched-position contrast skipped: no bin holds both an AKI and a control specimen.')
+
+capture_columns = [column for column in ('n_genes_by_counts', 'total_counts', 'n_spots',
+                                         'pct_counts_mt')
+                   if column in adata_pt.obs.columns]
+capture_summary = adata_pt.obs.groupby(['condition', 'sample'], observed=True)[
+    capture_columns].median().reset_index()
+capture_summary.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'capture_summary.csv', index=False)
+display(capture_summary)
+
 
 # %% [markdown]
 # # Section 5 - three-axis concordance (non-circular fidelity check)

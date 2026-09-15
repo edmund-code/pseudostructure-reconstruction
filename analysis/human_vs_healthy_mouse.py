@@ -279,6 +279,59 @@ print('Centroid plots below locate structures; segmentation boundaries require s
 
 
 # %%
+# --- Per-tubule count distribution, per sample, with the tubule filter's threshold marked ------
+# This is the distribution `sc.pp.filter_cells(min_genes=MIN_GENES_PER_TUBULE)` acts on in the next
+# cell. `shared_n_genes` is the ortholog-space count audited above, not the native input count, so
+# a sample that is cut disproportionately by the human->mouse mapping is visible here rather than
+# only as a smaller n later. `total_counts` is the raw UMI sum of the structure.
+_qc_counts = pd.DataFrame({
+    'sample': qc_before['sample'].astype(str).to_numpy(),
+    'shared_n_genes': qc_before['shared_n_genes'].to_numpy(),
+    'passes_min_genes': qc_before['passes_min_genes'].to_numpy(),
+    'total_counts': np.asarray(adata_combined.X.sum(axis=1)).ravel(),
+}, index=qc_before.index)
+_qc_counts['species'] = np.where(_qc_counts['sample'].str.startswith('HUK'), 'human', 'mouse')
+_qc_counts.to_csv(DIAGNOSTIC_DIR / 'tubule_counts_before_filter.csv')
+
+_samples = sorted(_qc_counts['sample'].unique())
+_colors = dict(zip(_samples, plt.get_cmap('tab10').colors))
+
+fig, axes = plt.subplots(1, 3, figsize=(19, 5))
+
+for sample in _samples:
+    sub = _qc_counts[_qc_counts['sample'] == sample]
+    axes[0].hist(sub['shared_n_genes'], bins=100, histtype='step', lw=1.2, color=_colors[sample],
+                 label=f'{sample} [{sub["species"].iloc[0]}] (n={len(sub):,})')
+axes[0].axvline(MIN_GENES_PER_TUBULE, color='crimson', ls='--', lw=1.6,
+                label=f'threshold = {MIN_GENES_PER_TUBULE} genes')
+axes[0].set_yscale('log')
+axes[0].set_xlabel('detected genes per structure (shared ortholog space)')
+axes[0].set_ylabel('structures (log scale)')
+axes[0].set_title('Shared-space genes per structure, before filtering')
+axes[0].legend(fontsize=7)
+
+for sample in _samples:
+    sub = _qc_counts[_qc_counts['sample'] == sample]
+    axes[1].hist(np.log10(sub['total_counts'].to_numpy() + 1), bins=100, histtype='step',
+                 lw=1.2, color=_colors[sample], label=sample)
+axes[1].set_xlabel('log10(total counts + 1) per structure')
+axes[1].set_ylabel('structures')
+axes[1].set_title('Total counts per structure, before filtering')
+axes[1].legend(fontsize=7)
+
+axes[2].boxplot([np.log10(_qc_counts.loc[_qc_counts['sample'] == s, 'total_counts'].to_numpy() + 1)
+                 for s in _samples], showfliers=False)
+axes[2].set_xticks(range(1, len(_samples) + 1))
+axes[2].set_xticklabels(_samples, rotation=30, ha='right')
+axes[2].set_ylabel('log10(total counts + 1)')
+axes[2].set_title('Per-sample spread of structure size')
+
+fig.tight_layout()
+fig.savefig(DIAGNOSTIC_DIR / 'tubule_count_distribution.png', dpi=200, bbox_inches='tight')
+plt.show()
+
+
+# %%
 # Purpose: apply structure QC, then low-support gene QC before Harmony HVG selection.
 print(f'Before structure filtering: {adata_combined.n_obs:,}')
 sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)

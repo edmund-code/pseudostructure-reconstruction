@@ -173,6 +173,7 @@ HARMONY_UMAP_SPREAD = 1.0
 # ---------------------------------------------------------------------------
 # Gene filter / clustering / DPT params
 # ---------------------------------------------------------------------------
+MIN_GENES_PER_TUBULE = 100            # tubule filter: minimum detected genes per structure
 MIN_GENE_TUBULE_FRACTION = 0.05
 MIN_GENE_TOTAL_COUNTS = 20
 NORMALIZE_TARGET_SUM = 1e4
@@ -285,54 +286,39 @@ NON_TUBULE_MARKERS = {
     'Immune':        ['Ptprc', 'C1qa', 'C1qb', 'Cd52', 'Lyz2', 'Cd74'],
 }
 
-# Fine segment -> coarse family. 'AL' = ascending limb: ATL, mTAL, cTAL and the macula densa are
-# not separable at this resolution, so they share one class.
-SEGMENT_TO_COARSE = {
-    'Podocyte': 'Glomerulus',
-    'PT-S1': 'PT', 'PT-S2': 'PT', 'PT-S3': 'PT',
-    'DTL1': 'DTL', 'DTL2': 'DTL', 'DTL3': 'DTL',
-    'ATL': 'AL', 'mTAL': 'AL', 'cTAL': 'AL', 'Macula-densa': 'AL',
-    'DCT1': 'DCT', 'DCT2': 'DCT',
-    'CNT': 'CNT_CD', 'CCD': 'CNT_CD', 'OMCD': 'CNT_CD', 'IMCD': 'CNT_CD',
-}
-COARSE_ORDER = ['PT', 'DTL', 'AL', 'DCT', 'CNT_CD']         # the nephron continuum, in order
-KEEP_TUBULE_CLASSES = list(COARSE_ORDER)
-REMOVE_CLASSES = ['Glomerulus', 'Vessel', 'Stroma', 'SmoothMuscle', 'Immune', 'Unassigned']
+# Fine segment -> coarse family, the coarse family list, the class vocabulary and the display
+# order all come from the shared `pseudospace.vocabulary` module, so notebooks 02, 03 and 04
+# cannot drift apart on any of them. Only the marker panels above stay local: they are
+# cell-typing evidence, not vocabulary.
+from pseudospace import vocabulary as segment_vocabulary
+
+if NEPHRON_SEGMENT_ORDER != list(segment_vocabulary.FINE_SEGMENTS):
+    raise ValueError(
+        'NEPHRON_AXIS_MARKERS keys no longer match pseudospace.vocabulary.FINE_SEGMENTS: '
+        f'{NEPHRON_SEGMENT_ORDER} vs {list(segment_vocabulary.FINE_SEGMENTS)}'
+    )
+
+# 'AL' = ascending limb: ATL, mTAL, cTAL and the macula densa are not separable at this
+# resolution, so they share one class.
+SEGMENT_TO_COARSE = dict(segment_vocabulary.SEGMENT_TO_COARSE)
+COARSE_ORDER = list(segment_vocabulary.COARSE_FAMILIES)   # the nephron continuum, in order
+KEEP_TUBULE_CLASSES = list(segment_vocabulary.KEEP_TUBULE_CLASSES)
+REMOVE_CLASSES = list(segment_vocabulary.REMOVE_CLASSES)
 
 # A coarse family is a LABEL IN ITS OWN RIGHT, not only a rollup target. At the resolutions this
-# pipeline actually clusters at (res=0.5 -> ~11 clusters) most clusters carry coarse identity
-# only: cluster markers like Pck1/Slc34a1/Slc4a4 say "proximal tubule" without distinguishing
-# S1 from S2 from S3. Forcing a fine label onto such a cluster invents a distinction the data
-# does not support, and it distorts the pseudospace axis those labels annotate.
+# pipeline actually clusters at most clusters carry coarse identity only: cluster markers like
+# Pck1/Slc34a1/Slc4a4 say "proximal tubule" without distinguishing S1 from S2 from S3. Forcing a
+# fine label onto such a cluster invents a distinction the data does not support, and it distorts
+# the pseudospace axis those labels annotate. So each coarse family maps to ITSELF and
+# 'Glomerulus' is directly typable alongside 'Podocyte': mixing 'PT' for one cluster and 'DCT2'
+# for another is expected, not a compromise. Both mappings live in the module.
 #
-# So each coarse family maps to ITSELF, and 'Glomerulus' is directly typable alongside
-# 'Podocyte'. Label each cluster at the granularity its markers support and no finer -- mixing
-# 'PT' for one cluster and 'DCT2' for another is expected, not a compromise.
-SEGMENT_TO_COARSE.update({family: family for family in COARSE_ORDER})
-SEGMENT_TO_COARSE['Glomerulus'] = 'Glomerulus'
+# LABEL_VOCABULARY is every label you may type at the manual checkpoint. SEGMENT_DISPLAY_ORDER
+# places each coarse family immediately before its own first fine member so the anatomical
+# left-to-right reading survives: ... PT, PT-S1, PT-S2, PT-S3, DTL, DTL1, ...
+LABEL_VOCABULARY = list(segment_vocabulary.LABEL_VOCABULARY)
+SEGMENT_DISPLAY_ORDER = list(segment_vocabulary.SEGMENT_DISPLAY_ORDER)
 
-# Every label you may type at the manual checkpoint.
-LABEL_VOCABULARY = (NEPHRON_SEGMENT_ORDER + COARSE_ORDER + ['Glomerulus']
-                    + [c for c in REMOVE_CLASSES if c != 'Glomerulus'])
-
-# Display order for the fine `segment_class` column, which may now hold a mix of coarse and fine
-# labels. Each coarse family is placed immediately before its own first fine member so the
-# anatomical left-to-right reading survives: ... PT, PT-S1, PT-S2, PT-S3, DTL, DTL1, ...
-def _build_segment_display_order():
-    order, seen = [], set()
-    for segment in NEPHRON_SEGMENT_ORDER:
-        family = SEGMENT_TO_COARSE.get(segment)
-        if family in COARSE_ORDER and family not in seen:
-            order.append(family)
-            seen.add(family)
-        order.append(segment)
-    for extra in ['Glomerulus'] + [c for c in REMOVE_CLASSES if c != 'Glomerulus']:
-        if extra not in order:
-            order.append(extra)
-    return order
-
-
-SEGMENT_DISPLAY_ORDER = _build_segment_display_order()
 
 # ---------------------------------------------------------------------------
 # Injury panels (Section 4.0b). NOT used for cell typing or for building the pseudospace axis --
@@ -1012,8 +998,18 @@ print(f'\nCombined: {adata_combined.n_obs:,} tubules x {adata_combined.n_vars:,}
 print(adata_combined.obs.groupby('condition')['sample'].value_counts())
 
 # %%
+# Capture the per-tubule counts BEFORE the tubule filter runs: once it does, the removed
+# tubules are gone and the distribution it acted on can no longer be plotted. `total_counts`
+# is the raw UMI sum of the structure -- the quantity the gene-level support filter
+# (MIN_GENE_TUBULE_FRACTION, MIN_GENE_TOTAL_COUNTS) is built from.
+_tubule_qc_before = pd.DataFrame({
+    'n_genes_by_counts': np.asarray((adata_combined.X > 0).sum(axis=1)).ravel(),
+    'total_counts': np.asarray(adata_combined.X.sum(axis=1)).ravel(),
+    'sample': adata_combined.obs['sample'].astype(str).to_numpy(),
+    'condition': adata_combined.obs['condition'].astype(str).to_numpy(),
+}, index=adata_combined.obs_names)
 print(f'Before cell filtering: {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
-sc.pp.filter_cells(adata_combined, min_genes=100)
+sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)
 print(f'After cell filtering:  {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
 
 # --- Low-support gene filter, now BEFORE Harmony ---------------------------------------------
@@ -1041,6 +1037,60 @@ sc.pp.normalize_total(adata_combined, target_sum=NORMALIZE_TARGET_SUM)
 sc.pp.log1p(adata_combined)
 adata_combined.layers['lognorm'] = adata_combined.X.copy()
 print("Normalized; counts in layers['counts'], log-normalized values in layers['lognorm'].")
+
+# %%
+# --- Per-tubule count distribution: what the tubule filter is actually cutting -----------------
+# Several downstream steps are sensitive to tubule size (HVG selection, the subset DPTs and the
+# gene-level shape analysis), so cutting one sample harder than another is a real confound rather
+# than a cosmetic QC number. Plotting the distribution per sample shows it here, at the point the
+# filter acts, instead of only as a smaller n several sections later.
+_tubule_qc_before['passes_min_genes'] = _tubule_qc_before['n_genes_by_counts'] >= MIN_GENES_PER_TUBULE
+_tubule_qc_before.to_csv(CELLTYPING_DIR / 'tubule_counts_before_filter.csv')
+_tubule_retention = _tubule_qc_before.groupby('sample', observed=True)['passes_min_genes'].agg(['size', 'sum', 'mean'])
+_tubule_retention['fraction_removed'] = 1 - _tubule_retention['mean']
+_tubule_retention.to_csv(CELLTYPING_DIR / 'tubule_retention_by_sample.csv')
+print(f"Tubule filter (>= {MIN_GENES_PER_TUBULE} detected genes): "
+      f"{int(_tubule_qc_before['passes_min_genes'].sum()):,}/{len(_tubule_qc_before):,} tubules pass, "
+      f"{1 - _tubule_qc_before['passes_min_genes'].mean():.2%} removed")
+print(_tubule_retention.to_string())
+
+_samples = sorted(_tubule_qc_before['sample'].unique())
+_colors = dict(zip(_samples, plt.get_cmap('tab10').colors))
+
+fig, axes = plt.subplots(1, 3, figsize=(19, 5))
+
+for sample in _samples:
+    sub = _tubule_qc_before[_tubule_qc_before['sample'] == sample]
+    axes[0].hist(sub['n_genes_by_counts'], bins=100, histtype='step', lw=1.2,
+                 color=_colors[sample], label=f'{sample} (n={len(sub):,})')
+axes[0].axvline(MIN_GENES_PER_TUBULE, color='crimson', ls='--', lw=1.6,
+                label=f'threshold = {MIN_GENES_PER_TUBULE} genes')
+axes[0].set_yscale('log')
+axes[0].set_xlabel('detected genes per tubule')
+axes[0].set_ylabel('tubules (log scale)')
+axes[0].set_title('Detected genes per tubule, before filtering')
+axes[0].legend(fontsize=7)
+
+for sample in _samples:
+    sub = _tubule_qc_before[_tubule_qc_before['sample'] == sample]
+    axes[1].hist(np.log10(sub['total_counts'].to_numpy() + 1), bins=100, histtype='step',
+                 lw=1.2, color=_colors[sample], label=sample)
+axes[1].set_xlabel('log10(total counts + 1) per tubule')
+axes[1].set_ylabel('tubules')
+axes[1].set_title('Total counts per tubule, before filtering')
+axes[1].legend(fontsize=7)
+
+axes[2].boxplot([np.log10(_tubule_qc_before.loc[_tubule_qc_before['sample'] == s, 'total_counts'].to_numpy() + 1)
+                 for s in _samples], showfliers=False)
+axes[2].set_xticks(range(1, len(_samples) + 1))
+axes[2].set_xticklabels(_samples, rotation=30, ha='right')
+axes[2].set_ylabel('log10(total counts + 1)')
+axes[2].set_title('Per-sample spread of tubule size')
+
+fig.tight_layout()
+fig.savefig(CELLTYPING_DIR / 'tubule_count_distribution.png', dpi=200, bbox_inches='tight')
+plt.show()
+
 
 # %%
 adata_combined = select_harmony_hvgs_by_condition(
@@ -1347,7 +1397,7 @@ for col in PER_CELL_CALL_COLUMNS:
 # Non-tubule labels pass through the rollup unchanged; anything unmapped becomes 'Unassigned'.
 adata_all.obs['coarse_class'] = (
     adata_all.obs['segment_class']
-    .map(lambda label: SEGMENT_TO_COARSE.get(label, label if label in REMOVE_CLASSES else 'Unassigned'))
+    .map(segment_vocabulary.coarse_for)
     .astype(str)
 )
 # Compatibility alias: the pseudospace package, the QuPath export and the spatial validation

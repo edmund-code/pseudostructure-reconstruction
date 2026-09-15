@@ -6,6 +6,7 @@ the spline design/penalty utilities in :mod:`pseudospace.stats_gam`.
 from __future__ import annotations
 
 import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -70,6 +71,127 @@ def shape_metrics(curve_h, curve_a):
     cond_rms = np.sqrt(np.mean(diff ** 2, axis=1))
     cond_max = np.max(np.abs(diff), axis=1)
     return mean_gap, shape_rms, cond_rms, cond_max
+
+
+# Reading thresholds for `summarize_curve_effects`. They label the numeric columns; they are not
+# tests, and each one is documented so a reader can disagree with the cut explicitly.
+EFFECT_RMS_FLOOR = 0.05          # lognorm units: below this there is nothing to describe
+PATTERN_RMS_Z_TOL = 0.25         # z-units: the curves keep the same shape below this
+AMPLITUDE_LOG2_TOL = 0.5         # a ~1.4x amplitude change
+LEVEL_FRACTION_TOL = 0.5         # the difference is mostly a vertical offset
+
+
+def _classify_difference(frame: pd.DataFrame) -> np.ndarray:
+    pattern_moves = frame['pattern_rms_z'].to_numpy() >= PATTERN_RMS_Z_TOL
+    amplitude_moves = np.abs(frame['amplitude_log2_ratio'].to_numpy()) >= AMPLITUDE_LOG2_TOL
+    level_dominant = frame['level_fraction'].to_numpy() >= LEVEL_FRACTION_TOL
+    detectable = frame['condition_effect_rms'].to_numpy() >= EFFECT_RMS_FLOOR
+
+    labels = np.full(len(frame), 'level shift', dtype=object)
+    labels[pattern_moves] = 'pattern shift'
+    labels[~pattern_moves & amplitude_moves & ~level_dominant] = 'amplitude change'
+    labels[~pattern_moves & amplitude_moves & level_dominant] = 'level shift + amplitude change'
+    labels[~pattern_moves & ~amplitude_moves & ~level_dominant] = 'undetermined'
+    labels[~detectable] = 'no detectable difference'
+    return labels
+
+
+def summarize_curve_effects(curve_reference, curve_comparison, feature_names=None):
+    """Split a fitted reference/comparison curve pair into level, amplitude and spatial pattern.
+
+    ``run_level_shape``'s ``shape_rms`` is the RMS of the mean-centred difference, so a gene whose
+    peak stays put while its gradient flattens is reported as a shape effect. Three questions are
+    worth separating:
+
+    * level - a constant vertical offset: ``level_effect`` is the mean difference over the grid.
+    * amplitude - how strong the gradient is: peak-to-trough of each curve and their ratio.
+    * pattern - where expression sits along pseudospace. ``pattern_rms_z`` compares the two curves
+      after each is standardised over the grid, and ``curve_spearman`` ranks them; both are
+      invariant to level and amplitude, so they only move when peak position, width or
+      monotonicity changes.
+
+    ``level_fraction`` / ``shape_fraction`` use the exact orthogonal split
+    ``RMS(diff)**2 = mean(diff)**2 + RMS(diff - mean(diff))**2``: the share of the total fitted
+    separation that is vertical offset rather than spatial redistribution.
+
+    NaN cells (a group evaluated outside its own support) are ignored per feature. Returns one row
+    per feature; ``difference_type`` is a reading aid and the numeric columns are the result.
+    """
+    lhs = np.asarray(curve_reference, dtype=float)
+    rhs = np.asarray(curve_comparison, dtype=float)
+    if lhs.shape != rhs.shape:
+        raise ValueError(f'curve shapes differ: {lhs.shape} vs {rhs.shape}')
+    if lhs.ndim != 2:
+        raise ValueError('curves must be 2-D (feature x grid)')
+
+    def _masked(values):
+        return np.where(np.isfinite(values), values, np.nan)
+
+    # A curve with no support on the grid (or zero spread) legitimately produces all-NaN
+    # aggregations; those rows are reported as NaN rather than warned about.
+    warnings.simplefilter('ignore', RuntimeWarning)
+    diff = _masked(rhs - lhs)
+    n_finite = np.sum(np.isfinite(diff), axis=1)
+    level_effect = np.nanmean(diff, axis=1)
+    centred = diff - level_effect[:, None]
+    shape_rms = np.sqrt(np.nanmean(centred ** 2, axis=1))
+    total_rms = np.sqrt(np.nanmean(diff ** 2, axis=1))
+    total_sq = total_rms ** 2
+    with np.errstate(invalid='ignore', divide='ignore'):
+        level_fraction = np.where(total_sq > 0, level_effect ** 2 / total_sq, 0.0)
+        shape_fraction = np.where(total_sq > 0, shape_rms ** 2 / total_sq, 0.0)
+
+    def _amplitude(curve):
+        finite = _masked(curve)
+        return np.nanmax(finite, axis=1) - np.nanmin(finite, axis=1)
+
+    amplitude_reference = _amplitude(lhs)
+    amplitude_comparison = _amplitude(rhs)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        amplitude_ratio = np.where(
+            amplitude_reference > 0, amplitude_comparison / amplitude_reference, np.nan
+        )
+        amplitude_log2_ratio = np.where(
+            (amplitude_reference > 0) & (amplitude_comparison > 0),
+            np.log2(amplitude_comparison) - np.log2(amplitude_reference),
+            np.nan,
+        )
+
+    def _standardized(curve):
+        finite = _masked(curve)
+        mean = np.nanmean(finite, axis=1, keepdims=True)
+        spread = np.nanstd(finite, axis=1, keepdims=True)
+        return np.where(spread > 0, (finite - mean) / spread, np.nan)
+
+    z_diff = _standardized(rhs) - _standardized(lhs)
+    pattern_rms_z = np.sqrt(np.nanmean(_masked(z_diff) ** 2, axis=1))
+
+    frame = pd.DataFrame({
+        'feature': (list(feature_names) if feature_names is not None
+                    else [f'feature_{i}' for i in range(lhs.shape[0])]),
+        'n_grid_points': n_finite,
+        'level_effect': level_effect,
+        'shape_rms': shape_rms,
+        'condition_effect_rms': total_rms,
+        'level_fraction': level_fraction,
+        'shape_fraction': shape_fraction,
+        'amplitude_reference': amplitude_reference,
+        'amplitude_comparison': amplitude_comparison,
+        'amplitude_ratio': amplitude_ratio,
+        'amplitude_log2_ratio': amplitude_log2_ratio,
+        'pattern_rms_z': pattern_rms_z,
+    })
+    frame['difference_type'] = _classify_difference(frame)
+    return frame
+
+
+def run_level_shape_summary(Y, s, c, knots, grid, lambda_grid, feature_names=None):
+    """``run_level_shape`` plus the level/amplitude/pattern table for its fitted curves."""
+    fit = run_level_shape(Y, s, c, knots, grid, lambda_grid)
+    summary = summarize_curve_effects(fit['curve_healthy'], fit['curve_aki'],
+                                      feature_names=feature_names)
+    summary['curve_spearman'] = fit['curve_spearman']
+    return fit, summary
 
 
 def _xty_of(design, Y, sparse):

@@ -2030,8 +2030,12 @@ print('Completed:', 'adata_heatmap = sc.read_h5ad(DPT_OUTPUT_PATH)')
 #
 
 # %%
-# Purpose: from pseudospace.levelshape import fit_single_condition_curves, run_level_shape
-from pseudospace.levelshape import fit_single_condition_curves, run_level_shape
+# Purpose: from pseudospace.levelshape import fit_single_condition_curves, run_level_shape, summarize_curve_effects
+from pseudospace.levelshape import (
+    fit_single_condition_curves,
+    run_level_shape,
+    summarize_curve_effects,
+)
 from pseudospace.stats_gam import as_csr, gam_internal_knots, resolve_present
 
 # This input is needed only for the pathway comparison below.
@@ -2183,6 +2187,17 @@ gene_results = pd.DataFrame({
     'level_F_cellwise_uncalibrated': gene_fit['level_F'],
     'shape_F_cellwise_uncalibrated': gene_fit['shape_F'],
 })
+# `species_effect_rms` alone mixes a constant vertical offset with a redistribution along
+# pseudospace, and `shape_rms` alone reports a weaker gradient as a shape change. The effect
+# summary separates the three questions: `level_fraction` is the share of the squared total effect
+# that is vertical offset, `pattern_rms_z` is free of both level and amplitude, and the amplitude
+# columns describe gradient strength on its own.
+gene_curve_effects = summarize_curve_effects(
+    gene_fit['curve_healthy'], gene_fit['curve_aki'], feature_names=gene_names
+)
+gene_results = gene_results.merge(
+    gene_curve_effects.rename(columns={'feature': 'gene'}), on='gene', how='left'
+)
 gene_results['axis_basis_gene'] = gene_results['gene'].str.upper().isin(axis_basis)
 gene_results['technical_gene'] = gene_results['gene'].str.match(
     r'^(mt-|Rpl|Rps|Mrpl|Mrps)', case=False
@@ -2207,8 +2222,18 @@ gene_results.to_csv(
 )
 display(gene_results.head(20)[[
     'gene', 'species_effect_rms', 'level_effect_human_minus_mouse',
-    'shape_rms', 'curve_spearman', 'axis_basis_gene',
+    'shape_rms', 'level_fraction', 'pattern_rms_z', 'difference_type',
+    'curve_spearman', 'axis_basis_gene',
 ]])
+
+# Magnitude audit. Every structure is normalised to the same total, so a broad vertical offset can
+# dominate the ranking; say how much of it is level rather than spatial redistribution instead of
+# leaving the reader to infer it from the effect size.
+top_effect_genes = gene_results[gene_results['primary_eligible']].head(20)
+print('Top-20 eligible genes: median level fraction '
+      f"{top_effect_genes['level_fraction'].median():.3f}; "
+      f"lower in human {int((top_effect_genes['level_effect_human_minus_mouse'] < 0).sum())}/20; "
+      f"types {top_effect_genes['difference_type'].value_counts().to_dict()}")
 
 
 
@@ -2508,13 +2533,32 @@ else:
     pathway_results['level_effect_human_minus_mouse'] = pathway_fit['level_effect']
     pathway_results['shape_rms'] = pathway_fit['shape_rms']
     pathway_results['curve_spearman'] = pathway_fit['curve_spearman']
+    # Same level/amplitude/pattern split as for genes; module scores are already standardised, so
+    # the level term here is the species offset in pooled-z units.
+    pathway_curve_effects = summarize_curve_effects(
+        pathway_fit['curve_healthy'], pathway_fit['curve_aki'],
+        feature_names=[f'{library}: {pathway}' for library, pathway in
+                       zip(retained_pathways['library'], retained_pathways['pathway'])],
+    )
+    for column in ('level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_ratio',
+                   'amplitude_log2_ratio', 'difference_type'):
+        pathway_results[column] = pathway_curve_effects[column].to_numpy()
     pathway_results = pathway_results.sort_values(
         'species_effect_rms', ascending=False
     ).reset_index(drop=True)
+    top_effect_pathways = pathway_results.head(20)
+    print('Top-20 pathways: median level fraction '
+          f"{top_effect_pathways['level_fraction'].median():.3f}; "
+          f"lower in human {int((top_effect_pathways['level_effect_human_minus_mouse'] < 0).sum())}/20; "
+          f"types {top_effect_pathways['difference_type'].value_counts().to_dict()}")
 pathway_results.to_csv(
     CURVE_OUTPUT_DIR / 'pathway_trajectory_comparison.csv', index=False
 )
-display(pathway_results.head(20) if len(pathway_results) else pathway_results)
+display(pathway_results.head(20)[[
+    'library', 'pathway', 'n_genes_present', 'species_effect_rms',
+    'level_effect_human_minus_mouse', 'shape_rms', 'level_fraction', 'pattern_rms_z',
+    'difference_type',
+]] if len(pathway_results) else pathway_results)
 
 
 

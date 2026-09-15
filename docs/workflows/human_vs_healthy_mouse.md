@@ -28,10 +28,12 @@ pathway-curve, and sample-support outputs under `human_vs_healthy_mouse/`.
 
 ## Interpretation limits
 
-There is one human donor versus two mouse specimens. Human cortex/medulla is also confounded
-with species because the human inputs are `HUK1_COR1` (cortex) and `HUK1_MED1` (medulla), while
-the mouse controls are mixed-kidney samples. `HUK1_MED1` has weaker capture in the current
-data. Do not report cellwise GAM F statistics or curve differences as confirmatory species
+There is one human donor versus two mouse specimens. Sampling is confounded with species because
+the human inputs are two slices of the *same* healthy cortex while the mouse controls are
+mixed-kidney samples. `HUK1_MED1` is only named medulla at source: the processed segmentation is
+cortex tissue, so it is not a medullary sample and must not be analysed or described as one (the
+workflow assigns `region = 'cortex'` to both human slices). `HUK1_MED1` has weaker capture in the
+current data. Do not report cellwise GAM F statistics or curve differences as confirmatory species
 significance. Repeat the analysis after excluding `HUK1_MED1`, and use anatomically matched
 mouse annotations if they become available.
 

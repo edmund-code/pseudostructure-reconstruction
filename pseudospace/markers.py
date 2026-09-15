@@ -803,7 +803,9 @@ def plot_coarse_cluster_visualizations(
         u_mask = adata_cluster.obs[cluster_col].astype(str) == u_id
         if 'sample' in adata_cluster.obs.columns:
             s_counts = adata_cluster.obs.loc[u_mask, 'sample'].value_counts()
-            s_labels = {'HUK1_COR1': 'HUK1_COR1 (Cortex)', 'HUK1_MED1': 'HUK1_MED1 (Medulla)', 'Ctrl1A2': 'Ctrl1A2 (Mouse)', 'Ctrl1A4': 'Ctrl1A4 (Mouse)'}
+            # HUK1_MED1 is named medulla at source but is healthy cortex tissue: label it as a slice,
+            # never as a medullary sample.
+            s_labels = {'HUK1_COR1': 'HUK1_COR1 (Cortex slice)', 'HUK1_MED1': 'HUK1_MED1 (Cortex slice)', 'Ctrl1A2': 'Ctrl1A2 (Mouse)', 'Ctrl1A4': 'Ctrl1A4 (Mouse)'}
             y_s = np.arange(len(s_counts))
             ax_c.barh(y_s, s_counts.values, color='#4575b4', edgecolor='black', linewidth=0.7, height=0.6)
             ax_c.set_yticks(y_s)

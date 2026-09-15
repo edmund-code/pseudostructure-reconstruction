@@ -1,7 +1,7 @@
 # %% [markdown]
 # # Human versus healthy-mouse exploratory classification and PT pseudospace
 #
-# Broad identities, structure QC, species-specific validation, and integration diagnostics precede an exploratory PT trajectory. Fine segment labels and a shared whole-nephron axis are not validated. Human cortex and medulla come from one donor.
+# Broad identities, structure QC, species-specific validation, and integration diagnostics precede an exploratory PT trajectory. Fine segment labels and a shared whole-nephron axis are not validated. Both human slices are healthy cortex from one donor.
 #
 
 # %% [markdown]
@@ -113,7 +113,10 @@ print(f'Results will be written to: {RESULTS_DIR.relative_to(PROJECT_DIR)}')
 MOUSE_SAMPLES = ('Ctrl1A2', 'Ctrl1A4')
 HUMAN_SAMPLES = ('HUK1_COR1', 'HUK1_MED1')
 SAMPLE_ORDER = (*MOUSE_SAMPLES, *HUMAN_SAMPLES)
-HUMAN_REGIONS = {'HUK1_COR1': 'cortex', 'HUK1_MED1': 'medulla'}
+# Both human slices are healthy CORTEX. `HUK1_MED1` is only *named* medulla at source (the Visium
+# matrix is HUK1_MED); the processed segmentation is cortex tissue, so it must never be treated as
+# medullary in an analysis or a write-up. `sample` keeps the source name for provenance.
+HUMAN_REGIONS = {'HUK1_COR1': 'cortex', 'HUK1_MED1': 'cortex'}
 SPECIES_GROUPS = ('mouse', 'human')
 BATCH_KEY = 'sample'
 RANDOM_STATE = 0
@@ -302,6 +305,10 @@ adata_combined.var['n_structures_expressed'] = expressed
 adata_combined.var['total_counts'] = total_counts
 adata_combined.var['passes_expression_count_filter'] = gene_keep
 n_genes_before_expression_filter = int(adata_combined.n_vars)
+# The normalisation below divides by the RETAINED panel's total, so a structure that lost genes to
+# the expression filter is scaled up relative to one that did not. Record the native (pre-filter)
+# total here so Section 4 can repeat the relative-expression comparison with that denominator.
+pre_filter_total_counts = np.asarray(adata_combined.layers['counts'].sum(axis=1)).ravel()
 adata_combined = adata_combined[:, gene_keep].copy()
 tubule_filter_audit.loc[len(tubule_filter_audit)] = {
     'filter_stage': 'expression-count filter before Harmony (genes only)',
@@ -317,6 +324,25 @@ print(f'Gene filter before Harmony: {n_genes_before_expression_filter:,} → {ad
 sc.pp.normalize_total(adata_combined, target_sum=NORMALIZE_TARGET_SUM)
 sc.pp.log1p(adata_combined)
 adata_combined.layers['lognorm'] = adata_combined.X.copy()
+
+# Denominator audit: how much of each structure's native UMI survives ortholog mapping and the gene
+# expression filter, i.e. what the normalisation actually divides by.
+adata_combined.obs['pre_filter_total_counts'] = pre_filter_total_counts
+adata_combined.obs['retained_panel_total_counts'] = np.asarray(
+    adata_combined.layers['counts'].sum(axis=1)
+).ravel()
+adata_combined.obs['retained_panel_fraction'] = (
+    adata_combined.obs['retained_panel_total_counts']
+    / adata_combined.obs['pre_filter_total_counts'].clip(lower=1)
+)
+normalisation_audit = (
+    adata_combined.obs.groupby(['comparison_species', 'sample'], observed=True)['retained_panel_fraction']
+    .agg(['size', 'mean', 'median', 'min']).reset_index()
+)
+normalisation_audit.to_csv(DIAGNOSTIC_DIR / 'normalisation_denominator_audit.csv', index=False)
+display(normalisation_audit.round(3))
+print('The retained panel is the normalisation denominator; Section 4 repeats the comparison with '
+      'the native total (normalisation_sensitivity.csv).')
 
 adata_combined = select_harmony_hvgs_by_condition(
     adata_combined,
@@ -1867,7 +1893,9 @@ plt.show()
 DPT_EXTRA_OBS_COLS = ['comparison_species', 'region', 'x_centroid', 'y_centroid',
     'segment_class', 'coarse_class', 'leiden_coarse', 'total_marker_axis',
     'total_early_trajectory_score', 'total_late_trajectory_score', 'global_nephron_dpt',
-    'shared_pseudospace']
+    'shared_pseudospace',
+    # carried so Section 4 can renormalise with the native denominator
+    'pre_filter_total_counts']
 adata_total.write(GLOBAL_DPT_OUTPUT_PATH)
 print(f'Saved global nephron DPT: {GLOBAL_DPT_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
 
@@ -2020,10 +2048,10 @@ print('Completed:', 'adata_heatmap = sc.read_h5ad(DPT_OUTPUT_PATH)')
 # # Section 4 - human versus healthy-mouse PT trajectories
 #
 # The same nested level/shape GAM used in the mouse notebook is fitted on PT structures over the
-# mouse/human common DPT support. Here c=0 is mouse and c=1 is human. The human cortex and medulla
-# samples come from one donor, so the fitted differences are descriptive effect sizes only.
-# Human regions are shown separately as sensitivity curves but are not treated as independent
-# biological replicates.
+# mouse/human common DPT support. Here c=0 is mouse and c=1 is human. Both human slices are healthy
+# cortex from one donor, so the fitted differences are descriptive effect sizes only. The two human
+# slices are shown separately as sensitivity curves but are not treated as independent biological
+# replicates.
 #
 #
 # **Output:** descriptive (not inferential) gene and pathway trajectory comparisons, with figure files in `curves/`.
@@ -2226,6 +2254,42 @@ gene_results = gene_results.sort_values(
     ['primary_eligible', 'species_effect_rms'],
     ascending=[False, False],
 ).reset_index(drop=True)
+
+# Normalisation sensitivity: the primary fit divides by the retained panel's total. Re-fit with the
+# native (pre-filter) denominator recorded in the QC cell, so a level-dominated ranking cannot be an
+# artifact of the panel denominator alone.
+if ('counts' in adata_pt.layers) and ('pre_filter_total_counts' in adata_pt.obs.columns):
+    native_scale = NORMALIZE_TARGET_SUM / np.maximum(
+        adata_pt.obs['pre_filter_total_counts'].to_numpy(dtype=float), 1.0
+    )
+    Y_native = sparse.diags(native_scale) @ as_csr(adata_pt.layers['counts'])[:, tested]
+    Y_native.data = np.log1p(Y_native.data)
+    native_fit = run_level_shape(Y_native, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'])
+    gene_results['level_effect_native_denominator'] = native_fit['level_effect']
+    gene_results['shape_rms_native_denominator'] = native_fit['shape_rms']
+    top_native = gene_results[gene_results['primary_eligible']].head(20)
+    normalisation_sensitivity = pd.DataFrame([{
+        'level_effect_spearman_panel_vs_native': float(spearmanr(
+            gene_results['level_effect_human_minus_mouse'],
+            gene_results['level_effect_native_denominator'],
+        ).correlation),
+        'top20_sign_agreement': float((
+            np.sign(top_native['level_effect_human_minus_mouse'])
+            == np.sign(top_native['level_effect_native_denominator'])
+        ).mean()),
+        'top20_median_level_fraction_panel_denominator': float(top_native['level_fraction'].median()),
+        'top20_median_level_fraction_native_denominator': float(np.median(
+            (top_native['level_effect_native_denominator'] ** 2)
+            / np.maximum(top_native['species_effect_rms'] ** 2, 1e-12)
+        )),
+    }])
+    normalisation_sensitivity.to_csv(CURVE_OUTPUT_DIR / 'normalisation_sensitivity.csv', index=False)
+    display(normalisation_sensitivity.round(3))
+    print('Agreement between the two denominators means the vertical-offset finding survives the '
+          'retained-panel denominator; it does not make the species offset biological.')
+else:
+    print('Normalisation sensitivity skipped: PT object lacks layers["counts"] or '
+          'obs["pre_filter_total_counts"].')
 gene_results.to_csv(
     CURVE_OUTPUT_DIR / 'gene_trajectory_comparison.csv', index=False
 )
@@ -2792,8 +2856,8 @@ analysis_notes = f"""# Human versus healthy-mouse pseudospace
 - Integration: deterministic R Harmony {HARMONY_EXPECTED_VERSION}; sample is the batch key and sample correction may remove species/region biology.
 - Cell labels: provisional broad pass-1 labels; run fingerprint {CLUSTERING_FINGERPRINT['membership_sha1']}; no relabeling after pass 2.
 - Species comparisons: descriptive level, shape, and fitted-curve effect sizes only.
-- Human cortex/medulla sampling and donor identity are inseparable from species in this cohort.
-- Human cortex and medulla curves are sensitivity views, not independent biological replicates.
+- Human sampling (two healthy cortex slices, named HUK1_COR1/HUK1_MED1 at source) and donor identity are inseparable from species in this cohort.
+- The two human slice curves are sensitivity views, not independent biological replicates.
 - Ambiguous and non-tubular structures are retained in pass 1 but excluded before pass-2 nephron Harmony; the glomerular cluster is excluded because it is not part of the tubular continuum.
 - Global DPT is inspected before PT is selected. `cross_species_nephron_global_dpt.h5ad` carries it as `total_scanpy_dpt`; in `cross_species_pt_dpt.h5ad` that column is the PT-specific coordinate and the global one is kept as `global_nephron_dpt`.
 - Reviewed labels are keyed by Leiden cluster ID and are not pinned to `CLUSTERING_FINGERPRINT` in this notebook; re-read `REVIEWED_CLUSTER_LABELS` after any change to the clustering inputs.

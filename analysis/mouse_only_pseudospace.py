@@ -1012,6 +1012,15 @@ print(f'Before cell filtering: {adata_combined.n_obs} tubules x {adata_combined.
 sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)
 print(f'After cell filtering:  {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
 
+# The same measurement once the filter has run, for the before/after plot below. Taken here,
+# before the gene filter drops columns, so it reflects the tubule filter alone.
+_tubule_qc_after = pd.DataFrame({
+    'n_genes_by_counts': np.asarray((adata_combined.X > 0).sum(axis=1)).ravel(),
+    'total_counts': np.asarray(adata_combined.X.sum(axis=1)).ravel(),
+    'sample': adata_combined.obs['sample'].astype(str).to_numpy(),
+    'condition': adata_combined.obs['condition'].astype(str).to_numpy(),
+}, index=adata_combined.obs_names)
+
 # --- Low-support gene filter, now BEFORE Harmony ---------------------------------------------
 # This ran after Harmony, on the object read back from disk, so X_harmony was built with genes the
 # later gene-level analysis then discarded. Notebook 03 filters ahead of Harmony; this matches it.
@@ -1039,56 +1048,88 @@ adata_combined.layers['lognorm'] = adata_combined.X.copy()
 print("Normalized; counts in layers['counts'], log-normalized values in layers['lognorm'].")
 
 # %%
-# --- Per-tubule count distribution: what the tubule filter is actually cutting -----------------
-# Several downstream steps are sensitive to tubule size (HVG selection, the subset DPTs and the
+OUTPUT_DIR = CELLTYPING_DIR
+
+# --- Per-tubule size around the tubule filter: before and after, per sample ---------------------
+# Several downstream steps are sensitive to tubule size (HVG selection, the subset DPTs, the
 # gene-level shape analysis), so cutting one sample harder than another is a real confound rather
-# than a cosmetic QC number. Plotting the distribution per sample shows it here, at the point the
-# filter acts, instead of only as a smaller n several sections later.
-_tubule_qc_before['passes_min_genes'] = _tubule_qc_before['n_genes_by_counts'] >= MIN_GENES_PER_TUBULE
-_tubule_qc_before.to_csv(CELLTYPING_DIR / 'tubule_counts_before_filter.csv')
-_tubule_retention = _tubule_qc_before.groupby('sample', observed=True)['passes_min_genes'].agg(['size', 'sum', 'mean'])
-_tubule_retention['fraction_removed'] = 1 - _tubule_retention['mean']
-_tubule_retention.to_csv(CELLTYPING_DIR / 'tubule_retention_by_sample.csv')
+# than a cosmetic QC number. `_tubule_qc_before` is the pre-filter state captured in the cell
+# above; `_tubule_qc_after` is the same measurement once the filter has run.
+_before = _tubule_qc_before
+_before['passes_min_genes'] = _before['n_genes_by_counts'] >= MIN_GENES_PER_TUBULE
+_after = _tubule_qc_after
+_before.to_csv(OUTPUT_DIR / 'tubule_counts_before_filter.csv')
+_after.to_csv(OUTPUT_DIR / 'tubule_counts_after_filter.csv')
+_retention = _before.groupby('sample', observed=True)['passes_min_genes'].agg(['size', 'sum', 'mean'])
+_retention['fraction_removed'] = 1 - _retention['mean']
+_retention.to_csv(OUTPUT_DIR / 'tubule_retention_by_sample.csv')
 print(f"Tubule filter (>= {MIN_GENES_PER_TUBULE} detected genes): "
-      f"{int(_tubule_qc_before['passes_min_genes'].sum()):,}/{len(_tubule_qc_before):,} tubules pass, "
-      f"{1 - _tubule_qc_before['passes_min_genes'].mean():.2%} removed")
-print(_tubule_retention.to_string())
+      f"{int(_before['passes_min_genes'].sum()):,}/{len(_before):,} tubules pass, "
+      f"{1 - _before['passes_min_genes'].mean():.2%} removed")
+print(_retention.to_string())
 
-_samples = sorted(_tubule_qc_before['sample'].unique())
+_samples = sorted(_before['sample'].unique())
 _colors = dict(zip(_samples, plt.get_cmap('tab10').colors))
+_GENE_COLUMN = 'shared_n_genes' if 'shared_n_genes' in _before.columns else 'n_genes_by_counts'
+_NOUN = 'structure' if _GENE_COLUMN == 'shared_n_genes' else 'tubule'
+_GENE_AXIS = ('detected genes per structure (shared ortholog space)' if _GENE_COLUMN == 'shared_n_genes'
+              else 'detected genes per tubule')
 
-fig, axes = plt.subplots(1, 3, figsize=(19, 5))
+fig, axes = plt.subplots(2, 3, figsize=(21, 10))
 
-for sample in _samples:
-    sub = _tubule_qc_before[_tubule_qc_before['sample'] == sample]
-    axes[0].hist(sub['n_genes_by_counts'], bins=100, histtype='step', lw=1.2,
-                 color=_colors[sample], label=f'{sample} (n={len(sub):,})')
-axes[0].axvline(MIN_GENES_PER_TUBULE, color='crimson', ls='--', lw=1.6,
-                label=f'threshold = {MIN_GENES_PER_TUBULE} genes')
-axes[0].set_yscale('log')
-axes[0].set_xlabel('detected genes per tubule')
-axes[0].set_ylabel('tubules (log scale)')
-axes[0].set_title('Detected genes per tubule, before filtering')
-axes[0].legend(fontsize=7)
+for column, (frame, state) in enumerate(((_before, 'before'), (_after, 'after'))):
+    for sample in _samples:
+        sub = frame[frame['sample'] == sample]
+        axes[0, column].hist(sub[_GENE_COLUMN], bins=100, histtype='step', lw=1.2,
+                             color=_colors[sample], label=f'{sample} (n={len(sub):,})')
+    if state == 'before':
+        axes[0, column].axvline(MIN_GENES_PER_TUBULE, color='crimson', ls='--', lw=1.6,
+                                label=f'threshold = {MIN_GENES_PER_TUBULE} genes')
+    axes[0, column].set_yscale('log')
+    axes[0, column].set_xlabel(_GENE_AXIS)
+    axes[0, column].set_ylabel(f'{_NOUN}s (log scale)')
+    axes[0, column].set_title(f'Detected genes per {_NOUN}, {state} filtering')
+    axes[0, column].legend(fontsize=7)
 
-for sample in _samples:
-    sub = _tubule_qc_before[_tubule_qc_before['sample'] == sample]
-    axes[1].hist(np.log10(sub['total_counts'].to_numpy() + 1), bins=100, histtype='step',
-                 lw=1.2, color=_colors[sample], label=sample)
-axes[1].set_xlabel('log10(total counts + 1) per tubule')
-axes[1].set_ylabel('tubules')
-axes[1].set_title('Total counts per tubule, before filtering')
-axes[1].legend(fontsize=7)
+    for sample in _samples:
+        sub = frame[frame['sample'] == sample]
+        axes[1, column].hist(np.log10(sub['total_counts'].to_numpy() + 1), bins=100,
+                             histtype='step', lw=1.2, color=_colors[sample], label=sample)
+    axes[1, column].set_xlabel(f'log10(total counts + 1) per {_NOUN}')
+    axes[1, column].set_ylabel(f'{_NOUN}s')
+    axes[1, column].set_title(f'Total counts per {_NOUN}, {state} filtering')
+    axes[1, column].legend(fontsize=7)
 
-axes[2].boxplot([np.log10(_tubule_qc_before.loc[_tubule_qc_before['sample'] == s, 'total_counts'].to_numpy() + 1)
-                 for s in _samples], showfliers=False)
-axes[2].set_xticks(range(1, len(_samples) + 1))
-axes[2].set_xticklabels(_samples, rotation=30, ha='right')
-axes[2].set_ylabel('log10(total counts + 1)')
-axes[2].set_title('Per-sample spread of tubule size')
+# How much each sample lost, and what that did to its size distribution.
+_removed = (1 - _retention['mean'].reindex(_samples).to_numpy()) * 100
+axes[0, 2].bar(_samples, _removed, color=[_colors[sample] for sample in _samples])
+for index, value in enumerate(_removed):
+    axes[0, 2].text(index, value, f'{value:.0f}%', ha='center', va='bottom', fontsize=9)
+axes[0, 2].set_ylim(0, max(_removed) * 1.25)
+axes[0, 2].set_ylabel(f'% of {_NOUN}s removed')
+axes[0, 2].set_title('Removed by the tubule filter, per sample')
+axes[0, 2].tick_params(axis='x', rotation=30)
 
-fig.tight_layout()
-fig.savefig(CELLTYPING_DIR / 'tubule_count_distribution.png', dpi=200, bbox_inches='tight')
+_positions = np.arange(len(_samples)) * 3.0
+axes[1, 2].boxplot([np.log10(_before.loc[_before['sample'] == sample, 'total_counts'].to_numpy() + 1)
+                    for sample in _samples], positions=_positions - 0.6, widths=0.9,
+                   showfliers=False, patch_artist=True,
+                   boxprops=dict(facecolor='#CCCCCC', edgecolor='#888888'),
+                   medianprops=dict(color='black'))
+axes[1, 2].boxplot([np.log10(_after.loc[_after['sample'] == sample, 'total_counts'].to_numpy() + 1)
+                    for sample in _samples], positions=_positions + 0.6, widths=0.9,
+                   showfliers=False, patch_artist=True,
+                   boxprops=dict(facecolor='#7FB3D5', edgecolor='#2E6DA4'),
+                   medianprops=dict(color='black'))
+axes[1, 2].set_xticks(_positions)
+axes[1, 2].set_xticklabels(_samples, rotation=30, ha='right')
+axes[1, 2].set_ylabel('log10(total counts + 1)')
+axes[1, 2].set_title('Size per sample, before (grey) vs after (blue)')
+
+fig.suptitle(f'{_NOUN.capitalize()} size around the tubule filter '
+             f'(>= {MIN_GENES_PER_TUBULE} detected genes)', fontsize=14)
+fig.tight_layout(rect=(0, 0, 1, 0.96))
+fig.savefig(OUTPUT_DIR / 'tubule_count_distribution.png', dpi=200, bbox_inches='tight')
 plt.show()
 
 

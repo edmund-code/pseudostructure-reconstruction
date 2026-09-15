@@ -44,6 +44,7 @@ def read_ortholog_table(path: Path) -> pd.DataFrame:
 def build_one_to_one_ortholog_map(
     table: pd.DataFrame,
     overrides: Mapping[str, str] | None = None,
+    min_support: int = 3,
 ) -> pd.DataFrame:
     """Build a deterministic one-to-one human->mouse symbol map.
 
@@ -51,8 +52,25 @@ def build_one_to_one_ortholog_map(
     used automatically: only symbols with exactly one partner on both sides are
     retained.  ``overrides`` is intended for reviewed kidney-specific exceptions
     and takes precedence after removing any conflicting HCOP rows.
+    When a ``support`` column is present (standard HCOP tables), consensus support-weighted
+    reciprocal best matching is applied:
+      1. Low-confidence noise pairs supported by fewer than ``min_support`` databases are pruned.
+      2. A candidate score is computed from database support count with a tie-breaking bonus for
+         identical gene symbols.
+      3. Only mutual reciprocal best pairs (the top mouse partner for the human gene is also
+         the top human partner for that mouse gene) are retained.
+
+    When ``support`` is absent (e.g. synthetic test tables), an unweighted bidirectional
+    uniqueness filter is applied as fallback.
+
+    ``overrides`` allows reviewed kidney-specific exceptions and takes precedence after
+    removing any conflicting HCOP rows.
     """
     pairs = table[["human_symbol", "mouse_symbol"]].drop_duplicates().copy()
+    pairs = table.copy()
+    pairs["human_symbol"] = pairs["human_symbol"].map(_symbol)
+    pairs["mouse_symbol"] = pairs["mouse_symbol"].map(_symbol)
+    pairs = pairs.loc[(pairs["human_symbol"] != "") & (pairs["mouse_symbol"] != "")].copy()
     pairs["human_key"] = pairs["human_symbol"].str.upper()
     pairs["mouse_key"] = pairs["mouse_symbol"].str.upper()
     h_counts = pairs.groupby("human_key")["mouse_key"].nunique()
@@ -64,6 +82,35 @@ def build_one_to_one_ortholog_map(
     )
     clean = pairs.loc[pairs["mapping_status"].eq("hcop_one_to_one"),
                       ["human_symbol", "mouse_symbol", "mapping_status"]].copy()
+
+    if "support" in pairs.columns:
+        pairs["n_support"] = pairs["support"].apply(
+            lambda x: len(str(x).split(",")) if pd.notna(x) and str(x) != "-" else 1
+        )
+        pairs["same_name"] = (pairs["human_key"] == pairs["mouse_key"]).astype(int)
+        pairs["score"] = pairs["n_support"] * 10 + pairs["same_name"]
+
+        filtered = pairs[pairs["n_support"] >= min_support].copy()
+        best_h = filtered.sort_values(["human_key", "score"], ascending=[True, False]).drop_duplicates(subset=["human_key"], keep="first")
+        best_m = filtered.sort_values(["mouse_key", "score"], ascending=[True, False]).drop_duplicates(subset=["mouse_key"], keep="first")
+
+        clean = pd.merge(
+            best_h[["human_symbol", "mouse_symbol", "human_key", "mouse_key"]],
+            best_m[["human_symbol", "mouse_symbol", "human_key", "mouse_key"]],
+            on=["human_symbol", "mouse_symbol", "human_key", "mouse_key"],
+        )
+        clean["mapping_status"] = "hcop_one_to_one"
+    else:
+        pairs = pairs[["human_symbol", "mouse_symbol", "human_key", "mouse_key"]].drop_duplicates()
+        h_counts = pairs.groupby("human_key")["mouse_key"].nunique()
+        m_counts = pairs.groupby("mouse_key")["human_key"].nunique()
+        pairs["mapping_status"] = np.where(
+            (pairs["human_key"].map(h_counts) == 1) & (pairs["mouse_key"].map(m_counts) == 1),
+            "hcop_one_to_one",
+            "ambiguous_hcop",
+        )
+        clean = pairs.loc[pairs["mapping_status"].eq("hcop_one_to_one"),
+                          ["human_symbol", "mouse_symbol", "mapping_status"]].copy()
 
     if overrides:
         override_rows = []
@@ -85,6 +132,7 @@ def build_one_to_one_ortholog_map(
             ]
             clean = pd.concat([clean, override_df], ignore_index=True)
 
+    clean = clean[["human_symbol", "mouse_symbol", "mapping_status"]].copy()
     if clean["human_symbol"].str.upper().duplicated().any() or clean["mouse_symbol"].str.upper().duplicated().any():
         raise ValueError("Ortholog overrides create a non-bijective mapping")
     return clean.sort_values("human_symbol", key=lambda s: s.str.upper()).reset_index(drop=True)
@@ -242,3 +290,333 @@ def prepare_shared_expression(
     out.var["ribo"] = out.var_names.astype(str).str.startswith(("Rpl", "Rps", "Mrpl", "Mrps"))
     out.var["exclude_from_harmony_hvg"] = out.var["mt"] | out.var["ribo"]
     return out
+
+
+def plot_cross_species_marker_alignment(
+    adata: ad.AnnData,
+    output_path: Path | str | None = None,
+    markers: Sequence[tuple[str, str, str]] | None = None,
+    basis: str = "umap",
+    species_key: str = "comparison_species",
+    segment_key: str = "segment_class",
+    dpi: int = 200,
+):
+    """Plot side-by-side (Human vs Mouse) canonical marker alignment on embedding coordinates.
+
+    Row 0 shows the categorical segment annotation for biological context.
+    Subsequent rows display canonical nephron segment markers with synchronized
+    color scaling, sorted so high-expressing structures are rendered on top.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    if markers is None:
+        markers = [
+            ("Slc5a2", "PT-S1", "Slc5a2 (SGLT2)"),
+            ("Slc22a6", "PT-S2", "Slc22a6 (OAT1)"),
+            ("Slc22a7", "PT-S3", "Slc22a7 (OAT2)"),
+            ("Slc12a1", "mTAL", "Slc12a1 (NKCC2)"),
+            ("Slc12a3", "DCT", "Slc12a3 (NCC)"),
+            ("Aqp2", "Collecting Duct", "Aqp2 (Aquaporin-2)"),
+        ]
+
+    rep_key = f"X_{basis}" if not basis.startswith("X_") else basis
+    if rep_key not in adata.obsm:
+        raise KeyError(f"Embedding coordinates {rep_key!r} not found in adata.obsm")
+
+    coords = np.asarray(adata.obsm[rep_key])
+    expr_mat = adata.layers["lognorm"] if "lognorm" in adata.layers else adata.X
+    species = adata.obs[species_key].to_numpy()
+    is_human = (species == "human")
+    is_mouse = (species == "mouse")
+
+    segments = ["PT-S1", "PT-S2", "PT-S3", "mTAL", "DCT2", "CNT_CD", "IMCD"]
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2"]
+    seg_color_map = dict(zip(segments, colors))
+    canonical_palette = {
+        "PT": "#1f77b4",
+        "PT-S1": "#4C9BD3",
+        "PT-S2": "#5B8E55",
+        "PT-S3": "#D6B48A",
+        "ATL": "#26A69A",
+        "DTL": "#7E57C2",
+        "mTAL": "#F58518",
+        "cTAL": "#E8A33D",
+        "AL": "#F58518",
+        "DCT": "#D81B60",
+        "DCT1": "#D81B60",
+        "DCT2": "#EC6EA5",
+        "CNT": "#76B7B2",
+        "CCD": "#4E79A7",
+        "OMCD": "#9C755F",
+        "IMCD": "#593C8F",
+        "CNT_CD": "#8D6E63",
+    }
+    seg_series = adata.obs[segment_key].astype(str).to_numpy()
+    unique_present = [s for s in pd.unique(adata.obs[segment_key]) if str(s) not in ("nan", "None", "")]
+    canonical_order = list(canonical_palette.keys())
+    segments = [s for s in canonical_order if s in unique_present] + [s for s in unique_present if s not in canonical_palette]
+
+    default_colors = plt.cm.tab20.colors
+    seg_color_map = {}
+    for i, seg in enumerate(segments):
+        if seg in canonical_palette:
+            seg_color_map[seg] = canonical_palette[seg]
+        else:
+            seg_color_map[seg] = default_colors[i % len(default_colors)]
+
+    n_rows = 1 + len(markers)
+    fig = plt.figure(figsize=(11, 3.4 * n_rows))
+    gs = fig.add_gridspec(
+        n_rows, 2, width_ratios=[1, 1], wspace=0.08, hspace=0.18,
+        left=0.05, right=0.88, top=0.96, bottom=0.02
+    )
+
+    # Row 0: Segment Annotations
+    ax_h0 = fig.add_subplot(gs[0, 0])
+    ax_m0 = fig.add_subplot(gs[0, 1])
+
+    for ax, mask, sp_name in [
+        (ax_h0, is_human, f"Human ({is_human.sum():,} structures)"),
+        (ax_m0, is_mouse, f"Mouse ({is_mouse.sum():,} structures)"),
+    ]:
+        ax.scatter(coords[~mask, 0], coords[~mask, 1], c="#ececec", s=1.0, alpha=0.3, rasterized=True)
+        for seg in segments:
+            seg_mask = mask & (seg_series == seg)
+            if seg_mask.any():
+                ax.scatter(
+                    coords[seg_mask, 0], coords[seg_mask, 1],
+                    c=seg_color_map[seg], s=3.0, alpha=0.85, label=seg, rasterized=True
+                )
+        ax.set_title(f"{sp_name}\nSegment Annotation", fontsize=11, fontweight="bold", pad=8)
+        ax.axis("off")
+
+    legend_elements = [
+        Line2D([0], [0], marker="o", color="w", label=s, markerfacecolor=seg_color_map[s], markersize=8)
+        for s in segments
+    ]
+    fig.legend(
+        handles=legend_elements, loc="upper left", bbox_to_anchor=(0.89, 0.96),
+        title="Segment Class", frameon=False, fontsize=9, title_fontsize=10
+    )
+
+    cmap = plt.cm.inferno
+
+    for row_idx, (gene, seg_label, title) in enumerate(markers, start=1):
+        if gene not in adata.var_names:
+            continue
+        g_idx = adata.var_names.get_loc(gene)
+        expr = expr_mat[:, g_idx]
+        if hasattr(expr, "toarray"):
+            expr = expr.toarray().ravel()
+        else:
+            expr = np.asarray(expr).ravel()
+
+        pos_expr = expr[expr > 0]
+        vmax = float(np.percentile(pos_expr, 99)) if len(pos_expr) > 0 else 1.0
+
+        ax_h = fig.add_subplot(gs[row_idx, 0])
+        ax_m = fig.add_subplot(gs[row_idx, 1])
+
+        for ax, mask, sp_name in [(ax_h, is_human, "Human"), (ax_m, is_mouse, "Mouse")]:
+            ax.scatter(coords[~mask, 0], coords[~mask, 1], c="#f0f0f0", s=1.0, alpha=0.3, rasterized=True)
+
+            sp_coords = coords[mask]
+            sp_expr = expr[mask]
+
+            zero_mask = (sp_expr == 0)
+            ax.scatter(sp_coords[zero_mask, 0], sp_coords[zero_mask, 1], c="#cfd4d8", s=2.0, alpha=0.4, rasterized=True)
+
+            pos_sub = ~zero_mask
+            if pos_sub.any():
+                sort_order = np.argsort(sp_expr[pos_sub])
+                sc_plot = ax.scatter(
+                    sp_coords[pos_sub][sort_order, 0], sp_coords[pos_sub][sort_order, 1],
+                    c=sp_expr[pos_sub][sort_order], cmap=cmap, vmin=0, vmax=vmax,
+                    s=3.5, alpha=0.9, rasterized=True
+                )
+
+            pct_pos = (sp_expr > 0).mean() * 100
+            ax.set_title(f"{sp_name}: {title} ({pct_pos:.1f}% > 0)", fontsize=10.5, fontweight="bold", pad=6)
+            ax.axis("off")
+
+        cbar_ax = fig.add_axes([
+            0.90, gs[row_idx, 1].get_position(fig).y0 + 0.015,
+            0.015, gs[row_idx, 1].get_position(fig).height * 0.7
+        ])
+        cbar = fig.colorbar(sc_plot, cax=cbar_ax)
+        cbar.ax.tick_params(labelsize=8)
+        cbar.set_label("log-norm counts", fontsize=8)
+
+    if output_path is not None:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(output_path, dpi=dpi, bbox_inches="tight")
+        print(f"Saved side-by-side marker alignment to {output_path}")
+    return fig
+
+
+def plot_pre_filtering_tubule_qc(
+    adata: ad.AnnData,
+    output_path: Path | str | None = None,
+    basis: str = "umap",
+    leiden_key: str = "leiden_coarse",
+    coarse_key: str = "coarse_class",
+    segment_key: str = "segment_class",
+    species_key: str = "comparison_species",
+    sample_key: str = "sample",
+    remove_classes: Sequence[str] = ("Unassigned",),
+    stroma_gene: str = "Vim",
+    doublet_gene: str = "Cryab",
+    dpi: int = 200,
+):
+    """Plot a 6-panel pre-filtering diagnostic on the Pass-1 manifold.
+
+    Audits which segmented structures are kept vs removed before filtering for Pass 2:
+    - Panel A: UMAP of Kept vs Removed structures.
+    - Panel B: Leiden clusters (0-8) with kept/removed status labeled.
+    - Panel C: Species distribution (Human vs Mouse).
+    - Panel D: Non-tubular stroma / glomerular signature (e.g. Vim).
+    - Panel E: Mixed doublet / stress bridge signature (e.g. Cryab).
+    - Panel F: Retention rate bar chart by sample.
+    """
+    import matplotlib.pyplot as plt
+
+    rep_key = f"X_{basis}" if not basis.startswith("X_") else basis
+    if rep_key not in adata.obsm:
+        raise KeyError(f"Embedding coordinates {rep_key!r} not found in adata.obsm")
+
+    coords = np.asarray(adata.obsm[rep_key])
+    expr_mat = adata.layers["lognorm"] if "lognorm" in adata.layers else adata.X
+
+    is_kept = ~adata.obs[coarse_key].isin(remove_classes).to_numpy()
+    leiden = adata.obs[leiden_key].astype(str).to_numpy()
+    species = adata.obs[species_key].astype(str).to_numpy()
+    sample = adata.obs[sample_key].astype(str).to_numpy()
+
+    fig = plt.figure(figsize=(19, 12))
+    gs = fig.add_gridspec(2, 3, wspace=0.22, hspace=0.25, left=0.04, right=0.96, top=0.93, bottom=0.06)
+
+    # 1. Kept vs Removed
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.scatter(coords[is_kept, 0], coords[is_kept, 1], c="#2b7bba", s=2.5, alpha=0.7,
+                label=f"Kept: Nephron Tubules (n={is_kept.sum():,})", rasterized=True)
+    ax1.scatter(coords[~is_kept, 0], coords[~is_kept, 1], c="#e6550d", s=3.5, alpha=0.85,
+                label=f"Removed: Non-tubule / Mixed (n={(~is_kept).sum():,})", rasterized=True)
+    ax1.set_title("A. Pass-1 Filtering Decision: Kept vs Removed", fontsize=12, fontweight="bold", pad=8)
+    ax1.legend(loc="lower left", frameon=True, facecolor="white", framealpha=0.92, fontsize=9.5)
+    ax1.axis("off")
+
+    # 2. Leiden Clusters with removed clusters highlighted
+    ax2 = fig.add_subplot(gs[0, 1])
+    unique_clusters = sorted(np.unique(leiden), key=lambda x: int(x) if x.isdigit() else x)
+    palette = ["#1f77b4", "#33a02c", "#6baed6", "#9467bd", "#ff7f0e", "#e31a1c", "#ff0055", "#7f3b08", "#e377c2", "#17becf", "#bcbd22"]
+
+    import matplotlib.patheffects as PathEffects
+
+    cluster_labels = {}
+    for c in unique_clusters:
+        c_mask = (leiden == c)
+        seg = adata.obs.loc[c_mask, segment_key].iloc[0] if segment_key in adata.obs else ""
+        c_removed = bool(adata.obs.loc[c_mask, coarse_key].isin(remove_classes).mean() > 0.5)
+        status = "REMOVED" if c_removed else "kept"
+        cluster_labels[c] = f"{c}: {seg} ({status})" if seg else f"{c} ({status})"
+
+    for i, c in enumerate(unique_clusters):
+        mask = (leiden == c)
+        color = palette[i % len(palette)]
+        ax2.scatter(coords[mask, 0], coords[mask, 1], c=color, s=2.5, alpha=0.75,
+                    label=cluster_labels.get(c, c), rasterized=True)
+        if mask.any():
+            x_c, y_c = np.median(coords[mask], axis=0)
+            txt = ax2.text(x_c, y_c, str(c), ha="center", va="center", fontsize=9.5, fontweight="bold", color="black")
+            txt.set_path_effects([PathEffects.withStroke(linewidth=3.0, foreground="white")])
+
+    ax2.set_title("B. Pass-1 Leiden Clusters (0–8)", fontsize=12, fontweight="bold", pad=8)
+    ax2.legend(loc="lower left", frameon=True, facecolor="white", framealpha=0.92, fontsize=8, markerscale=2)
+    ax2.axis("off")
+
+    # 3. Species breakdown on Pass 1
+    ax3 = fig.add_subplot(gs[0, 2])
+    sp_colors = {"human": "#1f77b4", "mouse": "#ff7f0e"}
+    for sp in sorted(np.unique(species)):
+        mask = (species == sp)
+        ax3.scatter(coords[mask, 0], coords[mask, 1], c=sp_colors.get(sp, "#333333"),
+                    s=2.5, alpha=0.7, label=f"{sp.capitalize()} (n={mask.sum():,})", rasterized=True)
+    ax3.set_title("C. Species Distribution (Pass 1)", fontsize=12, fontweight="bold", pad=8)
+    ax3.legend(loc="lower left", frameon=True, facecolor="white", framealpha=0.92, fontsize=10, markerscale=2)
+    ax3.axis("off")
+
+    # Helper for gene expression panels
+    def _plot_gene(ax, gene_name, title):
+        if gene_name not in adata.var_names:
+            ax.text(0.5, 0.5, f"Gene '{gene_name}' not found", ha="center", va="center", fontsize=11)
+            ax.axis("off")
+            return
+        g_idx = adata.var_names.get_loc(gene_name)
+        expr = expr_mat[:, g_idx]
+        if hasattr(expr, "toarray"):
+            expr = expr.toarray().ravel()
+        else:
+            expr = np.asarray(expr).ravel()
+        pos = expr[expr > 0]
+        vmax = float(np.percentile(pos, 99)) if len(pos) > 0 else 1.0
+        sort_order = np.argsort(expr)
+        sc = ax.scatter(
+            coords[sort_order, 0], coords[sort_order, 1],
+            c=expr[sort_order], cmap="magma", s=2.5, alpha=0.85,
+            vmin=0, vmax=vmax, rasterized=True
+        )
+        ax.set_title(title, fontsize=12, fontweight="bold", pad=8)
+        cb = plt.colorbar(sc, ax=ax, fraction=0.035, pad=0.03)
+        cb.set_label("log-norm expression", fontsize=8.5)
+        ax.axis("off")
+
+    # 4. Cluster 7 Marker: Vim (Stroma / Glomerular / Interstitial)
+    ax4 = fig.add_subplot(gs[1, 0])
+    _plot_gene(ax4, stroma_gene, f"D. Cluster 7 Signature: {stroma_gene} (Stroma / Podocyte / Interstitial)")
+
+    # 5. Cluster 6 Marker: Cryab (Mixed / Stress / Edge Program)
+    ax5 = fig.add_subplot(gs[1, 1])
+    _plot_gene(ax5, doublet_gene, f"E. Cluster 6 Signature: {doublet_gene} (Mixed Doublet / Stress Bridge)")
+
+    # 6. Breakdown table/bar chart by sample
+    ax6 = fig.add_subplot(gs[1, 2])
+    ct = pd.crosstab(
+        adata.obs[sample_key],
+        pd.Series(np.where(is_kept, "Kept", "Removed"), index=adata.obs_names)
+    )
+    for col in ["Kept", "Removed"]:
+        if col not in ct.columns:
+            ct[col] = 0
+    ct["Total"] = ct["Kept"] + ct["Removed"]
+    ct["% Kept"] = (ct["Kept"] / ct["Total"] * 100).round(1)
+
+    samples = ct.index.tolist()
+    y_pos = np.arange(len(samples))
+    bar_height = 0.55
+
+    ax6.barh(y_pos, ct["Kept"], height=bar_height, color="#2b7bba", label="Kept Tubules", edgecolor="black", linewidth=0.5)
+    ax6.barh(y_pos, ct["Removed"], left=ct["Kept"], height=bar_height, color="#e6550d", label="Removed", edgecolor="black", linewidth=0.5)
+
+    for i, (k, r, pct) in enumerate(zip(ct["Kept"], ct["Removed"], ct["% Kept"])):
+        ax6.text(k / 2, i, f"{k:,}", va="center", ha="center", color="white", fontweight="bold", fontsize=9)
+        if r > 300:
+            ax6.text(k + r / 2, i, f"{r:,}", va="center", ha="center", color="white", fontweight="bold", fontsize=8.5)
+        ax6.text(k + r + 200, i, f"{pct}% kept", va="center", ha="left", fontweight="bold", fontsize=9, color="#333333")
+
+    ax6.set_yticks(y_pos)
+    ax6.set_yticklabels(samples, fontsize=9.5, fontweight="bold")
+    ax6.set_xlabel("Number of Segmented Structures", fontsize=10)
+    ax6.set_xlim(0, ct["Total"].max() * 1.30)
+    ax6.set_title("F. Tubule Retention by Sample", fontsize=12, fontweight="bold", pad=8)
+    ax6.legend(loc="lower right", frameon=True, fontsize=9.5)
+    ax6.spines["top"].set_visible(False)
+    ax6.spines["right"].set_visible(False)
+
+    plt.suptitle("Pre-Filtering Tubule QC & Filtering Audit (Pass-1 Harmony Manifold)", fontsize=15, fontweight="bold", y=0.98)
+
+    if output_path is not None:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(output_path, dpi=dpi, bbox_inches="tight")
+        print(f"Saved pre-filtering tubule QC to {output_path}")
+    return fig

@@ -524,6 +524,9 @@ COARSE_ORDER = list(segment_vocabulary.COARSE_FAMILIES)
 KEEP_TUBULE_CLASSES = list(segment_vocabulary.KEEP_TUBULE_CLASSES)
 REMOVE_CLASSES = list(segment_vocabulary.REMOVE_CLASSES)
 LABEL_VOCABULARY = list(segment_vocabulary.LABEL_VOCABULARY)
+# Defined here rather than down in the global-DPT cell where it is also used: the cluster
+# spatial review above already needs it, and a top-to-bottom run failed on the ordering.
+SEGMENT_DISPLAY_ORDER = list(segment_vocabulary.SEGMENT_DISPLAY_ORDER)
 
 # Family palette. Fine labels inherit their family colour, so a map holding a mix of fine and
 # coarse labels stays legible -- and the family is what the coarse continuum reports anyway.
@@ -1338,7 +1341,6 @@ TOTAL_POSITION_MARKERS = {
     'early': sorted({gene for group in ('PT-S1', 'PT-S2') for gene in NEPHRON_AXIS_MARKERS[group]}),
     'late': sorted(NEPHRON_AXIS_MARKERS['PT-S3']),
 }
-SEGMENT_DISPLAY_ORDER = list(segment_vocabulary.SEGMENT_DISPLAY_ORDER)
 PAGA_CONNECTIVITY_THRESHOLD = 0.01
 N_DIFFMAP_COMPONENTS_TO_TEST, EIGENVALUE_FLOOR, MIN_VALID_FOR_SPEARMAN = 10, 1e-8, 20
 print('PT reference axis for global-DPT orientation:', {key: len(value) for key, value in TOTAL_POSITION_MARKERS.items()})

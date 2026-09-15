@@ -2088,6 +2088,7 @@ SECTION4_CONFIG = {
     'pathway_max_genes': 150,
     'pathway_overlap_threshold': 0.6,
     'redundancy_prioritized_pathways': 40,
+    'pseudobulk_bins': 20,
     'pathway_libraries': [
         'Reactome_2022', 'MSigDB_Hallmark_2020', 'KEGG_2019_Mouse',
     ],
@@ -2757,6 +2758,230 @@ if len(pathway_results):
 
 
 print('Completed:', 'if len(pathway_results):')
+
+
+# %% [markdown]
+# ## 4.4 - Curve modules: positional programs and response programs
+#
+# A module is a group of genes that share a *shape*, not a peak. Two catalogs are discovered from the
+# fitted curves:
+#
+# * **positional** - cluster the reference (healthy mouse) curves: which genes share a normal PT pattern.
+# * **response** - cluster the mean-centred difference curves `Delta f(s) = f_human(s) - f_mouse(s)`:
+#   which genes change in the same way, independent of how big their overall offset is. Broad
+#   suppression, selective loss of the late program, peak relocation and gradient flattening then
+#   separate instead of all being "large effect".
+#
+# Clustering is on the correlation distance between grid-standardised curves, so level and amplitude do
+# not decide membership; peak position, width, monotonicity and amplitude annotate a module afterwards.
+# Peaks alone are deliberately not the grouping key (a narrow spike and a broad plateau would merge),
+# and dynamic time warping is not used because aligning peaks would erase the positional difference
+# being measured. Stability is reported under specimen omission (the balanced curves recomputed
+# without each specimen) and under a different data mixture (pooled fit vs specimen-balanced), and
+# module-pathway overlap is tested against the genes **eligible for module discovery**, BH-corrected
+# across every (module, gene set) pair.
+#
+# Every member list and the per-gene assignment are written to `curves/module_*.csv`.
+#
+
+# %%
+# Purpose: discover positional and response curve modules, with stability and enrichment.
+from pseudospace.modules import (
+    difference_curves,
+    discover_curve_modules,
+    enrich_modules,
+    module_stability,
+)
+from pseudospace.specimen import specimen_balanced_curves
+
+# Per-specimen curves for EVERY tested gene (not only the plotted shortlist): the pooled fit cannot
+# be used one specimen at a time because the condition indicator is constant within a specimen.
+specimen_full_curves = {}
+for sample_name in sorted(set(samples)):
+    mask = samples == sample_name
+    curves, _ = fit_single_condition_curves(
+        Y_genes[mask], s[mask], knots, grid, SECTION4_CONFIG['lambda_grid'],
+        gene_fit['lam_idx'], support_pct=SECTION4_CONFIG['common_support_pct'],
+    )
+    specimen_full_curves[sample_name] = curves
+
+mouse_specimens = [name for name in specimen_full_curves if name in MOUSE_SAMPLES]
+human_specimens = [name for name in specimen_full_curves if name in HUMAN_SAMPLES]
+balanced_reference = specimen_balanced_curves({k: specimen_full_curves[k] for k in mouse_specimens})
+balanced_comparison = specimen_balanced_curves({k: specimen_full_curves[k] for k in human_specimens})
+specimen_balanced_frame = pd.DataFrame({
+    'gene': gene_names,
+    'balanced_mouse_amplitude': np.nanmax(balanced_reference, axis=1) - np.nanmin(balanced_reference, axis=1),
+    'balanced_human_amplitude': np.nanmax(balanced_comparison, axis=1) - np.nanmin(balanced_comparison, axis=1),
+    'balanced_level_effect_human_minus_mouse': np.nanmean(balanced_comparison - balanced_reference, axis=1),
+})
+specimen_balanced_frame.to_csv(CURVE_OUTPUT_DIR / 'specimen_balanced_gene_amplitudes.csv', index=False)
+
+MODULE_CONFIG = {
+    'max_distance': 0.4,
+    'min_amplitude': 0.05,
+    'min_features': 10,
+}
+positional_labels, positional_modules = discover_curve_modules(
+    gene_fit['curve_healthy'], grid,
+    max_distance=MODULE_CONFIG['max_distance'],
+    min_amplitude=MODULE_CONFIG['min_amplitude'],
+    min_features=MODULE_CONFIG['min_features'],
+    feature_names=gene_names,
+)
+response_delta = difference_curves(gene_fit['curve_healthy'], gene_fit['curve_aki'])
+response_centered = difference_curves(gene_fit['curve_healthy'], gene_fit['curve_aki'], center=True)
+response_labels, response_modules = discover_curve_modules(
+    response_centered, grid,
+    max_distance=MODULE_CONFIG['max_distance'],
+    min_amplitude=MODULE_CONFIG['min_amplitude'],
+    min_features=MODULE_CONFIG['min_features'],
+    feature_names=gene_names,
+)
+
+gene_module_table = pd.DataFrame({
+    'gene': gene_names,
+    'positional_module': positional_labels.to_numpy(),
+    'response_module': response_labels.to_numpy(),
+    'delta_mean_human_minus_mouse': np.nanmean(response_delta, axis=1),
+    'delta_pattern_rms': np.sqrt(np.nanmean(
+        (response_centered - np.nanmean(response_centered, axis=1, keepdims=True)) ** 2, axis=1)),
+})
+gene_module_table.to_csv(CURVE_OUTPUT_DIR / 'module_gene_assignment.csv', index=False)
+positional_modules.to_csv(CURVE_OUTPUT_DIR / 'module_positional_catalog.csv', index=False)
+response_modules.to_csv(CURVE_OUTPUT_DIR / 'module_response_catalog.csv', index=False)
+display(positional_modules)
+display(response_modules)
+
+# Stability: same discovery on curves that drop one specimen (from the per-specimen fits) and on a
+# different data mixture (specimen-balanced instead of pooled).
+def _response_modules_from(curve_reference, curve_comparison):
+    labels, _ = discover_curve_modules(
+        difference_curves(curve_reference, curve_comparison, center=True), grid,
+        max_distance=MODULE_CONFIG['max_distance'],
+        min_amplitude=MODULE_CONFIG['min_amplitude'],
+        min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
+    )
+    return labels
+
+stability_runs = {'pooled_fit': response_labels}
+for dropped in sorted(specimen_full_curves):
+    kept = [name for name in specimen_full_curves if name != dropped]
+    kept_mouse = [name for name in kept if name in MOUSE_SAMPLES]
+    kept_human = [name for name in kept if name in HUMAN_SAMPLES]
+    if not kept_mouse or not kept_human:
+        continue                      # dropping this specimen collapses a side of the comparison
+    stability_runs[f'without_{dropped}'] = _response_modules_from(
+        specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_mouse}),
+        specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_human}),
+    )
+stability_runs['specimen_balanced_mixture'] = _response_modules_from(
+    balanced_reference, balanced_comparison
+)
+module_stability_table = module_stability(stability_runs)
+module_stability_table.to_csv(CURVE_OUTPUT_DIR / 'module_response_stability.csv', index=False)
+display(module_stability_table.round(3))
+
+# Enrichment against the pathway library, with the discovery-eligible genes as the background and
+# correction across every tested (module, gene set) pair.
+module_gene_sets = {
+    f'{row.library}: {row.pathway}': row.genes_present
+    for row in pathway_coverage[pathway_coverage['retained']].itertuples()
+}
+module_enrichment = enrich_modules(
+    {module: members.index for module, members in response_labels.groupby(response_labels, observed=True)
+     if module != 'unassigned'},
+    module_gene_sets,
+    background=gene_names,
+)
+module_enrichment.to_csv(CURVE_OUTPUT_DIR / 'module_pathway_enrichment.csv', index=False)
+print('Response modules:', int((response_labels != 'unassigned').sum()), 'genes in',
+      int(response_labels[response_labels != 'unassigned'].nunique()), 'modules;',
+      'positional modules:', int(positional_labels[positional_labels != 'unassigned'].nunique()))
+print('Module-pathway pairs tested:', len(module_enrichment), '; significant after BH (q<0.05):',
+      int((module_enrichment['p_value_adjusted'] < 0.05).sum()))
+display(module_enrichment.head(15)[[
+    'module', 'gene_set', 'n_module_genes', 'n_overlap', 'expected_overlap',
+    'p_value', 'p_value_adjusted',
+]].round(4))
+
+# A broad suppression is not a module of its own in the clustered catalog: report those genes
+# separately so "everything went down together" cannot be read as a discovered program.
+level_only = gene_module_table[
+    (gene_results.set_index('gene').reindex(gene_module_table['gene'])['difference_type'].to_numpy()
+     == 'level shift')
+]
+level_only.to_csv(CURVE_OUTPUT_DIR / 'module_level_only_genes.csv', index=False)
+print(f'Genes whose difference is a level shift rather than a pattern change: {len(level_only):,}; '
+      'module discovery is run on the mean-centred difference, so they are annotated, not clustered.')
+
+
+# %% [markdown]
+# ## 4.5 - Specimen-level summaries and coordinate robustness
+#
+# The pooled GAMs weight tubules, so a specimen with more structures contributes more everywhere and
+# the specimen mixture can drift along pseudospace. The specimen-balanced curve is the primary
+# descriptive summary from here on, with the individual specimen curves kept visible in the gene
+# figures. Pseudobulk profiles (raw counts summed per specimen and pseudospace bin) are written for
+# count-based or specimen-level modelling; bins from one specimen are repeated measurements along a
+# single coordinate, not replicates, so the number of independent units stays the number of specimens.
+#
+# Coordinate robustness: dropping a specimen and recomputing the global DPT on the remainder shows how
+# much the coordinate depends on any one specimen. A transcriptome-level feature exclusion would need
+# HVG selection and Harmony to be re-run, which is why the mouse workflow's physical-axis sensitivity
+# analysis remains the feature-exclusion check.
+#
+
+# %%
+# Purpose: specimen-level summaries and coordinate robustness.
+from pseudospace.specimen import coordinate_agreement, pseudobulk_profiles
+
+# Pseudobulk profiles from raw counts: one row per (specimen, pseudospace bin). Bins from the same
+# specimen are repeated measurements along one coordinate, not replicates.
+pseudobulk = pseudobulk_profiles(
+    adata_pt.layers['counts'], samples, s,
+    n_bins=SECTION4_CONFIG['pseudobulk_bins'],
+    gene_names=list(adata_pt.var_names),
+)
+# Keep the wide shape (one row per specimen and bin, one column per gene): the long form is the same
+# information at 10,000x the rows and nothing downstream needs it.
+pseudobulk.to_csv(CURVE_OUTPUT_DIR / 'pseudobulk_profiles.csv', index=False)
+pseudobulk_columns = [column for column in pseudobulk if column.startswith('count_')]
+print(f'Pseudobulk: {len(pseudobulk)} specimen-bin rows x {len(pseudobulk_columns)} genes; '
+      f'{pseudobulk["specimen"].nunique()} specimens; '
+      f'median {int(pseudobulk["n_structures"].median())} structures per row.')
+display(pseudobulk[[column for column in pseudobulk.columns
+                    if not column.startswith('count_')]].describe().round(3))
+
+# Coordinate robustness: drop each specimen, rebuild neighbours + diffusion map + DPT on the rest with
+# the same root rule, and compare the resulting coordinate with the full one.
+coordinate_rows = []
+for dropped in sorted(set(samples)):
+    keep = samples != dropped
+    if len(set(samples[keep])) < 2 or np.unique(c[keep]).size < 2:
+        continue
+    subset = adata_pt[keep].copy()
+    trajectory_key = 'robustness_neighbors'
+    sc.pp.neighbors(subset, use_rep='X_harmony', n_neighbors=N_NEIGHBORS, key_added=trajectory_key,
+                    random_state=RANDOM_STATE)
+    sc.tl.diffmap(subset, neighbors_key=trajectory_key, random_state=RANDOM_STATE)
+    # Root at the structure that currently sits at the lowest DPT, so the recomputed coordinate is
+    # compared from the same starting point rather than from an unrelated one.
+    subset.uns['iroot'] = int(np.argmin(subset.obs['total_scanpy_dpt'].to_numpy(dtype=float)))
+    sc.tl.dpt(subset, neighbors_key=trajectory_key)
+    recomputed = np.asarray(subset.obs['dpt_pseudotime'], dtype=float)
+    reference = adata_pt.obs['total_scanpy_dpt'].to_numpy(dtype=float)[keep]
+    agreement = coordinate_agreement(reference, recomputed)
+    agreement.update({'dropped_sample': dropped, 'n_structures': int(keep.sum())})
+    coordinate_rows.append(agreement)
+coordinate_robustness = pd.DataFrame(coordinate_rows)
+if len(coordinate_robustness):
+    coordinate_robustness.to_csv(CURVE_OUTPUT_DIR / 'coordinate_specimen_robustness.csv', index=False)
+    display(coordinate_robustness.round(3))
+    print('Specimen omission keeps the coordinate if the rank concordance stays high; a low value for '
+          'one specimen means that specimen drives the axis.')
+else:
+    print('Coordinate robustness skipped: no specimen can be dropped without collapsing a condition.')
 
 
 # %% [markdown]

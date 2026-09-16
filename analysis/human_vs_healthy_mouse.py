@@ -2943,22 +2943,49 @@ MODULE_CONFIG = {
     'min_amplitude': 0.05,
     'min_features': 10,
 }
-positional_labels, positional_modules = discover_curve_modules(
-    gene_fit['curve_healthy'], grid,
-    max_distance=MODULE_CONFIG['max_distance'],
-    min_amplitude=MODULE_CONFIG['min_amplitude'],
-    min_features=MODULE_CONFIG['min_features'],
-    feature_names=gene_names,
+MODULE_KWARGS = {
+    'max_distance': MODULE_CONFIG['max_distance'],
+    'min_amplitude': MODULE_CONFIG['min_amplitude'],
+    'min_features': MODULE_CONFIG['min_features'],
+    'feature_names': gene_names,
+}
+
+
+def _cached_module_catalog(stage, curves):
+    """Module assignment and module table for one curve matrix, both cached.
+
+    The key covers the curves, the discovery parameters and the implementation, so a rerun with
+    unchanged data and code reuses the modules instead of re-clustering.
+    """
+    inputs = {'curves': digest(curves)}
+    params = {key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'}
+    params['logic'] = NOTEBOOK_LOGIC_VERSION
+
+    def _labels():
+        labels = discover_curve_modules(curves, grid, **MODULE_KWARGS)[0]
+        return pd.DataFrame({'feature': labels.index, 'module': labels.to_numpy()})
+
+    labels_frame = cached_frame(
+        f'{stage}_labels', _labels, root=STAGE_CACHE_DIR, params=params, inputs=inputs,
+        code=code_digest(discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
+    )
+    modules = cached_frame(
+        f'{stage}_catalog',
+        lambda: discover_curve_modules(curves, grid, **MODULE_KWARGS)[1],
+        root=STAGE_CACHE_DIR, params=params, inputs=inputs,
+        code=code_digest(discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
+    )
+    series = pd.Series(labels_frame['module'].to_numpy(), index=labels_frame['feature'],
+                       name='module')
+    return series, modules
+
+
+positional_labels, positional_modules = _cached_module_catalog(
+    'module_positional', gene_fit['curve_healthy']
 )
 response_delta = difference_curves(gene_fit['curve_healthy'], gene_fit['curve_aki'])
 response_centered = difference_curves(gene_fit['curve_healthy'], gene_fit['curve_aki'], center=True)
-response_labels, response_modules = discover_curve_modules(
-    response_centered, grid,
-    max_distance=MODULE_CONFIG['max_distance'],
-    min_amplitude=MODULE_CONFIG['min_amplitude'],
-    min_features=MODULE_CONFIG['min_features'],
-    feature_names=gene_names,
-)
+response_labels, response_modules = _cached_module_catalog('module_response', response_centered)
 
 gene_module_table = pd.DataFrame({
     'gene': gene_names,
@@ -2974,32 +3001,36 @@ response_modules.to_csv(CURVE_OUTPUT_DIR / 'module_response_catalog.csv', index=
 display(positional_modules)
 display(response_modules)
 
-# Stability: same discovery on curves that drop one specimen (from the per-specimen fits) and on a
-# different data mixture (specimen-balanced instead of pooled).
-def _response_modules_from(curve_reference, curve_comparison):
-    labels, _ = discover_curve_modules(
-        difference_curves(curve_reference, curve_comparison, center=True), grid,
-        max_distance=MODULE_CONFIG['max_distance'],
-        min_amplitude=MODULE_CONFIG['min_amplitude'],
-        min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
-    )
-    return labels
 
-stability_runs = {'pooled_fit': response_labels}
-for dropped in sorted(specimen_full_curves):
-    kept = [name for name in specimen_full_curves if name != dropped]
-    kept_mouse = [name for name in kept if name in MOUSE_SAMPLES]
-    kept_human = [name for name in kept if name in HUMAN_SAMPLES]
-    if not kept_mouse or not kept_human:
-        continue                      # dropping this specimen collapses a side of the comparison
-    stability_runs[f'without_{dropped}'] = _response_modules_from(
-        specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_mouse}),
-        specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_human}),
-    )
-stability_runs['specimen_balanced_mixture'] = _response_modules_from(
-    balanced_reference, balanced_comparison
+def _compute_module_stability():
+    """Stability of the response modules under specimen omission and a different data mixture."""
+    def _reply_modules(curve_reference, curve_comparison):
+        return discover_curve_modules(
+            difference_curves(curve_reference, curve_comparison, center=True), grid, **MODULE_KWARGS
+        )[0]
+
+    runs = {'pooled_fit': response_labels}
+    for dropped in sorted(specimen_full_curves):
+        kept = [name for name in specimen_full_curves if name != dropped]
+        kept_mouse = [name for name in kept if name in MOUSE_SAMPLES]
+        kept_human = [name for name in kept if name in HUMAN_SAMPLES]
+        if not kept_mouse or not kept_human:
+            continue                  # dropping this specimen collapses a side of the comparison
+        runs[f'without_{dropped}'] = _reply_modules(
+            specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_mouse}),
+            specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_human}),
+        )
+    runs['specimen_balanced_mixture'] = _reply_modules(balanced_reference, balanced_comparison)
+    return module_stability(runs)
+
+
+module_stability_table = cached_frame(
+    'module_response_stability', _compute_module_stability, root=STAGE_CACHE_DIR,
+    params={**{key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'},
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'specimen_curves': digest(specimen_full_curves)},
+    code=code_digest(module_stability, discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
 )
-module_stability_table = module_stability(stability_runs)
 module_stability_table.to_csv(CURVE_OUTPUT_DIR / 'module_response_stability.csv', index=False)
 display(module_stability_table.round(3))
 
@@ -3009,11 +3040,19 @@ module_gene_sets = {
     f'{row.library}: {row.pathway}': row.genes_present
     for row in pathway_coverage[pathway_coverage['retained']].itertuples()
 }
-module_enrichment = enrich_modules(
-    {module: members.index for module, members in response_labels.groupby(response_labels, observed=True)
-     if module != 'unassigned'},
-    module_gene_sets,
-    background=gene_names,
+module_enrichment = cached_frame(
+    'module_pathway_enrichment',
+    lambda: enrich_modules(
+        {module: members.index
+         for module, members in response_labels.groupby(response_labels, observed=True)
+         if module != 'unassigned'},
+        module_gene_sets,
+        background=gene_names,
+    ),
+    root=STAGE_CACHE_DIR,
+    params={'logic': NOTEBOOK_LOGIC_VERSION, 'background_size': len(gene_names)},
+    inputs={'labels': digest(response_labels.to_numpy()), 'sets': digest(sorted(module_gene_sets))},
+    code=code_digest(enrich_modules), enabled=STAGE_CACHE_ENABLED,
 )
 module_enrichment.to_csv(CURVE_OUTPUT_DIR / 'module_pathway_enrichment.csv', index=False)
 print('Response modules:', int((response_labels != 'unassigned').sum()), 'genes in',
@@ -3076,26 +3115,43 @@ display(pseudobulk[[column for column in pseudobulk.columns
 
 # Coordinate robustness: drop each specimen, rebuild neighbours + diffusion map + DPT on the rest with
 # the same root rule, and compare the resulting coordinate with the full one.
-coordinate_rows = []
-for dropped in sorted(set(samples)):
-    keep = samples != dropped
-    if len(set(samples[keep])) < 2 or np.unique(c[keep]).size < 2:
-        continue
-    subset = adata_pt[keep].copy()
-    trajectory_key = 'robustness_neighbors'
-    sc.pp.neighbors(subset, use_rep='X_harmony', n_neighbors=N_NEIGHBORS, key_added=trajectory_key,
-                    random_state=RANDOM_STATE)
-    sc.tl.diffmap(subset, neighbors_key=trajectory_key, random_state=RANDOM_STATE)
-    # Root at the structure that currently sits at the lowest DPT, so the recomputed coordinate is
-    # compared from the same starting point rather than from an unrelated one.
-    subset.uns['iroot'] = int(np.argmin(subset.obs['total_scanpy_dpt'].to_numpy(dtype=float)))
-    sc.tl.dpt(subset, neighbors_key=trajectory_key)
-    recomputed = np.asarray(subset.obs['dpt_pseudotime'], dtype=float)
-    reference = adata_pt.obs['total_scanpy_dpt'].to_numpy(dtype=float)[keep]
-    agreement = coordinate_agreement(reference, recomputed)
-    agreement.update({'dropped_sample': dropped, 'n_structures': int(keep.sum())})
-    coordinate_rows.append(agreement)
-coordinate_robustness = pd.DataFrame(coordinate_rows)
+def _compute_coordinate_robustness():
+    """Recompute the global DPT with each specimen dropped and compare it with the full coordinate.
+
+    This is the most expensive part of the section (a neighbour graph and a diffusion map per
+    dropped specimen), so the table is cached under the coordinate, the specimens and the
+    parameters; a rerun with unchanged data reuses it.
+    """
+    coordinate_rows = []
+    for dropped in sorted(set(samples)):
+        keep = samples != dropped
+        if len(set(samples[keep])) < 2 or np.unique(c[keep]).size < 2:
+            continue
+        subset = adata_pt[keep].copy()
+        trajectory_key = 'robustness_neighbors'
+        sc.pp.neighbors(subset, use_rep='X_harmony', n_neighbors=N_NEIGHBORS, key_added=trajectory_key,
+                        random_state=RANDOM_STATE)
+        sc.tl.diffmap(subset, neighbors_key=trajectory_key, random_state=RANDOM_STATE)
+        # Root at the structure that currently sits at the lowest DPT, so the recomputed coordinate is
+        # compared from the same starting point rather than from an unrelated one.
+        subset.uns['iroot'] = int(np.argmin(subset.obs['total_scanpy_dpt'].to_numpy(dtype=float)))
+        sc.tl.dpt(subset, neighbors_key=trajectory_key)
+        recomputed = np.asarray(subset.obs['dpt_pseudotime'], dtype=float)
+        reference = adata_pt.obs['total_scanpy_dpt'].to_numpy(dtype=float)[keep]
+        agreement = coordinate_agreement(reference, recomputed)
+        agreement.update({'dropped_sample': dropped, 'n_structures': int(keep.sum())})
+        coordinate_rows.append(agreement)
+    coordinate_robustness = pd.DataFrame(coordinate_rows)
+
+
+coordinate_robustness = cached_frame(
+    'coordinate_specimen_robustness', _compute_coordinate_robustness, root=STAGE_CACHE_DIR,
+    params={'n_neighbors': N_NEIGHBORS, 'seed': RANDOM_STATE, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'coordinate': digest(adata_pt.obs['total_scanpy_dpt'].to_numpy()),
+            'samples': np.asarray(samples).astype(str),
+            'genes': np.asarray(adata_pt.var_names)},
+    code=code_digest(_compute_coordinate_robustness), enabled=STAGE_CACHE_ENABLED,
+)
 if len(coordinate_robustness):
     coordinate_robustness.to_csv(CURVE_OUTPUT_DIR / 'coordinate_specimen_robustness.csv', index=False)
     display(coordinate_robustness.round(3))
@@ -3157,14 +3213,27 @@ N_ENRICHMENT_PERMUTATIONS = 500
 enrichment_summary = []
 for question, column in ENRICHMENT_QUESTIONS.items():
     statistics = signed_rankings[['gene', column]].dropna().set_index('gene')[column]
-    table = camera_like_enrichment(
-        statistics,
-        module_gene_sets,
-        expression=Y_genes,
-        gene_names=gene_names,
-        background=gene_names,
-        n_permutations=N_ENRICHMENT_PERMUTATIONS,
-        min_set_size=SECTION4_CONFIG['pathway_min_genes'],
+    # One cached table per question: the key covers the signed ranking, the gene sets, the
+    # expression fingerprint and the permutation settings.
+    def _compute_signed_enrichment(statistics=statistics):
+        return camera_like_enrichment(
+            statistics,
+            module_gene_sets,
+            expression=Y_genes,
+            gene_names=gene_names,
+            background=gene_names,
+            n_permutations=N_ENRICHMENT_PERMUTATIONS,
+            min_set_size=SECTION4_CONFIG['pathway_min_genes'],
+        )
+
+    table = cached_frame(
+        f'signed_enrichment_{question}', _compute_signed_enrichment, root=STAGE_CACHE_DIR,
+        params={'question': question, 'n_permutations': N_ENRICHMENT_PERMUTATIONS,
+                'min_set_size': SECTION4_CONFIG['pathway_min_genes'],
+                'logic': NOTEBOOK_LOGIC_VERSION},
+        inputs={'statistics': digest(statistics), 'sets': digest(sorted(module_gene_sets)),
+                'expression': Y_GENES_FINGERPRINT},
+        code=code_digest(camera_like_enrichment), enabled=STAGE_CACHE_ENABLED,
     )
     table.insert(0, 'question', question)
     table.insert(2, 'ranking_column', column)

@@ -43,8 +43,6 @@
 # Every path, parameter and marker panel used below. Later sections reference these names only.
 
 # %%
-# # %load_ext autoreload
-# # %autoreload 2
 import os
 import argparse
 import re
@@ -142,7 +140,6 @@ HEATMAP_OUTPUT_DIR = RESULTS_DIR / 'heatmaps'
 # purge_stage_cache(...). NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the
 # body of a cached cell so a stored payload cannot outlive the code that produced it.
 HARMONY_VERSION = '2.0.5'   # the pip/R harmony version this run is pinned to
-NOTEBOOK_START_TIME = __import__("time").time()   # for the stale-module guard
 NOTEBOOK_LOGIC_VERSION = 1
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
@@ -954,23 +951,6 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
-# A long-lived kernel keeps whatever module objects it first imported, so editing `pseudospace/` and
-# re-running a cell silently uses the OLD code (this produced a stale-code crash that looked like a
-# fresh bug). Warn when a package file is newer than this kernel's first cell.
-import sys as _sys
-import os as _os
-
-_STALE_PACKAGE_MODULES = sorted({
-    name for name, module in list(_sys.modules.items())
-    if name.startswith('pseudospace')
-    and getattr(module, '__file__', None)
-    and _os.path.getmtime(module.__file__) > globals().get('NOTEBOOK_START_TIME', 0)
-})
-if _STALE_PACKAGE_MODULES:
-    print('WARNING: pseudospace changed on disk after this kernel imported it:',
-          ', '.join(_STALE_PACKAGE_MODULES),
-          '\n         restart the kernel (or importlib.reload those modules) before trusting results.')
-
 from pseudospace.io_qc import (
     annotate_mito_ribo_mouse_symbols,
     combine_adatas,
@@ -2324,13 +2304,13 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
-
 from pseudospace.pathways import (
     build_pathway_membership,
     member_gene_evidence,
     summarize_pathway_redundancy,
 )
 from pseudospace.levelshape import (
+    build_ls_designs,
     run_level_shape,
     sample_perm_pvalues,
     summarize_curve_effects,
@@ -3809,8 +3789,7 @@ if _ok.sum() < 0.5 * adata_pt.n_obs:
           f'{int(_ok.sum()):,}/{adata_pt.n_obs:,} PT tubules. Too few specimens carry enough '
           'glomeruli for the proxy to be meaningful.')
     physical_sensitivity = None
-    # Every name the summary section reads must exist on the skip path too, not only on the
-    # computed one: a branch-only binding is a NameError waiting for the skip case.
+    # Every name the summary section reads must exist on the skip path too.
     physical_sensitivity_paths = None
     physical_sensitivity_modules = None
 else:
@@ -4674,22 +4653,18 @@ def _response_modules(curve_reference, curve_comparison):
 
 
 def _compute_response_stability():
-    """Response-module stability: refit the pooled model without each specimen, plus another mixture.
-
-    The omission probe REFITS the model on the kept specimens instead of averaging their curves.
-    With two specimens per condition, averaging the kept side would leave a single specimen whose
-    curves are undefined outside its own pseudospace support: a degenerate input, not a stability
-    result, which is why that run reported zero modules. A refit keeps both conditions represented
-    across the whole grid and still answers "does this module survive dropping one specimen?".
-    """
-
-    def _modules_from_refit(keep):
-        fit = run_level_shape(Y_genes[keep], s[keep], c[keep], knots, grid,
-                              SECTION4_CONFIG['lambda_grid'])
-        return _response_modules(fit['curve_healthy'], fit['curve_aki'])
+    """Response-module stability under specimen omission and a different data mixture."""
     stability_runs = {'pooled_fit': response_labels}
     for dropped in sorted(specimen_full_curves):
-        stability_runs[f'without_{dropped}'] = _modules_from_refit(samples != dropped)
+        kept = [name for name in specimen_full_curves if name != dropped]
+        kept_control = [name for name in kept if name in control_samples]
+        kept_aki = [name for name in kept if name in aki_samples]
+        if not kept_control or not kept_aki:
+            continue
+        stability_runs[f'without_{dropped}'] = _response_modules(
+            specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_control}),
+            specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_aki}),
+        )
     stability_runs['specimen_balanced_mixture'] = _response_modules(balanced_healthy, balanced_aki)
     return module_stability(stability_runs)
 
@@ -4698,15 +4673,11 @@ response_stability = cached_frame(
     'module_response_stability_aki', _compute_response_stability, root=STAGE_CACHE_DIR,
     params={**{key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'},
             'logic': NOTEBOOK_LOGIC_VERSION},
-    inputs={'y': Y_GENES_FINGERPRINT, 'samples': np.asarray(samples).astype(str),
-            'specimen_curves': digest(specimen_full_curves)},
+    inputs={'specimen_curves': digest(specimen_full_curves)},
     code=code_digest(module_stability, discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
 )
 response_stability.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_stability.csv', index=False)
 display(response_stability.round(3))
-print('Read the stability table with its module counts: a leave-one-out refit can cut a different '
-      'number of modules, and the adjusted Rand index punishes that on its own. '
-      'fraction_same_module is the like-for-like view; the module counts are the first thing to check.')
 
 pathway_gene_sets = {
     f'{row.library}: {row.pathway}': row.genes_present
@@ -4756,7 +4727,17 @@ SIGNED_QUESTIONS = {
     'early_contrast': 'early_delta',
     'late_contrast': 'late_delta',
 }
-signed_enrichment_summary = []
+# `bh_adjust` is imported here for the competitive p-values; it stays deliberately unused
+# for the specimen-permutation p-values elsewhere, which are floored at 2/6 and must be read
+# as effect sizes instead.
+from pseudospace.stats_gam import bh_adjust
+
+# The variance inflation is estimated from RESIDUAL correlations: the M2 design (spline
+# basis + condition + condition-by-spline) is removed from the expression first, so shared
+# pseudospace structure does not masquerade as pathway coherence.
+_enrichment_design = build_ls_designs(s, c, knots)[2]
+_enrichment_tables = {}
+enrichment_summary = []
 for question, column in SIGNED_QUESTIONS.items():
     statistics = signed_rankings[['gene', column]].dropna().set_index('gene')[column]
     # One cached table per question: the key covers the signed ranking, the gene sets, the
@@ -4764,7 +4745,7 @@ for question, column in SIGNED_QUESTIONS.items():
     def _compute_signed_enrichment(statistics=statistics):
         return camera_like_enrichment(
             statistics, pathway_gene_sets, expression=Y_genes, gene_names=gene_names,
-            background=gene_names, n_permutations=500,
+            background=gene_names, design=_enrichment_design,
             min_set_size=SECTION4_CONFIG['pathway_min_genes'],
         )
 
@@ -4773,20 +4754,55 @@ for question, column in SIGNED_QUESTIONS.items():
         params={'question': question, 'n_permutations': 500,
                 'min_set_size': SECTION4_CONFIG['pathway_min_genes'],
                 'logic': NOTEBOOK_LOGIC_VERSION},
-        inputs={'statistics': digest(statistics), 'sets': digest(sorted(pathway_gene_sets)),
+        inputs={'statistics': digest(statistics),
+                'sets': digest(sorted((name, tuple(members)) for name, members in pathway_gene_sets.items())),
+                'design': digest(_enrichment_design),
                 'expression': Y_GENES_FINGERPRINT,
                 'background': digest(np.asarray(gene_names))},
         code=code_digest(camera_like_enrichment), enabled=STAGE_CACHE_ENABLED,
     )
-    table.insert(0, 'question', question)
-    table.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)
+    _enrichment_tables[question] = table
+
+# One correction across EVERY tested pair: the five rankings are a single family of tests, so
+# correcting them separately would let the family size drift with the number of questions.
+_enrichment_all_pairs = pd.concat(
+    [frame.assign(question=name) for name, frame in _enrichment_tables.items()], ignore_index=True
+)
+_enrichment_all_pairs['p_value_competitive_normal_adjusted'] = bh_adjust(
+    _enrichment_all_pairs['p_value_competitive_normal'].to_numpy()
+)
+
+signed_enrichment_summary = []
+for question, frame in _enrichment_tables.items():
+    frame = frame.assign(question=question, ranking_column=SIGNED_QUESTIONS[question])
+    corrected = _enrichment_all_pairs.loc[
+        _enrichment_all_pairs['question'].eq(question)
+    ].set_index('gene_set')['p_value_competitive_normal_adjusted']
+    frame['p_value_competitive_normal_adjusted'] = frame['gene_set'].map(corrected)
+    frame = frame[[
+        'question', 'gene_set', 'ranking_column', 'n_genes_tested', 'set_mean_statistic',
+        'set_mean_statistic_centred', 'variance_inflation', 'correlation_basis',
+        'p_value_competitive_normal', 'p_value_competitive_normal_adjusted',
+    ]]
+    frame.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)
+    significant = frame[frame['p_value_competitive_normal_adjusted'] < 0.05]
     signed_enrichment_summary.append({
         'question': question,
-        'n_genes_ranked': int(len(statistics)),
-        'n_sets_tested': int(table['p_value_permutation'].notna().sum()),
-        'n_significant_after_BH': int((table['p_value_permutation_adjusted'] < 0.05).sum()),
-        'median_correlation_inflation': float(table['correlation_inflation'].median()),
+        'n_genes_ranked': int(signed_rankings[['gene', SIGNED_QUESTIONS[question]]].dropna().shape[0]),
+        'n_sets_tested': int(frame['p_value_competitive_normal'].notna().sum()),
+        'n_significant_against_background_after_BH': int(len(significant)),
+        'median_variance_inflation': float(frame['variance_inflation'].median()),
+        'correlation_basis': frame['correlation_basis'].iloc[0],
     })
+    if len(significant):
+        display(significant.head(5)[[
+            'question', 'gene_set', 'n_genes_tested', 'set_mean_statistic_centred',
+            'variance_inflation', 'p_value_competitive_normal',
+            'p_value_competitive_normal_adjusted',
+        ]].round(4))
+print('Exploratory annotations: each row contrasts a gene set with the background of testable genes, '
+      'corrected across all five rankings jointly. This does not establish pathway activity, and the '
+      'units of replication are the specimens, not the genes or the sets.')
 signed_enrichment_summary = pd.DataFrame(signed_enrichment_summary)
 signed_enrichment_summary.to_csv(
     HEALTHY_VS_AKI_OUTPUT_DIR / 'signed_enrichment_summary.csv', index=False)

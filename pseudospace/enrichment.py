@@ -95,20 +95,30 @@ def signed_gene_rankings(curve_reference, curve_comparison, grid, *, gene_names=
 
 
 def camera_like_enrichment(gene_statistics, gene_sets, *, expression=None, gene_names=None,
-                           background=None, n_permutations=1000, seed=0,
+                           background=None, design=None, n_permutations=1000, seed=0,
                            min_set_size=5, correction='fdr_bh',
-                           correlation_gene_cap=200, correlation_structure_cap=2000):
-    """Competitive enrichment of signed gene statistics, with and without correlation awareness.
+                           correlation_gene_cap=200, correlation_structure_cap=2000,
+                           validate_with_permutations=False):
+    """Competitive enrichment of signed gene statistics, with a correlation-aware variance.
 
-    ``gene_statistics`` is a mapping (or Series) of gene -> signed statistic. ``gene_sets`` is a
-    mapping of set name -> genes; ``background`` restricts both to the genes that were testable
-    (default: every gene in ``gene_statistics``). ``expression`` (structures x genes) is optional and
-    only needed for the correlation-aware column: without it, ``z_correlation_aware`` is NaN.
+    The test compares a set's mean statistic with the **background** mean, not with zero: the
+    question is whether the members of this set behave differently from an average testable gene,
+    which is what a competitive null means. For a set of ``k`` genes drawn from ``N``:
 
-    The average squared correlation is estimated from at most ``correlation_gene_cap`` members and
-    ``correlation_structure_cap`` structures (seeded subsamples). That bounds the cost for the large
-    Reactome parent sets without changing what the estimate is for: an average over member pairs,
-    which does not need every pair and every cell to be stable to two decimal places.
+    * ``set_mean_statistic_centred`` = mean(member statistics) - mean(background statistics)
+    * ``p_value_competitive_normal`` = two-sided normal tail of that mean under simple random
+      sampling without replacement, i.e. sd = sd(background)/sqrt(k) * sqrt((N - k)/(N - 1)),
+      multiplied by the variance inflation ``correlation_inflation`` estimated from the set's genes
+    * ``p_value_permutation_with_replacement`` = an optional sanity check from random gene sets of
+      the same size, which ignores both the finite-population correction and the correlation
+
+    The variance inflation is the CAMERA idea - genes in a pathway are not independent - estimated
+    from the **residual** correlations when a ``design`` is supplied (the fitted trend is removed, so
+    shared pseudospace structure does not inflate it), and from mean-centred correlations otherwise.
+    ``correlation_gene_cap`` members and ``correlation_structure_cap`` structures bound the cost.
+
+    These are exploratory annotations. Nothing here is a confirmatory test: the design has two mice
+    and one human donor, so the units of replication are specimens, not genes or sets.
     """
     statistics = dict(gene_statistics) if not isinstance(gene_statistics, pd.Series) else gene_statistics.to_dict()
     statistics = {str(gene).upper(): float(value) for gene, value in statistics.items()
@@ -116,79 +126,106 @@ def camera_like_enrichment(gene_statistics, gene_sets, *, expression=None, gene_
     allowed = ({str(gene).upper() for gene in background} if background is not None
                else set(statistics))
 
-    values = np.array(list(statistics.values()), dtype=float)
-    gene_index = {gene: index for index, gene in enumerate(statistics)}
+    ordered_genes = list(statistics)
+    values = np.array([statistics[gene] for gene in ordered_genes], dtype=float)
+    gene_index = {gene: index for index, gene in enumerate(ordered_genes)}
+    background_mask = np.array([gene in allowed for gene in ordered_genes], dtype=bool)
+    if background_mask.sum() < max(2, int(min_set_size)):
+        raise ValueError('fewer testable background genes than the minimum set size')
+    background_values = values[background_mask]
+    background_mean = float(background_values.mean())
+    background_sd = float(background_values.std(ddof=1))
+    n_available = int(background_mask.sum())
+
     matrix = None
+    column_by_gene = None
     if expression is not None and gene_names is not None:
         matrix = _as_matrix(expression)
         column_by_gene = {str(gene).upper(): index for index, gene in enumerate(gene_names)}
 
     rng = np.random.default_rng(seed)
-    n_available = len(values)
     rows = []
     for name, members in gene_sets.items():
         present = np.array(sorted({gene_index[gene] for gene in
-                                   {str(member).upper() for member in members} if gene in gene_index}),
-                           dtype=int)
-        present = np.array([index for index in present
-                            if list(statistics)[index] in allowed], dtype=int)
+                                   {str(member).upper() for member in members}
+                                   if gene in gene_index}), dtype=int)
+        present = np.array([index for index in present if background_mask[index]], dtype=int)
         size = int(present.size)
-        if size < int(min_set_size) or size >= n_available:
-            rows.append({'gene_set': name, 'n_genes_tested': size, 'set_mean_statistic': np.nan,
-                         'p_value_permutation': np.nan, 'p_value_correlation_aware': np.nan,
-                         'correlation_inflation': np.nan, 'permutation_floor': np.nan})
+        if size < int(min_set_size):
+            rows.append({'gene_set': name, 'n_genes_tested': size,
+                         'set_mean_statistic': np.nan, 'set_mean_statistic_centred': np.nan,
+                         'variance_inflation': np.nan, 'correlation_basis': '',
+                         'p_value_competitive_normal': np.nan,
+                         'p_value_permutation_with_replacement': np.nan})
             continue
-        observed = float(np.mean(values[present]))
-        # competitive permutation null: random sets of the same size from the same testable pool
-        draw = rng.choice(n_available, size=(int(n_permutations), size), replace=True)
-        null_means = values[draw].mean(axis=1)
-        tail = int(np.sum(np.abs(null_means) >= abs(observed) - 1e-12))
-        p_permutation = (tail + 1) / (int(n_permutations) + 1)
+        observed = float(values[present].mean())
+        centred = observed - background_mean
 
-        inflation = np.nan
-        p_aware = np.nan
+        inflation = 1.0
+        basis = 'none'
         if matrix is not None:
-            columns = [column_by_gene[list(statistics)[index]] for index in present
-                       if list(statistics)[index] in column_by_gene]
+            columns = [column_by_gene[ordered_genes[index]] for index in present
+                       if ordered_genes[index] in column_by_gene]
             if len(columns) >= max(3, int(min_set_size)):
-                capped_columns = columns
-                if len(capped_columns) > int(correlation_gene_cap):
-                    capped_columns = list(rng.choice(capped_columns,
-                                                     size=int(correlation_gene_cap), replace=False))
-                block = (np.asarray(matrix[:, capped_columns].todense())
-                         if hasattr(matrix, 'todense') else np.asarray(matrix[:, capped_columns],
-                                                                      dtype=float))
+                capped = columns
+                if len(capped) > int(correlation_gene_cap):
+                    capped = list(rng.choice(capped, size=int(correlation_gene_cap), replace=False))
+                block = (np.asarray(matrix[:, capped].todense()) if hasattr(matrix, 'todense')
+                         else np.asarray(matrix[:, capped], dtype=float))
                 if block.shape[0] > int(correlation_structure_cap):
-                    structure_rows = rng.choice(block.shape[0],
-                                                size=int(correlation_structure_cap), replace=False)
-                    block = block[structure_rows]
+                    rows_kept = rng.choice(block.shape[0],
+                                           size=int(correlation_structure_cap), replace=False)
+                    block = block[rows_kept]
+                if design is not None:
+                    design_block = np.asarray(design, dtype=float)
+                    if design_block.shape[0] > block.shape[0]:
+                        design_block = design_block[rows_kept] if 'rows_kept' in dir() else design_block
+                    keep_rows = min(design_block.shape[0], block.shape[0])
+                    design_block, block = design_block[:keep_rows], block[:keep_rows]
+                    fitted = design_block @ (np.linalg.pinv(design_block) @ block)
+                    block = block - fitted
+                    basis = 'residual'
+                else:
+                    basis = 'mean-centred'
+                block = block - block.mean(axis=0, keepdims=True)
                 with np.errstate(invalid='ignore', divide='ignore'):
                     corr = np.corrcoef(block, rowvar=False)
                 corr = np.nan_to_num(corr, nan=0.0)
                 off_diagonal = ~np.eye(corr.shape[0], dtype=bool)
-                mean_squared = float(np.mean(corr[off_diagonal] ** 2)) if off_diagonal.any() else 0.0
-                inflation = 1.0 + (corr.shape[0] - 1) * mean_squared
-                standard_error = np.std(values[present], ddof=1) / np.sqrt(size)
-                if standard_error > 0 and inflation > 0:
-                    z_value = observed / (standard_error * np.sqrt(inflation))
-                    p_aware = 2 * (1 - norm.cdf(abs(z_value)))
+                if off_diagonal.any():
+                    mean_squared = float(np.mean(corr[off_diagonal] ** 2))
+                    inflation = 1.0 + (corr.shape[0] - 1) * mean_squared
+
+        # competitive normal tail with the finite-population correction and the correlation inflation
+        if background_sd > 0 and size < n_available:
+            sd = background_sd / np.sqrt(size) * np.sqrt((n_available - size) / (n_available - 1))
+            sd *= np.sqrt(max(inflation, 1.0))
+            z_value = centred / sd if sd > 0 else np.nan
+            p_competitive = 2 * (1 - norm.cdf(abs(z_value))) if np.isfinite(z_value) else np.nan
+        else:
+            p_competitive = np.nan
+
+        p_permutation = np.nan
+        if validate_with_permutations:
+            draw = rng.choice(n_available, size=(int(n_permutations), size), replace=True)
+            null_means = background_values[draw].mean(axis=1)
+            tail = int(np.sum(np.abs(null_means - background_mean) >= abs(centred) - 1e-12))
+            p_permutation = (tail + 1) / (int(n_permutations) + 1)
 
         rows.append({
-            'gene_set': name,
-            'n_genes_tested': size,
-            'set_mean_statistic': observed,
-            'p_value_permutation': float(p_permutation),
-            'p_value_correlation_aware': float(p_aware) if p_aware is not None else np.nan,
-            'correlation_inflation': float(inflation) if inflation is not None else np.nan,
-            'permutation_floor': 1.0 / (int(n_permutations) + 1),
+            'gene_set': name, 'n_genes_tested': size, 'set_mean_statistic': observed,
+            'set_mean_statistic_centred': centred, 'variance_inflation': inflation,
+            'correlation_basis': basis, 'p_value_competitive_normal': float(p_competitive)
+            if np.isfinite(p_competitive) else np.nan,
+            'p_value_permutation_with_replacement': p_permutation,
         })
     frame = pd.DataFrame(rows)
     if frame.empty:
         return frame
-    for column, adjusted in (('p_value_permutation', 'p_value_permutation_adjusted'),
-                             ('p_value_correlation_aware', 'p_value_correlation_aware_adjusted')):
-        frame[adjusted] = bh_adjust(frame[column].to_numpy()) if correction == 'fdr_bh' else frame[column]
-    return frame.sort_values('p_value_permutation_adjusted').reset_index(drop=True)
+    frame['p_value_competitive_normal_adjusted'] = (
+        bh_adjust(frame['p_value_competitive_normal'].to_numpy()) if correction == 'fdr_bh'
+        else frame['p_value_competitive_normal'])
+    return frame.sort_values('p_value_competitive_normal_adjusted').reset_index(drop=True)
 
 
 def score_signed_signatures(expression, signatures, *, gene_names=None, min_genes=5):

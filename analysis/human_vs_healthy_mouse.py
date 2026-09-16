@@ -93,7 +93,6 @@ for _directory in (RESULTS_DIR, CELLTYPING_DIR, HEATMAP_OUTPUT_DIR, CURVE_OUTPUT
 # pseudospace.stage_cache.cache_status(STAGE_CACHE_DIR) / purge_stage_cache(STAGE_CACHE_DIR).
 # NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the body of a cached cell so
 # the cached results cannot outlive the code that produced them.
-NOTEBOOK_START_TIME = __import__("time").time()   # for the stale-module guard
 NOTEBOOK_LOGIC_VERSION = 1
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
@@ -201,23 +200,6 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
-# A long-lived kernel keeps whatever module objects it first imported, so editing `pseudospace/` and
-# re-running a cell silently uses the OLD code (this produced a stale-code crash that looked like a
-# fresh bug). Warn when a package file is newer than this kernel's first cell.
-import sys as _sys
-import os as _os
-
-_STALE_PACKAGE_MODULES = sorted({
-    name for name, module in list(_sys.modules.items())
-    if name.startswith('pseudospace')
-    and getattr(module, '__file__', None)
-    and _os.path.getmtime(module.__file__) > globals().get('NOTEBOOK_START_TIME', 0)
-})
-if _STALE_PACKAGE_MODULES:
-    print('WARNING: pseudospace changed on disk after this kernel imported it:',
-          ', '.join(_STALE_PACKAGE_MODULES),
-          '\n         restart the kernel (or importlib.reload those modules) before trusting results.')
-
 from pseudospace.heatmaps import plot_marker_heatmap
 from pseudospace.markers import build_gene_lookup
 from pseudospace.trajectory import (
@@ -288,6 +270,29 @@ adata_combined = combine_cross_species(adatas)
 adata_combined = annotate_mito_ribo_mouse_symbols(adata_combined)
 print(f'Combined shared space: {adata_combined.n_obs:,} structures x '
       f'{adata_combined.n_vars:,} ortholog genes')
+
+# The accepted ortholog map creates a target column for every pair, so a gene absent from one input's
+# feature list would otherwise enter as a structural zero. The shared space is restricted to features
+# measured in EVERY input, and this audit records what that removed.
+_availability = adata_combined.uns.get('cross_species_availability', {})
+if _availability:
+    pd.DataFrame([{
+        'n_shared_genes': _availability.get('n_shared_genes'),
+        'n_dropped_not_measured_in_every_input': _availability.get(
+            'n_dropped_not_measured_in_every_input'),
+        'rule': _availability.get('rule', ''),
+    }]).to_csv(DIAGNOSTIC_DIR / 'cross_species_gene_availability.csv', index=False)
+    pd.DataFrame([
+        {'sample': name, 'n_species_genes_not_shared': len(symbols)}
+        for name, symbols in _availability.get('unmeasured_symbols_by_sample', {}).items()
+    ]).to_csv(DIAGNOSTIC_DIR / 'cross_species_unmeasured_genes_by_sample.csv', index=False)
+    pd.DataFrame({'dropped_symbol': _availability.get('dropped_symbols', [])}).to_csv(
+        DIAGNOSTIC_DIR / 'cross_species_dropped_gene_symbols.csv', index=False)
+    print(f'Shared space restricted to genes measured in every input: '
+          f"{_availability.get('n_shared_genes'):,} kept, "
+          f"{_availability.get('n_dropped_not_measured_in_every_input'):,} dropped because at least "
+          'one input does not contain that feature. A measured zero stays; a missing feature cannot '
+          "be read as one.")
 
 
 
@@ -2174,6 +2179,7 @@ print('Completed:', 'adata_heatmap = sc.read_h5ad(DPT_OUTPUT_PATH)')
 # %%
 # Purpose: from pseudospace.levelshape import fit_single_condition_curves, run_level_shape, summarize_curve_effects
 from pseudospace.levelshape import (
+    build_ls_designs,
     fit_single_condition_curves,
     run_level_shape,
     summarize_curve_effects,
@@ -2183,7 +2189,7 @@ from pseudospace.pathways import (
     member_gene_evidence,
     summarize_pathway_redundancy,
 )
-from pseudospace.stats_gam import as_csr, gam_internal_knots, resolve_present
+from pseudospace.stats_gam import bh_adjust, as_csr, gam_internal_knots, resolve_present
 
 # This input is needed only for the pathway comparison below.
 PATHWAY_LIBRARY_DIR = DATA_ROOT / 'mouse_vs_human' / 'pathway_gene_sets'
@@ -2394,8 +2400,17 @@ if ('counts' in adata_pt.layers) and ('pre_filter_total_counts' in adata_pt.obs.
         stage='section4_gene_fit_native_denominator', root=STAGE_CACHE_DIR,
         y_fingerprint=digest(Y_native), enabled=STAGE_CACHE_ENABLED,
     )
-    gene_results['level_effect_native_denominator'] = native_fit['level_effect']
-    gene_results['shape_rms_native_denominator'] = native_fit['shape_rms']
+    # `gene_results` is sorted by effect size at this point, while the fit arrays are in gene order:
+    # assigning them positionally compared different genes with one another. Merge on the gene name,
+    # and carry the alternative fit's own total effect so the level fraction uses the right
+    # denominator (the panel fit's `species_effect_rms` belongs to the other normalisation).
+    native_effects = pd.DataFrame({
+        'gene': gene_names,
+        'level_effect_native_denominator': native_fit['level_effect'],
+        'shape_rms_native_denominator': native_fit['shape_rms'],
+        'condition_effect_rms_native_denominator': native_fit['condition_effect_rms'],
+    })
+    gene_results = gene_results.merge(native_effects, on='gene', how='left')
     top_native = gene_results[gene_results['primary_eligible']].head(20)
     normalisation_sensitivity = pd.DataFrame([{
         'level_effect_spearman_panel_vs_native': float(spearmanr(
@@ -2409,7 +2424,7 @@ if ('counts' in adata_pt.layers) and ('pre_filter_total_counts' in adata_pt.obs.
         'top20_median_level_fraction_panel_denominator': float(top_native['level_fraction'].median()),
         'top20_median_level_fraction_native_denominator': float(np.median(
             (top_native['level_effect_native_denominator'] ** 2)
-            / np.maximum(top_native['species_effect_rms'] ** 2, 1e-12)
+            / np.maximum(top_native['condition_effect_rms_native_denominator'] ** 2, 1e-12)
         )),
     }])
     normalisation_sensitivity.to_csv(CURVE_OUTPUT_DIR / 'normalisation_sensitivity.csv', index=False)
@@ -3030,18 +3045,7 @@ display(response_modules)
 
 
 def _compute_module_stability():
-    """Response-module stability: refit the pooled model without each specimen, plus another mixture.
-
-    The omission probe REFITS the model on the kept specimens instead of averaging their curves: with
-    two specimens per side, averaging the kept side would leave one specimen whose curves are
-    undefined outside its own pseudospace support - a degenerate input rather than a stability
-    result. A refit keeps both sides represented across the whole grid.
-    """
-
-    def _modules_from_refit(keep):
-        fit = run_level_shape(Y_genes[keep], s[keep], c[keep], knots, grid,
-                              SECTION4_CONFIG['lambda_grid'])
-        return _reply_modules(fit['curve_healthy'], fit['curve_aki'])
+    """Stability of the response modules under specimen omission and a different data mixture."""
     def _reply_modules(curve_reference, curve_comparison):
         return discover_curve_modules(
             difference_curves(curve_reference, curve_comparison, center=True), grid, **MODULE_KWARGS
@@ -3049,7 +3053,15 @@ def _compute_module_stability():
 
     runs = {'pooled_fit': response_labels}
     for dropped in sorted(specimen_full_curves):
-        runs[f'without_{dropped}'] = _modules_from_refit(samples != dropped)
+        kept = [name for name in specimen_full_curves if name != dropped]
+        kept_mouse = [name for name in kept if name in MOUSE_SAMPLES]
+        kept_human = [name for name in kept if name in HUMAN_SAMPLES]
+        if not kept_mouse or not kept_human:
+            continue                  # dropping this specimen collapses a side of the comparison
+        runs[f'without_{dropped}'] = _reply_modules(
+            specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_mouse}),
+            specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_human}),
+        )
     runs['specimen_balanced_mixture'] = _reply_modules(balanced_reference, balanced_comparison)
     return module_stability(runs)
 
@@ -3058,15 +3070,11 @@ module_stability_table = cached_frame(
     'module_response_stability', _compute_module_stability, root=STAGE_CACHE_DIR,
     params={**{key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'},
             'logic': NOTEBOOK_LOGIC_VERSION},
-    inputs={'y': Y_GENES_FINGERPRINT, 'samples': np.asarray(samples).astype(str),
-            'specimen_curves': digest(specimen_full_curves)},
+    inputs={'specimen_curves': digest(specimen_full_curves)},
     code=code_digest(module_stability, discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
 )
 module_stability_table.to_csv(CURVE_OUTPUT_DIR / 'module_response_stability.csv', index=False)
 display(module_stability_table.round(3))
-print('Read the stability table with its module counts: a leave-one-out refit can cut a different '
-      'number of modules, and the adjusted Rand index punishes that on its own. '
-      'fraction_same_module is the like-for-like view; the module counts are the first thing to check.')
 
 # Enrichment against the pathway library, with the discovery-eligible genes as the background and
 # correction across every tested (module, gene set) pair.
@@ -3244,7 +3252,12 @@ ENRICHMENT_QUESTIONS = {
     'early_contrast': 'early_delta',
     'late_contrast': 'late_delta',
 }
+# The variance inflation is estimated from RESIDUAL correlations: the M2 design (spline
+# basis + condition + condition-by-spline) is removed from the expression first, so shared
+# pseudospace structure does not masquerade as pathway coherence.
+_enrichment_design = build_ls_designs(s, c, knots)[2]
 N_ENRICHMENT_PERMUTATIONS = 500
+_enrichment_tables = {}
 enrichment_summary = []
 for question, column in ENRICHMENT_QUESTIONS.items():
     statistics = signed_rankings[['gene', column]].dropna().set_index('gene')[column]
@@ -3257,7 +3270,7 @@ for question, column in ENRICHMENT_QUESTIONS.items():
             expression=Y_genes,
             gene_names=gene_names,
             background=gene_names,
-            n_permutations=N_ENRICHMENT_PERMUTATIONS,
+            design=_enrichment_design,
             min_set_size=SECTION4_CONFIG['pathway_min_genes'],
         )
 
@@ -3266,28 +3279,55 @@ for question, column in ENRICHMENT_QUESTIONS.items():
         params={'question': question, 'n_permutations': N_ENRICHMENT_PERMUTATIONS,
                 'min_set_size': SECTION4_CONFIG['pathway_min_genes'],
                 'logic': NOTEBOOK_LOGIC_VERSION},
-        inputs={'statistics': digest(statistics), 'sets': digest(sorted(module_gene_sets)),
+        inputs={'statistics': digest(statistics),
+                'sets': digest(sorted((name, tuple(members)) for name, members in module_gene_sets.items())),
+                'design': digest(_enrichment_design),
                 'expression': Y_GENES_FINGERPRINT,
                 'background': digest(np.asarray(gene_names))},
         code=code_digest(camera_like_enrichment), enabled=STAGE_CACHE_ENABLED,
     )
-    table.insert(0, 'question', question)
-    table.insert(2, 'ranking_column', column)
-    table.to_csv(CURVE_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)
-    significant = table[table['p_value_permutation_adjusted'] < 0.05]
+    _enrichment_tables[question] = table
+
+# One correction across EVERY tested pair: the five rankings are a single family of tests, so
+# correcting them separately would let the family size drift with the number of questions.
+_enrichment_all_pairs = pd.concat(
+    [frame.assign(question=name) for name, frame in _enrichment_tables.items()], ignore_index=True
+)
+_enrichment_all_pairs['p_value_competitive_normal_adjusted'] = bh_adjust(
+    _enrichment_all_pairs['p_value_competitive_normal'].to_numpy()
+)
+
+enrichment_summary = []
+for question, frame in _enrichment_tables.items():
+    frame = frame.assign(question=question, ranking_column=ENRICHMENT_QUESTIONS[question])
+    corrected = _enrichment_all_pairs.loc[
+        _enrichment_all_pairs['question'].eq(question)
+    ].set_index('gene_set')['p_value_competitive_normal_adjusted']
+    frame['p_value_competitive_normal_adjusted'] = frame['gene_set'].map(corrected)
+    frame = frame[[
+        'question', 'gene_set', 'ranking_column', 'n_genes_tested', 'set_mean_statistic',
+        'set_mean_statistic_centred', 'variance_inflation', 'correlation_basis',
+        'p_value_competitive_normal', 'p_value_competitive_normal_adjusted',
+    ]]
+    frame.to_csv(CURVE_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)
+    significant = frame[frame['p_value_competitive_normal_adjusted'] < 0.05]
     enrichment_summary.append({
         'question': question,
-        'n_genes_ranked': int(len(statistics)),
-        'n_sets_tested': int(table['p_value_permutation'].notna().sum()),
-        'n_significant_after_BH': int(len(significant)),
-        'median_correlation_inflation': float(table['correlation_inflation'].median()),
+        'n_genes_ranked': int(signed_rankings[['gene', ENRICHMENT_QUESTIONS[question]]].dropna().shape[0]),
+        'n_sets_tested': int(frame['p_value_competitive_normal'].notna().sum()),
+        'n_significant_against_background_after_BH': int(len(significant)),
+        'median_variance_inflation': float(frame['variance_inflation'].median()),
+        'correlation_basis': frame['correlation_basis'].iloc[0],
     })
     if len(significant):
         display(significant.head(5)[[
-            'question', 'gene_set', 'n_genes_tested', 'set_mean_statistic',
-            'p_value_permutation', 'p_value_permutation_adjusted',
-            'p_value_correlation_aware', 'correlation_inflation',
+            'question', 'gene_set', 'n_genes_tested', 'set_mean_statistic_centred',
+            'variance_inflation', 'p_value_competitive_normal',
+            'p_value_competitive_normal_adjusted',
         ]].round(4))
+print('Exploratory annotations: each row contrasts a gene set with the background of testable genes, '
+      'corrected across all five rankings jointly. This does not establish pathway activity, and the '
+      'units of replication are the specimens, not the genes or the sets.')
 enrichment_summary = pd.DataFrame(enrichment_summary)
 enrichment_summary.to_csv(CURVE_OUTPUT_DIR / 'signed_enrichment_summary.csv', index=False)
 display(enrichment_summary)

@@ -196,6 +196,17 @@ def map_human_to_mouse_space(
         next((h for h, m in human_to_mouse.items() if m.upper() == target.upper()), "")
         for target in target_symbols
     ]
+    # A target column exists for every accepted ortholog, but it is only a MEASUREMENT when some
+    # source gene actually fed it. The rest are structural zeros that must not be read as "this gene
+    # has no expression here" - the distinction the shared space has to carry forward.
+    measured_targets = np.zeros(len(target_symbols), dtype=bool)
+    if len(target_idx):
+        measured_targets[target_idx] = True
+    out.var["measured_in_source_input"] = measured_targets
+    out.uns["cross_species_mapping"]["n_targets_measured_in_source_input"] = int(
+        measured_targets.sum())
+    out.uns["cross_species_mapping"]["n_targets_without_source_feature"] = int(
+        (~measured_targets).sum())
     return out, report
 
 
@@ -248,8 +259,16 @@ def load_cross_species_samples(
                 "mouse_symbol": pd.Series(dtype=str),
                 "mapping_status": pd.Series(dtype=str),
             })
+        if species == "mouse":
+            # Mouse objects are already in the target space, so every column is a measurement.
+            adata.var["measured_in_source_input"] = True
+            adata.uns["cross_species_mapping"] = {
+                "n_targets_measured_in_source_input": int(adata.n_vars),
+                "n_targets_without_source_feature": 0,
+            }
         adatas[name] = adata
-        print(f"{name}: {species}, {adata.n_obs:,} tubules x {adata.n_vars:,} shared genes")
+        print(f"{name}: {species}, {adata.n_obs:,} tubules x {adata.n_vars:,} shared genes "
+              f"({int(adata.var['measured_in_source_input'].sum()):,} measured in the source input)")
 
     expected = mouse_samples | human_samples
     missing = sorted(expected - set(adatas))
@@ -259,8 +278,49 @@ def load_cross_species_samples(
     return adatas, mapping_report
 
 
-def combine_cross_species(adatas: Mapping[str, ad.AnnData]) -> ad.AnnData:
-    """Concatenate already-converted objects using the shared-gene intersection."""
+def combine_cross_species(adatas: Mapping[str, ad.AnnData], *,
+                          require_measured_in_both: bool = True) -> ad.AnnData:
+    """Concatenate already-converted objects over the genes measured in every input.
+
+    An ortholog mapping guarantees a unique counterpart, not that both input matrices contain that
+    gene. Converting human symbols creates a target column for every accepted pair and fills zeros
+    where the human input has no such feature, so a plain symbol intersection keeps those structural
+    zeros and turns "not supplied in this measurement" into apparent evidence of no expression.
+    Genes measured in only one species are therefore dropped by default, with the dropped symbols
+    recorded in ``uns['cross_species_availability']``. ``require_measured_in_both=False`` restores
+    the older symbol-only intersection for comparison.
+    """
+    if require_measured_in_both:
+        measured_sets = []
+        for name, adata in adatas.items():
+            flags = adata.var.get("measured_in_source_input")
+            if flags is None:
+                measured_sets.append(set(map(str, adata.var_names)))
+            else:
+                measured_sets.append(set(map(str, adata.var_names[np.asarray(flags, dtype=bool)])))
+        shared = set.intersection(*measured_sets) if measured_sets else set()
+        # What each object holds but cannot contribute to the joint analysis: a gene missing from the
+        # shared set was not measured in some input, whether or not this particular object has it.
+        per_species_unmeasured = {
+            str(name): sorted(set(map(str, adata.var_names)) - shared)[:500]
+            for name, adata in adatas.items()
+        }
+        all_symbols = set().union(*(set(map(str, adata.var_names)) for adata in adatas.values()))
+        dropped_union = sorted(all_symbols - shared)
+        adatas = {
+            name: adata[:, [gene for gene in adata.var_names if str(gene) in shared]]
+            for name, adata in adatas.items()
+        }
+        availability = {
+            "n_shared_genes": len(shared),
+            "n_dropped_not_measured_in_every_input": len(dropped_union),
+            "dropped_symbols": dropped_union[:500],
+            "unmeasured_symbols_by_sample": per_species_unmeasured,
+            "rule": "measured_in_source_input in every input",
+        }
+    else:
+        availability = {"n_shared_genes": None,
+                        "rule": "symbol intersection only (structural zeros retained)"}
     out = sc.concat(dict(adatas), join="inner", label="sample_from_concat", index_unique=None)
     out.obs["sample"] = out.obs["sample"].astype(str)
     out.obs["species"] = out.obs["species"].astype(str)
@@ -268,6 +328,8 @@ def combine_cross_species(adatas: Mapping[str, ad.AnnData]) -> ad.AnnData:
         out.obs_names_make_unique()
     if not out.var_names.is_unique:
         out.var_names_make_unique()
+    out.var["measured_in_both_inputs"] = bool(require_measured_in_both)
+    out.uns["cross_species_availability"] = availability
     return out
 
 

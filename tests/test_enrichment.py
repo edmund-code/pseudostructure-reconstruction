@@ -38,67 +38,81 @@ def test_signed_rankings_separate_level_amplitude_and_redistribution():
     assert by_gene.loc['late', 'early_delta'] < -0.3
 
 
-def test_camera_like_reports_a_competitive_p_and_a_correlation_inflation():
+def test_competitive_test_contrasts_with_the_background_not_zero():
+    """Every gene shifted up by the same amount must NOT be significant: the null is the background."""
     rng = np.random.default_rng(0)
-    n_structures, n_genes = 200, 60
-    latent = rng.normal(size=(n_structures, 1))
-    block = latent + 0.1 * rng.normal(size=(n_structures, 20))        # 20 correlated genes
-    noise = rng.normal(size=(n_structures, n_genes - 20))
-    expression = np.column_stack([block, noise])
+    names = [f'g{i}' for i in range(200)]
+    # every gene carries the same offset: the raw mean is large, the deviation from the background is not
+    shifted = {name: 5.0 + float(value) for name, value in zip(names, rng.normal(size=200))}
+    sets = {'half': names[:100]}
+    result = camera_like_enrichment(shifted, sets, min_set_size=5)
+    row = result.set_index('gene_set').loc['half']
+    assert row['set_mean_statistic'] > 4.5                       # raw mean is dominated by the offset
+    assert abs(row['set_mean_statistic_centred']) < 0.5
+    assert row['p_value_competitive_normal'] > 0.05, 'no deviation from the background mean'
+
+    elevated = dict(shifted)
+    elevated.update({name: shifted[name] + 4.0 for name in names[:100]})
+    result = camera_like_enrichment(elevated, sets, min_set_size=5)
+    row = result.set_index('gene_set').loc['half']
+    # the background mean includes the elevated members, so the centred effect is ~2, not exactly 2
+    assert row['set_mean_statistic_centred'] == pytest.approx(2.0, abs=0.3)
+    assert row['p_value_competitive_normal'] < 1e-3
+
+
+def test_permutation_validation_agrees_with_the_normal_approximation():
+    """The analytic competitive p must match a brute-force sampling-without-replacement null."""
+    rng = np.random.default_rng(7)
+    names = [f'g{i}' for i in range(400)]
+    statistics = {name: float(value) for name, value in zip(names, rng.normal(size=400))}
+    member_names = names[:12]
+    observed = np.mean([statistics[name] for name in member_names])
+    all_values = np.array([statistics[name] for name in names])
+    background_mean = all_values.mean()
+    draws = 20_000
+    empirical = np.array([
+        all_values[rng.choice(len(all_values), size=12, replace=False)].mean() - background_mean
+        for _ in range(draws)
+    ])
+    empirical_p = float(np.mean(np.abs(empirical) >= abs(observed - background_mean)))
+    result = camera_like_enrichment(statistics, {'set': member_names}, min_set_size=5)
+    analytic_p = float(result['p_value_competitive_normal'].iloc[0])
+    assert 0.0 < empirical_p <= 1.0 and 0.0 < analytic_p <= 1.0
+    assert 0.4 < analytic_p / max(empirical_p, 1e-4) < 2.5, (analytic_p, empirical_p)
+
+
+def test_inflation_uses_residual_correlation_when_a_design_is_given():
+    rng = np.random.default_rng(0)
+    n_structures, n_genes = 400, 30
+    trend = np.linspace(-1, 1, n_structures)[:, None]
+    block = trend @ rng.normal(size=(1, 15)) + 0.2 * rng.normal(size=(n_structures, 15))
+    expression = np.column_stack([block, rng.normal(size=(n_structures, n_genes - 15))])
     names = [f'g{i}' for i in range(n_genes)]
-    signal = rng.normal(1.0, 0.1, size=20)          # the correlated block carries the signal
-    statistics = {name: float(value) for name, value in
-                  zip(names, np.concatenate([signal, np.zeros(n_genes - 20)]))}
-    result = camera_like_enrichment(statistics, {'correlated_up': names[:20], 'noise': names[20:]},
-                                    expression=expression, gene_names=names, n_permutations=200,
-                                    seed=1, min_set_size=5)
-    by_set = result.set_index('gene_set')
-    assert by_set.loc['correlated_up', 'set_mean_statistic'] > 0.9
-    assert by_set.loc['correlated_up', 'p_value_permutation'] < 0.05
-    # the correlated block must inflate the variance of the set mean
-    assert by_set.loc['correlated_up', 'correlation_inflation'] > 1.0
-    assert np.isfinite(by_set.loc['correlated_up', 'p_value_correlation_aware'])
-    assert by_set.loc['noise', 'set_mean_statistic'] == pytest.approx(0.0)
-    assert by_set.loc['noise', 'p_value_permutation'] > 0.5
-    assert 'p_value_permutation_adjusted' in result.columns
+    statistics = {name: (1.0 if index < 15 else 0.0) for index, name in enumerate(names)}
+    design = np.column_stack([np.ones(n_structures), trend.ravel()])
+    raw = camera_like_enrichment(statistics, {'correlated': names[:15]}, expression=expression,
+                                 gene_names=names, min_set_size=5)
+    residual = camera_like_enrichment(statistics, {'correlated': names[:15]}, expression=expression,
+                                      gene_names=names, design=design, min_set_size=5)
+    raw_inflation = float(raw['variance_inflation'].iloc[0])
+    residual_inflation = float(residual['variance_inflation'].iloc[0])
+    # the shared trend is what makes the genes look correlated; removing it must lower the inflation
+    assert raw_inflation > residual_inflation > 1.0
+    assert residual['correlation_basis'].iloc[0] == 'residual'
+    assert raw['correlation_basis'].iloc[0] == 'mean-centred'
 
 
-def test_correlation_estimate_is_capped_without_losing_the_inflation():
-    """The capped estimate is a noisier version of the same number, not a different regime."""
-    rng = np.random.default_rng(4)
-    n_correlated = 30
-    latent = rng.normal(size=(400, 1))
-    expression = np.column_stack([latent + 0.1 * rng.normal(size=(400, n_correlated)),
-                                  rng.normal(size=(400, 20))])
-    names = [f'g{i}' for i in range(expression.shape[1])]
-    statistics = {name: (1.0 if index < n_correlated else 0.0)
-                  for index, name in enumerate(names)}
-    gene_sets = {'correlated': names[:n_correlated]}
-    capped = camera_like_enrichment(statistics, gene_sets, expression=expression, gene_names=names,
-                                    n_permutations=50, min_set_size=5,
-                                    correlation_gene_cap=15, correlation_structure_cap=200)
-    uncapped = camera_like_enrichment(statistics, gene_sets, expression=expression, gene_names=names,
-                                      n_permutations=50, min_set_size=5)
-    capped_inflation = float(capped['correlation_inflation'].iloc[0])
-    uncapped_inflation = float(uncapped['correlation_inflation'].iloc[0])
-    assert capped_inflation > 1.5 and uncapped_inflation > 1.5
-    assert 0.5 < capped_inflation / uncapped_inflation < 2.0
-
-
-def test_camera_like_respects_background_and_minimum_size():
+def test_small_or_out_of_background_sets_are_not_tested():
     statistics = {f'g{i}': float(i) for i in range(30)}
-    sets = {
-        'too_small': ['g0', 'g1'],
-        'outside_background': ['g26', 'g27', 'g28', 'g29'],
-        'partly_inside': ['g20', 'g21', 'g22', 'g23', 'g24', 'g25', 'g26', 'g27'],
-    }
+    sets = {'too_small': ['g0', 'g1'], 'outside_background': ['g26', 'g27', 'g28'],
+            'partly_inside': ['g20', 'g21', 'g22', 'g23', 'g24']}
     result = camera_like_enrichment(statistics, sets, background=[f'g{i}' for i in range(25)],
-                                    n_permutations=100, min_set_size=5)
+                                    min_set_size=5)
     by_set = result.set_index('gene_set')
-    assert np.isnan(by_set.loc['too_small', 'p_value_permutation'])
-    assert np.isnan(by_set.loc['outside_background', 'p_value_permutation'])
-    # only the members that sit in the background window are tested
+    assert np.isnan(by_set.loc['too_small', 'p_value_competitive_normal'])
+    assert np.isnan(by_set.loc['outside_background', 'p_value_competitive_normal'])
     assert by_set.loc['partly_inside', 'n_genes_tested'] == 5
+    assert 'p_value_competitive_normal_adjusted' in result.columns
 
 
 def test_signature_scores_use_weights_and_report_coverage():

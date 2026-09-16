@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 import anndata as ad
 
-from pseudospace.cross_species import build_one_to_one_ortholog_map, map_human_to_mouse_space
+from pseudospace.cross_species import (
+    build_one_to_one_ortholog_map,
+    combine_cross_species,
+    map_human_to_mouse_space,
+)
 
 
 def test_one_to_one_map_excludes_ambiguous_pairs_and_accepts_override():
@@ -143,3 +147,77 @@ def test_plot_coarse_cluster_visualizations(tmp_path):
         assert Path(file_path).is_file()
 
 
+
+
+def _mapping(*pairs):
+    return pd.DataFrame({
+        'human_symbol': [human for human, _ in pairs],
+        'mouse_symbol': [mouse for _, mouse in pairs],
+        'mapping_status': ['hcop_one_to_one'] * len(pairs),
+    })
+
+
+def test_targets_without_a_source_feature_are_flagged_not_measured():
+    """The map creates a column per accepted ortholog; only fed columns are measurements."""
+    mapping = _mapping(('H1', 'M1'), ('H2', 'M2'))
+    human = ad.AnnData(
+        np.array([[1.0, 0.0]]),                        # H2 present but all-zero: an observed zero
+        var=pd.DataFrame(index=['H1', 'H2']),
+        obs=pd.DataFrame(index=['cell1']),
+    )
+    human.obs['sample'] = 'human'
+    human.obs['species'] = 'human'
+    converted, _ = map_human_to_mouse_space(human, _mapping(('H1', 'M1'), ('H2', 'M2'), ('H3', 'M3')))
+    assert list(converted.var_names) == ['M1', 'M2', 'M3']
+    assert converted.var['measured_in_source_input'].tolist() == [True, True, False]
+    # the measured-but-zero gene is kept: it is information, unlike the unfed column
+    assert converted[:, 'M2'].X.sum() == 0
+    assert converted.uns['cross_species_mapping']['n_targets_without_source_feature'] == 1
+
+
+def test_combine_drops_genes_not_measured_in_every_input_and_records_them():
+    mouse = ad.AnnData(
+        np.array([[1.0, 2.0, 3.0]]),
+        var=pd.DataFrame(index=['M1', 'M2', 'M3']),
+        obs=pd.DataFrame(index=['cell1']),
+    )
+    mouse.obs['sample'] = 'ctrl'
+    mouse.obs['species'] = 'mouse'
+    mouse.var['measured_in_source_input'] = True
+    human = ad.AnnData(
+        np.array([[5.0, 0.0]]),
+        var=pd.DataFrame(index=['H1', 'H2']),
+        obs=pd.DataFrame(index=['cell1']),
+    )
+    human.obs['sample'] = 'human'
+    human.obs['species'] = 'human'
+    converted, _ = map_human_to_mouse_space(human, _mapping(('H1', 'M1'), ('H2', 'M2')))
+    combined = combine_cross_species({'ctrl': mouse, 'human': converted})
+    assert list(combined.var_names) == ['M1', 'M2'], 'M3 was never in the human input'
+    assert combined.var['measured_in_both_inputs'].all()
+    audit = combined.uns['cross_species_availability']
+    assert audit['n_shared_genes'] == 2
+    assert audit['n_dropped_not_measured_in_every_input'] == 1
+    assert audit['dropped_symbols'] == ['M3']
+    assert 'ctrl' in audit['unmeasured_symbols_by_sample']
+
+
+def test_combine_can_reproduce_the_older_symbol_intersection():
+    """The gate is the fix; turning it off must give the old structural-zero behaviour back."""
+    mouse = ad.AnnData(np.array([[1.0, 2.0]]), var=pd.DataFrame(index=['M1', 'M2']),
+                       obs=pd.DataFrame(index=['cell1']))
+    mouse.obs['sample'] = 'ctrl'
+    mouse.obs['species'] = 'mouse'
+    mouse.var['measured_in_source_input'] = True
+    human = ad.AnnData(np.array([[5.0]]), var=pd.DataFrame(index=['H1']),
+                       obs=pd.DataFrame(index=['cell1']))
+    human.obs['sample'] = 'human'
+    human.obs['species'] = 'human'
+    # H2 is an accepted ortholog of M2 but is absent from this human input
+    converted, _ = map_human_to_mouse_space(human, _mapping(('H1', 'M1'), ('H2', 'M2')))
+    assert list(converted.var_names) == ['M1', 'M2']
+    gated = combine_cross_species({'ctrl': mouse, 'human': converted})
+    assert list(gated.var_names) == ['M1'], 'M2 is a structural zero in the human input'
+    ungated = combine_cross_species({'ctrl': mouse, 'human': converted},
+                                    require_measured_in_both=False)
+    assert list(ungated.var_names) == ['M1', 'M2'], 'the old intersection kept the zero column'

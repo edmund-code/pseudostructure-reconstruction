@@ -72,6 +72,24 @@ so the independent units remain the specimens. Before any condition or species c
 detection/abundance per side, ratio-versus-abundance, within-side gradients, the matched-position
 per-specimen contrast, and the capture summary.
 
+## Rerunning: the stage cache
+
+Expensive pure stages (Harmony embeddings, the clustering object, the nested GAM fits, module
+discovery, enrichment sweeps, the specimen-omission coordinate check) are stored under
+`results/<workflow>/stage_cache/` and keyed by their parameters, their input fingerprints and the
+implementation (`pseudospace.stage_cache`). A rerun with unchanged code reloads them and prints
+`[stage cache] hit <stage> (key ...)` for each hit; nothing is skipped silently. Editing the
+parameters or the inputs (including the expression matrix) changes the key and recomputes the stage.
+
+```bash
+PSEUDOSPACE_STAGE_CACHE=0 python analysis/mouse_only_pseudospace.py   # force a clean rebuild
+python -c "from pseudospace.stage_cache import cache_status, purge_stage_cache as p; \
+           print(cache_status('results/mouse_only_v5/stage_cache')); print(p('results/mouse_only_v5/stage_cache'))"
+```
+
+`NOTEBOOK_LOGIC_VERSION` in each notebook's configuration cell is part of every key: bump it after
+editing the body of a cached cell. Validation and guard cells are deliberately never cached.
+
 ## Caveats that must travel with the numbers
 
 - The 2-vs-2 permutation p-floor is **2/6**, not 1/6: six relabelings form three mirror-image pairs

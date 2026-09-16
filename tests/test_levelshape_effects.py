@@ -86,3 +86,24 @@ def test_zero_variance_curve_does_not_produce_a_pattern_change():
     out = summarize_curve_effects(reference, comparison).iloc[0]
     assert np.isnan(out['pattern_rms_z'])
     assert out['difference_type'] == 'level shift'
+
+
+def test_effect_columns_that_collide_with_a_fit_table_are_identifiable():
+    """`shape_rms`/`level_effect` exist in both the fit table and this summary.
+
+    The notebooks therefore merge only the new columns; if this set ever gains a name that a fit
+    table already carries, the merge would silently rename rather than overwrite.
+    """
+    reference = _curves(1.0 + 2.0 * GRID)
+    comparison = _curves(3.0 + 2.0 * GRID)
+    summary = summarize_curve_effects(reference, comparison, feature_names=['gene'])
+    fit_table_columns = {'gene', 'shape_rms', 'level_effect', 'condition_effect_rms',
+                        'curve_spearman', 'amplitude_healthy', 'amplitude_aki'}
+    overlap = fit_table_columns & set(summary.columns)
+    assert overlap == {'shape_rms', 'level_effect', 'condition_effect_rms'}
+    merged_new_columns = ['level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference',
+                         'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio',
+                         'difference_type']
+    assert not (set(merged_new_columns) & overlap), 'the notebook merge list must avoid these'
+    for column in merged_new_columns:
+        assert column in summary.columns

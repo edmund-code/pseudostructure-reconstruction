@@ -105,6 +105,13 @@ tables under `docs/results/`.
 - Keep scientific caveats beside result summaries, not in a separate file.
 - `pseudospace/` modules are extracted from the notebooks and keep notebook-equivalent code;
   prefer adding reusable logic there and thin orchestration in `analysis/`.
+- **Expensive stages are cached, keyed by parameters + inputs + code** (`pseudospace/stage_cache.py`,
+  stored under `results/<workflow>/stage_cache/`). A rerun of an unchanged notebook reloads them and
+  prints `[stage cache] hit ...` for each; `PSEUDOSPACE_STAGE_CACHE=0` forces a full rebuild, and
+  `pseudospace.stage_cache.cache_status(...)`/`purge_stage_cache(...)` inspect or clear it. Cached
+  cells carry a `NOTEBOOK_LOGIC_VERSION` in their key: bump it in the config cell whenever you change
+  the body of a cached cell, so a stale payload cannot outlive the code that produced it. Never put
+  validation or guard cells behind the cache (Harmony version, input existence, fingerprint checks).
 - **Commit and push after every change.** Version control is the safety net here: once an edit is
   verified, commit it and push to `origin/main`
   (`https://github.com/edmund-code/pseudostructure-reconstruction.git`) rather than leaving work

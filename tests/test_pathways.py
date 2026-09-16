@@ -75,6 +75,25 @@ def test_membership_reports_every_coverage_stage_and_keeps_excluded_pathways():
     assert 'more than 5' in by_pathway.loc['too_big', 'exclusion_reason']
 
 
+def test_membership_exposes_the_tested_subset_separately_from_the_assayed_set():
+    """Downstream scoring indexes a tested-gene table, so it must not receive untested symbols."""
+    library = {'mixed': ['SLC12A1', 'UMOD', 'KCNJ1', 'ATP6V0D2', 'RHCG']}
+    membership = build_pathway_membership(
+        library, UNIVERSE, library_name='Test_2024', min_genes=3,
+        tested=['SLC12A1', 'UMOD', 'KCNJ1'],          # two assayed members fail the filter
+    )
+    row = membership.iloc[0]
+    assert row['n_assayed'] == 5
+    assert row['n_tested'] == 3
+    assert row['genes_present'] == ['Kcnj1', 'Slc12a1', 'Umod']   # universe spelling
+    assert row['n_genes_present'] == 3
+    assert row['genes_assayed'] == ['Atp6v0d2', 'Kcnj1', 'Rhcg', 'Slc12a1', 'Umod']
+    # without a tested set the assayed members are the present ones (backwards compatible)
+    without_filter = build_pathway_membership(library, UNIVERSE, library_name='Test_2024', min_genes=3)
+    assert without_filter.iloc[0]['genes_present'] == ['Atp6v0d2', 'Kcnj1', 'Rhcg',
+                                                       'Slc12a1', 'Umod']
+
+
 def test_redundancy_groups_pathways_sharing_almost_all_members():
     membership = pd.DataFrame({
         'library': ['L'] * 3,

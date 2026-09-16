@@ -3077,8 +3077,13 @@ gene_results = pd.DataFrame({
 gene_curve_effects = summarize_curve_effects(
     gene_ls['curve_healthy'], gene_ls['curve_aki'], feature_names=gene_names
 )
+# Only the columns the fit table does not already carry are merged: `shape_rms`, `level_effect` and
+# `condition_effect_rms` come from the fit itself, and a straight merge would suffix them
+# (`shape_rms_x`/`shape_rms_y`) and break every table that selects them.
+gene_curve_effects = gene_curve_effects.rename(columns={'feature': 'gene'})
 gene_results = gene_results.merge(
-    gene_curve_effects.rename(columns={'feature': 'gene'}), on='gene', how='left'
+    gene_curve_effects[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference', 'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio', 'difference_type']],
+    on='gene', how='left',
 ).sort_values('shape_rms', ascending=False).reset_index(drop=True)
 top_shape_genes = gene_results.head(20)
 print('Top-20 shape-ranked genes: median level fraction '

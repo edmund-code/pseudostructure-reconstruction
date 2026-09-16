@@ -86,6 +86,19 @@ for _directory in (RESULTS_DIR, CELLTYPING_DIR, HEATMAP_OUTPUT_DIR, CURVE_OUTPUT
                    DIAGNOSTIC_DIR):
     _directory.mkdir(parents=True, exist_ok=True)
 
+# --- Stage cache -------------------------------------------------------------------------------
+# Expensive pure stages are keyed by their parameters, their inputs and their code, so pressing
+# "Run All" again reloads them instead of recomputing. Every hit is printed. Disable for a clean
+# rebuild with PSEUDOSPACE_STAGE_CACHE=0; inspect or clear it with
+# pseudospace.stage_cache.cache_status(STAGE_CACHE_DIR) / purge_stage_cache(STAGE_CACHE_DIR).
+# NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the body of a cached cell so
+# the cached results cannot outlive the code that produced them.
+NOTEBOOK_LOGIC_VERSION = 1
+STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
+STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
+STAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+print(f'Stage cache: {"on" if STAGE_CACHE_ENABLED else "off"} ({STAGE_CACHE_DIR})')
+
 
 
 print(f'Project: {PROJECT_DIR.name}')
@@ -172,6 +185,20 @@ from pseudospace.cross_species import (
 )
 from pseudospace.io_qc import annotate_mito_ribo_mouse_symbols, sample_name_from_path
 from pseudospace.harmony import run_harmony_rpy2, select_harmony_hvgs_by_condition
+from pseudospace.stage_cache import (
+    cached_anndata,
+    cached_frame,
+    cached_payload,
+    cached_perm_pvalues,
+    cached_run_level_shape,
+    cache_status,
+    code_digest,
+    digest,
+    fingerprint_anndata,
+    stage_is_fresh,
+    stage_key,
+    stage_mark_fresh,
+)
 from pseudospace.heatmaps import plot_marker_heatmap
 from pseudospace.markers import build_gene_lookup
 from pseudospace.trajectory import (
@@ -457,63 +484,94 @@ plt.show()
 # %%
 # Purpose: # Uncorrected PCA/UMAP is retained as the before-Harmony reference.
 # Uncorrected PCA/UMAP is retained as the before-Harmony reference.
-adata_hvg = adata_combined[:, adata_combined.var[hvg_col]].copy()
-adata_hvg.X = adata_hvg.layers['lognorm'].copy()
-sc.tl.pca(adata_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
-adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
-
-sc.pp.neighbors(
-    adata_combined, use_rep='X_pca', n_neighbors=HARMONY_NEIGHBORS_N,
-    key_added='pre_harmony', random_state=RANDOM_STATE,
+# Both pass-1 embeddings are one cached artifact (`cross_species_harmony_pass1.h5ad` plus a key
+# sidecar): when the parameters, the input matrix and the implementation are unchanged, the next
+# run loads them and only redraws the figures.
+PASS1_CACHE_KEY = stage_key(
+    'pass1_embeddings',
+    params={'HVGs': N_HVGS, 'hvg_min_mean': HARMONY_HVG_MIN_MEAN,
+            'hvg_max_mean': HARMONY_HVG_MAX_MEAN, 'hvg_min_disp': HARMONY_HVG_MIN_DISP,
+            'pca_comps': HARMONY_PCA_N_COMPS, 'theta': HARMONY_THETA,
+            'lambda': HARMONY_LAMBDA, 'max_iter': HARMONY_MAX_ITER, 'tau': HARMONY_TAU,
+            'neighbors': HARMONY_NEIGHBORS_N, 'umap_min_dist': HARMONY_UMAP_MIN_DIST,
+            'umap_spread': HARMONY_UMAP_SPREAD, 'batch_key': BATCH_KEY, 'seed': RANDOM_STATE,
+            'harmony_version': HARMONY_EXPECTED_VERSION, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'matrix': fingerprint_anndata(adata_combined)},
+    code=code_digest(run_harmony_rpy2, select_harmony_hvgs_by_condition),
 )
-sc.tl.umap(
-    adata_combined, neighbors_key='pre_harmony', min_dist=HARMONY_UMAP_MIN_DIST,
-    spread=HARMONY_UMAP_SPREAD, random_state=RANDOM_STATE,
-)
-adata_combined.obsm['X_umap_pre_harmony'] = adata_combined.obsm['X_umap'].copy()
-sc.pl.umap(
-    adata_combined, color=['sample', 'comparison_species'], ncols=2, frameon=False,
-    title=['Pre-Harmony: sample', 'Pre-Harmony: species'],
-)
+if STAGE_CACHE_ENABLED and stage_is_fresh(HARMONY_OUTPUT_PATH, PASS1_CACHE_KEY):
+    print(f'[stage cache] hit pass-1 embeddings (key {PASS1_CACHE_KEY}); loading '
+          f'{HARMONY_OUTPUT_PATH.name} and redrawing the pre-Harmony figure')
+    adata_combined = sc.read_h5ad(HARMONY_OUTPUT_PATH)
+    adata_hvg = adata_combined[:, adata_combined.var[hvg_col]].copy()
+    PASS1_LOADED_FROM_CACHE = True
+    sc.pl.embedding(adata_combined, basis='X_umap_pre_harmony',
+                    color=['sample', 'comparison_species'], ncols=2, frameon=False,
+                    title=['Pre-Harmony: sample', 'Pre-Harmony: species'])
+else:
+    adata_hvg = adata_combined[:, adata_combined.var[hvg_col]].copy()
+    adata_hvg.X = adata_hvg.layers['lognorm'].copy()
+    sc.tl.pca(adata_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
+    adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
 
-
-print('Completed:', '# Uncorrected PCA/UMAP is retained as the before-Harmony reference.')
+    sc.pp.neighbors(
+        adata_combined, use_rep='X_pca', n_neighbors=HARMONY_NEIGHBORS_N,
+        key_added='pre_harmony', random_state=RANDOM_STATE,
+    )
+    sc.tl.umap(
+        adata_combined, neighbors_key='pre_harmony', min_dist=HARMONY_UMAP_MIN_DIST,
+        spread=HARMONY_UMAP_SPREAD, random_state=RANDOM_STATE,
+    )
+    adata_combined.obsm['X_umap_pre_harmony'] = adata_combined.obsm['X_umap'].copy()
+    sc.pl.umap(
+        adata_combined, color=['sample', 'comparison_species'], ncols=2, frameon=False,
+        title=['Pre-Harmony: sample', 'Pre-Harmony: species'],
+    )
 
 
 # %%
-# Purpose: print(f'Running deterministic R Harmony on {adata_hvg.n_obs:,} structures x '
-print(f'Running deterministic R Harmony on {adata_hvg.n_obs:,} structures x '
-      f'{adata_hvg.n_vars:,} shared HVGs.')
-ro.r(f'set.seed({RANDOM_STATE})')
-adata_hvg = run_harmony_rpy2(
-    adata_hvg,
-    batch_key=BATCH_KEY,  # 'sample': integrates cross-species & intra-species slide batches simultaneously
-    n_pcs=HARMONY_N_PCS,
-    theta=HARMONY_THETA,
-    lambda_val=HARMONY_LAMBDA,
-    max_iter=HARMONY_MAX_ITER,
-    tau=HARMONY_TAU,
-)
-adata_combined.obsm['X_harmony'] = adata_hvg.obsm['X_harmony'].copy()
-adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
+# Purpose: pass-1 Harmony embedding (cached) + figure.
+# The Harmony run, the Harmony neighbour graph and its UMAP are the expensive half of pass 1; the
+# key was built in the previous cell from the same parameters, inputs and implementation.
+if PASS1_LOADED_FROM_CACHE:
+    print('[stage cache] hit pass-1 embeddings: Harmony and its UMAP were not recomputed')
+    sc.pl.embedding(adata_combined, basis='X_umap',
+                    color=['sample', 'comparison_species', 'region'], ncols=3, frameon=False)
+    print(f'Pass-1 object reused: {HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
+else:
+    print(f'Running deterministic R Harmony on {adata_hvg.n_obs:,} structures x '
+          f'{adata_hvg.n_vars:,} shared HVGs.')
+    ro.r(f'set.seed({RANDOM_STATE})')
+    adata_hvg = run_harmony_rpy2(
+        adata_hvg,
+        batch_key=BATCH_KEY,  # 'sample': integrates cross-species and intra-species slide batches
+        n_pcs=HARMONY_N_PCS,
+        theta=HARMONY_THETA,
+        lambda_val=HARMONY_LAMBDA,
+        max_iter=HARMONY_MAX_ITER,
+        tau=HARMONY_TAU,
+    )
+    adata_combined.obsm['X_harmony'] = adata_hvg.obsm['X_harmony'].copy()
+    adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
 
-sc.pp.neighbors(
-    adata_combined, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
-    random_state=RANDOM_STATE,
-)
-sc.tl.umap(
-    adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-    random_state=RANDOM_STATE,
-)
-sc.pl.umap(
-    adata_combined,
-    color=['sample', 'comparison_species', 'region'],
-    ncols=3,
-    frameon=False,
-)
-adata_combined.write(HARMONY_OUTPUT_PATH)
-print(f'Saved pass-1 object: {HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
-
+    sc.pp.neighbors(
+        adata_combined, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
+        random_state=RANDOM_STATE,
+    )
+    sc.tl.umap(
+        adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+        random_state=RANDOM_STATE,
+    )
+    sc.pl.umap(
+        adata_combined,
+        color=['sample', 'comparison_species', 'region'],
+        ncols=3,
+        frameon=False,
+    )
+    adata_combined.write(HARMONY_OUTPUT_PATH)
+    stage_mark_fresh(HARMONY_OUTPUT_PATH, PASS1_CACHE_KEY, stage='pass1_embeddings',
+                     params={'logic': NOTEBOOK_LOGIC_VERSION})
+    print(f'Saved pass-1 object: {HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
 
 
 # %% [markdown]
@@ -650,20 +708,27 @@ sc.pp.highly_variable_genes(
 )
 feature_mask = adata_all.var['highly_variable'].to_numpy(dtype=bool)
 adata_all.var['selected_for_clustering'] = feature_mask
-adata_cluster = adata_all[:, feature_mask].copy()
-
 # Cluster in the integrated representation without supplying any cell-type marker panel.
-sc.pp.neighbors(
-    adata_cluster, n_neighbors=N_NEIGHBORS, use_rep='X_harmony',
-    random_state=RANDOM_STATE,
-)
-sc.tl.leiden(
-    adata_cluster, resolution=COARSE_RESOLUTION, key_added='leiden_coarse',
-    flavor='igraph', n_iterations=2, directed=False, random_state=RANDOM_STATE,
-)
-sc.tl.umap(
-    adata_cluster, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-    random_state=RANDOM_STATE,
+# The neighbour graph, the Leiden partition and the cluster UMAP depend only on the pass-1 object
+# and these parameters, so they are cached; the DE table below is not (it is attached to the full
+# gene matrix, which is not worth writing to the cache).
+def _compute_cluster_object():
+    obj = adata_all[:, feature_mask].copy()
+    sc.pp.neighbors(obj, n_neighbors=N_NEIGHBORS, use_rep='X_harmony', random_state=RANDOM_STATE)
+    sc.tl.leiden(obj, resolution=COARSE_RESOLUTION, key_added='leiden_coarse', flavor='igraph',
+                 n_iterations=2, directed=False, random_state=RANDOM_STATE)
+    sc.tl.umap(obj, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+               random_state=RANDOM_STATE)
+    return obj
+
+adata_cluster = cached_anndata(
+    'cluster_object', _compute_cluster_object, root=STAGE_CACHE_DIR,
+    params={'resolution': COARSE_RESOLUTION, 'n_neighbors': N_NEIGHBORS,
+            'n_hvgs': int(feature_mask.sum()), 'seed': RANDOM_STATE,
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'pass1_object': digest(HARMONY_OUTPUT_PATH)},
+    code=code_digest(_compute_cluster_object),
+    enabled=STAGE_CACHE_ENABLED,
 )
 
 # Transfer cluster membership to the full retained-gene matrix before testing.
@@ -1308,45 +1373,66 @@ display(tubule_filter_audit)
 
 
 # %%
-# Purpose: # Pass-2 Harmony on the reviewed tubular-nephron cohort; labels are carried, never recomputed.
-# Pass-2 Harmony on the reviewed tubular-nephron cohort; labels are carried, never recomputed.
-adata_tubule = select_harmony_hvgs_by_condition(
-    adata_tubule,
-    group_key='comparison_species',
-    groups=SPECIES_GROUPS,
-    mode='intersection',
-    min_mean=HARMONY_HVG_MIN_MEAN,
-    max_mean=HARMONY_HVG_MAX_MEAN,
-    min_disp=HARMONY_HVG_MIN_DISP,
+# Purpose: Pass-2 Harmony on the reviewed tubular-nephron cohort; labels are carried, never recomputed.
+# Cached like pass 1: the cohort, the parameters and the implementation form the key, so a rerun with
+# unchanged code reloads the pass-2 embeddings instead of re-running Harmony and its UMAP.
+PASS2_CACHE_KEY = stage_key(
+    'pass2_embeddings',
+    params={'hvg_min_mean': HARMONY_HVG_MIN_MEAN, 'hvg_max_mean': HARMONY_HVG_MAX_MEAN,
+            'hvg_min_disp': HARMONY_HVG_MIN_DISP, 'pca_comps': HARMONY_PCA_N_COMPS,
+            'theta': HARMONY_THETA, 'lambda': HARMONY_LAMBDA, 'max_iter': HARMONY_MAX_ITER,
+            'tau': HARMONY_TAU, 'neighbors': HARMONY_NEIGHBORS_N,
+            'umap_min_dist': HARMONY_UMAP_MIN_DIST, 'umap_spread': HARMONY_UMAP_SPREAD,
+            'batch_key': BATCH_KEY, 'seed': RANDOM_STATE,
+            'harmony_version': HARMONY_EXPECTED_VERSION, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'tubule_cohort': fingerprint_anndata(adata_tubule)},
+    code=code_digest(run_harmony_rpy2, select_harmony_hvgs_by_condition),
 )
-tub_hvg = 'highly_variable_for_harmony'
-adata_tubule_hvg = adata_tubule[:, adata_tubule.var[tub_hvg]].copy()
-adata_tubule_hvg.X = adata_tubule_hvg.layers['lognorm'].copy()
-sc.tl.pca(
-    adata_tubule_hvg, n_comps=HARMONY_PCA_N_COMPS,
-    random_state=RANDOM_STATE,
-)
-adata_tubule.obsm['X_pca'] = adata_tubule_hvg.obsm['X_pca'].copy()
-ro.r(f'set.seed({RANDOM_STATE})')
-adata_tubule_hvg = run_harmony_rpy2(
-    adata_tubule_hvg,
-    batch_key=BATCH_KEY,  # 'sample': aligns across 4 biological samples (Ctrl1A2, Ctrl1A4, HUK1_COR1, HUK1_MED1)
-    n_pcs=HARMONY_N_PCS,
-    theta=HARMONY_THETA,
-    lambda_val=HARMONY_LAMBDA,
-    max_iter=HARMONY_MAX_ITER,
-    tau=HARMONY_TAU,
-)
-adata_tubule.obsm['X_harmony'] = adata_tubule_hvg.obsm['X_harmony'].copy()
-sc.pp.neighbors(
-    adata_tubule, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
-    random_state=RANDOM_STATE,
-)
-sc.tl.umap(
-    adata_tubule, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-    random_state=RANDOM_STATE,
-)
-adata_tubule.write(PASS2_HARMONY_OUTPUT_PATH)
+
+
+def _compute_pass2_embeddings(current):
+    obj = select_harmony_hvgs_by_condition(
+        current,
+        group_key='comparison_species',
+        groups=SPECIES_GROUPS,
+        mode='intersection',
+        min_mean=HARMONY_HVG_MIN_MEAN,
+        max_mean=HARMONY_HVG_MAX_MEAN,
+        min_disp=HARMONY_HVG_MIN_DISP,
+    )
+    hvg = obj[:, obj.var['highly_variable_for_harmony']].copy()
+    hvg.X = hvg.layers['lognorm'].copy()
+    sc.tl.pca(hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
+    obj.obsm['X_pca'] = hvg.obsm['X_pca'].copy()
+    ro.r(f'set.seed({RANDOM_STATE})')
+    hvg = run_harmony_rpy2(
+        hvg,
+        batch_key=BATCH_KEY,  # 'sample': aligns the 4 biological samples at once
+        n_pcs=HARMONY_N_PCS,
+        theta=HARMONY_THETA,
+        lambda_val=HARMONY_LAMBDA,
+        max_iter=HARMONY_MAX_ITER,
+        tau=HARMONY_TAU,
+    )
+    obj.obsm['X_harmony'] = hvg.obsm['X_harmony'].copy()
+    sc.pp.neighbors(obj, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
+                    random_state=RANDOM_STATE)
+    sc.tl.umap(obj, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+               random_state=RANDOM_STATE)
+    return obj
+
+
+if STAGE_CACHE_ENABLED and stage_is_fresh(PASS2_HARMONY_OUTPUT_PATH, PASS2_CACHE_KEY):
+    print(f'[stage cache] hit pass-2 embeddings (key {PASS2_CACHE_KEY}); loading '
+          f'{PASS2_HARMONY_OUTPUT_PATH.name}')
+    adata_tubule = sc.read_h5ad(PASS2_HARMONY_OUTPUT_PATH)
+else:
+    adata_tubule = _compute_pass2_embeddings(adata_tubule)
+    adata_tubule.write(PASS2_HARMONY_OUTPUT_PATH)
+    stage_mark_fresh(PASS2_HARMONY_OUTPUT_PATH, PASS2_CACHE_KEY, stage='pass2_embeddings',
+                     params={'logic': NOTEBOOK_LOGIC_VERSION})
+    print(f'Saved pass-2 object: {PASS2_HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
+
 sc.pl.embedding(
     adata_tubule,
     basis='umap',
@@ -2176,6 +2262,9 @@ tested = (
 gene_names = adata_pt.var_names.to_numpy()[tested]
 Y_genes = Y_all[:, tested].tocsr().astype(np.float64)
 gene_lookup_tested = {str(gene).upper(): index for index, gene in enumerate(gene_names)}
+# Fingerprint of the tested-gene matrix, reused by every cached stage below so it is hashed once
+# per run rather than once per call site.
+Y_GENES_FINGERPRINT = digest(Y_genes)
 
 pt_cohort_summary = (
     adata_pt.obs.groupby(
@@ -2207,8 +2296,10 @@ print('Inference units: two mouse specimens versus one human donor; no species p
 
 # %%
 # Purpose: gene_fit = run_level_shape(
-gene_fit = run_level_shape(
-    Y_genes, s, c, knots, grid, SECTION4_CONFIG['lambda_grid']
+gene_fit = cached_run_level_shape(
+    Y_genes, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+    stage='section4_gene_fit', root=STAGE_CACHE_DIR, y_fingerprint=Y_GENES_FINGERPRINT,
+    enabled=STAGE_CACHE_ENABLED,
 )
 axis_basis = {
     gene.upper()
@@ -2235,8 +2326,13 @@ gene_results = pd.DataFrame({
 gene_curve_effects = summarize_curve_effects(
     gene_fit['curve_healthy'], gene_fit['curve_aki'], feature_names=gene_names
 )
+# Only the columns the fit table does not already carry are merged: `shape_rms`, `level_effect` and
+# `condition_effect_rms` come from the fit itself, and a straight merge would suffix them
+# (`shape_rms_x`/`shape_rms_y`) and break every table that selects them.
+gene_curve_effects = gene_curve_effects.rename(columns={'feature': 'gene'})
 gene_results = gene_results.merge(
-    gene_curve_effects.rename(columns={'feature': 'gene'}), on='gene', how='left'
+    gene_curve_effects[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference', 'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio', 'difference_type']],
+    on='gene', how='left',
 )
 gene_results['axis_basis_gene'] = gene_results['gene'].str.upper().isin(axis_basis)
 gene_results['technical_gene'] = gene_results['gene'].str.match(
@@ -2267,7 +2363,11 @@ if ('counts' in adata_pt.layers) and ('pre_filter_total_counts' in adata_pt.obs.
     )
     Y_native = sparse.diags(native_scale) @ as_csr(adata_pt.layers['counts'])[:, tested]
     Y_native.data = np.log1p(Y_native.data)
-    native_fit = run_level_shape(Y_native, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'])
+    native_fit = cached_run_level_shape(
+        Y_native, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+        stage='section4_gene_fit_native_denominator', root=STAGE_CACHE_DIR,
+        y_fingerprint=digest(Y_native), enabled=STAGE_CACHE_ENABLED,
+    )
     gene_results['level_effect_native_denominator'] = native_fit['level_effect']
     gene_results['shape_rms_native_denominator'] = native_fit['shape_rms']
     top_native = gene_results[gene_results['primary_eligible']].head(20)
@@ -2612,13 +2712,10 @@ else:
             (values - gene_mean[indices]) / gene_std[indices]
         ).mean(axis=1)
 
-    pathway_fit = run_level_shape(
-        pathway_module_scores,
-        s,
-        c,
-        knots,
-        grid,
-        SECTION4_CONFIG['lambda_grid'],
+    pathway_fit = cached_run_level_shape(
+        pathway_module_scores, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+        stage='section4_pathway_fit', root=STAGE_CACHE_DIR,
+        y_fingerprint=digest(pathway_module_scores), enabled=STAGE_CACHE_ENABLED,
     )
     pathway_results = retained_pathways.drop(columns='genes_present').copy()
     pathway_results['genes_present'] = retained_pathways['genes_present'].map(
@@ -3101,9 +3198,12 @@ if SIGNATURE_PATH.exists():
     signature_coverage.to_csv(CURVE_OUTPUT_DIR / 'signed_signature_coverage.csv', index=False)
     usable_signatures = list(signature_coverage.loc[signature_coverage['usable'], 'signature'])
     if usable_signatures:
-        signature_fit = run_level_shape(
+        signature_fit = cached_run_level_shape(
             signature_scores[usable_signatures].to_numpy(dtype=float),
             s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+            stage='section4_signature_fit', root=STAGE_CACHE_DIR,
+            y_fingerprint=digest(signature_scores[usable_signatures].to_numpy(dtype=float)),
+            enabled=STAGE_CACHE_ENABLED,
         )
         signature_summary = pd.DataFrame({
             'signature': usable_signatures,

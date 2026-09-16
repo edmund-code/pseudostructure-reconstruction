@@ -89,7 +89,9 @@ def build_pathway_membership(library_sets, universe, *, ortholog_map=None, libra
 
     Returns a DataFrame with one row per pathway and the coverage columns
     ``n_requested`` / ``n_with_ortholog`` / ``n_assayed`` / ``n_tested`` / ``n_genes_present``,
-    plus ``genes_present``, ``retained`` and ``exclusion_reason``.
+    plus ``genes_present`` (members surviving the expression filter, or every assayed member when no
+    ``tested`` set is given), ``genes_assayed``, ``retained`` and ``exclusion_reason``. Retention is
+    decided on the *assayed* count, so a pathway is still reported when the filter removes members.
     """
     tested_upper = _as_upper_set(tested) if tested is not None else None
     rows = []
@@ -100,8 +102,9 @@ def build_pathway_membership(library_sets, universe, *, ortholog_map=None, libra
             members, universe, ortholog_map=ortholog_map,
             source_column=source_column, target_column=target_column,
         )
-        n_tested = (len([gene for gene in mapped if gene.upper() in tested_upper])
-                    if tested_upper is not None else np.nan)
+        tested_members = ([gene for gene in mapped if gene.upper() in tested_upper]
+                          if tested_upper is not None else list(mapped))
+        n_tested = len(tested_members) if tested_upper is not None else np.nan
         if audit['n_assayed'] < int(min_genes):
             retained, reason = False, f'fewer than {int(min_genes)} assayed members'
         elif max_genes is not None and audit['n_assayed'] > int(max_genes):
@@ -115,8 +118,12 @@ def build_pathway_membership(library_sets, universe, *, ortholog_map=None, libra
             'n_with_ortholog': audit['n_with_ortholog'],
             'n_assayed': audit['n_assayed'],
             'n_tested': n_tested,
-            'n_genes_present': audit['n_assayed'],
-            'genes_present': mapped,
+            # `genes_present` is what a downstream model may actually use: the members that survive
+            # the expression filter. `genes_assayed` keeps the wider assayed list for coverage
+            # reporting, so a caller can no longer index a tested-gene table with an untested symbol.
+            'n_genes_present': len(tested_members),
+            'genes_present': tested_members,
+            'genes_assayed': mapped,
             'retained': retained,
             'exclusion_reason': reason,
         })

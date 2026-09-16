@@ -104,7 +104,8 @@ tables under `docs/results/`.
     feature list and records them in `uns['cross_species_availability']` (notebook 03 also writes
     `diagnostics/cross_species_*.csv`). A measured zero stays.
   - **Set-level enrichment is exploratory, never confirmatory.** `camera_like_enrichment` contrasts a
-    set's mean statistic with the background mean, corrects across the whole family of tested pairs,
+    set's mean statistic with the background mean, corrects across the whole family of tested pairs
+    (pooled and specimen-balanced rankings together),
     and estimates the variance inflation from residual correlations given the fitted design. With two
     mice and one human donor the units of replication are specimens.
   - Only `*_v4.geojson` mouse segmentations are valid; centroid verification is mandatory

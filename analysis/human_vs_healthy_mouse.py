@@ -3251,6 +3251,10 @@ else:
 # Signed downstream signatures (PROGENy-style) are scored when a gene-to-weight matrix is supplied;
 # none is bundled, so that step is skipped unless one is present.
 #
+# Every ranking is reported twice: from the pooled fits and from the specimen-balanced curves
+# (equal weight per specimen). `signed_ranking_pooled_vs_balanced.csv` quantifies the agreement,
+# so a ranking that depends on how many tubules each specimen contributed is visible as such.
+#
 
 # %%
 # Purpose: signed rankings and competitive (correlation-aware) enrichment per question.
@@ -3263,10 +3267,19 @@ from pseudospace.enrichment import (
 signed_rankings = signed_gene_rankings(
     gene_fit['curve_healthy'], gene_fit['curve_aki'], grid, gene_names=gene_names
 )
+# The same estimator on the SPECIMEN-BALANCED curves: same data, equal weight per specimen. Both
+# weightings are reported (the balanced columns carry a `_balanced` suffix) so the reader can see how
+# much of a ranking is carried by how many tubules each specimen contributed.
+balanced_rankings = signed_gene_rankings(
+    balanced_reference, balanced_comparison, grid, gene_names=gene_names
+).add_suffix('_balanced').rename(columns={'gene_balanced': 'gene'})
+balanced_effects = summarize_curve_effects(balanced_reference, balanced_comparison)[[
+    'gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'pattern_status', 'difference_type',
+]].add_suffix('_balanced').rename(columns={'gene_balanced': 'gene'})
 signed_rankings = signed_rankings.merge(
     gene_results[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'pattern_status', 'difference_type']],
     on='gene', how='left',
-)
+).merge(balanced_rankings, on='gene', how='left').merge(balanced_effects, on='gene', how='left')
 signed_rankings.to_csv(CURVE_OUTPUT_DIR / 'gene_signed_rankings.csv', index=False)
 display(signed_rankings.head(10).round(3))
 
@@ -3277,6 +3290,31 @@ ENRICHMENT_QUESTIONS = {
     'early_contrast': 'early_delta',
     'late_contrast': 'late_delta',
 }
+# Pooled versus balanced: one estimator, two weightings of the same data. A ranking that survives this
+# is not an artefact of tubule abundance per specimen; the columns are reported together everywhere.
+_ranking_agreement_source = signed_rankings.dropna(subset=['level_effect', 'level_effect_balanced'])
+ranking_agreement = pd.DataFrame([
+    {
+        'column': column,
+        'spearman_pooled_vs_balanced': float(_ranking_agreement_source[column].corr(
+            _ranking_agreement_source[f'{column}_balanced'], method='spearman')),
+        'top20_pooled_effect_sign_agreement': float(np.mean(
+            np.sign(_ranking_agreement_source.reindex(
+                _ranking_agreement_source[column].abs().nlargest(20).index)[column])
+            == np.sign(_ranking_agreement_source.reindex(
+                _ranking_agreement_source[column].abs().nlargest(20).index)[f'{column}_balanced']))),
+    }
+    for column in set(ENRICHMENT_QUESTIONS.values())
+])
+ranking_agreement.to_csv(CURVE_OUTPUT_DIR / 'signed_ranking_pooled_vs_balanced.csv', index=False)
+print('Pooled versus specimen-balanced gene rankings (same data, equal weight per specimen):')
+display(ranking_agreement.round(3))
+# The same five questions on the balanced rankings, tested and corrected in ONE family with the pooled
+# ones: they are not independent evidence, and splitting the correction would hide that.
+ENRICHMENT_QUESTIONS.update({
+    f'{question}_balanced': f'{column}_balanced'
+    for question, column in list(ENRICHMENT_QUESTIONS.items())
+})
 # The variance inflation is estimated from RESIDUAL correlations: the M2 design (spline
 # basis + condition + condition-by-spline) is removed from the expression first, so shared
 # pseudospace structure does not masquerade as pathway coherence.

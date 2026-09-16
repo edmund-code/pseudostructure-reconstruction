@@ -58,9 +58,11 @@ support and above the amplitude floor), with the finite-population correction fo
 replacement and a variance inflation estimated from **residual** correlations - the fitted M2 design
 is removed first, so shared pseudospace structure cannot masquerade as pathway coherence. The
 permutation column (`p_value_permutation_with_replacement`) is an optional sanity check, not the
-headline; correction is applied across every tested pair of the whole family, not per question. These
-are exploratory annotations: with two mice and one human donor the units of replication are
-specimens, so no set-level p-value is confirmatory.
+headline; correction is applied across every tested pair of the whole family, not per question. The signed rankings ship in **both weightings** - pooled and specimen-balanced
+(`_balanced` suffix) - with their agreement reported in `signed_ranking_pooled_vs_balanced.csv`, and
+the sweeps over both belong to ONE correction family. These are exploratory annotations: with two
+mice and one human donor the units of replication are specimens, so no set-level p-value is
+confirmatory.
 
 ## Curve modules
 

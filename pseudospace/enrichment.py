@@ -96,13 +96,19 @@ def signed_gene_rankings(curve_reference, curve_comparison, grid, *, gene_names=
 
 def camera_like_enrichment(gene_statistics, gene_sets, *, expression=None, gene_names=None,
                            background=None, n_permutations=1000, seed=0,
-                           min_set_size=5, correction='fdr_bh'):
+                           min_set_size=5, correction='fdr_bh',
+                           correlation_gene_cap=200, correlation_structure_cap=2000):
     """Competitive enrichment of signed gene statistics, with and without correlation awareness.
 
     ``gene_statistics`` is a mapping (or Series) of gene -> signed statistic. ``gene_sets`` is a
     mapping of set name -> genes; ``background`` restricts both to the genes that were testable
     (default: every gene in ``gene_statistics``). ``expression`` (structures x genes) is optional and
     only needed for the correlation-aware column: without it, ``z_correlation_aware`` is NaN.
+
+    The average squared correlation is estimated from at most ``correlation_gene_cap`` members and
+    ``correlation_structure_cap`` structures (seeded subsamples). That bounds the cost for the large
+    Reactome parent sets without changing what the estimate is for: an average over member pairs,
+    which does not need every pair and every cell to be stable to two decimal places.
     """
     statistics = dict(gene_statistics) if not isinstance(gene_statistics, pd.Series) else gene_statistics.to_dict()
     statistics = {str(gene).upper(): float(value) for gene, value in statistics.items()
@@ -145,8 +151,17 @@ def camera_like_enrichment(gene_statistics, gene_sets, *, expression=None, gene_
             columns = [column_by_gene[list(statistics)[index]] for index in present
                        if list(statistics)[index] in column_by_gene]
             if len(columns) >= max(3, int(min_set_size)):
-                block = np.asarray(matrix[:, columns].todense()) if hasattr(matrix, 'todense') \
-                    else np.asarray(matrix[:, columns], dtype=float)
+                capped_columns = columns
+                if len(capped_columns) > int(correlation_gene_cap):
+                    capped_columns = list(rng.choice(capped_columns,
+                                                     size=int(correlation_gene_cap), replace=False))
+                block = (np.asarray(matrix[:, capped_columns].todense())
+                         if hasattr(matrix, 'todense') else np.asarray(matrix[:, capped_columns],
+                                                                      dtype=float))
+                if block.shape[0] > int(correlation_structure_cap):
+                    structure_rows = rng.choice(block.shape[0],
+                                                size=int(correlation_structure_cap), replace=False)
+                    block = block[structure_rows]
                 with np.errstate(invalid='ignore', divide='ignore'):
                     corr = np.corrcoef(block, rowvar=False)
                 corr = np.nan_to_num(corr, nan=0.0)

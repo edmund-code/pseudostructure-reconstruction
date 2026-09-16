@@ -2381,6 +2381,37 @@ path_shape_p, path_level_p, _, _ = sample_perm_pvalues(
 print(f'Pathway modules tested: {P}  '
       f"(shape_rms max={path_ls['shape_rms'].max():.4f})")
 
+# %%
+# Purpose: discover the positional and response curve modules.
+# Defined here (not in section 4.12) because the physical-axis sensitivity analysis in
+# section 4.9 checks the same modules on the independent axis.
+from pseudospace.modules import difference_curves, discover_curve_modules
+
+MODULE_CONFIG = {'max_distance': 0.4, 'min_amplitude': 0.05, 'min_features': 10}
+positional_labels, positional_modules = discover_curve_modules(
+    gene_ls['curve_healthy'], grid, max_distance=MODULE_CONFIG['max_distance'],
+    min_amplitude=MODULE_CONFIG['min_amplitude'], min_features=MODULE_CONFIG['min_features'],
+    feature_names=gene_names,
+)
+response_delta = difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'])
+response_labels, response_modules = discover_curve_modules(
+    difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'], center=True), grid,
+    max_distance=MODULE_CONFIG['max_distance'], min_amplitude=MODULE_CONFIG['min_amplitude'],
+    min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
+)
+mouse_gene_modules = pd.DataFrame({
+    'gene': gene_names,
+    'positional_module': positional_labels.to_numpy(),
+    'response_module': response_labels.to_numpy(),
+    'delta_mean_aki_minus_healthy': np.nanmean(response_delta, axis=1),
+})
+mouse_gene_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_gene_assignment.csv', index=False)
+positional_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_positional_catalog.csv', index=False)
+response_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_catalog.csv', index=False)
+display(positional_modules)
+display(response_modules)
+
+
 # %% [markdown]
 # ## 4.6 - Analysis B: pseudospace-structure diagnostics (secondary)
 
@@ -3636,8 +3667,8 @@ else:
     if _prioritized_modules:
         _module_scores = np.empty((adata_pt.n_obs, len(_prioritized_modules)))
         for _position, _module in enumerate(_prioritized_modules):
-            _idxs = [gene_lookup_tested[gene.upper()] for gene in _module_members[_module]
-                     if gene.upper() in gene_lookup_tested]
+            _idxs = [gene_local[gene.upper()] for gene in _module_members[_module]
+                     if gene.upper() in gene_local]
             _block = np.asarray(Y_genes[:, _idxs].todense())
             _module_scores[:, _position] = (
                 (_block - gene_mean[_idxs]) / gene_std[_idxs]).mean(axis=1)
@@ -4383,31 +4414,6 @@ balanced_healthy = specimen_balanced_curves(
     {name: curves for name, curves in specimen_full_curves.items() if name in control_samples})
 balanced_aki = specimen_balanced_curves(
     {name: curves for name, curves in specimen_full_curves.items() if name in aki_samples})
-
-MODULE_CONFIG = {'max_distance': 0.4, 'min_amplitude': 0.05, 'min_features': 10}
-positional_labels, positional_modules = discover_curve_modules(
-    gene_ls['curve_healthy'], grid, max_distance=MODULE_CONFIG['max_distance'],
-    min_amplitude=MODULE_CONFIG['min_amplitude'], min_features=MODULE_CONFIG['min_features'],
-    feature_names=gene_names,
-)
-response_delta = difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'])
-response_labels, response_modules = discover_curve_modules(
-    difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'], center=True), grid,
-    max_distance=MODULE_CONFIG['max_distance'], min_amplitude=MODULE_CONFIG['min_amplitude'],
-    min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
-)
-mouse_gene_modules = pd.DataFrame({
-    'gene': gene_names,
-    'positional_module': positional_labels.to_numpy(),
-    'response_module': response_labels.to_numpy(),
-    'delta_mean_aki_minus_healthy': np.nanmean(response_delta, axis=1),
-})
-mouse_gene_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_gene_assignment.csv', index=False)
-positional_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_positional_catalog.csv', index=False)
-response_modules.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_catalog.csv', index=False)
-display(positional_modules)
-display(response_modules)
-
 
 def _response_modules(curve_reference, curve_comparison):
     labels, _ = discover_curve_modules(

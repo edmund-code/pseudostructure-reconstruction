@@ -63,6 +63,28 @@ def test_camera_like_reports_a_competitive_p_and_a_correlation_inflation():
     assert 'p_value_permutation_adjusted' in result.columns
 
 
+def test_correlation_estimate_is_capped_without_losing_the_inflation():
+    """The capped estimate is a noisier version of the same number, not a different regime."""
+    rng = np.random.default_rng(4)
+    n_correlated = 30
+    latent = rng.normal(size=(400, 1))
+    expression = np.column_stack([latent + 0.1 * rng.normal(size=(400, n_correlated)),
+                                  rng.normal(size=(400, 20))])
+    names = [f'g{i}' for i in range(expression.shape[1])]
+    statistics = {name: (1.0 if index < n_correlated else 0.0)
+                  for index, name in enumerate(names)}
+    gene_sets = {'correlated': names[:n_correlated]}
+    capped = camera_like_enrichment(statistics, gene_sets, expression=expression, gene_names=names,
+                                    n_permutations=50, min_set_size=5,
+                                    correlation_gene_cap=15, correlation_structure_cap=200)
+    uncapped = camera_like_enrichment(statistics, gene_sets, expression=expression, gene_names=names,
+                                      n_permutations=50, min_set_size=5)
+    capped_inflation = float(capped['correlation_inflation'].iloc[0])
+    uncapped_inflation = float(uncapped['correlation_inflation'].iloc[0])
+    assert capped_inflation > 1.5 and uncapped_inflation > 1.5
+    assert 0.5 < capped_inflation / uncapped_inflation < 2.0
+
+
 def test_camera_like_respects_background_and_minimum_size():
     statistics = {f'g{i}': float(i) for i in range(30)}
     sets = {

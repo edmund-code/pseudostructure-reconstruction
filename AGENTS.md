@@ -34,7 +34,11 @@ conda env create -f environment.yml && conda activate kidney-pseudospace
 pytest tests
 
 # Repository hygiene gate (requires nbformat) — run before every commit
-python tools/check_repository_hygiene.py
+python tools/check_repository_hygiene.py            # inspects the working tree
+python tools/check_repository_hygiene.py --staged   # inspects the index (what a commit would record)
+
+# Stage output-free copies of tracked notebooks WITHOUT touching the working files
+python tools/stage_notebooks_without_outputs.py [--list]
 
 # Notebook ordering gate — run after editing a notebook, before regenerating its mirror
 python tools/check_notebook_stage_order.py analysis/notebooks/*.ipynb
@@ -92,9 +96,14 @@ tables under `docs/results/`.
 - **`comment_magics = true`** (`jupytext.toml`): IPython magics appear as comments
   (`# %load_ext autoreload`) in the mirror, keeping the `.py` valid, parseable Python that agents can
   syntax-check. jupytext restores them as live magics in the notebook, so the notebook is unaffected.
-- **Committed notebooks must be output-free.** Strip before committing with
-  `python -m nbconvert --clear-output --inplace <notebook>`; tracked cell outputs or execution
-  counts fail the hygiene gate.
+- **Committed notebooks must be output-free, and a working notebook is never cleared to achieve
+  that.** Notebooks live in git *and* they are run interactively, so a tracked notebook usually holds
+  a contributor's live outputs. Stage an output-free copy instead of editing the file
+  (`python tools/stage_notebooks_without_outputs.py`, which hashes a cleaned copy into the index and
+  leaves the working file alone), do not `git add` those paths afterwards, and check the result with
+  `python tools/check_repository_hygiene.py --staged`. `nbconvert --clear-output --inplace` is only
+  for a notebook nobody is working in — running it on a live notebook destroys outputs that cannot be
+  recovered.
 - **Tests must not need private data.** Use synthetic fixtures; gate heavy imports with
   `pytest.importorskip(...)` (see `tests/test_pseudospace_synthetic.py`).
 - **Scientific guardrails** (do not bypass):
@@ -134,7 +143,8 @@ tables under `docs/results/`.
   cells carry a `NOTEBOOK_LOGIC_VERSION` in their key: bump it in the config cell whenever you change
   the body of a cached cell, so a stale payload cannot outlive the code that produced it. Never put
   validation or guard cells behind the cache (Harmony version, input existence, fingerprint checks).
-- **Commit and push after every change.** Version control is the safety net here: once an edit is
+- **Commit and push after every change** (never re-add a notebook whose working copy carries live
+  outputs — see the notebook-output convention above). Version control is the safety net here: once an edit is
   verified, commit it and push to `origin/main`
   (`https://github.com/edmund-code/pseudostructure-reconstruction.git`) rather than leaving work
   uncommitted — and never push private data or executed notebooks.

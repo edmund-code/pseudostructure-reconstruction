@@ -266,7 +266,13 @@ adatas, human_mapping_report = load_cross_species_samples(
 )
 human_mapping_report.to_csv(RESULTS_DIR / 'human_gene_mapping_report.csv', index=False)
 
-adata_combined = combine_cross_species(adatas)
+# The availability rule gates the ANALYSIS gene set, not the object: an accepted ortholog whose
+# human input has no such feature is a structural zero and must never enter a gene comparison, but
+# which genes feed the HVG/PCA/Harmony step changes that selection (Scanpy's seurat HVG flavour bins
+# genes by mean expression, so removing genes moves the bin edges) and therefore the embedding, the
+# Leiden partition and the hand-reviewed cluster labels. Keeping every gene here and masking the
+# analysis set with `measured_in_both_inputs` below keeps both properties.
+adata_combined = combine_cross_species(adatas, require_measured_in_both=False)
 adata_combined = annotate_mito_ribo_mouse_symbols(adata_combined)
 print(f'Combined shared space: {adata_combined.n_obs:,} structures x '
       f'{adata_combined.n_vars:,} ortholog genes')
@@ -288,11 +294,11 @@ if _availability:
     ]).to_csv(DIAGNOSTIC_DIR / 'cross_species_unmeasured_genes_by_sample.csv', index=False)
     pd.DataFrame({'dropped_symbol': _availability.get('dropped_symbols', [])}).to_csv(
         DIAGNOSTIC_DIR / 'cross_species_dropped_gene_symbols.csv', index=False)
-    print(f'Shared space restricted to genes measured in every input: '
-          f"{_availability.get('n_shared_genes'):,} kept, "
-          f"{_availability.get('n_dropped_not_measured_in_every_input'):,} dropped because at least "
-          'one input does not contain that feature. A measured zero stays; a missing feature cannot '
-          "be read as one.")
+    print(f"Genes measured in EVERY input: {_availability.get('n_shared_genes'):,}; "
+          f"{_availability.get('n_dropped_not_measured_in_every_input'):,} are absent from at least "
+          'one input\'s feature list and are excluded from every gene comparison (the object keeps '
+          'them so the clustering is unaffected). A measured zero stays; a missing feature cannot be '
+          'read as one.')
 
 
 
@@ -2289,10 +2295,17 @@ gene_mean_all = np.asarray(Y_all.mean(axis=0)).ravel()
 min_detected = int(np.ceil(
     SECTION4_CONFIG['min_detected_fraction'] * adata_pt.n_obs
 ))
+# `measured_in_both_inputs` is the availability rule: a gene absent from one input's feature list is
+# a structural zero there, so it cannot enter any comparison (ranking, curve fit, pathway membership
+# or enrichment background). Everything downstream of `tested`/`gene_names` is gated by this.
+measured_in_both = adata_pt.var['measured_in_both_inputs'].to_numpy(dtype=bool)
 tested = (
     (detected >= min_detected)
     & (gene_mean_all >= SECTION4_CONFIG['min_mean_expression'])
+    & measured_in_both
 )
+print(f'Analysis gene set: {int(tested.sum()):,} of {adata_pt.n_vars:,} genes are detectable and '
+      f'measured in both inputs ({int((~measured_in_both).sum()):,} excluded as unmeasured).')
 gene_names = adata_pt.var_names.to_numpy()[tested]
 Y_genes = Y_all[:, tested].tocsr().astype(np.float64)
 gene_lookup_tested = {str(gene).upper(): index for index, gene in enumerate(gene_names)}

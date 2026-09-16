@@ -100,9 +100,13 @@ tables under `docs/results/`.
 - **Scientific guardrails** (do not bypass):
   - **The cross-species shared space contains only genes measured in every input.** The accepted
     ortholog map creates a target column for every pair, so an unfed column is a structural zero, not
-    an observation of zero expression; `combine_cross_species` drops genes missing from any input's
-    feature list and records them in `uns['cross_species_availability']` (notebook 03 also writes
-    `diagnostics/cross_species_*.csv`). A measured zero stays.
+    an observation of zero expression. `combine_cross_species` flags `measured_in_both_inputs` per gene
+    and records the audit in `uns['cross_species_availability']` (notebook 03 also writes
+    `diagnostics/cross_species_*.csv`); a measured zero stays. Notebook 03 keeps every gene in the
+    object (`require_measured_in_both=False`) and masks the **analysis** gene set instead: the HVG
+    selection that feeds PCA/Harmony is sensitive to the gene set (Scanpy's seurat flavour bins genes
+    by mean expression), so removing genes from the object moves the Leiden partition and invalidates
+    the hand-reviewed cluster labels in notebook 03.
   - **Set-level enrichment is exploratory, never confirmatory.** `camera_like_enrichment` contrasts a
     set's mean statistic with the background mean, corrects across the whole family of tested pairs
     (pooled and specimen-balanced rankings together),

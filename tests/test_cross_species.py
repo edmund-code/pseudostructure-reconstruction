@@ -221,3 +221,9 @@ def test_combine_can_reproduce_the_older_symbol_intersection():
     ungated = combine_cross_species({'ctrl': mouse, 'human': converted},
                                     require_measured_in_both=False)
     assert list(ungated.var_names) == ['M1', 'M2'], 'the old intersection kept the zero column'
+    # ...and in that mode the structural zero is flagged per gene, so the analysis gene set can be
+    # gated while the embedding keeps every gene
+    assert ungated.var['measured_in_both_inputs'].tolist() == [True, False]
+    assert ungated.uns['cross_species_availability']['genes_removed_from_the_object'] is False
+    gated_flag = gated.var['measured_in_both_inputs']
+    assert gated_flag.tolist() == [True]

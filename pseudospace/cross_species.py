@@ -290,37 +290,37 @@ def combine_cross_species(adatas: Mapping[str, ad.AnnData], *,
     recorded in ``uns['cross_species_availability']``. ``require_measured_in_both=False`` restores
     the older symbol-only intersection for comparison.
     """
+    measured_sets = []
+    for name, adata in adatas.items():
+        flags = adata.var.get("measured_in_source_input")
+        if flags is None:
+            measured_sets.append(set(map(str, adata.var_names)))
+        else:
+            measured_sets.append(set(map(str, adata.var_names[np.asarray(flags, dtype=bool)])))
+    shared = set.intersection(*measured_sets) if measured_sets else set()
+    # What each object holds but cannot contribute to the joint analysis: a gene missing from the
+    # shared set was not measured in some input, whether or not this particular object has it.
+    per_species_unmeasured = {
+        str(name): sorted(set(map(str, adata.var_names)) - shared)[:500]
+        for name, adata in adatas.items()
+    }
+    all_symbols = set().union(*(set(map(str, adata.var_names)) for adata in adatas.values()))
+    dropped_union = sorted(all_symbols - shared)
     if require_measured_in_both:
-        measured_sets = []
-        for name, adata in adatas.items():
-            flags = adata.var.get("measured_in_source_input")
-            if flags is None:
-                measured_sets.append(set(map(str, adata.var_names)))
-            else:
-                measured_sets.append(set(map(str, adata.var_names[np.asarray(flags, dtype=bool)])))
-        shared = set.intersection(*measured_sets) if measured_sets else set()
-        # What each object holds but cannot contribute to the joint analysis: a gene missing from the
-        # shared set was not measured in some input, whether or not this particular object has it.
-        per_species_unmeasured = {
-            str(name): sorted(set(map(str, adata.var_names)) - shared)[:500]
-            for name, adata in adatas.items()
-        }
-        all_symbols = set().union(*(set(map(str, adata.var_names)) for adata in adatas.values()))
-        dropped_union = sorted(all_symbols - shared)
         adatas = {
             name: adata[:, [gene for gene in adata.var_names if str(gene) in shared]]
             for name, adata in adatas.items()
         }
-        availability = {
-            "n_shared_genes": len(shared),
-            "n_dropped_not_measured_in_every_input": len(dropped_union),
-            "dropped_symbols": dropped_union[:500],
-            "unmeasured_symbols_by_sample": per_species_unmeasured,
-            "rule": "measured_in_source_input in every input",
-        }
-    else:
-        availability = {"n_shared_genes": None,
-                        "rule": "symbol intersection only (structural zeros retained)"}
+    availability = {
+        "n_shared_genes": len(shared),
+        "n_dropped_not_measured_in_every_input": len(dropped_union),
+        "dropped_symbols": dropped_union[:500],
+        "unmeasured_symbols_by_sample": per_species_unmeasured,
+        "rule": ("measured_in_source_input in every input"
+                 if require_measured_in_both else
+                 "measured_in_source_input flagged per gene; the object keeps every gene"),
+        "genes_removed_from_the_object": bool(require_measured_in_both),
+    }
     out = sc.concat(dict(adatas), join="inner", label="sample_from_concat", index_unique=None)
     out.obs["sample"] = out.obs["sample"].astype(str)
     out.obs["species"] = out.obs["species"].astype(str)
@@ -328,7 +328,11 @@ def combine_cross_species(adatas: Mapping[str, ad.AnnData], *,
         out.obs_names_make_unique()
     if not out.var_names.is_unique:
         out.var_names_make_unique()
-    out.var["measured_in_both_inputs"] = bool(require_measured_in_both)
+    # Per gene, in BOTH modes: True only where every input actually measured the gene. The notebooks
+    # gate their analysis gene set on this, so the availability rule can be applied without changing
+    # which genes feed the HVG/PCA/Harmony step (a selection step that is sensitive to the gene set,
+    # and therefore to the clustering and its hand-reviewed labels).
+    out.var["measured_in_both_inputs"] = [str(gene) in shared for gene in out.var_names]
     out.uns["cross_species_availability"] = availability
     return out
 

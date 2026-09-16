@@ -40,3 +40,7 @@ mouse annotations if they become available.
 The archived `legacy/notebooks/4_mouse_vs_human.ipynb` documents the earlier analysis but has
 stale paths and a deprecated permutation engine. It is provenance only; use the current script
 and notebook above.
+
+## Gene availability and the clustering
+
+The shared space carries `measured_in_both_inputs` per gene, and the analysis gene set is gated on it. The combined object keeps every accepted ortholog (`require_measured_in_both=False`) so the HVG selection, Harmony embedding and the reviewed cluster labels are unaffected by gene availability: removing genes changes the seurat HVG bin edges and therefore the partition. Availability is reported in `diagnostics/cross_species_gene_availability.csv` and the dropped symbols in `cross_species_dropped_gene_symbols.csv`.

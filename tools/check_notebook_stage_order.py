@@ -26,6 +26,13 @@ import sys
 from pathlib import Path
 
 BUILTIN_NAMES = set(dir(builtins)) | {'display', 'get_ipython', '__file__', 'Image', 'In', 'Out'}
+
+# Stage-cache entry points take a zero-argument compute callback and store what it returns, so a
+# callback with no `return` silently caches None. `cached_neighbor_graph` takes it third (adata,
+# key, compute); the others take it second.
+CACHE_CALLBACKS = {
+    'cached_anndata': 1, 'cached_payload': 1, 'cached_frame': 1, 'cached_neighbor_graph': 2,
+}
 MAGIC = re.compile(r'^\s*[%!]')
 CONTINUATION = re.compile(r'^\s*[%!]\s*=')          # a line starting with '!=' is not a magic
 
@@ -78,8 +85,33 @@ def _bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
     return certain, maybe
 
 
+def _returns(tree: ast.AST) -> bool:
+    return any(isinstance(node, ast.Return) for node in ast.walk(tree))
+
+
+def _compute_callback_problems(tree: ast.AST, index: int, known: dict[str, bool]) -> list[str]:
+    problems = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        position = CACHE_CALLBACKS.get(node.func.id)
+        if position is None:
+            continue
+        callback = node.args[position] if len(node.args) > position else None
+        if callback is None:
+            for keyword in node.keywords:
+                if keyword.arg in ('compute', 'callback'):
+                    callback = keyword.value
+        if isinstance(callback, ast.Name) and known.get(callback.id) is False:
+            problems.append(
+                f'cell {index}: {callback.id!r} is passed as the compute callback to '
+                f'{node.func.id} but has no return statement, so None would be cached')
+    return problems
+
+
 def check_notebook(path: Path) -> list[str]:
     notebook = json.loads(path.read_text())
+    function_returns: dict[str, bool] = {}
     certain: set[str] = set()
     maybe: dict[str, int] = {}
     problems: list[str] = []
@@ -95,6 +127,10 @@ def check_notebook(path: Path) -> list[str]:
         # bound further down), so they are collected before the cell's uses are examined.
         cell_certain, cell_maybe = _bindings(tree)
         visible = certain | cell_certain | cell_maybe
+        problems.extend(_compute_callback_problems(tree, index, function_returns))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                function_returns[node.name] = _returns(node)
         for statement in tree.body:
             for node in ast.walk(statement):
                 if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):

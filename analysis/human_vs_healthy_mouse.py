@@ -3151,7 +3151,7 @@ def _compute_coordinate_robustness():
         agreement = coordinate_agreement(reference, recomputed)
         agreement.update({'dropped_sample': dropped, 'n_structures': int(keep.sum())})
         coordinate_rows.append(agreement)
-    coordinate_robustness = pd.DataFrame(coordinate_rows)
+    return pd.DataFrame(coordinate_rows)
 
 
 coordinate_robustness = cached_frame(

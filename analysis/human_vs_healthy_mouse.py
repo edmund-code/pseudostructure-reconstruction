@@ -3286,7 +3286,9 @@ signed_rankings = signed_gene_rankings(
 balanced_rankings = signed_gene_rankings(
     balanced_reference, balanced_comparison, grid, gene_names=gene_names
 ).add_suffix('_balanced').rename(columns={'gene_balanced': 'gene'})
-balanced_effects = summarize_curve_effects(balanced_reference, balanced_comparison)[[
+balanced_effects = summarize_curve_effects(
+    balanced_reference, balanced_comparison, feature_names=gene_names,
+)[[
     'gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'pattern_status', 'difference_type',
 ]].add_suffix('_balanced').rename(columns={'gene_balanced': 'gene'})
 signed_rankings = signed_rankings.merge(
@@ -3317,7 +3319,7 @@ ranking_agreement = pd.DataFrame([
             == np.sign(_ranking_agreement_source.reindex(
                 _ranking_agreement_source[column].abs().nlargest(20).index)[f'{column}_balanced']))),
     }
-    for column in set(ENRICHMENT_QUESTIONS.values())
+    for column in list(ENRICHMENT_QUESTIONS.values())
 ])
 ranking_agreement.to_csv(CURVE_OUTPUT_DIR / 'signed_ranking_pooled_vs_balanced.csv', index=False)
 print('Pooled versus specimen-balanced gene rankings (same data, equal weight per specimen):')

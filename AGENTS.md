@@ -16,7 +16,9 @@ subproject that produces its GeoJSON inputs.
   is passed in by path; see [data/README.md](data/README.md) and [docs/data/access.md](docs/data/access.md).
 - Entry points: the notebooks in `analysis/notebooks/`, with generated `.py` mirrors at
   `analysis/mouse_only_pseudospace.py` (active mouse-only workflow) and
-  `analysis/human_vs_healthy_mouse.py` (cross-species).
+  `analysis/human_vs_healthy_mouse.py` (cross-species),
+  and `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace,
+  recomputes no coordinate).
 - **Cohort**: 2 control mouse specimens, 2 AKI mouse specimens, and 2 human kidney slices. The two
   human slices are *named* cortex and medulla, but **both are in reality healthy human cortex** —
   do not treat the medulla-labelled slice as medullary tissue in any analysis or write-up.
@@ -46,6 +48,7 @@ python tools/check_notebook_stage_order.py analysis/notebooks/*.ipynb
 # Active workflows (flags win over env vars)
 python analysis/mouse_only_pseudospace.py   --data-root <dir> --results-root <dir>
 python analysis/human_vs_healthy_mouse.py   --data-root <dir> --results-root <dir>
+python analysis/gam_human_vs_mouse.py       --data-root <dir> --results-root <dir>   # needs 03's outputs
 # env-var equivalents: PSEUDOSPACE_DATA_ROOT, PSEUDOSPACE_RESULTS_ROOT
 
 # QuPath export / spatial validation
@@ -157,8 +160,9 @@ tables under `docs/results/`.
   `analysis/<name>.py`), so jupytext cannot infer the pairs and `jupytext --sync` has no partner.
   Pairing:
   `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py`,
-  `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`, and
-  `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`.
+  `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`,
+  `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`, and
+  `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`.
   (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
@@ -168,6 +172,8 @@ tables under `docs/results/`.
     analysis/notebooks/03_human_vs_healthy_mouse.ipynb
   jupytext --to py:percent --output analysis/mouse_workflow_comparison.py \
     analysis/notebooks/04_mouse_workflow_comparison.ipynb
+  jupytext --to py:percent --output analysis/gam_human_vs_mouse.py \
+    analysis/notebooks/05_gam_human_vs_mouse.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.

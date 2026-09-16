@@ -125,36 +125,9 @@ from IPython.display import display
 from scipy import sparse
 from scipy.stats import spearmanr
 
-from pseudospace.cross_species import (
-    build_one_to_one_ortholog_map,
-    combine_cross_species,
-    load_cross_species_samples,
-    plot_cross_species_marker_alignment,
-    plot_pre_filtering_tubule_qc,
-    read_ortholog_table,
-)
 from pseudospace.stage_cache import (
-    cached_anndata,
-    cached_frame,
-    cached_payload,
-    cached_neighbor_graph,
-    cached_perm_pvalues,
     cached_run_level_shape,
-    cache_status,
-    code_digest,
     digest,
-    fingerprint_anndata,
-    stage_is_fresh,
-    stage_key,
-    stage_mark_fresh,
-)
-from pseudospace.trajectory import (
-    choose_diffusion_component,
-    choose_root_global,
-    choose_root_pt_cluster,
-    orient_and_normalize,
-    recompute_subset_dpt,
-    save_total_pseudotime_anndata,
 )
 
 import matplotlib as _mpl
@@ -205,9 +178,7 @@ print('Retained tubular-nephron classes:', ', '.join(KEEP_TUBULE_CLASSES))
 # %%
 # Purpose: from pseudospace.levelshape import fit_single_condition_curves, run_level_shape, summarize_curve_effects
 from pseudospace.levelshape import (
-    build_ls_designs,
     fit_single_condition_curves,
-    run_level_shape,
     summarize_curve_effects,
 )
 from pseudospace.pathways import (
@@ -215,7 +186,11 @@ from pseudospace.pathways import (
     member_gene_evidence,
     summarize_pathway_redundancy,
 )
-from pseudospace.stats_gam import bh_adjust, as_csr, gam_internal_knots, resolve_present
+from pseudospace.stats_gam import (
+    as_csr,
+    gam_internal_knots,
+    resolve_present,
+)
 
 # This input is needed only for the pathway comparison below.
 PATHWAY_LIBRARY_DIR = DATA_ROOT / 'mouse_vs_human' / 'pathway_gene_sets'

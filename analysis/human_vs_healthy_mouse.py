@@ -3286,9 +3286,10 @@ signed_rankings = signed_gene_rankings(
 balanced_rankings = signed_gene_rankings(
     balanced_reference, balanced_comparison, grid, gene_names=gene_names
 ).add_suffix('_balanced').rename(columns={'gene_balanced': 'gene'})
+# `summarize_curve_effects` keys its output on `feature`, exactly as the pooled call above does.
 balanced_effects = summarize_curve_effects(
-    balanced_reference, balanced_comparison, feature_names=gene_names,
-)[[
+    balanced_reference, balanced_comparison, feature_names=gene_names
+).rename(columns={'feature': 'gene'})[[
     'gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'pattern_status', 'difference_type',
 ]].add_suffix('_balanced').rename(columns={'gene_balanced': 'gene'})
 signed_rankings = signed_rankings.merge(

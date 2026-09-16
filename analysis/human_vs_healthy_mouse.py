@@ -93,6 +93,7 @@ for _directory in (RESULTS_DIR, CELLTYPING_DIR, HEATMAP_OUTPUT_DIR, CURVE_OUTPUT
 # pseudospace.stage_cache.cache_status(STAGE_CACHE_DIR) / purge_stage_cache(STAGE_CACHE_DIR).
 # NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the body of a cached cell so
 # the cached results cannot outlive the code that produced them.
+NOTEBOOK_START_TIME = __import__("time").time()   # for the stale-module guard
 NOTEBOOK_LOGIC_VERSION = 1
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
@@ -200,6 +201,23 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
+# A long-lived kernel keeps whatever module objects it first imported, so editing `pseudospace/` and
+# re-running a cell silently uses the OLD code (this produced a stale-code crash that looked like a
+# fresh bug). Warn when a package file is newer than this kernel's first cell.
+import sys as _sys
+import os as _os
+
+_STALE_PACKAGE_MODULES = sorted({
+    name for name, module in list(_sys.modules.items())
+    if name.startswith('pseudospace')
+    and getattr(module, '__file__', None)
+    and _os.path.getmtime(module.__file__) > globals().get('NOTEBOOK_START_TIME', 0)
+})
+if _STALE_PACKAGE_MODULES:
+    print('WARNING: pseudospace changed on disk after this kernel imported it:',
+          ', '.join(_STALE_PACKAGE_MODULES),
+          '\n         restart the kernel (or importlib.reload those modules) before trusting results.')
+
 from pseudospace.heatmaps import plot_marker_heatmap
 from pseudospace.markers import build_gene_lookup
 from pseudospace.trajectory import (

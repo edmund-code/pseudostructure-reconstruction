@@ -43,6 +43,8 @@
 # Every path, parameter and marker panel used below. Later sections reference these names only.
 
 # %%
+# # %load_ext autoreload
+# # %autoreload 2
 import os
 import argparse
 import re
@@ -140,6 +142,7 @@ HEATMAP_OUTPUT_DIR = RESULTS_DIR / 'heatmaps'
 # purge_stage_cache(...). NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the
 # body of a cached cell so a stored payload cannot outlive the code that produced it.
 HARMONY_VERSION = '2.0.5'   # the pip/R harmony version this run is pinned to
+NOTEBOOK_START_TIME = __import__("time").time()   # for the stale-module guard
 NOTEBOOK_LOGIC_VERSION = 1
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
@@ -951,6 +954,23 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
+# A long-lived kernel keeps whatever module objects it first imported, so editing `pseudospace/` and
+# re-running a cell silently uses the OLD code (this produced a stale-code crash that looked like a
+# fresh bug). Warn when a package file is newer than this kernel's first cell.
+import sys as _sys
+import os as _os
+
+_STALE_PACKAGE_MODULES = sorted({
+    name for name, module in list(_sys.modules.items())
+    if name.startswith('pseudospace')
+    and getattr(module, '__file__', None)
+    and _os.path.getmtime(module.__file__) > globals().get('NOTEBOOK_START_TIME', 0)
+})
+if _STALE_PACKAGE_MODULES:
+    print('WARNING: pseudospace changed on disk after this kernel imported it:',
+          ', '.join(_STALE_PACKAGE_MODULES),
+          '\n         restart the kernel (or importlib.reload those modules) before trusting results.')
+
 from pseudospace.io_qc import (
     annotate_mito_ribo_mouse_symbols,
     combine_adatas,
@@ -2304,6 +2324,7 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
+
 from pseudospace.pathways import (
     build_pathway_membership,
     member_gene_evidence,

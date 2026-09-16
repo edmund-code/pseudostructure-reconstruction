@@ -133,6 +133,19 @@ PASS2_HARMONY_OUTPUT_PATH = RESULTS_DIR / 'all_mouse_tubules_harmony.h5ad'   # p
 DPT_OUTPUT_PATH = RESULTS_DIR / 'all_mouse_tubules_scanpy_dpt.h5ad'
 CELLTYPING_DIR = RESULTS_DIR / 'celltyping'
 HEATMAP_OUTPUT_DIR = RESULTS_DIR / 'heatmaps'
+# --- Stage cache -------------------------------------------------------------------------------
+# Expensive pure stages are keyed by their parameters, their inputs and their code, so pressing
+# "Run All" again reloads them instead of recomputing, and each hit is printed. Disable with
+# PSEUDOSPACE_STAGE_CACHE=0; inspect or clear with pseudospace.stage_cache.cache_status(...) /
+# purge_stage_cache(...). NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the
+# body of a cached cell so a stored payload cannot outlive the code that produced it.
+HARMONY_VERSION = '2.0.5'   # the pip/R harmony version this run is pinned to
+NOTEBOOK_LOGIC_VERSION = 1
+STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
+STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
+STAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+print(f'Stage cache: {"on" if STAGE_CACHE_ENABLED else "off"} ({STAGE_CACHE_DIR})')
+
 HEALTHY_VS_AKI_OUTPUT_DIR = RESULTS_DIR / 'healthy_vs_aki'
 CONCORDANCE_DIR = RESULTS_DIR / 'concordance'
 
@@ -924,6 +937,19 @@ from scipy.spatial import cKDTree
 from matplotlib.colors import ListedColormap
 from scipy.stats import ks_2samp, spearmanr, wasserstein_distance
 
+from pseudospace.stage_cache import (
+    cached_anndata,
+    cached_frame,
+    cached_payload,
+    cached_perm_pvalues,
+    cached_run_level_shape,
+    code_digest,
+    digest,
+    fingerprint_anndata,
+    stage_is_fresh,
+    stage_key,
+    stage_mark_fresh,
+)
 from pseudospace.io_qc import (
     annotate_mito_ribo_mouse_symbols,
     combine_adatas,
@@ -1173,19 +1199,57 @@ print(adata_hvg.obs['sample'].value_counts())
 # randomly, so an unseeded run returns a DIFFERENT X_harmony each time -- which moves the
 # neighbour graph, which moves Leiden, which invalidates the hand-written COARSE_LABELS below.
 # rpy2 shares one R session, so setting the seed here governs the RunHarmony call that follows.
-ro.r(f'set.seed({RANDOM_STATE})')
-adata_hvg = run_harmony_rpy2(
-    adata_hvg, batch_key=BATCH_KEY, n_pcs=HARMONY_N_PCS, theta=HARMONY_THETA,
-    lambda_val=HARMONY_LAMBDA, max_iter=HARMONY_MAX_ITER, tau=HARMONY_TAU,
+#
+# The pass-1 embeddings are a cached stage: the key covers the Harmony parameters, the combined
+# matrix and the implementation, so a rerun with unchanged data and code reloads X_pca / X_harmony /
+# X_umap instead of re-running Harmony, the neighbour graph and the UMAP.
+PASS1_EMBEDDING_KEY = stage_key(
+    'pass1_embeddings',
+    params={'pcs': HARMONY_N_PCS, 'theta': HARMONY_THETA, 'lambda': HARMONY_LAMBDA,
+            'max_iter': HARMONY_MAX_ITER, 'tau': HARMONY_TAU,
+            'neighbors': HARMONY_NEIGHBORS_N, 'umap_min_dist': HARMONY_UMAP_MIN_DIST,
+            'umap_spread': HARMONY_UMAP_SPREAD, 'batch_key': BATCH_KEY, 'seed': RANDOM_STATE,
+            'harmony_version': HARMONY_VERSION, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'matrix': fingerprint_anndata(adata_combined)},
+    code=code_digest(run_harmony_rpy2),
 )
-adata_combined.obsm['X_harmony'] = adata_hvg.obsm['X_harmony'].copy()
-adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
 
-sc.pp.neighbors(adata_combined, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
-                random_state=RANDOM_STATE)
-sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-           random_state=RANDOM_STATE)
+
+def _compute_pass1_embeddings():
+    ro.r(f'set.seed({RANDOM_STATE})')
+    result = run_harmony_rpy2(
+        adata_hvg, batch_key=BATCH_KEY, n_pcs=HARMONY_N_PCS, theta=HARMONY_THETA,
+        lambda_val=HARMONY_LAMBDA, max_iter=HARMONY_MAX_ITER, tau=HARMONY_TAU,
+    )
+    adata_combined.obsm['X_pca'] = result.obsm['X_pca'].copy()
+    adata_combined.obsm['X_harmony'] = result.obsm['X_harmony'].copy()
+    sc.pp.neighbors(adata_combined, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
+                    random_state=RANDOM_STATE)
+    sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+               random_state=RANDOM_STATE)
+    return {'X_pca': np.asarray(adata_combined.obsm['X_pca']),
+            'X_harmony': np.asarray(adata_combined.obsm['X_harmony']),
+            'X_umap': np.asarray(adata_combined.obsm['X_umap'])}
+
+
+_pass1 = cached_payload(
+    'pass1_embeddings', _compute_pass1_embeddings, root=STAGE_CACHE_DIR,
+    params={'pcs': HARMONY_N_PCS, 'theta': HARMONY_THETA, 'lambda': HARMONY_LAMBDA,
+            'max_iter': HARMONY_MAX_ITER, 'tau': HARMONY_TAU,
+            'neighbors': HARMONY_NEIGHBORS_N, 'umap_min_dist': HARMONY_UMAP_MIN_DIST,
+            'umap_spread': HARMONY_UMAP_SPREAD, 'batch_key': BATCH_KEY, 'seed': RANDOM_STATE,
+            'harmony_version': HARMONY_VERSION, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'matrix': fingerprint_anndata(adata_combined)},
+    code=code_digest(run_harmony_rpy2), enabled=STAGE_CACHE_ENABLED,
+)
+for _name in ('X_pca', 'X_harmony', 'X_umap'):
+    adata_combined.obsm[_name] = _pass1[_name]
+adata_hvg.obsm['X_pca'] = _pass1['X_pca']
+adata_hvg.obsm['X_harmony'] = _pass1['X_harmony']
+print(f'Pass-1 embeddings ready (key {PASS1_EMBEDDING_KEY})')
+
 sc.pl.umap(adata_combined, color=['sample', 'condition'], ncols=2, frameon=False)
+
 
 # %%
 adata_combined.write(HARMONY_OUTPUT_PATH)
@@ -1259,9 +1323,24 @@ gene_lookup = build_gene_lookup(adata_cluster)
 print(f'Clustering feature space: {int(feature_mask.sum()):,} genes '
       f'({int(adata_all.var["highly_variable"].sum()):,} HVGs + curated markers)')
 
-sc.pp.neighbors(adata_cluster, n_neighbors=N_NEIGHBORS, use_rep='X_harmony', random_state=RANDOM_STATE)
-sc.tl.leiden(adata_cluster, resolution=COARSE_RESOLUTION, key_added='leiden_coarse',
-             flavor='igraph', n_iterations=2, directed=False, random_state=RANDOM_STATE)
+# The neighbour graph and the Leiden partition are a cached stage: the key covers the feature
+# space, the parameters and the pass-1 embedding they are built on.
+def _compute_cluster_object(feature_space):
+    obj = feature_space.copy()
+    sc.pp.neighbors(obj, n_neighbors=N_NEIGHBORS, use_rep='X_harmony', random_state=RANDOM_STATE)
+    sc.tl.leiden(obj, resolution=COARSE_RESOLUTION, key_added='leiden_coarse', flavor='igraph',
+                 n_iterations=2, directed=False, random_state=RANDOM_STATE)
+    return obj
+
+
+adata_cluster = cached_anndata(
+    'cluster_object', lambda: _compute_cluster_object(adata_cluster), root=STAGE_CACHE_DIR,
+    params={'resolution': COARSE_RESOLUTION, 'n_neighbors': N_NEIGHBORS,
+            'n_features': int(feature_mask.sum()), 'seed': RANDOM_STATE,
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'embedding': digest(np.asarray(adata_all.obsm['X_harmony']))},
+    code=code_digest(_compute_cluster_object), enabled=STAGE_CACHE_ENABLED,
+)
 n_clusters = adata_cluster.obs['leiden_coarse'].nunique()
 print(f'Leiden (res={COARSE_RESOLUTION}): {n_clusters} clusters')
 
@@ -2160,6 +2239,19 @@ def binned_matrix_profile(mat, s_vals, lo_, hi_, n_bins, sigma):
 
 
 # %%
+from pseudospace.stage_cache import (
+    cached_anndata,
+    cached_frame,
+    cached_payload,
+    cached_perm_pvalues,
+    cached_run_level_shape,
+    code_digest,
+    digest,
+    fingerprint_anndata,
+    stage_is_fresh,
+    stage_key,
+    stage_mark_fresh,
+)
 from pseudospace.pathways import (
     build_pathway_membership,
     member_gene_evidence,
@@ -2235,6 +2327,8 @@ tested = (detected >= min_detected) & (gene_mean_all >= SECTION4_CONFIG['min_mea
 gene_names = adata_pt.var_names.to_numpy()[tested]
 gene_local = {g_: i for i, g_ in enumerate(gene_names)}
 Y_genes = Y_all[:, tested].tocsr()
+# Fingerprint reused by every cached stage below, so the matrix is hashed once per run.
+Y_GENES_FINGERPRINT = digest(Y_genes)
 Y_csc = Y_genes.tocsc()
 
 # Per-gene mean/std over PT cells (for module z-scores + z-score plotting).
@@ -2276,7 +2370,11 @@ print(f'Common support: [{lo:.3f}, {hi:.3f}]   internal knots: {len(knots)}  ({k
 # ----------------------------------------------------------------------------
 # Section 4.3 -- gene-level nested level/shape decomposition + effect sizes
 # ----------------------------------------------------------------------------
-gene_ls = run_level_shape(Y_genes, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'])
+gene_ls = cached_run_level_shape(
+    Y_genes, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+    stage='section4_gene_fit', root=STAGE_CACHE_DIR,
+    y_fingerprint=Y_GENES_FINGERPRINT, enabled=STAGE_CACHE_ENABLED,
+)
 print(f'Gene-level level/shape fit complete for {len(gene_names):,} genes.')
 print(f"  shape_rms:    [{gene_ls['shape_rms'].min():.4f}, {gene_ls['shape_rms'].max():.4f}]")
 print(f"  |level_eff|:  [{np.abs(gene_ls['level_effect']).min():.4f}, {np.abs(gene_ls['level_effect']).max():.4f}]")

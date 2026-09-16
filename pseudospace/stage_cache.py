@@ -294,13 +294,14 @@ def cached_run_level_shape(Y, s, c, knots, grid, lambda_grid, *, stage, root, y_
     The payload is the fit dictionary; ``sl2`` (a list of slices) is stored as a (start, stop) array
     and rebuilt, so callers such as ``sample_perm_pvalues`` keep working unchanged.
     """
+    from . import stats_gam
     from .levelshape import run_level_shape
 
     params = {'grid': np.asarray(grid), 'lambda_grid': np.asarray(lambda_grid),
               'knots': np.asarray(knots)}
     inputs = {'s': np.asarray(s), 'c': np.asarray(c),
               'y': y_fingerprint if y_fingerprint is not None else digest(Y)}
-    key = stage_key(stage, params=params, inputs=inputs, code=code_digest(run_level_shape))
+    key = stage_key(stage, params=params, inputs=inputs, code=code_digest(run_level_shape, stats_gam))
     root = _ensure_dir(root) if stage_cache_enabled(enabled) else None
     path = root / f'{stage}__{key}.npz' if root is not None else None
     if path is not None and _hit(path, key):
@@ -318,7 +319,7 @@ def cached_run_level_shape(Y, s, c, knots, grid, lambda_grid, *, stage, root, y_
         payload['sl2_bounds'] = np.asarray([[item.start, item.stop] for item in fit['sl2']])
         np.savez_compressed(path, **payload)
         _record(path, stage=stage, key=key, params=params, inputs={k: repr(v)[:80] for k, v in inputs.items()},
-                code=code_digest(run_level_shape))
+                code=code_digest(run_level_shape, stats_gam))
     return fit
 
 
@@ -326,6 +327,7 @@ def cached_perm_pvalues(Y, s, samples, knots, grid, lambda_grid, lam_idx, sl2, p
                         control_samples, *, stage, root, y_fingerprint=None, enabled=None,
                         verbose=True):
     """``levelshape.sample_perm_pvalues`` with the exact permutation block cached."""
+    from . import stats_gam as _stats_gam
     from .levelshape import sample_perm_pvalues
 
     params = {'grid': np.asarray(grid), 'lambda_grid': np.asarray(lambda_grid),
@@ -334,7 +336,7 @@ def cached_perm_pvalues(Y, s, samples, knots, grid, lambda_grid, lam_idx, sl2, p
               'y': y_fingerprint if y_fingerprint is not None else digest(Y),
               'sl2': [[item.start, item.stop] for item in sl2],
               'control': list(map(str, control_samples))}
-    key = stage_key(stage, params=params, inputs=inputs, code=code_digest(sample_perm_pvalues))
+    key = stage_key(stage, params=params, inputs=inputs, code=code_digest(sample_perm_pvalues, _stats_gam))
     root = _ensure_dir(root) if stage_cache_enabled(enabled) else None
     path = root / f'{stage}__{key}.npz' if root is not None else None
     if path is not None and _hit(path, key):
@@ -352,7 +354,7 @@ def cached_perm_pvalues(Y, s, samples, knots, grid, lambda_grid, lam_idx, sl2, p
                             splits=np.asarray([list(map(str, split)) for split in splits]),
                             true_idx=np.asarray(true_idx))
         _record(path, stage=stage, key=key, params=params, inputs={k: repr(v)[:80] for k, v in inputs.items()},
-                code=code_digest(sample_perm_pvalues))
+                code=code_digest(sample_perm_pvalues, _stats_gam))
     return shape_p, level_p, splits, true_idx
 
 

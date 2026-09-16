@@ -3055,7 +3055,8 @@ module_enrichment = cached_frame(
         background=gene_names,
     ),
     root=STAGE_CACHE_DIR,
-    params={'logic': NOTEBOOK_LOGIC_VERSION, 'background_size': len(gene_names)},
+    params={'logic': NOTEBOOK_LOGIC_VERSION,
+            'background': digest(np.asarray(gene_names))},
     inputs={'labels': digest(response_labels.to_numpy()), 'sets': digest(sorted(module_gene_sets))},
     code=code_digest(enrich_modules), enabled=STAGE_CACHE_ENABLED,
 )
@@ -3237,7 +3238,8 @@ for question, column in ENRICHMENT_QUESTIONS.items():
                 'min_set_size': SECTION4_CONFIG['pathway_min_genes'],
                 'logic': NOTEBOOK_LOGIC_VERSION},
         inputs={'statistics': digest(statistics), 'sets': digest(sorted(module_gene_sets)),
-                'expression': Y_GENES_FINGERPRINT},
+                'expression': Y_GENES_FINGERPRINT,
+                'background': digest(np.asarray(gene_names))},
         code=code_digest(camera_like_enrichment), enabled=STAGE_CACHE_ENABLED,
     )
     table.insert(0, 'question', question)

@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pseudospace.levelshape import summarize_curve_effects
+from pseudospace.levelshape import PATTERN_RMS_Z_TOL, summarize_curve_effects
 
 GRID = np.linspace(0.0, 1.0, 41)
 
@@ -27,7 +27,8 @@ def test_pure_level_shift_is_all_level():
     assert row['shape_fraction'] == pytest.approx(0.0, abs=1e-12)
     assert row['shape_rms'] == pytest.approx(0.0, abs=1e-12)
     assert row['pattern_rms_z'] == pytest.approx(0.0, abs=1e-12)
-    assert row['difference_type'] == 'level shift'
+    assert row['difference_type'] == 'level'
+    assert row['pattern_status'] == 'unchanged'
 
 
 def test_amplitude_loss_is_not_reported_as_a_pattern_change():
@@ -39,7 +40,8 @@ def test_amplitude_loss_is_not_reported_as_a_pattern_change():
     assert out['amplitude_log2_ratio'] == pytest.approx(-1.0)
     assert out['pattern_rms_z'] == pytest.approx(0.0, abs=1e-12)
     assert out['shape_rms'] > 0.1                    # the legacy metric does move
-    assert out['difference_type'] == 'amplitude change'
+    assert out['difference_type'] == 'amplitude'
+    assert out['pattern_status'] == 'unchanged'
 
 
 def test_peak_relocation_is_a_pattern_change():
@@ -47,7 +49,8 @@ def test_peak_relocation_is_a_pattern_change():
     comparison = _curves(np.exp(-((GRID - 0.75) ** 2) / 0.01))
     out = summarize_curve_effects(reference, comparison).iloc[0]
     assert out['pattern_rms_z'] > 1.0
-    assert out['difference_type'] == 'pattern shift'
+    assert out['difference_type'] == 'redistribution'
+    assert out['pattern_status'] == 'supported'
 
 
 def test_identical_curves_have_no_detectable_difference():
@@ -55,7 +58,7 @@ def test_identical_curves_have_no_detectable_difference():
     out = summarize_curve_effects(reference, reference.copy()).iloc[0]
     assert out['condition_effect_rms'] == pytest.approx(0.0, abs=1e-12)
     assert out['level_effect'] == pytest.approx(0.0, abs=1e-12)
-    assert out['difference_type'] == 'no detectable difference'
+    assert out['difference_type'] == 'none'
 
 
 def test_level_and_shape_fractions_are_orthogonal_and_sum_to_one():
@@ -85,7 +88,19 @@ def test_zero_variance_curve_does_not_produce_a_pattern_change():
     comparison = _curves(np.full(GRID.size, 5.0))
     out = summarize_curve_effects(reference, comparison).iloc[0]
     assert np.isnan(out['pattern_rms_z'])
-    assert out['difference_type'] == 'level shift'
+    assert out['pattern_status'] == 'insufficient amplitude'
+    assert out['difference_type'] == 'level'
+
+
+def test_a_nearly_flat_gradient_cannot_claim_a_pattern_change():
+    """Standardising a flat curve magnifies noise; that must not become a pattern verdict."""
+    rng = np.random.default_rng(0)
+    reference = _curves(2.0 + 0.01 * rng.normal(size=GRID.size))
+    comparison = _curves(2.5 + 0.01 * rng.normal(size=GRID.size))
+    out = summarize_curve_effects(reference, comparison).iloc[0]
+    assert out['pattern_rms_z'] > PATTERN_RMS_Z_TOL, 'the standardised difference is large...'
+    assert out['pattern_status'] == 'insufficient amplitude', '...but the gradients are not'
+    assert out['difference_type'] == 'level'
 
 
 def test_effect_columns_that_collide_with_a_fit_table_are_identifiable():

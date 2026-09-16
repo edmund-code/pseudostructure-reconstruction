@@ -360,8 +360,8 @@ three it is: on the cross-species fits 98-99 % of the top-20 effect is a vertica
 Related outputs written by the current workflows: pathway coverage per stage
 (`pathway_membership_coverage.csv`, with the pathways a size bound would remove), pathway redundancy
 groups and member-gene evidence, positional/response curve modules with specimen-omission stability
-(`module_*.csv`), signed per-question enrichments with a correlation-aware p
-(`signed_enrichment_*.csv`), specimen-balanced curves, pseudobulk profiles, and the magnitude checks
+(`module_*.csv`), signed per-question enrichments, competitive against the eligible-gene background with a
+residual-correlation variance inflation (`signed_enrichment_*.csv`), specimen-balanced curves, pseudobulk profiles, and the magnitude checks
 (detection/abundance, ratio-versus-abundance, within-side gradients, matched-position per-specimen
 contrast, capture summary).
 

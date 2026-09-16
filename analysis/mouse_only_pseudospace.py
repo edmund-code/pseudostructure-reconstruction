@@ -2584,6 +2584,8 @@ positional_labels, positional_modules = _cached_module_catalog(
     'module_positional_aki', gene_ls['curve_healthy']
 )
 response_delta = difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'])
+_response_centered_aki = difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'],
+                                           center=True)
 response_labels, response_modules = _cached_module_catalog(
     'module_response_aki',
     difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'], center=True),
@@ -3271,7 +3273,7 @@ gene_curve_effects = summarize_curve_effects(
 # (`shape_rms_x`/`shape_rms_y`) and break every table that selects them.
 gene_curve_effects = gene_curve_effects.rename(columns={'feature': 'gene'})
 gene_results = gene_results.merge(
-    gene_curve_effects[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference', 'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio', 'difference_type']],
+    gene_curve_effects[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference', 'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio', 'pattern_status', 'difference_type']],
     on='gene', how='left',
 ).sort_values('shape_rms', ascending=False).reset_index(drop=True)
 top_shape_genes = gene_results.head(20)
@@ -4683,6 +4685,14 @@ pathway_gene_sets = {
     f'{row.library}: {row.pathway}': row.genes_present
     for row in retained_pathways.itertuples()
 }
+# Enrichment background: the genes eligible for discovery (finite over the run support and above the
+# amplitude floor), so the expected overlap is not inflated by genes that could never be assigned.
+_response_amplitude_aki = (np.nanmax(_response_centered_aki, axis=1)
+                           - np.nanmin(_response_centered_aki, axis=1))
+module_background = gene_names[
+    np.isfinite(_response_centered_aki).all(axis=1)
+    & (_response_amplitude_aki >= MODULE_CONFIG['min_amplitude'])
+]
 module_enrichment = cached_frame(
     'module_pathway_enrichment_aki',
     lambda: enrich_modules(
@@ -4690,13 +4700,16 @@ module_enrichment = cached_frame(
          for module, members in response_labels.groupby(response_labels, observed=True)
          if module != 'unassigned'},
         pathway_gene_sets,
-        background=gene_names,
+        background=module_background,
     ),
     root=STAGE_CACHE_DIR,
     params={'logic': NOTEBOOK_LOGIC_VERSION,
-            'background': digest(np.asarray(gene_names))},
+            'background': digest(np.asarray(module_background))},
     inputs={'labels': digest(response_labels.to_numpy()),
-            'sets': digest(sorted(pathway_gene_sets))},
+            # the member lists, not the names: a pathway can keep its name and change members
+            'sets': digest(sorted((name, tuple(members))
+                                  for name, members in pathway_gene_sets.items())),
+            'background': digest(np.asarray(module_background))},
     code=code_digest(enrich_modules), enabled=STAGE_CACHE_ENABLED,
 )
 module_enrichment.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_pathway_enrichment.csv', index=False)
@@ -4906,7 +4919,7 @@ within_condition_gradients['gradient_difference_aki_minus_healthy'] = (
     - within_condition_gradients['healthy_early_to_late']
 )
 within_condition_gradients = within_condition_gradients.merge(
-    gene_results[['gene', 'level_effect', 'difference_type']], on='gene', how='left')
+    gene_results[['gene', 'level_effect', 'pattern_status', 'difference_type']], on='gene', how='left')
 within_condition_gradients.to_csv(
     HEALTHY_VS_AKI_OUTPUT_DIR / 'within_condition_gradients.csv', index=False)
 finite_gradients = within_condition_gradients.dropna(

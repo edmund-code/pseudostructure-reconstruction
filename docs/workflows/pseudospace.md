@@ -52,14 +52,22 @@ carries its coverage stages (`n_requested`, `n_with_ortholog`, `n_assayed`, `n_t
 pathways are kept with a reason, and no upper size bound is applied to membership — the number of
 pathways such a bound would remove is reported instead. Pathways whose member sets largely coincide
 are grouped in `pathway_redundancy_*.csv`, and each prioritized pathway ships member-gene evidence
-(agreement fraction, strongest contributor, sign flip without it). Enrichment is competitive, uses
-the genes eligible for the analysis as background, and reports both a label-permutation p and a
-correlation-aware p; correction is applied across all tested pairs.
+(agreement fraction, strongest contributor, sign flip without it). Enrichment is competitive: a set's mean signed statistic is
+contrasted with the **background mean** (the genes eligible for the analysis, i.e. finite over the run
+support and above the amplitude floor), with the finite-population correction for sampling without
+replacement and a variance inflation estimated from **residual** correlations - the fitted M2 design
+is removed first, so shared pseudospace structure cannot masquerade as pathway coherence. The
+permutation column (`p_value_permutation_with_replacement`) is an optional sanity check, not the
+headline; correction is applied across every tested pair of the whole family, not per question. These
+are exploratory annotations: with two mice and one human donor the units of replication are
+specimens, so no set-level p-value is confirmatory.
 
 ## Curve modules
 
 `pseudospace.modules` discovers **positional** modules from the reference curves and **response**
-modules from the mean-centred difference curves by correlation distance on standardised curves.
+modules from the mean-centred difference curves by correlation distance on standardised curves. Both
+catalogs are discovered on the **specimen-balanced** curves (equal weight per specimen), with the
+pooled fits kept as the `specimen_balanced_mixture` sensitivity row.
 Peaks are annotations, never the grouping key, and dynamic time warping is not used. Stability is
 reported under specimen omission and under a different data mixture.
 

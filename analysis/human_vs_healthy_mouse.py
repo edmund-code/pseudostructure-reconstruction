@@ -2011,6 +2011,8 @@ DPT_EXTRA_OBS_COLS = ['comparison_species', 'region', 'x_centroid', 'y_centroid'
     'segment_class', 'coarse_class', 'leiden_coarse', 'total_marker_axis',
     'total_early_trajectory_score', 'total_late_trajectory_score', 'global_nephron_dpt',
     'shared_pseudospace',
+    # capture fields, so the magnitude checks can read them
+    'n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_counts_mt',
     # carried so Section 4 can renormalise with the native denominator
     'pre_filter_total_counts']
 adata_total.write(GLOBAL_DPT_OUTPUT_PATH)
@@ -2363,7 +2365,7 @@ gene_curve_effects = summarize_curve_effects(
 # (`shape_rms_x`/`shape_rms_y`) and break every table that selects them.
 gene_curve_effects = gene_curve_effects.rename(columns={'feature': 'gene'})
 gene_results = gene_results.merge(
-    gene_curve_effects[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference', 'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio', 'difference_type']],
+    gene_curve_effects[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_reference', 'amplitude_comparison', 'amplitude_ratio', 'amplitude_log2_ratio', 'pattern_status', 'difference_type']],
     on='gene', how='left',
 )
 gene_results['axis_basis_gene'] = gene_results['gene'].str.upper().isin(axis_basis)
@@ -2439,7 +2441,7 @@ gene_results.to_csv(
 )
 display(gene_results.head(20)[[
     'gene', 'species_effect_rms', 'level_effect_human_minus_mouse',
-    'shape_rms', 'level_fraction', 'pattern_rms_z', 'difference_type',
+    'shape_rms', 'level_fraction', 'pattern_rms_z', 'pattern_status', 'difference_type',
     'curve_spearman', 'axis_basis_gene',
 ]])
 
@@ -2775,7 +2777,7 @@ else:
                        zip(retained_pathways['library'], retained_pathways['pathway'])],
     )
     for column in ('level_fraction', 'shape_fraction', 'pattern_rms_z', 'amplitude_ratio',
-                   'amplitude_log2_ratio', 'difference_type'):
+                   'amplitude_log2_ratio', 'pattern_status', 'difference_type'):
         pathway_results[column] = pathway_curve_effects[column].to_numpy()
     pathway_results = pathway_results.sort_values(
         'species_effect_rms', ascending=False
@@ -2791,7 +2793,7 @@ pathway_results.to_csv(
 display(pathway_results.head(20)[[
     'library', 'pathway', 'n_genes_present', 'species_effect_rms',
     'level_effect_human_minus_mouse', 'shape_rms', 'level_fraction', 'pattern_rms_z',
-    'difference_type',
+    'pattern_status', 'difference_type',
 ]] if len(pathway_results) else pathway_results)
 
 # Member-gene evidence beside every prioritized pathway: how many members move with the aggregate
@@ -3022,12 +3024,21 @@ def _cached_module_catalog(stage, curves):
     return series, modules
 
 
+# Both catalogs come from the SPECIMEN-BALANCED curves: equal weight per specimen, so a specimen with
+# more tubules cannot shape the modules. The pooled fits stay available through the
+# `specimen_balanced_mixture` row of the stability table below.
 positional_labels, positional_modules = _cached_module_catalog(
-    'module_positional', gene_fit['curve_healthy']
+    'module_positional_balanced', balanced_reference
 )
 response_delta = difference_curves(gene_fit['curve_healthy'], gene_fit['curve_aki'])
 response_centered = difference_curves(gene_fit['curve_healthy'], gene_fit['curve_aki'], center=True)
-response_labels, response_modules = _cached_module_catalog('module_response', response_centered)
+# Discovery uses the SPECIMEN-BALANCED difference curves: equal weight per specimen, so a specimen
+# with more tubules cannot shape the modules. The pooled fit remains available through the
+# `specimen_balanced_mixture` row of the stability table below.
+balanced_response_centered = difference_curves(balanced_reference, balanced_comparison, center=True)
+response_labels, response_modules = _cached_module_catalog(
+    'module_response_balanced', balanced_response_centered
+)
 
 gene_module_table = pd.DataFrame({
     'gene': gene_names,
@@ -3078,6 +3089,16 @@ display(module_stability_table.round(3))
 
 # Enrichment against the pathway library, with the discovery-eligible genes as the background and
 # correction across every tested (module, gene set) pair.
+# Enrichment background: the genes eligible for discovery (finite over the run support and above
+# the amplitude floor). Testing a module against genes that could never have been assigned to one
+# inflates the expected overlap and understates the enrichment.
+_response_amplitude = (np.nanmax(balanced_response_centered, axis=1)
+                       - np.nanmin(balanced_response_centered, axis=1))
+module_background = gene_names[
+    np.isfinite(balanced_response_centered).all(axis=1)
+    & (_response_amplitude >= MODULE_CONFIG['min_amplitude'])
+]
+
 module_gene_sets = {
     f'{row.library}: {row.pathway}': row.genes_present
     for row in pathway_coverage[pathway_coverage['retained']].itertuples()
@@ -3089,12 +3110,16 @@ module_enrichment = cached_frame(
          for module, members in response_labels.groupby(response_labels, observed=True)
          if module != 'unassigned'},
         module_gene_sets,
-        background=gene_names,
+        background=module_background,
     ),
     root=STAGE_CACHE_DIR,
     params={'logic': NOTEBOOK_LOGIC_VERSION,
             'background': digest(np.asarray(gene_names))},
-    inputs={'labels': digest(response_labels.to_numpy()), 'sets': digest(sorted(module_gene_sets))},
+    inputs={'labels': digest(response_labels.to_numpy()),
+            # the member lists, not the names: a pathway can keep its name and change members
+            'sets': digest(sorted((name, tuple(members))
+                                  for name, members in module_gene_sets.items())),
+            'background': digest(np.asarray(module_background))},
     code=code_digest(enrich_modules), enabled=STAGE_CACHE_ENABLED,
 )
 module_enrichment.to_csv(CURVE_OUTPUT_DIR / 'module_pathway_enrichment.csv', index=False)
@@ -3112,10 +3137,10 @@ display(module_enrichment.head(15)[[
 # separately so "everything went down together" cannot be read as a discovered program.
 level_only = gene_module_table[
     (gene_results.set_index('gene').reindex(gene_module_table['gene'])['difference_type'].to_numpy()
-     == 'level shift')
+     == 'level')
 ]
 level_only.to_csv(CURVE_OUTPUT_DIR / 'module_level_only_genes.csv', index=False)
-print(f'Genes whose difference is a level shift rather than a pattern change: {len(level_only):,}; '
+print(f'Genes whose dominant difference is level, not a supported pattern change: {len(level_only):,}; '
       'module discovery is run on the mean-centred difference, so they are annotated, not clustered.')
 
 
@@ -3239,7 +3264,7 @@ signed_rankings = signed_gene_rankings(
     gene_fit['curve_healthy'], gene_fit['curve_aki'], grid, gene_names=gene_names
 )
 signed_rankings = signed_rankings.merge(
-    gene_results[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'difference_type']],
+    gene_results[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z', 'pattern_status', 'difference_type']],
     on='gene', how='left',
 )
 signed_rankings.to_csv(CURVE_OUTPUT_DIR / 'gene_signed_rankings.csv', index=False)
@@ -3460,7 +3485,7 @@ within_species_gradients['gradient_difference_human_minus_mouse'] = (
     - within_species_gradients['mouse_early_to_late']
 )
 within_species_gradients = within_species_gradients.merge(
-    gene_results[['gene', 'level_effect_human_minus_mouse', 'difference_type']], on='gene', how='left'
+    gene_results[['gene', 'level_effect_human_minus_mouse', 'pattern_status', 'difference_type']], on='gene', how='left'
 )
 within_species_gradients.to_csv(CURVE_OUTPUT_DIR / 'within_species_gradients.csv', index=False)
 finite_gradients = within_species_gradients.dropna(subset=['mouse_early_to_late', 'human_early_to_late'])
@@ -3510,6 +3535,14 @@ if pair_ratios:
     per_gene = matched_region_ratios.groupby('gene')['log2_ratio'].agg(
         ['median', 'std', 'size']).reset_index()
     # Every gene is measured in the same specimen pairs, so the unit count is a single number.
+    # Consistency means AGREEMENT IN SIGN across bins and specimen pairs, not "the median is large":
+    # a gene can have a big median driven by one bin while half the comparisons disagree.
+    _signs = np.sign(matched_region_ratios['log2_ratio'])
+    per_gene['fraction_rows_agreeing_with_median'] = (
+        _signs.groupby(matched_region_ratios['gene'])
+        .transform(lambda values: values == np.sign(values.median()))
+        .groupby(matched_region_ratios['gene']).mean().to_numpy()
+    )
     per_gene['n_specimen_pairs'] = matched_region_ratios[
         ['human_specimen', 'mouse_specimen']].drop_duplicates().shape[0]
     per_gene.to_csv(CURVE_OUTPUT_DIR / 'matched_region_per_gene.csv', index=False)

@@ -79,21 +79,42 @@ EFFECT_RMS_FLOOR = 0.05          # lognorm units: below this there is nothing to
 PATTERN_RMS_Z_TOL = 0.25         # z-units: the curves keep the same shape below this
 AMPLITUDE_LOG2_TOL = 0.5         # a ~1.4x amplitude change
 LEVEL_FRACTION_TOL = 0.5         # the difference is mostly a vertical offset
+# Below this gradient amplitude a z-standardised comparison magnifies noise: standardising a nearly
+# flat curve turns tiny fluctuations into an apparently large pattern difference. Such features get
+# `pattern_status = 'insufficient amplitude'` instead of a pattern claim.
+PATTERN_AMPLITUDE_FLOOR = 0.15
 
 
 def _classify_difference(frame: pd.DataFrame) -> np.ndarray:
-    pattern_moves = frame['pattern_rms_z'].to_numpy() >= PATTERN_RMS_Z_TOL
-    amplitude_moves = np.abs(frame['amplitude_log2_ratio'].to_numpy()) >= AMPLITUDE_LOG2_TOL
-    level_dominant = frame['level_fraction'].to_numpy() >= LEVEL_FRACTION_TOL
-    detectable = frame['condition_effect_rms'].to_numpy() >= EFFECT_RMS_FLOOR
+    """Dominant kind of difference: level, amplitude, redistribution, or nothing detectable.
 
-    labels = np.full(len(frame), 'level shift', dtype=object)
-    labels[pattern_moves] = 'pattern shift'
-    labels[~pattern_moves & amplitude_moves & ~level_dominant] = 'amplitude change'
-    labels[~pattern_moves & amplitude_moves & level_dominant] = 'level shift + amplitude change'
-    labels[~pattern_moves & ~amplitude_moves & ~level_dominant] = 'undetermined'
-    labels[~detectable] = 'no detectable difference'
+    Reported separately from :func:`_pattern_status`, because a large level offset can coexist with an
+    unsupported pattern comparison, and a single label that lets the pattern term win hides that.
+    """
+    detectable = frame['condition_effect_rms'].to_numpy() >= EFFECT_RMS_FLOOR
+    level_dominant = frame['level_fraction'].to_numpy() >= LEVEL_FRACTION_TOL
+    amplitude_moves = np.abs(frame['amplitude_log2_ratio'].to_numpy()) >= AMPLITUDE_LOG2_TOL
+    pattern_supported = frame['pattern_status'].to_numpy() == 'supported'
+
+    labels = np.full(len(frame), 'undetermined', dtype=object)
+    labels[level_dominant] = 'level'
+    labels[~level_dominant & amplitude_moves & ~pattern_supported] = 'amplitude'
+    labels[~level_dominant & pattern_supported] = 'redistribution'
+    labels[~detectable] = 'none'
     return labels
+
+
+def _pattern_status(frame: pd.DataFrame) -> np.ndarray:
+    """Whether a pattern comparison is meaningful for this feature.
+
+    ``supported`` requires both curves to carry a gradient and the standardised difference to exceed
+    the tolerance. Anything flatter is ``insufficient amplitude``, where standardising magnifies noise;
+    a measurable gradient that does not move is ``unchanged``.
+    """
+    measurable = ((frame['amplitude_reference'].to_numpy() >= PATTERN_AMPLITUDE_FLOOR)
+                  & (frame['amplitude_comparison'].to_numpy() >= PATTERN_AMPLITUDE_FLOOR))
+    moved = frame['pattern_rms_z'].to_numpy() >= PATTERN_RMS_Z_TOL
+    return np.where(~measurable, 'insufficient amplitude', np.where(moved, 'supported', 'unchanged'))
 
 
 def summarize_curve_effects(curve_reference, curve_comparison, feature_names=None):
@@ -181,7 +202,11 @@ def summarize_curve_effects(curve_reference, curve_comparison, feature_names=Non
         'amplitude_log2_ratio': amplitude_log2_ratio,
         'pattern_rms_z': pattern_rms_z,
     })
+    # A pattern verdict is only offered when both curves carry a gradient, and the dominant kind of
+    # difference is reported separately, so a large vertical offset cannot hide inside a pattern label.
+    frame['pattern_status'] = _pattern_status(frame)
     frame['difference_type'] = _classify_difference(frame)
+    frame['dominant_difference'] = frame['difference_type']
     return frame
 
 

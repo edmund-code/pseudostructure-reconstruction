@@ -60,7 +60,7 @@ CI (`.github/workflows/ci.yml`) runs three jobs: `hygiene`, `pseudospace-synthet
 
 | Path | Role |
 | --- | --- |
-| `pseudospace/` | Reusable, data-location-agnostic analysis logic: `markers` (alias resolution, marker axis, DE cluster annotation), `harmony` (R integration + version guard), `trajectory` (DPT root/orientation), `levelshape` + `stats_gam` (level/shape GAM decomposition, inclusive-tail permutation p-values, LOSO stability, level/amplitude/pattern split), `modules` (positional and response curve modules + module enrichment), `enrichment` (signed rankings, competitive correlation-aware set tests, signed signatures), `pathways` (ortholog-aware membership, coverage stages, redundancy, member evidence), `specimen` (balanced curves, pseudobulk, coordinate agreement), `cross_species`, `heatmaps`, `io_qc`, `scprisma_pseudospace`. |
+| `pseudospace/` | Reusable, data-location-agnostic analysis logic: `markers` (alias resolution, marker axis, DE cluster annotation), `harmony` (R integration + version guard), `trajectory` (DPT root/orientation), `levelshape` + `stats_gam` (level/shape GAM decomposition, inclusive-tail permutation p-values, LOSO stability, dominant-difference and pattern-status split), `modules` (positional and response curve modules + module enrichment), `enrichment` (signed rankings, competitive set tests with residual-correlation variance inflation, signed signatures), `pathways` (ortholog-aware membership, coverage stages, redundancy, member evidence), `specimen` (balanced curves, pseudobulk, coordinate agreement), `cross_species`, `heatmaps`, `io_qc`, `scprisma_pseudospace`. |
 | `analysis/` | Canonical `notebooks/*.ipynb` workflows plus their generated `.py` mirrors and the study-specific data contract. |
 | `analysis/scripts/` | QuPath label export and spatial validation of the pseudospace. |
 | `segmentation/` | Self-contained `kidney_panoptic` project (`src/kidney_panoptic/{data,models,losses,postprocess,eval,utils,infer}`, `scripts/`, `configs/`). Frozen encoder + native-resolution decoder + watershed decode. |
@@ -98,6 +98,15 @@ tables under `docs/results/`.
 - **Tests must not need private data.** Use synthetic fixtures; gate heavy imports with
   `pytest.importorskip(...)` (see `tests/test_pseudospace_synthetic.py`).
 - **Scientific guardrails** (do not bypass):
+  - **The cross-species shared space contains only genes measured in every input.** The accepted
+    ortholog map creates a target column for every pair, so an unfed column is a structural zero, not
+    an observation of zero expression; `combine_cross_species` drops genes missing from any input's
+    feature list and records them in `uns['cross_species_availability']` (notebook 03 also writes
+    `diagnostics/cross_species_*.csv`). A measured zero stays.
+  - **Set-level enrichment is exploratory, never confirmatory.** `camera_like_enrichment` contrasts a
+    set's mean statistic with the background mean, corrects across the whole family of tested pairs,
+    and estimates the variance inflation from residual correlations given the fitted design. With two
+    mice and one human donor the units of replication are specimens.
   - Only `*_v4.geojson` mouse segmentations are valid; centroid verification is mandatory
     (`analysis/`, `docs/workflows/pseudospace.md`).
   - The coarse-label checkpoint requires explicit per-cluster confirmation, and the reference

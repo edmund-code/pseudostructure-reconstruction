@@ -84,7 +84,8 @@ def test_n_modules_cut_is_honoured():
     assert len(table) == 3
 
 
-def test_module_stability_reports_agreement_and_disorder():
+def test_module_stability_is_label_invariant_and_reports_retention():
+    """Module names are arbitrary: agreement must not depend on them, and retention is the metric."""
     base = pd.Series(['M1'] * 5 + ['M2'] * 5, index=[f'g{i}' for i in range(10)])
     same = base.copy()
     renamed = pd.Series(['M2'] * 5 + ['M1'] * 5, index=base.index)   # same partition, other names
@@ -94,11 +95,14 @@ def test_module_stability_reports_agreement_and_disorder():
     stability = module_stability({'baseline': base, 'identical': same, 'renamed': renamed,
                                   'repartitioned': repartitioned, 'one_feature_moved': moved})
     table = stability.set_index('run')
-    assert table.loc['identical', 'adjusted_rand_index_vs_reference'] == pytest.approx(1.0)
-    # module names are arbitrary, so an exact relabelling must still count as full agreement
-    assert table.loc['renamed', 'adjusted_rand_index_vs_reference'] == pytest.approx(1.0)
+    assert 'fraction_same_module' not in stability.columns, 'module names are not comparable'
+    for run in ('identical', 'renamed'):
+        assert table.loc[run, 'adjusted_rand_index_vs_reference'] == pytest.approx(1.0)
+        assert table.loc[run, 'mean_reference_module_retention'] == pytest.approx(1.0)
     assert table.loc['repartitioned', 'adjusted_rand_index_vs_reference'] < 0.0
-    assert table.loc['one_feature_moved', 'fraction_same_module'] == pytest.approx(0.9)
+    # each reference module's best match captures 3 of its 5 members under the alternating split
+    assert table.loc['repartitioned', 'mean_reference_module_retention'] == pytest.approx(0.6)
+    assert table.loc['one_feature_moved', 'mean_reference_module_retention'] == pytest.approx(0.9)
 
 
 def test_enrichment_uses_the_discovery_background_and_corrects_across_pairs():

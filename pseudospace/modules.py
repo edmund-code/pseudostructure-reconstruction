@@ -183,23 +183,42 @@ def discover_curve_modules(curves, grid, *, n_modules=None, max_distance=0.5, mi
 def module_stability(labels_by_run: Mapping[str, pd.Series]) -> pd.DataFrame:
     """Agreement of module assignments across runs (leave-one-specimen-out, other smoothing).
 
-    Returns one row per run with the adjusted Rand index against the first run, the fraction of
-    features keeping a module label, and the number of modules found.
+    Returns one row per run with the adjusted Rand index against the first run (label invariant), the
+    fraction of features labelled at all, and ``mean_reference_module_retention``: for each reference
+    module, the fraction of its members that land together in this run's best-overlapping module, then
+    averaged over reference modules. Retention is the label-invariant replacement for counting
+    identical module names, which is meaningless because module names are arbitrary.
     """
     runs = {name: pd.Series(labels).astype(str) for name, labels in labels_by_run.items()}
     reference_name = next(iter(runs))
     reference = runs[reference_name]
+    reference_modules = [module for module in reference.unique() if module != 'unassigned']
+
     rows = []
     for name, labels in runs.items():
         shared = reference.index.intersection(labels.index)
         left, right = reference.loc[shared], labels.loc[shared]
+        retentions = []
+        for module in reference_modules:
+            members = set(left.index[left == module])
+            if not members:
+                continue
+            best = right.loc[sorted(members)].value_counts()
+            if best.empty:
+                continue
+            best_module = best.index[0]
+            if best_module == 'unassigned':
+                retentions.append(0.0)
+                continue
+            best_members = set(right.index[right == best_module])
+            retentions.append(len(members & best_members) / len(members))
         rows.append({
             'run': name,
             'n_features': int(len(shared)),
             'n_modules': int(labels[labels != 'unassigned'].nunique()),
             'adjusted_rand_index_vs_reference': float(adjusted_rand_score(left, right)),
             'fraction_labelled': float((labels != 'unassigned').mean()),
-            'fraction_same_module': float((left == right).mean()),
+            'mean_reference_module_retention': float(np.mean(retentions)) if retentions else np.nan,
         })
     return pd.DataFrame(rows)
 

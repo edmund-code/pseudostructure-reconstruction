@@ -47,11 +47,21 @@ def clean_copy(path: Path) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list", action="store_true", help="report without staging")
+    parser.add_argument("paths", nargs="*", type=Path,
+                        help="notebooks to stage (default: every tracked notebook carrying outputs)")
     args = parser.parse_args(argv)
 
-    names = subprocess.run(["git", "ls-files", "-z", "*.ipynb"], cwd=REPO_ROOT,
-                           check=True, capture_output=True).stdout.split(b"\0")
-    dirty = [REPO_ROOT / name.decode() for name in names if name and has_outputs(REPO_ROOT / name.decode())]
+    if args.paths:
+        candidates = [p if p.is_absolute() else REPO_ROOT / p for p in args.paths]
+        missing = [p for p in candidates if not p.exists()]
+        if missing:
+            print("not found:", *missing, sep="\n  ")
+            return 1
+    else:
+        names = subprocess.run(["git", "ls-files", "-z", "*.ipynb"], cwd=REPO_ROOT,
+                               check=True, capture_output=True).stdout.split(b"\0")
+        candidates = [REPO_ROOT / name.decode() for name in names if name]
+    dirty = [path for path in candidates if has_outputs(path)]
     if not dirty:
         print("No tracked notebook carries outputs; nothing to stage.")
         return 0

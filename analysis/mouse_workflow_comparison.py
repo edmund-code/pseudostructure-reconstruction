@@ -59,10 +59,11 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 MOUSE_CONTROLS = ("Ctrl1A2", "Ctrl1A4")
 # The cross-species workflow removes these before pass-2 Harmony, so they are "not a nephron tubule".
-NEPHRON_CLASSES = ("PT", "TAL", "DCT", "CNT_CD")
-# Notebook 02 rolls the ascending limb up as 'AL'; notebook 03 calls the same class 'TAL'.
-# Bridging them is what makes the two coarse vocabularies comparable at all -- see section 6.
-COARSE_BRIDGE = {"AL": "TAL"}
+NEPHRON_CLASSES = ("PT", "AL", "DCT", "CNT_CD")
+# Both workflows roll the ascending limb up as 'AL'; notebook 02 carries `mTAL` only as a fine label
+# and notebook 03 emits no `TAL` at the coarse level. The bridge is therefore empty, and section 3
+# checks each class against the vocabularies the runs actually carry instead of assuming one.
+COARSE_BRIDGE = {}
 N_SUBSAMPLE = 2500
 N_NEIGHBOURS = 15
 RANDOM_STATE = 0
@@ -209,22 +210,34 @@ else:
     print("vocabulary 03:", sorted(cross_species["coarse_class"].unique()))
     print()
     print(f"coarse label agreement, raw                 : {(paired['label_02'] == paired['label_03']).mean():7.1%}")
-    print(f"coarse label agreement, AL bridged to TAL   : {(paired['label_02_bridged'] == paired['label_03']).mean():7.1%}")
     print(f"nephron-tubule vs not, agreement            : {(paired['is_nephron_02'] == paired['is_nephron_03']).mean():7.1%}")
 
     cross_tab = pd.crosstab(paired["label_02_bridged"], paired["label_03"], margins=True)
     cross_tab.to_csv(OUTPUT_DIR / "coarse_label_crosstab.csv")
     print()
-    print("rows = notebook 02 (AL -> TAL), columns = notebook 03")
+    print("rows = notebook 02, columns = notebook 03")
     print(cross_tab.to_string())
 
     per_class = (paired.assign(match=paired["label_02_bridged"] == paired["label_03"])
                  .groupby("label_02_bridged")
                  .agg(n_tubules=("match", "size"), agreement=("match", "mean"))
                  .sort_values("n_tubules", ascending=False))
+    # A class notebook 03 never emits is a vocabulary gap, not a disagreement: a 0 % row there would
+    # measure the absence of the label rather than the labels disagreeing, so those rows are reported
+    # separately and kept out of the summary mean.
+    per_class["counterpart_in_03"] = per_class.index.isin(set(cross_species["coarse_class"].unique()))
     per_class.to_csv(OUTPUT_DIR / "per_class_agreement.csv")
     print()
     print(per_class.to_string())
+    comparable = per_class[per_class["counterpart_in_03"]]
+    print()
+    print(f"mean agreement over the {len(comparable)} classes notebook 03 also emits: "
+          f"{comparable['agreement'].mean():7.1%}")
+    for _label in per_class.index[~per_class["counterpart_in_03"]]:
+        _sub = paired[paired["label_02_bridged"] == _label]
+        print(f"  {_label}: notebook 03 emits no such class (n={len(_sub):,}); it calls them "
+              f"{_sub['label_03'].value_counts().head(3).to_dict()} - a vocabulary gap, not a "
+              "disagreement.")
 
     fig, ax = plt.subplots(figsize=(7, 3.6))
     ax.barh(per_class.index, 100 * per_class["agreement"], color="#4c72b0")
@@ -352,7 +365,7 @@ inputs = pd.DataFrame({
     "workflow": ["02 mouse-only", "03 cross-species"],
     "cohort": ["Ctrl1A2, Ctrl1A4, IR2A2, IR2A4", "Ctrl1A2, Ctrl1A4, HUK1_COR1, HUK1_MED1"],
     "feature_space": ["all mouse genes", "mouse genes restricted to human<->mouse HCOP orthologs"],
-    "label_vocabulary": ["fine (PT-S1/S2/S3, cTAL/mTAL, Stroma, AL)", "coarse (PT, TAL, DCT, CNT_CD)"],
+    "label_vocabulary": ["fine (PT-S1/S2/S3, cTAL/mTAL, Stroma, AL)", "coarse (PT, AL, DCT, CNT_CD; no Stroma)"],
 })
 inputs.to_csv(OUTPUT_DIR / "workflow_input_summary.csv", index=False)
 print()
@@ -454,9 +467,12 @@ print(steps.to_string(index=False))
 #   local neighbourhoods are reshuffled - and Leiden clusters off the neighbour graph, so this is the
 #   mechanism behind any label disagreement. Compare `X_pca` with `X_harmony` in section 4 to see how
 #   much of that originates before Harmony.
-# - **`AL` -> `TAL` is a bridging assumption, not a measurement.** Notebook 02's coarse rollup emits
-#   `AL` where notebook 03 emits `TAL`. If those are meant to be distinct classes, the raw agreement
-#   in section 3 is the number to quote and the interpretation changes.
+# - **Both rollups emit `AL` for the ascending limb**, so section 3 compares that class directly and
+#   no bridge is applied (`mTAL` exists only as a fine label in notebook 02). An earlier version of this
+#   notebook bridged `AL` -> `TAL` on the assumption that notebook 03 emitted `TAL`; that reported 0 %
+#   for the whole ascending limb. The vocabularies are printed and every class is checked for a
+#   counterpart in the other run, so a future divergence appears as a no-counterpart row rather than as
+#   a failure.
 # - **`Stroma` exists only in notebook 02.** Where the label sets do not overlap the disagreement is
 #   a vocabulary gap rather than a biological one, but it is not harmless: some of notebook 02's
 #   stromal tubules are called nephron segments in notebook 03. Inspect the cross-tab rather than the

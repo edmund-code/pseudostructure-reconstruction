@@ -356,6 +356,67 @@ def cached_perm_pvalues(Y, s, samples, knots, grid, lambda_grid, lam_idx, sl2, p
     return shape_p, level_p, splits, true_idx
 
 
+def cached_neighbor_graph(adata, key, compute, *, stage, root, params=None, inputs=None,
+                          code=None, enabled=None, verbose=True):
+    """``compute()`` builds ``sc.pp.neighbors(adata, key_added=key, ...)`` once, then reuses it.
+
+    A neighbour graph is the most expensive object in the pipeline to build and the cheapest to
+    store, so the connectivity and distance matrices are cached together with the ``uns`` parameters
+    Scanpy needs to find them again. On a hit the two ``obsp`` entries and the ``uns`` record are
+    restored, so downstream PAGA, diffusion map and DPT calls behave exactly as after a fresh build.
+    """
+    payload_dir = _ensure_dir(root) if stage_cache_enabled(enabled) else None
+    digest_of = code_digest(code)
+    cache_key = stage_key(stage, params=params,
+                          inputs={**(inputs or {}), 'key': key, 'n_obs': int(adata.n_obs)},
+                          code=digest_of)
+    path = payload_dir / f'{stage}__{cache_key}.npz' if payload_dir is not None else None
+    if path is not None and _hit(path, cache_key):
+        if verbose:
+            print(f'[stage cache] hit {stage} (key {cache_key})')
+        with np.load(path, allow_pickle=False) as stored:
+            connectivities = sp.csr_matrix(
+                (stored['conn_data'], stored['conn_indices'], stored['conn_indptr']),
+                shape=tuple(stored['shape']))
+            distances = sp.csr_matrix(
+                (stored['dist_data'], stored['dist_indices'], stored['dist_indptr']),
+                shape=tuple(stored['shape']))
+            uns_record = json.loads(str(stored['uns_json']))
+        # Scanpy stores the connectivities and distances under the keys named in `uns[key]`
+        # (`<key>_connectivities` / `<key>_distances` for a vanilla `sc.pp.neighbors` call), so the
+        # restored entries have to use those names rather than the neighbours key itself.
+        adata.obsp[uns_record.get('connectivities_key', key)] = connectivities
+        adata.obsp[uns_record.get('distances_key', f'{key}_distances')] = distances
+        adata.uns[key] = uns_record
+        return adata
+    if verbose:
+        print(f'[stage cache] computing {stage} (key {cache_key})')
+    compute()
+    if path is not None:
+        record = dict(adata.uns.get(key, {}))
+        connectivities_key = record.get('connectivities_key', key)
+        distances_key = record.get('distances_key', f'{key}_distances')
+        connectivities = adata.obsp[connectivities_key].tocsr()
+        distances = (adata.obsp[distances_key].tocsr() if distances_key in adata.obsp
+                     else connectivities.copy())
+        np.savez_compressed(
+            path,
+            conn_data=connectivities.data, conn_indices=connectivities.indices,
+            conn_indptr=connectivities.indptr,
+            dist_data=distances.data, dist_indices=distances.indices,
+            dist_indptr=distances.indptr,
+            shape=np.asarray(connectivities.shape),
+            uns_json=np.asarray(json.dumps({
+                'connectivities_key': record.get('connectivities_key', key),
+                'distances_key': distances_key,
+                'params': {k: (v.item() if hasattr(v, 'item') else v)
+                           for k, v in record.get('params', {}).items()},
+            })),
+        )
+        _record(path, stage=stage, key=cache_key, params=params, inputs=inputs, code=digest_of)
+    return adata
+
+
 def cache_status(root) -> pd.DataFrame:
     """One row per cached entry: what is stored, when, and how large."""
     root = Path(root)

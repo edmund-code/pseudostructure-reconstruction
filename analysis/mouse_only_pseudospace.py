@@ -941,6 +941,7 @@ from pseudospace.stage_cache import (
     cached_anndata,
     cached_frame,
     cached_payload,
+    cached_neighbor_graph,
     cached_perm_pvalues,
     cached_run_level_shape,
     code_digest,
@@ -1180,12 +1181,30 @@ adata_hvg = adata_combined[:, adata_combined.var[hvg_col]].copy()
 adata_hvg.X = adata_hvg.layers['lognorm'].copy()
 sc.tl.pca(adata_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
 
-adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
-sc.pp.neighbors(adata_combined, use_rep='X_pca', n_neighbors=HARMONY_NEIGHBORS_N,
-                key_added='pre_harmony', random_state=RANDOM_STATE)
-sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-           neighbors_key='pre_harmony', random_state=RANDOM_STATE)
-adata_combined.obsm['X_umap_pre_harmony'] = adata_combined.obsm['X_umap'].copy()
+# The uncorrected PCA/UMAP is a cached payload: same parameters on the same matrix give the same
+# "before" panel without rebuilding the graph or the UMAP.
+def _compute_pre_harmony_embedding():
+    sc.tl.pca(adata_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
+    adata_combined.obsm['X_pca'] = adata_hvg.obsm['X_pca'].copy()
+    sc.pp.neighbors(adata_combined, use_rep='X_pca', n_neighbors=HARMONY_NEIGHBORS_N,
+                    key_added='pre_harmony', random_state=RANDOM_STATE)
+    sc.tl.umap(adata_combined, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+               neighbors_key='pre_harmony', random_state=RANDOM_STATE)
+    return {'X_pca': np.asarray(adata_combined.obsm['X_pca']),
+            'X_umap_pre_harmony': np.asarray(adata_combined.obsm['X_umap'])}
+
+
+_pre_harmony = cached_payload(
+    'pre_harmony_embedding', _compute_pre_harmony_embedding, root=STAGE_CACHE_DIR,
+    params={'pca_comps': HARMONY_PCA_N_COMPS, 'neighbors': HARMONY_NEIGHBORS_N,
+            'umap_min_dist': HARMONY_UMAP_MIN_DIST, 'umap_spread': HARMONY_UMAP_SPREAD,
+            'seed': RANDOM_STATE, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'matrix': fingerprint_anndata(adata_combined)},
+    code=code_digest(_compute_pre_harmony_embedding), enabled=STAGE_CACHE_ENABLED,
+)
+adata_combined.obsm['X_pca'] = _pre_harmony['X_pca']
+adata_combined.obsm['X_umap_pre_harmony'] = _pre_harmony['X_umap_pre_harmony']
+adata_combined.obsm['X_umap'] = _pre_harmony['X_umap_pre_harmony']
 
 sc.pl.umap(adata_combined, color=['sample', 'condition'], ncols=2, frameon=False,
            title=['Pre-Harmony: sample', 'Pre-Harmony: condition'])
@@ -1575,28 +1594,52 @@ print(adata_tubule.obs['coarse_class'].value_counts().reindex(COARSE_ORDER).to_s
 
 # %%
 # --- Section 2d: pass-2 Harmony on the tubule subset (labels are carried, never recomputed) ---
-adata_tubule = select_harmony_hvgs_by_condition(
-    adata_tubule, group_key='condition', groups=('Control', 'IR'), mode='intersection',
-    min_mean=HARMONY_HVG_MIN_MEAN, max_mean=HARMONY_HVG_MAX_MEAN, min_disp=HARMONY_HVG_MIN_DISP)
-tub_hvg = 'highly_variable_for_harmony'
-print(f'Pass-2 HVGs (intersection, tubule-only): {int(adata_tubule.var[tub_hvg].sum())}')
+# The pass-2 embeddings are a cached artifact: the key covers the tubule cohort, the Harmony
+# parameters and the implementation, so a rerun with unchanged data and code reloads the saved
+# object instead of re-running Harmony, the neighbour graph and its UMAP.
+PASS2_CACHE_KEY = stage_key(
+    'pass2_embeddings_aki',
+    params={'hvg_min_mean': HARMONY_HVG_MIN_MEAN, 'hvg_max_mean': HARMONY_HVG_MAX_MEAN,
+            'hvg_min_disp': HARMONY_HVG_MIN_DISP, 'pcs': HARMONY_N_PCS, 'theta': HARMONY_THETA,
+            'lambda': HARMONY_LAMBDA, 'max_iter': HARMONY_MAX_ITER, 'tau': HARMONY_TAU,
+            'neighbors': HARMONY_NEIGHBORS_N, 'umap_min_dist': HARMONY_UMAP_MIN_DIST,
+            'umap_spread': HARMONY_UMAP_SPREAD, 'batch_key': BATCH_KEY, 'seed': RANDOM_STATE,
+            'harmony_version': HARMONY_VERSION, 'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'tubule_cohort': fingerprint_anndata(adata_tubule)},
+    code=code_digest(run_harmony_rpy2, select_harmony_hvgs_by_condition),
+)
+if STAGE_CACHE_ENABLED and stage_is_fresh(PASS2_HARMONY_OUTPUT_PATH, PASS2_CACHE_KEY):
+    print(f'[stage cache] hit pass-2 embeddings (key {PASS2_CACHE_KEY}); loading '
+          f'{PASS2_HARMONY_OUTPUT_PATH.name}')
+    adata_tubule = sc.read_h5ad(PASS2_HARMONY_OUTPUT_PATH)
+else:
+    adata_tubule = select_harmony_hvgs_by_condition(
+        adata_tubule, group_key='condition', groups=('Control', 'IR'), mode='intersection',
+        min_mean=HARMONY_HVG_MIN_MEAN, max_mean=HARMONY_HVG_MAX_MEAN, min_disp=HARMONY_HVG_MIN_DISP)
+    tub_hvg = 'highly_variable_for_harmony'
+    print(f'Pass-2 HVGs (intersection, tubule-only): {int(adata_tubule.var[tub_hvg].sum())}')
 
-adata_tubule_hvg = adata_tubule[:, adata_tubule.var[tub_hvg]].copy()
-adata_tubule_hvg.X = adata_tubule_hvg.layers['lognorm'].copy()
-sc.tl.pca(adata_tubule_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
-adata_tubule.obsm['X_pca'] = adata_tubule_hvg.obsm['X_pca'].copy()
+    adata_tubule_hvg = adata_tubule[:, adata_tubule.var[tub_hvg]].copy()
+    adata_tubule_hvg.X = adata_tubule_hvg.layers['lognorm'].copy()
+    sc.tl.pca(adata_tubule_hvg, n_comps=HARMONY_PCA_N_COMPS, random_state=RANDOM_STATE)
+    adata_tubule.obsm['X_pca'] = adata_tubule_hvg.obsm['X_pca'].copy()
 
-ro.r(f'set.seed({RANDOM_STATE})')          # see the note at the Section 1 harmony call
-adata_tubule_hvg = run_harmony_rpy2(
-    adata_tubule_hvg, batch_key=BATCH_KEY, n_pcs=HARMONY_N_PCS, theta=HARMONY_THETA,
-    lambda_val=HARMONY_LAMBDA, max_iter=HARMONY_MAX_ITER, tau=HARMONY_TAU)
-adata_tubule.obsm['X_harmony'] = adata_tubule_hvg.obsm['X_harmony'].copy()
+    ro.r(f'set.seed({RANDOM_STATE})')          # see the note at the Section 1 harmony call
+    adata_tubule_hvg = run_harmony_rpy2(
+        adata_tubule_hvg, batch_key=BATCH_KEY, n_pcs=HARMONY_N_PCS, theta=HARMONY_THETA,
+        lambda_val=HARMONY_LAMBDA, max_iter=HARMONY_MAX_ITER, tau=HARMONY_TAU)
+    adata_tubule.obsm['X_harmony'] = adata_tubule_hvg.obsm['X_harmony'].copy()
 
-sc.pp.neighbors(adata_tubule, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
-                random_state=RANDOM_STATE)
-sc.tl.umap(adata_tubule, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-           random_state=RANDOM_STATE)
-adata_tubule.write(PASS2_HARMONY_OUTPUT_PATH)
+    sc.pp.neighbors(adata_tubule, use_rep='X_harmony', n_neighbors=HARMONY_NEIGHBORS_N,
+                    random_state=RANDOM_STATE)
+    sc.tl.umap(adata_tubule, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
+               random_state=RANDOM_STATE)
+    adata_tubule.write(PASS2_HARMONY_OUTPUT_PATH)
+
+    adata_tubule.write(PASS2_HARMONY_OUTPUT_PATH)
+    stage_mark_fresh(PASS2_HARMONY_OUTPUT_PATH, PASS2_CACHE_KEY, stage='pass2_embeddings_aki',
+                     params={'logic': NOTEBOOK_LOGIC_VERSION})
+    print(f'Saved pass-2 object: {PASS2_HARMONY_OUTPUT_PATH.relative_to(PROJECT_DIR)}')
 
 sc.pl.embedding(adata_tubule, basis='umap', color=['sample', 'condition', 'coarse_class', 'segment_class'],
                 ncols=2, frameon=False, show=False)
@@ -1679,8 +1722,17 @@ use_rep = 'X_harmony'
 n_neighbors = max(N_NEIGHBORS, int(np.sqrt(adata_total.n_obs)))
 neighbors_key = 'trajectory_neighbors'
 
-sc.pp.neighbors(adata_total, n_neighbors=n_neighbors, use_rep=use_rep,
-                key_added=neighbors_key, random_state=RANDOM_STATE)
+cached_neighbor_graph(
+    adata_total, neighbors_key,
+    lambda: sc.pp.neighbors(adata_total, n_neighbors=n_neighbors, use_rep=use_rep,
+                            key_added=neighbors_key, random_state=RANDOM_STATE),
+    stage='trajectory_graph_aki', root=STAGE_CACHE_DIR,
+    params={'n_neighbors': int(n_neighbors), 'use_rep': use_rep, 'seed': RANDOM_STATE,
+            'scanpy': sc.__version__, 'harmony_version': HARMONY_VERSION,
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'embedding': digest(np.asarray(adata_total.obsm[use_rep]))},
+    code=code_digest(sc.pp.neighbors), enabled=STAGE_CACHE_ENABLED,
+)
 
 # %%
 # --- Section 2f.1: PAGA topology check -- IS there a continuum to order? ---
@@ -2383,9 +2435,11 @@ print(f"  |level_eff|:  [{np.abs(gene_ls['level_effect']).min():.4f}, {np.abs(ge
 # ----------------------------------------------------------------------------
 # Section 4.4 -- sample-level condition-label permutation (honest for n=2 vs 2)
 # ----------------------------------------------------------------------------
-gene_shape_p, gene_level_p, splits, true_idx = sample_perm_pvalues(
+gene_shape_p, gene_level_p, splits, true_idx = cached_perm_pvalues(
     Y_genes, s, samples, knots, grid, SECTION4_CONFIG['lambda_grid'],
-    gene_ls['lam_idx'], gene_ls['sl2'], gene_ls['p_b'], control_samples)
+    gene_ls['lam_idx'], gene_ls['sl2'], gene_ls['p_b'], control_samples,
+    stage='section4_gene_perm', root=STAGE_CACHE_DIR,
+    y_fingerprint=Y_GENES_FINGERPRINT, enabled=STAGE_CACHE_ENABLED)
 
 print('=' * 78)
 print('SAMPLE-LEVEL PERMUTATION -- CALIBRATION/SANITY CHECK, NOT A POWERED TEST.')
@@ -2472,10 +2526,16 @@ for j, members in enumerate(retained_pathways['genes_present']):
     sub = Y_csc[:, idxs].toarray()
     module_scores[:, j] = ((sub - gene_mean[idxs]) / gene_std[idxs]).mean(axis=1)
 
-path_ls = run_level_shape(module_scores, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'])
-path_shape_p, path_level_p, _, _ = sample_perm_pvalues(
+path_ls = cached_run_level_shape(
+    module_scores, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+    stage='section4_pathway_fit', root=STAGE_CACHE_DIR,
+    y_fingerprint=digest(module_scores), enabled=STAGE_CACHE_ENABLED,
+)
+path_shape_p, path_level_p, _, _ = cached_perm_pvalues(
     module_scores, s, samples, knots, grid, SECTION4_CONFIG['lambda_grid'],
-    path_ls['lam_idx'], path_ls['sl2'], path_ls['p_b'], control_samples)
+    path_ls['lam_idx'], path_ls['sl2'], path_ls['p_b'], control_samples,
+    stage='section4_pathway_perm', root=STAGE_CACHE_DIR,
+    y_fingerprint=digest(module_scores), enabled=STAGE_CACHE_ENABLED)
 print(f'Pathway modules tested: {P}  '
       f"(shape_rms max={path_ls['shape_rms'].max():.4f})")
 
@@ -2486,16 +2546,46 @@ print(f'Pathway modules tested: {P}  '
 from pseudospace.modules import difference_curves, discover_curve_modules
 
 MODULE_CONFIG = {'max_distance': 0.4, 'min_amplitude': 0.05, 'min_features': 10}
-positional_labels, positional_modules = discover_curve_modules(
-    gene_ls['curve_healthy'], grid, max_distance=MODULE_CONFIG['max_distance'],
-    min_amplitude=MODULE_CONFIG['min_amplitude'], min_features=MODULE_CONFIG['min_features'],
-    feature_names=gene_names,
+MODULE_KWARGS = {
+    'max_distance': MODULE_CONFIG['max_distance'],
+    'min_amplitude': MODULE_CONFIG['min_amplitude'],
+    'min_features': MODULE_CONFIG['min_features'],
+    'feature_names': gene_names,
+}
+
+
+def _cached_module_catalog(stage, curves):
+    """Module assignment and module table for one curve matrix, both cached."""
+    inputs = {'curves': digest(curves)}
+    params = {key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'}
+    params['logic'] = NOTEBOOK_LOGIC_VERSION
+
+    def _labels():
+        labels = discover_curve_modules(curves, grid, **MODULE_KWARGS)[0]
+        return pd.DataFrame({'feature': labels.index, 'module': labels.to_numpy()})
+
+    labels_frame = cached_frame(
+        f'{stage}_labels', _labels, root=STAGE_CACHE_DIR, params=params, inputs=inputs,
+        code=code_digest(discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
+    )
+    modules = cached_frame(
+        f'{stage}_catalog',
+        lambda: discover_curve_modules(curves, grid, **MODULE_KWARGS)[1],
+        root=STAGE_CACHE_DIR, params=params, inputs=inputs,
+        code=code_digest(discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
+    )
+    series = pd.Series(labels_frame['module'].to_numpy(), index=labels_frame['feature'],
+                       name='module')
+    return series, modules
+
+
+positional_labels, positional_modules = _cached_module_catalog(
+    'module_positional_aki', gene_ls['curve_healthy']
 )
 response_delta = difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'])
-response_labels, response_modules = discover_curve_modules(
-    difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'], center=True), grid,
-    max_distance=MODULE_CONFIG['max_distance'], min_amplitude=MODULE_CONFIG['min_amplitude'],
-    min_features=MODULE_CONFIG['min_features'], feature_names=gene_names,
+response_labels, response_modules = _cached_module_catalog(
+    'module_response_aki',
+    difference_curves(gene_ls['curve_healthy'], gene_ls['curve_aki'], center=True),
 )
 mouse_gene_modules = pd.DataFrame({
     'gene': gene_names,
@@ -3214,8 +3304,17 @@ display(pathway_results[['library', 'pathway', 'n_genes_present', 'level_effect'
 # Leave-one-specimen-out robustness of the top shape hits (honest ceiling at n=2 vs 2).
 from pseudospace.levelshape import loso_shape_stability
 top_idx = np.argsort(gene_ls['shape_rms'])[::-1][:SECTION4_CONFIG['N_TOP_PLOT']]
-loso = loso_shape_stability(Y_genes, s, c, samples, knots, grid, SECTION4_CONFIG['lambda_grid'],
-                            top_idx, feature_names=gene_names)
+loso = cached_frame(
+    'section4_loso_genes',
+    lambda: loso_shape_stability(Y_genes, s, c, samples, knots, grid,
+                                 SECTION4_CONFIG['lambda_grid'], top_idx,
+                                 feature_names=gene_names),
+    root=STAGE_CACHE_DIR,
+    params={'n_top': int(len(top_idx)), 'lambda_grid': SECTION4_CONFIG['lambda_grid'],
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'y': Y_GENES_FINGERPRINT, 'samples': np.asarray(samples).astype(str)},
+    code=code_digest(loso_shape_stability), enabled=STAGE_CACHE_ENABLED,
+)
 loso.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'loso_shape_stability_genes.csv', index=False)
 feats = list(gene_names[top_idx])
 fig, ax = plt.subplots(figsize=(8, 0.4 * len(feats) + 1.5))
@@ -3699,11 +3798,19 @@ else:
     _dgrid = np.linspace(_dlo, _dhi, SECTION4_CONFIG['grid_points'])
     _dknots = gam_internal_knots(_depth[_ok], basis_df=3 + SECTION4_CONFIG['n_internal_knots'])
 
-    phys_ls = run_level_shape(Y_genes[_ok], _depth[_ok], c[_ok], _dknots, _dgrid,
-                              SECTION4_CONFIG['lambda_grid'])
-    phys_shape_p, phys_level_p, _, _ = sample_perm_pvalues(
+    phys_ls = cached_run_level_shape(
+        Y_genes[_ok], _depth[_ok], c[_ok], _dknots, _dgrid, SECTION4_CONFIG['lambda_grid'],
+        stage='section4_physical_gene_fit', root=STAGE_CACHE_DIR,
+        y_fingerprint=digest(Y_genes[_ok]) + '|' + digest(_depth[_ok]),
+        enabled=STAGE_CACHE_ENABLED,
+    )
+    phys_shape_p, phys_level_p, _, _ = cached_perm_pvalues(
         Y_genes[_ok], _depth[_ok], samples[_ok], _dknots, _dgrid, SECTION4_CONFIG['lambda_grid'],
-        phys_ls['lam_idx'], phys_ls['sl2'], phys_ls['p_b'], control_samples)
+        phys_ls['lam_idx'], phys_ls['sl2'], phys_ls['p_b'], control_samples,
+        stage='section4_physical_gene_perm', root=STAGE_CACHE_DIR,
+        y_fingerprint=digest(Y_genes[_ok]) + '|' + digest(_depth[_ok]),
+        enabled=STAGE_CACHE_ENABLED,
+    )
 
     physical_sensitivity = pd.DataFrame({
         'gene': gene_names,
@@ -3726,12 +3833,20 @@ else:
     # often just where injured cells land in DPT space. Amplitudes are exported here
     # (unlike in pathway_level_shape_results.csv) because curve_spearman is
     # uninterpretable when shape_rms is a large fraction of the curve amplitude.
-    phys_path_ls = run_level_shape(module_scores[_ok], _depth[_ok], c[_ok], _dknots, _dgrid,
-                                   SECTION4_CONFIG['lambda_grid'])
-    phys_path_shape_p, phys_path_level_p, _, _ = sample_perm_pvalues(
+    phys_path_ls = cached_run_level_shape(
+        module_scores[_ok], _depth[_ok], c[_ok], _dknots, _dgrid, SECTION4_CONFIG['lambda_grid'],
+        stage='section4_physical_pathway_fit', root=STAGE_CACHE_DIR,
+        y_fingerprint=digest(module_scores[_ok]) + '|' + digest(_depth[_ok]),
+        enabled=STAGE_CACHE_ENABLED,
+    )
+    phys_path_shape_p, phys_path_level_p, _, _ = cached_perm_pvalues(
         module_scores[_ok], _depth[_ok], samples[_ok], _dknots, _dgrid,
         SECTION4_CONFIG['lambda_grid'], phys_path_ls['lam_idx'], phys_path_ls['sl2'],
-        phys_path_ls['p_b'], control_samples)
+        phys_path_ls['p_b'], control_samples,
+        stage='section4_physical_pathway_perm', root=STAGE_CACHE_DIR,
+        y_fingerprint=digest(module_scores[_ok]) + '|' + digest(_depth[_ok]),
+        enabled=STAGE_CACHE_ENABLED,
+    )
 
     physical_sensitivity_paths = pd.DataFrame({
         'library': retained_pathways['library'],
@@ -3775,10 +3890,16 @@ else:
             _block = np.asarray(Y_genes[:, _idxs].todense())
             _module_scores[:, _position] = (
                 (_block - gene_mean[_idxs]) / gene_std[_idxs]).mean(axis=1)
-        _module_dpt_ls = run_level_shape(
-            _module_scores, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'])
-        _module_physical_ls = run_level_shape(
-            _module_scores[_ok], _depth[_ok], c[_ok], _dknots, _dgrid, SECTION4_CONFIG['lambda_grid'])
+        _module_dpt_ls = cached_run_level_shape(
+            _module_scores, s, c, knots, grid, SECTION4_CONFIG['lambda_grid'],
+            stage='section4_module_fit', root=STAGE_CACHE_DIR,
+            y_fingerprint=digest(_module_scores), enabled=STAGE_CACHE_ENABLED)
+        _module_physical_ls = cached_run_level_shape(
+            _module_scores[_ok], _depth[_ok], c[_ok], _dknots, _dgrid,
+            SECTION4_CONFIG['lambda_grid'],
+            stage='section4_module_physical_fit', root=STAGE_CACHE_DIR,
+            y_fingerprint=digest(_module_scores[_ok]) + '|' + digest(_depth[_ok]),
+            enabled=STAGE_CACHE_ENABLED)
         physical_sensitivity_modules = pd.DataFrame({
             'module': _prioritized_modules,
             'n_genes': [len(_module_members[name]) for name in _prioritized_modules],
@@ -4527,19 +4648,30 @@ def _response_modules(curve_reference, curve_comparison):
     return labels
 
 
-stability_runs = {'pooled_fit': response_labels}
-for dropped in sorted(specimen_full_curves):
-    kept = [name for name in specimen_full_curves if name != dropped]
-    kept_control = [name for name in kept if name in control_samples]
-    kept_aki = [name for name in kept if name in aki_samples]
-    if not kept_control or not kept_aki:
-        continue
-    stability_runs[f'without_{dropped}'] = _response_modules(
-        specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_control}),
-        specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_aki}),
-    )
-stability_runs['specimen_balanced_mixture'] = _response_modules(balanced_healthy, balanced_aki)
-response_stability = module_stability(stability_runs)
+def _compute_response_stability():
+    """Response-module stability under specimen omission and a different data mixture."""
+    stability_runs = {'pooled_fit': response_labels}
+    for dropped in sorted(specimen_full_curves):
+        kept = [name for name in specimen_full_curves if name != dropped]
+        kept_control = [name for name in kept if name in control_samples]
+        kept_aki = [name for name in kept if name in aki_samples]
+        if not kept_control or not kept_aki:
+            continue
+        stability_runs[f'without_{dropped}'] = _response_modules(
+            specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_control}),
+            specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_aki}),
+        )
+    stability_runs['specimen_balanced_mixture'] = _response_modules(balanced_healthy, balanced_aki)
+    return module_stability(stability_runs)
+
+
+response_stability = cached_frame(
+    'module_response_stability_aki', _compute_response_stability, root=STAGE_CACHE_DIR,
+    params={**{key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'},
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'specimen_curves': digest(specimen_full_curves)},
+    code=code_digest(module_stability, discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
+)
 response_stability.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_stability.csv', index=False)
 display(response_stability.round(3))
 
@@ -4547,12 +4679,20 @@ pathway_gene_sets = {
     f'{row.library}: {row.pathway}': row.genes_present
     for row in retained_pathways.itertuples()
 }
-module_enrichment = enrich_modules(
-    {module: members.index
-     for module, members in response_labels.groupby(response_labels, observed=True)
-     if module != 'unassigned'},
-    pathway_gene_sets,
-    background=gene_names,
+module_enrichment = cached_frame(
+    'module_pathway_enrichment_aki',
+    lambda: enrich_modules(
+        {module: members.index
+         for module, members in response_labels.groupby(response_labels, observed=True)
+         if module != 'unassigned'},
+        pathway_gene_sets,
+        background=gene_names,
+    ),
+    root=STAGE_CACHE_DIR,
+    params={'logic': NOTEBOOK_LOGIC_VERSION, 'background_size': len(gene_names)},
+    inputs={'labels': digest(response_labels.to_numpy()),
+            'sets': digest(sorted(pathway_gene_sets))},
+    code=code_digest(enrich_modules), enabled=STAGE_CACHE_ENABLED,
 )
 module_enrichment.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_pathway_enrichment.csv', index=False)
 print('Response modules:', int(response_labels[response_labels != 'unassigned'].nunique()),
@@ -4564,8 +4704,14 @@ display(module_enrichment.head(10)[[
     'p_value', 'p_value_adjusted',
 ]].round(4))
 
-signed_rankings = signed_gene_rankings(
-    gene_ls['curve_healthy'], gene_ls['curve_aki'], grid, gene_names=gene_names
+signed_rankings = cached_frame(
+    'section4_signed_rankings_aki',
+    lambda: signed_gene_rankings(gene_ls['curve_healthy'], gene_ls['curve_aki'], grid,
+                                 gene_names=gene_names),
+    root=STAGE_CACHE_DIR, params={'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'healthy_curves': digest(gene_ls['curve_healthy']),
+            'aki_curves': digest(gene_ls['curve_aki'])},
+    code=code_digest(signed_gene_rankings), enabled=STAGE_CACHE_ENABLED,
 ).merge(gene_results[['gene', 'level_fraction', 'shape_fraction', 'pattern_rms_z',
                       'difference_type']], on='gene', how='left')
 signed_rankings.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'gene_signed_rankings.csv', index=False)
@@ -4579,10 +4725,23 @@ SIGNED_QUESTIONS = {
 signed_enrichment_summary = []
 for question, column in SIGNED_QUESTIONS.items():
     statistics = signed_rankings[['gene', column]].dropna().set_index('gene')[column]
-    table = camera_like_enrichment(
-        statistics, pathway_gene_sets, expression=Y_genes, gene_names=gene_names,
-        background=gene_names, n_permutations=500,
-        min_set_size=SECTION4_CONFIG['pathway_min_genes'],
+    # One cached table per question: the key covers the signed ranking, the gene sets, the
+    # expression fingerprint and the permutation settings.
+    def _compute_signed_enrichment(statistics=statistics):
+        return camera_like_enrichment(
+            statistics, pathway_gene_sets, expression=Y_genes, gene_names=gene_names,
+            background=gene_names, n_permutations=500,
+            min_set_size=SECTION4_CONFIG['pathway_min_genes'],
+        )
+
+    table = cached_frame(
+        f'signed_enrichment_{question}', _compute_signed_enrichment, root=STAGE_CACHE_DIR,
+        params={'question': question, 'n_permutations': 500,
+                'min_set_size': SECTION4_CONFIG['pathway_min_genes'],
+                'logic': NOTEBOOK_LOGIC_VERSION},
+        inputs={'statistics': digest(statistics), 'sets': digest(sorted(pathway_gene_sets)),
+                'expression': Y_GENES_FINGERPRINT},
+        code=code_digest(camera_like_enrichment), enabled=STAGE_CACHE_ENABLED,
     )
     table.insert(0, 'question', question)
     table.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / f'signed_enrichment_{question}.csv', index=False)

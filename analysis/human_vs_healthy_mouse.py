@@ -189,6 +189,7 @@ from pseudospace.stage_cache import (
     cached_anndata,
     cached_frame,
     cached_payload,
+    cached_neighbor_graph,
     cached_perm_pvalues,
     cached_run_level_shape,
     cache_status,
@@ -1529,12 +1530,16 @@ adata_total.obs['total_segment_marker_call'] = (
 marker_axis = adata_total.obs['total_marker_axis'].to_numpy(dtype=float)
 trajectory_neighbors = 'trajectory_neighbors'
 n_neighbors = max(N_NEIGHBORS, int(np.sqrt(adata_total.n_obs)))
-sc.pp.neighbors(
-    adata_total,
-    n_neighbors=n_neighbors,
-    use_rep='X_harmony',
-    key_added=trajectory_neighbors,
-    random_state=RANDOM_STATE,
+cached_neighbor_graph(
+    adata_total, trajectory_neighbors,
+    lambda: sc.pp.neighbors(adata_total, n_neighbors=n_neighbors, use_rep='X_harmony',
+                            key_added=trajectory_neighbors, random_state=RANDOM_STATE),
+    stage='trajectory_graph_global', root=STAGE_CACHE_DIR,
+    params={'n_neighbors': int(n_neighbors), 'use_rep': 'X_harmony', 'seed': RANDOM_STATE,
+            'scanpy': sc.__version__, 'harmony_version': HARMONY_EXPECTED_VERSION,
+            'logic': NOTEBOOK_LOGIC_VERSION},
+    inputs={'embedding': digest(np.asarray(adata_total.obsm['X_harmony']))},
+    code=code_digest(sc.pp.neighbors), enabled=STAGE_CACHE_ENABLED,
 )
 adata_total.obs['leiden_coarse'] = adata_total.obs['leiden_coarse'].astype('category').cat.remove_unused_categories()
 if adata_total.obs['leiden_coarse'].nunique() > 1:

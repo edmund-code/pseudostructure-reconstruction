@@ -9,6 +9,7 @@ import scipy.sparse as sp
 
 from pseudospace.stage_cache import (
     cache_status,
+    cached_neighbor_graph,
     cached_anndata,
     cached_frame,
     cached_payload,
@@ -128,3 +129,42 @@ def test_status_and_purge(tmp_path):
     assert set(cache_status(tmp_path)['stage']) == {'frame'}
     assert purge_stage_cache(tmp_path) == 2
     assert cache_status(tmp_path).empty
+
+
+def test_neighbor_graph_cache_restores_the_graph_and_its_uns_record(tmp_path):
+    """A cached graph must satisfy the calls that consume it (diffmap, dpt, paga)."""
+    import scanpy as sc
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    adata = ad.AnnData(X=sp.csr_matrix(rng.normal(size=(60, 8)) ** 2))
+    adata.obsm['X_emb'] = rng.normal(size=(60, 5))
+    calls = {'n': 0}
+
+    def compute():
+        calls['n'] += 1
+        sc.pp.neighbors(adata, use_rep='X_emb', n_neighbors=10, key_added='graph',
+                        random_state=0)
+
+    cached_neighbor_graph(adata, 'graph', compute, stage='graph', root=tmp_path,
+                          params={'n_neighbors': 10}, code='c1', verbose=False)
+    assert calls['n'] == 1
+    first = adata.obsp[adata.uns['graph']['connectivities_key']].copy()
+
+    # a fresh object with the same embedding must get the graph from the cache, not recompute it
+    fresh = ad.AnnData(X=adata.X.copy())
+    fresh.obsm['X_emb'] = adata.obsm['X_emb'].copy()
+
+    def compute_fresh():
+        calls['n'] += 1
+        sc.pp.neighbors(fresh, use_rep='X_emb', n_neighbors=10, key_added='graph', random_state=0)
+
+    cached_neighbor_graph(fresh, 'graph', compute_fresh, stage='graph', root=tmp_path,
+                          params={'n_neighbors': 10}, code='c1', verbose=False)
+    assert calls['n'] == 1, 'the second call must come from the cache'
+    assert (fresh.obsp[fresh.uns['graph']['connectivities_key']] != first).nnz == 0
+    assert fresh.uns['graph']['connectivities_key'] == adata.uns['graph']['connectivities_key']
+    assert 'params' in fresh.uns['graph']
+    # the restored graph is usable by the consumers
+    sc.tl.diffmap(fresh, neighbors_key='graph')
+    assert fresh.obsm['X_diffmap'].shape[0] == 60

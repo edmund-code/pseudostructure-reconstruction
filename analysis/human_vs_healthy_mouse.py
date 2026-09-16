@@ -759,7 +759,11 @@ adata_cluster = cached_anndata(
     params={'resolution': COARSE_RESOLUTION, 'n_neighbors': N_NEIGHBORS,
             'n_hvgs': int(feature_mask.sum()), 'seed': RANDOM_STATE,
             'logic': NOTEBOOK_LOGIC_VERSION},
-    inputs={'pass1_object': digest(HARMONY_OUTPUT_PATH)},
+    # Do NOT hash the pass-1 artifact: the end of this run writes the clustering-derived columns
+    # (`leiden_coarse`, the reviewed labels, eligibility) back into that same file, so its bytes
+    # depend on this stage's own previous output and a byte-keyed entry can never be reused.
+    # PASS1_CACHE_KEY identifies the same object by its upstream inputs alone.
+    inputs={'pass1_key': PASS1_CACHE_KEY},
     code=code_digest(_compute_cluster_object),
     enabled=STAGE_CACHE_ENABLED,
 )

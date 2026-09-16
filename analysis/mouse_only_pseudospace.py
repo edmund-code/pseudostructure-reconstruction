@@ -3788,8 +3788,8 @@ if _ok.sum() < 0.5 * adata_pt.n_obs:
           f'{int(_ok.sum()):,}/{adata_pt.n_obs:,} PT tubules. Too few specimens carry enough '
           'glomeruli for the proxy to be meaningful.')
     physical_sensitivity = None
-    # Every name the summary section reads has to exist on the skip path too, not only on
-    # the computed one; a branch-only binding is a NameError waiting for the skip case.
+    # Every name the summary section reads must exist on the skip path too, not only on the
+    # computed one: a branch-only binding is a NameError waiting for the skip case.
     physical_sensitivity_paths = None
     physical_sensitivity_modules = None
 else:

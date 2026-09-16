@@ -90,8 +90,20 @@ def digest(obj) -> str:
             hasher.update(np.ascontiguousarray(value.tocsr().indices).view(np.uint8))
             hasher.update(np.ascontiguousarray(value.tocsr().indptr).view(np.uint8))
         elif isinstance(value, np.ndarray):
-            hasher.update(f'array{value.shape}{value.dtype}|'.encode())
-            hasher.update(np.ascontiguousarray(value).view(np.uint8))
+            # The header carries the shape for every kind, and the dtype only where the raw bytes
+            # depend on it. Object and unicode name arrays hash through their string form, so the
+            # same names are the same key whatever the container dtype is (an object array reaching
+            # here is common: `np.asarray(pandas.Index([...]))` is object, and `.view(np.uint8)`
+            # refuses to reinterpret an array of references).
+            if value.dtype.kind in 'OU':
+                hasher.update(f'string-array{value.shape}|'.encode())
+                hasher.update(repr([str(item) for item in value.ravel(order='C')]).encode())
+            elif value.dtype.kind in 'SV':
+                hasher.update(f'bytes-array{value.shape}|'.encode())
+                hasher.update(np.ascontiguousarray(value).tobytes())
+            else:
+                hasher.update(f'array{value.shape}{value.dtype}|'.encode())
+                hasher.update(np.ascontiguousarray(value).view(np.uint8))
         elif isinstance(value, pd.DataFrame):
             _feed(value.to_numpy().astype(str) if value.empty is False else value.shape)
             _feed(list(map(str, value.columns)))

@@ -38,6 +38,21 @@ def test_digest_is_stable_and_sensitive():
     assert digest(frame) != digest(frame.assign(x=[1, 3]))
 
 
+def test_digest_handles_object_and_unicode_arrays():
+    """`np.asarray(pandas.Index([...]))` is object dtype: it must digest, not raise."""
+    names = pd.Index(['Ank2', 'Umod', 'Slc12a1'])
+    as_object = np.asarray(names)
+    assert as_object.dtype == object
+    assert digest(as_object) == digest(np.asarray(list(names)))          # same names, other dtype
+    assert digest(as_object) != digest(np.asarray(['Ank2', 'Umod', 'Other']))
+    # a Series carries an index, so it is legitimately a different object; it must still be
+    # stable across calls
+    assert digest(pd.Series(list(names))) == digest(pd.Series(list(names)))
+    assert digest(np.asarray([{'a': 1}], dtype=object)) == digest(np.asarray([{'a': 1}], dtype=object))
+    # the numeric fast path still works, including non-contiguous input
+    assert digest(np.arange(6).reshape(2, 3)[:, ::2]) == digest(np.asarray([[0, 2], [3, 5]]))
+
+
 def test_code_digest_changes_with_the_implementation():
     def version_one(x):
         return x + 1

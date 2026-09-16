@@ -36,6 +36,9 @@ pytest tests
 # Repository hygiene gate (requires nbformat) — run before every commit
 python tools/check_repository_hygiene.py
 
+# Notebook ordering gate — run after editing a notebook, before regenerating its mirror
+python tools/check_notebook_stage_order.py analysis/notebooks/*.ipynb
+
 # Active workflows (flags win over env vars)
 python analysis/mouse_only_pseudospace.py   --data-root <dir> --results-root <dir>
 python analysis/human_vs_healthy_mouse.py   --data-root <dir> --results-root <dir>
@@ -75,6 +78,11 @@ tables under `docs/results/`.
   to the `PSEUDOSPACE_*` env vars; CLI arguments win. The hygiene checker rejects any tracked file
   containing a machine-local absolute home directory (never spell one out in tracked text — that is
   what makes the checker fail).
+- **Check the notebook's name order before regenerating its mirror.**
+  `tools/check_notebook_stage_order.py` flags (a) names used before any cell defines them and
+  (b) names assigned only inside a conditional branch of an earlier cell and then read later — the
+  second class is a latent `NameError` that only fires on the branch you did not test (a cache miss,
+  an empty result, a skipped sensitivity analysis). It has already caught three such defects.
 - **Notebooks are the canonical artifact; the `.py` files are generated mirrors.** You (the human)
   execute `analysis/notebooks/*.ipynb` — that is where the workflow lives, and running cells is
   always fine. The `.py` exists as a token-efficient plain-text surface for agents to read and

@@ -500,6 +500,9 @@ PASS1_CACHE_KEY = stage_key(
     inputs={'matrix': fingerprint_anndata(adata_combined)},
     code=code_digest(run_harmony_rpy2, select_harmony_hvgs_by_condition),
 )
+# Initialised here rather than only inside the hit branch: a cache miss is the
+# normal first run, and the flag has to exist there too.
+PASS1_LOADED_FROM_CACHE = False
 if STAGE_CACHE_ENABLED and stage_is_fresh(HARMONY_OUTPUT_PATH, PASS1_CACHE_KEY):
     print(f'[stage cache] hit pass-1 embeddings (key {PASS1_CACHE_KEY}); loading '
           f'{HARMONY_OUTPUT_PATH.name} and redrawing the pre-Harmony figure')
@@ -2704,6 +2707,7 @@ print(f'Pathways a {SECTION4_CONFIG["pathway_max_genes"]}-member upper bound wou
 
 if retained_pathways.empty:
     pathway_results = pd.DataFrame()
+    pathway_fit = None      # bound on the empty path so later cells cannot NameError
     pathway_module_scores = np.empty((adata_pt.n_obs, 0))
 else:
     pathway_module_scores = np.empty(

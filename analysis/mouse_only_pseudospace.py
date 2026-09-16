@@ -4653,18 +4653,22 @@ def _response_modules(curve_reference, curve_comparison):
 
 
 def _compute_response_stability():
-    """Response-module stability under specimen omission and a different data mixture."""
+    """Response-module stability: refit the pooled model without each specimen, plus another mixture.
+
+    The omission probe REFITS the model on the kept specimens instead of averaging their curves.
+    With two specimens per condition, averaging the kept side would leave a single specimen whose
+    curves are undefined outside its own pseudospace support: a degenerate input, not a stability
+    result, which is why that run reported zero modules. A refit keeps both conditions represented
+    across the whole grid and still answers "does this module survive dropping one specimen?".
+    """
+
+    def _modules_from_refit(keep):
+        fit = run_level_shape(Y_genes[keep], s[keep], c[keep], knots, grid,
+                              SECTION4_CONFIG['lambda_grid'])
+        return _response_modules(fit['curve_healthy'], fit['curve_aki'])
     stability_runs = {'pooled_fit': response_labels}
     for dropped in sorted(specimen_full_curves):
-        kept = [name for name in specimen_full_curves if name != dropped]
-        kept_control = [name for name in kept if name in control_samples]
-        kept_aki = [name for name in kept if name in aki_samples]
-        if not kept_control or not kept_aki:
-            continue
-        stability_runs[f'without_{dropped}'] = _response_modules(
-            specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_control}),
-            specimen_balanced_curves({name: specimen_full_curves[name] for name in kept_aki}),
-        )
+        stability_runs[f'without_{dropped}'] = _modules_from_refit(samples != dropped)
     stability_runs['specimen_balanced_mixture'] = _response_modules(balanced_healthy, balanced_aki)
     return module_stability(stability_runs)
 
@@ -4673,11 +4677,15 @@ response_stability = cached_frame(
     'module_response_stability_aki', _compute_response_stability, root=STAGE_CACHE_DIR,
     params={**{key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'},
             'logic': NOTEBOOK_LOGIC_VERSION},
-    inputs={'specimen_curves': digest(specimen_full_curves)},
+    inputs={'y': Y_GENES_FINGERPRINT, 'samples': np.asarray(samples).astype(str),
+            'specimen_curves': digest(specimen_full_curves)},
     code=code_digest(module_stability, discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
 )
 response_stability.to_csv(HEALTHY_VS_AKI_OUTPUT_DIR / 'module_response_stability.csv', index=False)
 display(response_stability.round(3))
+print('Read the stability table with its module counts: a leave-one-out refit can cut a different '
+      'number of modules, and the adjusted Rand index punishes that on its own. '
+      'fraction_same_module is the like-for-like view; the module counts are the first thing to check.')
 
 pathway_gene_sets = {
     f'{row.library}: {row.pathway}': row.genes_present

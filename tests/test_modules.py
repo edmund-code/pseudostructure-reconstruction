@@ -115,3 +115,21 @@ def test_enrichment_uses_the_discovery_background_and_corrects_across_pairs():
     none = result[(result['module'] == 'M1') & (result['gene_set'] == 'hits_none')].iloc[0]
     assert np.isnan(none['p_value']), 'a set with no background genes cannot be tested'
     assert len(result) == 4
+
+
+def test_modules_survive_a_run_whose_support_is_narrower_than_the_grid():
+    """One specimen's curves are undefined outside its own support; that must not yield zero modules."""
+    curves = np.vstack(_early_declining(4) + _late_rising(4) + [np.full(GRID.size, 1.0)])
+    curves[:, GRID < 0.2] = np.nan          # a run that only covers the middle of the grid
+    labels, table = discover_curve_modules(curves, GRID, max_distance=0.4, min_features=3)
+    assert int((labels != 'unassigned').sum()) >= 8, labels.tolist()
+    assert set(table['module']) == {'M1', 'M2'}
+    # peak positions come from the covered support only
+    assert table.set_index('module').loc['M1', 'median_peak_position'] >= 0.2
+
+
+def test_a_run_with_no_usable_curves_still_reports_unassigned():
+    curves = np.full((4, GRID.size), np.nan)
+    labels, table = discover_curve_modules(curves, GRID, max_distance=0.4, min_features=3)
+    assert (labels == 'unassigned').all()
+    assert table.empty

@@ -16,6 +16,7 @@ difference the analysis is trying to detect.
 """
 from __future__ import annotations
 
+import warnings
 from typing import Iterable, Mapping
 
 import numpy as np
@@ -89,17 +90,35 @@ def curve_descriptors(curves, grid):
     return pd.DataFrame(rows)
 
 
-def _standardize_curves(curves):
+def _standardize_curves(curves, min_column_finite_fraction=0.5):
+    """Standardise each curve over the grid this run actually covers.
+
+    A run whose curves come from one specimen is undefined outside that specimen's own pseudospace
+    support, and demanding a fully finite row would then reject every feature - which is how a
+    leave-one-specimen-out probe can report zero modules. Columns covered by at least
+    ``min_column_finite_fraction`` of the features define the run's support; features are then
+    required to be finite on that support.
+    """
     values = np.asarray(curves, dtype=float)
-    mean = np.nanmean(values, axis=1, keepdims=True)
-    spread = np.nanstd(values, axis=1, keepdims=True)
     finite = np.isfinite(values)
-    standardized = np.where(spread > 0, (values - mean) / np.where(spread > 0, spread, 1.0), np.nan)
-    return standardized, finite.all(axis=1) & (spread.ravel() > 0)
+    column_ok = finite.mean(axis=0) >= float(min_column_finite_fraction)
+    if column_ok.sum() < 3:                     # too little overlap to describe any shape
+        column_ok = np.ones(values.shape[1], dtype=bool)
+    subset = values[:, column_ok]
+    subset_finite = finite[:, column_ok]
+    # An all-NaN row is a legitimate outcome of a narrow run; report it as unusable, do not warn.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        mean = np.nanmean(subset, axis=1, keepdims=True)
+        spread = np.nanstd(subset, axis=1, keepdims=True)
+    standardized = np.where(spread > 0, (subset - mean) / np.where(spread > 0, spread, 1.0), np.nan)
+    usable = subset_finite.all(axis=1) & (spread.ravel() > 0)
+    return standardized, usable, column_ok
 
 
 def discover_curve_modules(curves, grid, *, n_modules=None, max_distance=0.5, min_amplitude=0.05,
-                           method='average', min_features=3, feature_names=None):
+                           method='average', min_features=3, feature_names=None,
+                           min_column_finite_fraction=0.5):
     """Cluster curves into modules by shape, using correlation distance on standardised curves.
 
     ``n_modules`` (if given) cuts the tree at that many clusters, otherwise ``max_distance`` is the
@@ -111,9 +130,13 @@ def discover_curve_modules(curves, grid, *, n_modules=None, max_distance=0.5, mi
     values = np.asarray(curves, dtype=float)
     names = (list(feature_names) if feature_names is not None
              else [f'feature_{i}' for i in range(values.shape[0])])
-    descriptors = curve_descriptors(values, grid)
+    positions = np.asarray(grid, dtype=float)
+    standardized, usable, column_ok = _standardize_curves(
+        values, min_column_finite_fraction=min_column_finite_fraction)
+    # Descriptors are read on the same support the curves were standardised on, so peak positions are
+    # never reported from a stretch of pseudospace this run cannot see.
+    descriptors = curve_descriptors(values[:, column_ok], positions[column_ok])
     descriptors.insert(0, 'feature', names)
-    standardized, usable = _standardize_curves(values)
     usable &= descriptors['amplitude'].to_numpy() >= min_amplitude
 
     labels = np.array(['unassigned'] * len(names), dtype=object)

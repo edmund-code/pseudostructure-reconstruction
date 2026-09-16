@@ -3012,7 +3012,18 @@ display(response_modules)
 
 
 def _compute_module_stability():
-    """Stability of the response modules under specimen omission and a different data mixture."""
+    """Response-module stability: refit the pooled model without each specimen, plus another mixture.
+
+    The omission probe REFITS the model on the kept specimens instead of averaging their curves: with
+    two specimens per side, averaging the kept side would leave one specimen whose curves are
+    undefined outside its own pseudospace support - a degenerate input rather than a stability
+    result. A refit keeps both sides represented across the whole grid.
+    """
+
+    def _modules_from_refit(keep):
+        fit = run_level_shape(Y_genes[keep], s[keep], c[keep], knots, grid,
+                              SECTION4_CONFIG['lambda_grid'])
+        return _reply_modules(fit['curve_healthy'], fit['curve_aki'])
     def _reply_modules(curve_reference, curve_comparison):
         return discover_curve_modules(
             difference_curves(curve_reference, curve_comparison, center=True), grid, **MODULE_KWARGS
@@ -3020,15 +3031,7 @@ def _compute_module_stability():
 
     runs = {'pooled_fit': response_labels}
     for dropped in sorted(specimen_full_curves):
-        kept = [name for name in specimen_full_curves if name != dropped]
-        kept_mouse = [name for name in kept if name in MOUSE_SAMPLES]
-        kept_human = [name for name in kept if name in HUMAN_SAMPLES]
-        if not kept_mouse or not kept_human:
-            continue                  # dropping this specimen collapses a side of the comparison
-        runs[f'without_{dropped}'] = _reply_modules(
-            specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_mouse}),
-            specimen_balanced_curves({k: specimen_full_curves[k] for k in kept_human}),
-        )
+        runs[f'without_{dropped}'] = _modules_from_refit(samples != dropped)
     runs['specimen_balanced_mixture'] = _reply_modules(balanced_reference, balanced_comparison)
     return module_stability(runs)
 
@@ -3037,11 +3040,15 @@ module_stability_table = cached_frame(
     'module_response_stability', _compute_module_stability, root=STAGE_CACHE_DIR,
     params={**{key: value for key, value in MODULE_KWARGS.items() if key != 'feature_names'},
             'logic': NOTEBOOK_LOGIC_VERSION},
-    inputs={'specimen_curves': digest(specimen_full_curves)},
+    inputs={'y': Y_GENES_FINGERPRINT, 'samples': np.asarray(samples).astype(str),
+            'specimen_curves': digest(specimen_full_curves)},
     code=code_digest(module_stability, discover_curve_modules), enabled=STAGE_CACHE_ENABLED,
 )
 module_stability_table.to_csv(CURVE_OUTPUT_DIR / 'module_response_stability.csv', index=False)
 display(module_stability_table.round(3))
+print('Read the stability table with its module counts: a leave-one-out refit can cut a different '
+      'number of modules, and the adjusted Rand index punishes that on its own. '
+      'fraction_same_module is the like-for-like view; the module counts are the first thing to check.')
 
 # Enrichment against the pathway library, with the discovery-eligible genes as the background and
 # correction across every tested (module, gene set) pair.

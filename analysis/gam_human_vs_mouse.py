@@ -1,28 +1,35 @@
 # %% [markdown]
 # # GAM analysis of the human vs healthy-mouse PT pseudospace
 #
-# This notebook is **only** the trajectory analysis: the nested level/shape GAM on the PT
-# pseudospace, for every tested gene and for the predefined pathway sets, plus the
-# specimen-balanced weighting.
+# Two analyses, in order:
 #
-# It **consumes** notebook 03's upstream artifacts - the PT-specific DPT coordinate
-# (`cross_species_pt_dpt.h5ad`), the reviewed cluster labels carried on it, and the accepted
-# ortholog map (`ortholog_map_used.csv`) - and never rebuilds Harmony, the diffusion map, DPT
-# or the clustering. Curve-module discovery, the signed-ranking enrichment sweeps and the
-# magnitude/detection audits stay in notebook 03 and are out of scope here.
+# * **Part 1 - gene analysis.** The nested level/shape GAM for every tested gene, the canonical PT
+#   marker-gradient check, and the specimen-balanced weighting.
+# * **Part 2 - pathway analysis.** The same GAM on predefined pathway scores, with membership
+#   coverage, redundancy grouping and member-level evidence.
 #
-# Run notebook 03 first: this notebook stops with a clear error if the upstream artifacts are
-# missing.
+# Everything above Part 1 is setup and shared input. This notebook **consumes** notebook 03's upstream
+# artifacts - the PT-specific DPT coordinate (`cross_species_pt_dpt.h5ad`), the reviewed cluster labels
+# carried on it, and the accepted ortholog map (`ortholog_map_used.csv`) - and never rebuilds Harmony,
+# the diffusion map, DPT or the clustering. Curve-module discovery, the signed-ranking enrichment
+# sweeps and the magnitude/detection audits stay in notebook 03.
+#
+# Run notebook 03 first: this notebook stops with a clear error if the upstream artifacts are missing.
+#
+
+# %% [markdown]
+# ## Setup
+#
+# Configuration, the upstream dependencies, and the coordinate and gene set every
+# analysis below shares.
 
 # %%
 # Purpose: from __future__ import annotations
 # %load_ext autoreload
 # %autoreload 2
 
-from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -70,35 +77,19 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 DATA_ROOT, RESULTS_ROOT = _workflow_roots(PROJECT_DIR)
 
-# Define only locations needed to start the workflow.
-TUBULE_BY_GENE_DIR = DATA_ROOT / 'tubule_by_gene'
-ORTHOLOG_TABLE_PATH = DATA_ROOT / 'human_mouse_hcop_fifteen_column.txt.gz'
 
 # Upstream run: notebook 03 owns the pseudospace, the cluster labels and the ortholog
 # map. This notebook reads them and never writes into that directory.
 UPSTREAM_DIR = RESULTS_ROOT / 'human_vs_healthy_mouse'
 RESULTS_DIR = UPSTREAM_DIR
 OUTPUT_DIR = RESULTS_ROOT / 'gam_human_vs_mouse'
-HARMONY_OUTPUT_PATH = RESULTS_DIR / 'cross_species_harmony_pass1.h5ad'
-PASS2_HARMONY_OUTPUT_PATH = RESULTS_DIR / 'cross_species_harmony_pass2.h5ad'
-GLOBAL_DPT_OUTPUT_PATH = RESULTS_DIR / 'cross_species_nephron_global_dpt.h5ad'
 # The PT file below is a post-global-DPT subset for later PT analyses.
 DPT_OUTPUT_PATH = RESULTS_DIR / 'cross_species_pt_dpt.h5ad'
-CELLTYPING_DIR = RESULTS_DIR / 'celltyping'
-HEATMAP_OUTPUT_DIR = RESULTS_DIR / 'heatmaps'
 CURVE_OUTPUT_DIR = OUTPUT_DIR      # every table and figure written here
 DIAGNOSTIC_DIR = OUTPUT_DIR / 'diagnostics'
 for _directory in (OUTPUT_DIR, DIAGNOSTIC_DIR):
     _directory.mkdir(parents=True, exist_ok=True)
 
-# --- Stage cache -------------------------------------------------------------------------------
-# Expensive pure stages are keyed by their parameters, their inputs and their code, so pressing
-# "Run All" again reloads them instead of recomputing. Every hit is printed. Disable for a clean
-# rebuild with PSEUDOSPACE_STAGE_CACHE=0; inspect or clear it with
-# pseudospace.stage_cache.cache_status(STAGE_CACHE_DIR) / purge_stage_cache(STAGE_CACHE_DIR).
-# NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the body of a cached cell so
-# the cached results cannot outlive the code that produced them.
-NOTEBOOK_LOGIC_VERSION = 1
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = UPSTREAM_DIR / "stage_cache"   # reuse 03's cache: same fits hit
 STAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -113,59 +104,26 @@ print(f'Results will be written to: {OUTPUT_DIR.relative_to(PROJECT_DIR)}')
 
 # %%
 # Purpose: # Settings used only for pass-1 loading, QC, and integration.
-# Settings used only for pass-1 loading, QC, and integration.
-# Keep these adjacent to the pass that consumes them so reruns are easy to audit.
+# The specimen groups the fits compare, and the normalisation target the native-denominator
+# sensitivity uses. Pass-1 loading, QC and Harmony happen upstream in notebook 03; this notebook
+# only reads their result, so their parameters do not belong here.
 MOUSE_SAMPLES = ('Ctrl1A2', 'Ctrl1A4')
 HUMAN_SAMPLES = ('HUK1_COR1', 'HUK1_MED1')
-SAMPLE_ORDER = (*MOUSE_SAMPLES, *HUMAN_SAMPLES)
-# Both human slices are healthy CORTEX. `HUK1_MED1` is only *named* medulla at source (the Visium
-# matrix is HUK1_MED); the processed segmentation is cortex tissue, so it must never be treated as
-# medullary in an analysis or a write-up. `sample` keeps the source name for provenance.
-HUMAN_REGIONS = {'HUK1_COR1': 'cortex', 'HUK1_MED1': 'cortex'}
 SPECIES_GROUPS = ('mouse', 'human')
-BATCH_KEY = 'sample'
-RANDOM_STATE = 0
 
-MIN_GENES_PER_TUBULE = 100
 # This gene filter is applied immediately after structure QC, before HVG selection
 # and Harmony, so low-support genes cannot influence the integration embedding.
-MIN_GENE_TUBULE_FRACTION = 0.05
-MIN_GENE_TOTAL_COUNTS = 20
 NORMALIZE_TARGET_SUM = 1e4
-N_HVGS = 2000
-HARMONY_EXPECTED_VERSION = '2.0.5'
-HARMONY_HVG_MIN_MEAN = 0.0125
-HARMONY_HVG_MAX_MEAN = 3
-HARMONY_HVG_MIN_DISP = 0.5
-HARMONY_N_PCS = 50
-HARMONY_THETA = 6
-HARMONY_LAMBDA = 1
-HARMONY_MAX_ITER = 30
-HARMONY_TAU = 0
-HARMONY_PCA_N_COMPS = 50
-HARMONY_NEIGHBORS_N = 25
-HARMONY_UMAP_MIN_DIST = 0.3
-HARMONY_UMAP_SPREAD = 1.0
-COARSE_RESOLUTION = 0.7
 
-print('Pass-1 settings:', {'min_genes': MIN_GENES_PER_TUBULE,
-                            'min_gene_fraction': MIN_GENE_TUBULE_FRACTION,
-                            'min_gene_total_counts': MIN_GENE_TOTAL_COUNTS, 'HVGs': N_HVGS,
-                            'batch_key': BATCH_KEY, 'seed': RANDOM_STATE})
 
 
 # %%
 # Purpose: import scanpy as sc
 import scanpy as sc
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as PathEffects
-import rpy2.robjects as ro
 from IPython.display import display
 from scipy import sparse
-from scipy.ndimage import gaussian_filter1d
-from scipy.spatial import cKDTree
 from scipy.stats import spearmanr
-from sklearn.metrics import silhouette_score
 
 from pseudospace.cross_species import (
     build_one_to_one_ortholog_map,
@@ -175,8 +133,6 @@ from pseudospace.cross_species import (
     plot_pre_filtering_tubule_qc,
     read_ortholog_table,
 )
-from pseudospace.io_qc import annotate_mito_ribo_mouse_symbols, sample_name_from_path
-from pseudospace.harmony import run_harmony_rpy2, select_harmony_hvgs_by_condition
 from pseudospace.stage_cache import (
     cached_anndata,
     cached_frame,
@@ -192,8 +148,6 @@ from pseudospace.stage_cache import (
     stage_key,
     stage_mark_fresh,
 )
-from pseudospace.heatmaps import plot_marker_heatmap
-from pseudospace.markers import build_gene_lookup
 from pseudospace.trajectory import (
     choose_diffusion_component,
     choose_root_global,
@@ -212,21 +166,14 @@ if not _mpl_cfg.is_relative_to(CACHE_ROOT.resolve()):
 else:
     print(f'Cache redirects active ({CACHE_ROOT}).')
 
-_installed_harmony = str(ro.r('as.character(packageVersion("harmony"))')[0])
-if _installed_harmony != HARMONY_EXPECTED_VERSION:
-    raise RuntimeError(
-        f'R harmony {HARMONY_EXPECTED_VERSION} is required for the pinned clustering; '
-        f'found {_installed_harmony}. Activate the kidney-pseudospace environment.'
-    )
-print(f'R harmony version: {_installed_harmony}')
 
 
 # %% [markdown]
-# ## 1 - ortholog map (upstream dependency)
+# ### Ortholog map (upstream)
 #
-# The accepted human-to-mouse map notebook 03 wrote. Pathway membership resolves through it,
-# and the analysis gene set is gated on which features each input actually measured, which 03
-# recorded as `measured_in_both_inputs`.
+# The accepted human-to-mouse map notebook 03 wrote. Pathway membership resolves through it, and
+# the analysis gene set is gated on which features each input actually measured
+# (`measured_in_both_inputs`).
 
 # %%
 # Read the map 03 produced rather than re-deriving it: deriving it needs the HCOP table plus the
@@ -248,28 +195,12 @@ from pseudospace.vocabulary import KEEP_TUBULE_CLASSES
 print('Retained tubular-nephron classes:', ', '.join(KEEP_TUBULE_CLASSES))
 
 
-# %%
-# Purpose: define reference genes used only after manual PT cluster review.
-# These lists do not participate in clustering, differential expression, or broad labels.
-NEPHRON_AXIS_MARKERS = {
-    'PT-S1': ['Slc5a2', 'Slc5a12', 'Gatm'],
-    'PT-S2': ['Slc22a6', 'Slc13a3', 'Cyp2e1'],
-    'PT-S3': ['Slc7a13', 'Slc22a7', 'Cyp7b1'],
-}
-print('Reference-only PT groups:', ', '.join(NEPHRON_AXIS_MARKERS))
-
-
-# %%
-# Purpose: # Global-DPT orientation settings: defined where the trajectory is constructed.
-# Global-DPT orientation settings: defined where the trajectory is constructed.
-TOTAL_POSITION_MARKERS = {
-    'early': sorted({gene for group in ('PT-S1', 'PT-S2') for gene in NEPHRON_AXIS_MARKERS[group]}),
-    'late': sorted(NEPHRON_AXIS_MARKERS['PT-S3']),
-}
-PAGA_CONNECTIVITY_THRESHOLD = 0.01
-N_DIFFMAP_COMPONENTS_TO_TEST, EIGENVALUE_FLOOR, MIN_VALID_FOR_SPEARMAN = 10, 1e-8, 20
-print('PT reference axis for global-DPT orientation:', {key: len(value) for key, value in TOTAL_POSITION_MARKERS.items()})
-
+# %% [markdown]
+# ### Coordinate and analysis gene set
+#
+# The PT pseudospace coordinate and the gene set every fit below uses. The coordinate comes
+# straight from 03; the gene set is the detectable genes that **both** inputs actually measured,
+# so a structural zero from a missing feature can never enter a comparison.
 
 # %%
 # Purpose: from pseudospace.levelshape import fit_single_condition_curves, run_level_shape, summarize_curve_effects
@@ -420,13 +351,43 @@ print('Inference units: two mouse specimens versus one human donor; no species p
 
 
 # %% [markdown]
-# ## 2 - gene-level level/shape decomposition
+# ### Reference markers
 #
-# M0 is one shared smooth, M1 adds a constant species offset and M2 adds a
-# species-by-pseudospace interaction; the likelihood-ratio tests choose between them, and the
-# effect split then separates a vertical offset (level), a gradient-strength change (amplitude)
-# and a spatial redistribution (pattern). The comparison is repeated with the native total as
-# denominator, so a result cannot be attributed to the normalisation choice alone.
+# Axis-adjacent genes. They flag the early/late programs in the gene tables and orient the read
+# of the fitted curves; nothing here is fitted or selected on them, and because the axis was built
+# from the same markers upstream they are not independent validation.
+
+# %%
+# Purpose: define reference genes used only after manual PT cluster review.
+# These lists do not participate in clustering, differential expression, or broad labels.
+NEPHRON_AXIS_MARKERS = {
+    'PT-S1': ['Slc5a2', 'Slc5a12', 'Gatm'],
+    'PT-S2': ['Slc22a6', 'Slc13a3', 'Cyp2e1'],
+    'PT-S3': ['Slc7a13', 'Slc22a7', 'Cyp7b1'],
+}
+print('Reference-only PT groups:', ', '.join(NEPHRON_AXIS_MARKERS))
+
+# Purpose: # Global-DPT orientation settings: defined where the trajectory is constructed.
+# Global-DPT orientation settings: defined where the trajectory is constructed.
+TOTAL_POSITION_MARKERS = {
+    'early': sorted({gene for group in ('PT-S1', 'PT-S2') for gene in NEPHRON_AXIS_MARKERS[group]}),
+    'late': sorted(NEPHRON_AXIS_MARKERS['PT-S3']),
+}
+print('PT reference axis for global-DPT orientation:', {key: len(value) for key, value in TOTAL_POSITION_MARKERS.items()})
+
+
+# %% [markdown]
+# ## Part 1 - gene analysis
+
+# %% [markdown]
+# ### 1.1 - gene-level level/shape decomposition
+#
+# M0 is one shared smooth, M1 adds a constant species offset and M2 adds a species-by-pseudospace
+# interaction; the likelihood-ratio tests choose between them, and the effect split then separates a
+# vertical offset (level), a gradient-strength change (amplitude) and a spatial redistribution
+# (pattern). The comparison is repeated with the native total as denominator, so a result cannot be
+# attributed to the normalisation choice alone.
+#
 
 # %%
 # Purpose: gene_fit = run_level_shape(
@@ -719,13 +680,15 @@ print('Completed:', '# Paired standardized fitted-curve heatmap for the broader 
 
 
 # %% [markdown]
-# ## 3 - canonical PT marker-gradient check
+# ### 1.2 - canonical PT marker-gradient check
 #
-# Axis-adjacent genes shown separately: they locate where each program sits along the
-# pseudospace and orient the read of the fit. They are markers used to build and orient the
-# axis, so they are not independent validation.
+# The reference markers plotted against the fitted mouse and human curves: they show where each PT
+# program sits along the shared coordinate and whether that placement is consistent between species.
+#
 
 # %%
+# Reference marker panels for the check below. They do not participate in any fit: they are
+# plotted against the fitted curves to show where each PT program sits on the axis.
 # Purpose: # Marker panels and display settings used only by the heatmap section.
 # Marker panels and display settings used only by the heatmap section.
 HEATMAP_MARKERS = {
@@ -735,16 +698,10 @@ HEATMAP_MARKERS = {
         'PT-S3': ['Slc22a7', 'Cyp7b1'],
     },
 }
-HEATMAP_COLORS = {'PT-S1': '#4C9BD3', 'PT-S2': '#5B8E55', 'PT-S3': '#D6B48A', 'ATL': '#26A69A', 'mTAL': '#F58518', 'cTAL': '#E8A33D', 'DCT1': '#D81B60', 'DCT2': '#EC6EA5', 'CNT': '#76B7B2', 'CCD': '#4E79A7', 'OMCD': '#9C755F', 'IMCD': '#593C8F'}
-SEGMENT_STRIP_COLORS = {**HEATMAP_COLORS, 'PT': '#4C9BD3', 'DTL': '#7E57C2', 'AL': '#F58518', 'DCT': '#D81B60', 'CNT_CD': '#8D6E63', 'Glomerulus': '#9E9E9E'}
-N_BINS = 120
-HEATMAP_OUTPUT_DIR = OUTPUT_DIR / 'heatmaps'   # this notebook's own directory
 def _marker_dict(markers):
     return {group: [{'label': gene, 'candidates': [gene]} for gene in genes] for group, genes in markers.items()}
 print(f'Heatmap families: {", ".join(HEATMAP_MARKERS)}')
 
-
-# %%
 # Purpose: pt_marker_groups = {
 pt_marker_groups = {
     key.replace('PT-', ''): genes
@@ -794,12 +751,101 @@ print('Completed:', 'pt_marker_groups = {')
 
 
 # %% [markdown]
-# ## 4 - predefined pathway trajectories
+# ### 1.3 - specimen-balanced weighting
 #
-# Pathway scores are the mean of PT-standardised member genes, fitted with the same nested
-# GAM. Membership is resolved through the ortholog map with explicit coverage stages, redundant
-# sets are grouped, and each prioritized pathway ships member-level evidence so a single gene
-# cannot masquerade as a program.
+# The pooled fits weight tubules, so a specimen that contributed more structures shapes every curve
+# more. Fitting each specimen separately and averaging the curves gives each specimen equal weight -
+# the version that cannot be driven by one specimen's share of the data. Both weightings are reported.
+#
+
+# %%
+# Purpose: per-specimen GAM fits and the specimen-balanced mixture.
+# The pooled fit above weights TUBULES, so a specimen that contributed more structures shapes every
+# curve more. Fitting each specimen separately and averaging the curves gives each specimen equal
+# weight; comparing the two weightings says how much of a result is a weighting artefact.
+from pseudospace.specimen import specimen_balanced_curves
+
+specimen_full_curves = {}
+for sample_name in sorted(set(samples)):
+    mask = samples == sample_name
+    specimen_full_curves[sample_name], _ = fit_single_condition_curves(
+        Y_genes[mask], s[mask], knots, grid, SECTION4_CONFIG['lambda_grid'],
+        gene_fit['lam_idx'], support_pct=SECTION4_CONFIG['common_support_pct'],
+    )
+
+mouse_specimens = [name for name in specimen_full_curves if name in MOUSE_SAMPLES]
+human_specimens = [name for name in specimen_full_curves if name in HUMAN_SAMPLES]
+balanced_reference = specimen_balanced_curves({n: specimen_full_curves[n] for n in mouse_specimens})
+balanced_comparison = specimen_balanced_curves({n: specimen_full_curves[n] for n in human_specimens})
+
+specimen_balanced_frame = pd.DataFrame({
+    'gene': gene_names,
+    'balanced_mouse_amplitude': (np.nanmax(balanced_reference, axis=1)
+                                 - np.nanmin(balanced_reference, axis=1)),
+    'balanced_human_amplitude': (np.nanmax(balanced_comparison, axis=1)
+                                 - np.nanmin(balanced_comparison, axis=1)),
+    'balanced_level_effect_human_minus_mouse': np.nanmean(
+        balanced_comparison - balanced_reference, axis=1),
+})
+specimen_balanced_frame.to_csv(CURVE_OUTPUT_DIR / 'specimen_balanced_gene_amplitudes.csv',
+                               index=False)
+print(f'Specimen fits: {len(specimen_full_curves)} specimens ({len(mouse_specimens)} mouse, '
+      f'{len(human_specimens)} human); balanced curve matrix {balanced_reference.shape}.')
+
+# The same estimator on both weightings: a result that survives this is not an artefact of how many
+# tubules each specimen contributed.
+pooled_effects = summarize_curve_effects(
+    gene_fit['curve_healthy'], gene_fit['curve_aki'], feature_names=gene_names
+).rename(columns={'feature': 'gene'})
+balanced_effects = summarize_curve_effects(
+    balanced_reference, balanced_comparison, feature_names=gene_names
+).rename(columns={'feature': 'gene'})
+weighting = pooled_effects.merge(balanced_effects, on='gene', suffixes=('_pooled', '_balanced'))
+weighting_agreement = pd.DataFrame([
+    {
+        'metric': metric,
+        'spearman_pooled_vs_balanced': float(weighting[metric + '_pooled'].corr(
+            weighting[metric + '_balanced'], method='spearman')),
+        'top20_sign_agreement': float(np.mean(
+            np.sign(weighting.reindex(weighting[metric + '_pooled'].abs().nlargest(20).index)[
+                metric + '_pooled'])
+            == np.sign(weighting.reindex(weighting[metric + '_pooled'].abs().nlargest(20).index)[
+                metric + '_balanced']))),
+    }
+    for metric in ('level_effect', 'amplitude_log2_ratio', 'pattern_rms_z', 'level_fraction')
+])
+weighting_agreement.to_csv(CURVE_OUTPUT_DIR / 'pooled_vs_specimen_balanced_agreement.csv',
+                           index=False)
+display(weighting_agreement.round(3))
+print('Where the two weightings disagree, the pooled number is the one that depends on how many '
+      'tubules each specimen contributed.')
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4.4))
+axes[0].scatter(weighting['level_effect_pooled'], weighting['level_effect_balanced'], s=4,
+                alpha=0.25, color='#4C9BD3')
+axes[0].set_xlabel('level effect, pooled fit')
+axes[0].set_ylabel('level effect, balanced fit')
+axes[0].set_title(f"level: Spearman {weighting_agreement.loc[0, 'spearman_pooled_vs_balanced']:+.3f}")
+axes[1].scatter(weighting['pattern_rms_z_pooled'], weighting['pattern_rms_z_balanced'], s=4,
+                alpha=0.25, color='#E15759')
+axes[1].set_xlabel('pattern RMS (z), pooled')
+axes[1].set_ylabel('pattern RMS (z), balanced')
+axes[1].set_title(f"pattern: Spearman {weighting_agreement.loc[2, 'spearman_pooled_vs_balanced']:+.3f}")
+fig.tight_layout()
+fig.savefig(CURVE_OUTPUT_DIR / 'pooled_vs_specimen_balanced.png', dpi=180)
+plt.show()
+
+
+# %% [markdown]
+# ## Part 2 - pathway analysis
+
+# %% [markdown]
+# ### 2.1 - predefined pathway trajectories
+#
+# Pathway scores are the mean of PT-standardised member genes, fitted with the same nested GAM as the
+# genes. Membership is resolved through the ortholog map with explicit coverage stages, and redundant
+# sets are grouped rather than reported as independent hits.
+#
 
 # %%
 # Purpose: gene_mean = np.asarray(Y_genes.mean(axis=0)).ravel()
@@ -965,6 +1011,14 @@ if len(pathway_results):
     ]].round(3))
 
 
+# %% [markdown]
+# ### 2.2 - member evidence
+#
+# Each prioritized pathway ships member-level evidence: how many of its members move with the
+# aggregate trend, which gene contributes most, and whether the direction survives without it.
+# A pathway name is not evidence of a distinct program when its member set is another
+# pathway's member set.
+
 # %%
 # Purpose: if len(pathway_results):
 if len(pathway_results):
@@ -1041,91 +1095,6 @@ if len(pathway_results):
 print('Completed:', 'if len(pathway_results):')
 
 
-# %% [markdown]
-# ## 5 - specimen-balanced weighting
-#
-# The pooled fits weight tubules. Fitting each specimen separately and averaging the curves
-# gives each specimen equal weight, which is the version that cannot be driven by one specimen
-# contributing more structures. Both weightings are reported side by side.
-
-# %%
-# Purpose: per-specimen GAM fits and the specimen-balanced mixture.
-# The pooled fit above weights TUBULES, so a specimen that contributed more structures shapes every
-# curve more. Fitting each specimen separately and averaging the curves gives each specimen equal
-# weight; comparing the two weightings says how much of a result is a weighting artefact.
-from pseudospace.specimen import specimen_balanced_curves
-
-specimen_full_curves = {}
-for sample_name in sorted(set(samples)):
-    mask = samples == sample_name
-    specimen_full_curves[sample_name], _ = fit_single_condition_curves(
-        Y_genes[mask], s[mask], knots, grid, SECTION4_CONFIG['lambda_grid'],
-        gene_fit['lam_idx'], support_pct=SECTION4_CONFIG['common_support_pct'],
-    )
-
-mouse_specimens = [name for name in specimen_full_curves if name in MOUSE_SAMPLES]
-human_specimens = [name for name in specimen_full_curves if name in HUMAN_SAMPLES]
-balanced_reference = specimen_balanced_curves({n: specimen_full_curves[n] for n in mouse_specimens})
-balanced_comparison = specimen_balanced_curves({n: specimen_full_curves[n] for n in human_specimens})
-
-specimen_balanced_frame = pd.DataFrame({
-    'gene': gene_names,
-    'balanced_mouse_amplitude': (np.nanmax(balanced_reference, axis=1)
-                                 - np.nanmin(balanced_reference, axis=1)),
-    'balanced_human_amplitude': (np.nanmax(balanced_comparison, axis=1)
-                                 - np.nanmin(balanced_comparison, axis=1)),
-    'balanced_level_effect_human_minus_mouse': np.nanmean(
-        balanced_comparison - balanced_reference, axis=1),
-})
-specimen_balanced_frame.to_csv(CURVE_OUTPUT_DIR / 'specimen_balanced_gene_amplitudes.csv',
-                               index=False)
-print(f'Specimen fits: {len(specimen_full_curves)} specimens ({len(mouse_specimens)} mouse, '
-      f'{len(human_specimens)} human); balanced curve matrix {balanced_reference.shape}.')
-
-# The same estimator on both weightings: a result that survives this is not an artefact of how many
-# tubules each specimen contributed.
-pooled_effects = summarize_curve_effects(
-    gene_fit['curve_healthy'], gene_fit['curve_aki'], feature_names=gene_names
-).rename(columns={'feature': 'gene'})
-balanced_effects = summarize_curve_effects(
-    balanced_reference, balanced_comparison, feature_names=gene_names
-).rename(columns={'feature': 'gene'})
-weighting = pooled_effects.merge(balanced_effects, on='gene', suffixes=('_pooled', '_balanced'))
-weighting_agreement = pd.DataFrame([
-    {
-        'metric': metric,
-        'spearman_pooled_vs_balanced': float(weighting[metric + '_pooled'].corr(
-            weighting[metric + '_balanced'], method='spearman')),
-        'top20_sign_agreement': float(np.mean(
-            np.sign(weighting.reindex(weighting[metric + '_pooled'].abs().nlargest(20).index)[
-                metric + '_pooled'])
-            == np.sign(weighting.reindex(weighting[metric + '_pooled'].abs().nlargest(20).index)[
-                metric + '_balanced']))),
-    }
-    for metric in ('level_effect', 'amplitude_log2_ratio', 'pattern_rms_z', 'level_fraction')
-])
-weighting_agreement.to_csv(CURVE_OUTPUT_DIR / 'pooled_vs_specimen_balanced_agreement.csv',
-                           index=False)
-display(weighting_agreement.round(3))
-print('Where the two weightings disagree, the pooled number is the one that depends on how many '
-      'tubules each specimen contributed.')
-
-fig, axes = plt.subplots(1, 2, figsize=(11, 4.4))
-axes[0].scatter(weighting['level_effect_pooled'], weighting['level_effect_balanced'], s=4,
-                alpha=0.25, color='#4C9BD3')
-axes[0].set_xlabel('level effect, pooled fit')
-axes[0].set_ylabel('level effect, balanced fit')
-axes[0].set_title(f"level: Spearman {weighting_agreement.loc[0, 'spearman_pooled_vs_balanced']:+.3f}")
-axes[1].scatter(weighting['pattern_rms_z_pooled'], weighting['pattern_rms_z_balanced'], s=4,
-                alpha=0.25, color='#E15759')
-axes[1].set_xlabel('pattern RMS (z), pooled')
-axes[1].set_ylabel('pattern RMS (z), balanced')
-axes[1].set_title(f"pattern: Spearman {weighting_agreement.loc[2, 'spearman_pooled_vs_balanced']:+.3f}")
-fig.tight_layout()
-fig.savefig(CURVE_OUTPUT_DIR / 'pooled_vs_specimen_balanced.png', dpi=180)
-plt.show()
-
-
 # %%
 # Purpose: close with what was written and what must not be read into it.
 written = sorted(p.name for p in CURVE_OUTPUT_DIR.glob('*') if p.is_file())
@@ -1139,8 +1108,8 @@ print()
 print('Reading rules for these numbers:')
 print('  - the coordinate is upstream (notebook 03). Nothing here re-derives Harmony, the diffusion')
 print('    map, DPT or the cluster labels, so a coordinate change has to be made in 03.')
-print('  - genes absent from either input feature list are excluded from every fit: a structural')
-print('    zero is not a measurement (measured_in_both_inputs).')
+print('  - genes absent from either input feature list are excluded from every fit (Part 1 and')
+print('    Part 2 both): a structural zero is not a measurement (measured_in_both_inputs).')
 print('  - the effect split separates level, amplitude and pattern, and a pattern verdict is only')
 print('    offered when both curves carry a gradient (see pattern_status).')
 print('  - the inference unit is the specimen: two mouse specimens versus one human donor, so these')

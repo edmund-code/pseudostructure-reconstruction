@@ -3161,6 +3161,118 @@ print(f'Genes whose dominant difference is level, not a supported pattern change
       'module discovery is run on the mean-centred difference, so they are annotated, not clustered.')
 
 
+# %%
+# Purpose: plot every response-module pathway that passes the pooled BH correction.
+from textwrap import fill
+
+from matplotlib import colors as mpl_colors
+
+significant_module_pathways = module_enrichment.loc[
+    module_enrichment['p_value_adjusted'].lt(0.05)
+].copy()
+
+if significant_module_pathways.empty:
+    print('No response-module pathways pass BH q < 0.05; no enrichment plot was written.')
+else:
+    _name_parts = significant_module_pathways['gene_set'].str.split(': ', n=1, expand=True)
+    significant_module_pathways['library'] = _name_parts[0]
+    significant_module_pathways['pathway'] = _name_parts[1]
+    significant_module_pathways['fold_enrichment'] = (
+        significant_module_pathways['n_overlap']
+        / significant_module_pathways['expected_overlap']
+    )
+    significant_module_pathways['module_number'] = (
+        significant_module_pathways['module'].str.extract(r'(\d+)', expand=False).astype(int)
+    )
+    significant_module_pathways = significant_module_pathways.sort_values(
+        ['module_number', 'p_value_adjusted', 'fold_enrichment'],
+        ascending=[True, True, False],
+    ).reset_index(drop=True)
+
+    # If an adjusted p-value underflows to zero, place it one decade below the smallest
+    # representable positive result rather than letting an infinite colour score dominate.
+    _positive_q = significant_module_pathways.loc[
+        significant_module_pathways['p_value_adjusted'].gt(0), 'p_value_adjusted'
+    ]
+    _q_floor = max(
+        float(_positive_q.min()) / 10 if len(_positive_q) else np.finfo(float).tiny,
+        np.finfo(float).tiny,
+    )
+    significant_module_pathways['minus_log10_q'] = -np.log10(
+        significant_module_pathways['p_value_adjusted'].clip(lower=_q_floor)
+    )
+
+    _library_labels = {
+        'MSigDB_Hallmark_2020': 'Hallmark',
+        'Reactome_2022': 'Reactome',
+        'KEGG_2019_Mouse': 'KEGG',
+    }
+    _pathway_display = significant_module_pathways['pathway'].str.replace(
+        r'\s+R-HSA-\d+$', '', regex=True
+    )
+    _row_labels = [
+        fill(
+            f'{module} · {pathway} [{_library_labels.get(library, library)}]',
+            width=62, subsequent_indent='    ',
+        )
+        for module, pathway, library in zip(
+            significant_module_pathways['module'],
+            _pathway_display,
+            significant_module_pathways['library'],
+        )
+    ]
+
+    _q_scores = significant_module_pathways['minus_log10_q'].to_numpy(dtype=float)
+    _q_min, _q_max = float(_q_scores.min()), float(_q_scores.max())
+    if np.isclose(_q_min, _q_max):
+        _q_max = _q_min + 1.0
+    _q_norm = mpl_colors.Normalize(vmin=_q_min, vmax=_q_max)
+    _cmap = plt.get_cmap('viridis')
+    _y = np.arange(len(significant_module_pathways))
+
+    fig, axis = plt.subplots(
+        figsize=(10.5, max(4.8, 0.55 * len(significant_module_pathways)))
+    )
+    bars = axis.barh(
+        _y, significant_module_pathways['fold_enrichment'],
+        color=_cmap(_q_norm(_q_scores)), edgecolor='#333333', linewidth=0.4,
+    )
+    axis.axvline(1.0, color='#666666', lw=0.8, ls='--', zorder=0)
+    axis.set_yticks(_y, labels=_row_labels)
+    axis.invert_yaxis()
+    axis.set_xlabel('Observed / expected overlap')
+    axis.set_ylabel('Response module · pathway [library]')
+    axis.set_title(
+        'BH-significant response-module pathway enrichments (q < 0.05)\n'
+        'Exploratory hypergeometric tests; correction spans all tested module–pathway pairs'
+    )
+    for boundary in np.flatnonzero(
+        significant_module_pathways['module'].to_numpy()[1:]
+        != significant_module_pathways['module'].to_numpy()[:-1]
+    ):
+        axis.axhline(boundary + 0.5, color='#BDBDBD', lw=0.7)
+
+    _max_fold = float(significant_module_pathways['fold_enrichment'].max())
+    _label_pad = max(0.04 * _max_fold, 0.08)
+    axis.set_xlim(0, _max_fold + 4.5 * _label_pad)
+    for bar, overlap in zip(bars, significant_module_pathways['n_overlap']):
+        axis.text(
+            bar.get_width() + _label_pad, bar.get_y() + bar.get_height() / 2,
+            f'{int(overlap)} genes', va='center', ha='left', fontsize=7, color='#333333',
+        )
+
+    _q_mappable = plt.cm.ScalarMappable(norm=_q_norm, cmap=_cmap)
+    _q_mappable.set_array([])
+    colorbar = fig.colorbar(_q_mappable, ax=axis, pad=0.02, aspect=30)
+    colorbar.set_label('−log10(BH q)')
+    _save_figure(fig, 'significant_module_pathway_enrichment.png')
+
+    display(significant_module_pathways[[
+        'module', 'library', 'pathway', 'n_overlap', 'expected_overlap',
+        'fold_enrichment', 'p_value_adjusted',
+    ]].round({'expected_overlap': 2, 'fold_enrichment': 2, 'p_value_adjusted': 4}))
+
+
 # %% [markdown]
 # ## 4.5 - Specimen-level summaries and coordinate robustness
 #

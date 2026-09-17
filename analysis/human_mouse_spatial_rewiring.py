@@ -1349,6 +1349,82 @@ print(
 )
 
 
+# --------------------------------------------------------------------------------------
+# Figure: canonical programs before registration, landmark positions, the mapping, and the
+# canonical gradient genes after it. This is the sensitivity axis, so the panel also shows the
+# ordering the mapping had to impose.
+# --------------------------------------------------------------------------------------
+
+validation_genes = ["Slc5a2", "Slc22a6", "Slc22a7"]
+
+figure, axes = plt.subplots(2, 2, figsize=(12, 7.6))
+(ax_before, ax_positions), (ax_mapping, ax_after) = axes
+
+for panel, curves in landmark_registration["programs"].items():
+    first_panel = next(iter(landmark_registration["programs"]))
+    ax_before.plot(grid_unit, curves["mouse"], color=SPECIES_COLORS["mouse"], lw=1.8,
+                   label=f"{panel} (mouse)" if panel == first_panel else None)
+    ax_before.plot(grid_unit, curves["human"], color=SPECIES_COLORS["human"], lw=1.8, ls="--",
+                   label=f"{panel} (human)" if panel == first_panel else None)
+ax_before.set_title("Landmark programs before registration (solid = mouse, dashed = human)",
+                    loc="left")
+ax_before.set_xlabel("PT position (unit): early -> late")
+ax_before.set_ylabel("Mean member z-score")
+ax_before.legend()
+
+ax_positions.plot([0, 1], [0, 1], color="0.7", lw=1, ls=":", label="consistent ordering")
+ax_positions.scatter(landmark_table["mouse_centroid"], landmark_table["human_centroid"],
+                     s=60, color="#444444", zorder=3, label="landmark centroid")
+for row in landmark_table.itertuples():
+    ax_positions.annotate(row.panel, (row.mouse_centroid, row.human_centroid),
+                          xytext=(4, 4), textcoords="offset points", fontsize=8)
+out_of_order = int((np.diff(human_centroids) <= 0).sum()) if human_centroids.size > 1 else 0
+ax_positions.set_title(
+    f"Landmark positions ({out_of_order} human order violation(s))", loc="left"
+)
+ax_positions.set_xlabel("Mouse landmark centroid")
+ax_positions.set_ylabel("Human landmark centroid")
+ax_positions.legend()
+
+ax_mapping.plot(grid_unit, grid_unit, color="0.7", lw=1, ls=":", label="identity")
+ax_mapping.plot(grid_unit, landmark_registration["mapped"], color="#444444", lw=2.0,
+                label="mapping m(human) -> mouse")
+if len(landmark_registration["anchors"]):
+    ax_mapping.scatter(landmark_registration["anchors"]["human_centroid"],
+                       landmark_registration["anchors"]["mouse_centroid"], s=45, color="#D55E00",
+                       zorder=3, label="anchors")
+ax_mapping.set_title("Monotone human -> mouse mapping imposed on the landmarks", loc="left")
+ax_mapping.set_xlabel("Human PT position")
+ax_mapping.set_ylabel("Registered mouse PT position")
+ax_mapping.legend()
+
+for gene in validation_genes:
+    index = gene_lookup_tested.get(gene.upper())
+    if index is None:
+        continue
+    ax_after.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.8,
+                  label="mouse" if gene == validation_genes[0] else None)
+    ax_after.plot(grid_unit, human_registered[index], color=SPECIES_COLORS["human"], lw=1.8, ls="--",
+                  label="human (registered)" if gene == validation_genes[0] else None)
+    ax_after.annotate(gene, (grid_unit[int(np.nanargmax(balanced_mouse[index]))],
+                             float(np.nanmax(balanced_mouse[index]))),
+                      xytext=(2, 2), textcoords="offset points", fontsize=8)
+ax_after.set_title("Canonical PT gradients on the registered axis", loc="left")
+ax_after.set_xlabel("PT position (unit, registered)")
+ax_after.set_ylabel("Fitted lognorm")
+ax_after.legend()
+
+figure.suptitle(
+    "Cross-species registration of PT position from S1/S2/S3 landmark programs\n"
+    "sensitivity axis only: the primary coordinate is 03's shared PT DPT "
+    "(2 mouse specimens, 1 human donor)",
+    fontsize=11,
+)
+figure.tight_layout()
+_save_figure(figure, "pt_cross_species_registration.png")
+plt.show()
+
+
 # %%
 # Purpose: synthetic self-check of the landmark registration.
 
@@ -1581,18 +1657,28 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
 
 
 def _spatial_discovery_score(frame, config):
-    """Divergence score for any frame carrying the metric columns.
+    """Interpretability-gated divergence score, in units of each component's own threshold.
 
-    A divergence score, not a probability: each term is in units of its own threshold, so one unit of
-    the score is "one threshold's worth" of amplitude change, displacement, or shape divergence. Used
-    for the primary table and for every sensitivity variant's frame.
+    Each term counts **only where the evidence for it is interpretable**, which is the difference
+    between measuring divergence and measuring noise:
+
+    * amplitude change counts only when at least one species is reproducibly patterned - the ratio of
+      two flat curves is a division artefact, not a loss of zonation;
+    * displacement counts only when the full phase criteria pass (interior optimum, agreement with the
+      mouse curve, corroboration by the centroid, reproduction on the alternate coordinate);
+    * shape divergence counts only when both species are patterned and reproducible.
+
+    A gene with nothing interpretable therefore scores 0 rather than accumulating a large value out of
+    tiny amplitudes, boundary shifts and noisy correlations. The frame must already carry the
+    phenotype flags (section 4), so the score is computed after them.
     """
-    return (
-        (frame["amplitude_log2_ratio_human_over_mouse"].abs() / config["amplitude_change_major"]).fillna(0.0)
-        + (frame["best_shift_human_minus_mouse"].abs() / (config["shift_search_limit"]
-                                                          - config["shift_interior_margin"])).fillna(0.0)
-        + (1.0 - frame["shape_corr"].clip(-1.0, 1.0).fillna(1.0))
-    )
+    amplitude_term = (frame["amplitude_log2_ratio_human_over_mouse"].abs()
+                      / config["amplitude_change_major"]).where(frame["amplitude_evidence"], 0.0)
+    phase_term = (frame["best_shift_human_minus_mouse"].abs()
+                  / SHIFT_INTERIOR_LIMIT).where(frame["shift_usable"], 0.0)
+    shape_term = (1.0 - frame["shape_corr"].clip(-1.0, 1.0)).where(frame["positional_usable"], 0.0)
+
+    return (amplitude_term.fillna(0.0) + phase_term.fillna(0.0) + shape_term.fillna(0.0))
 
 
 # ALT_COLUMNS (setup cell) names the alternate coordinate's metrics. Whichever axis is not primary
@@ -1841,6 +1927,14 @@ def _phenotype_flags(metrics, config, include_axis_genes=False):
     flags["patterned_both"] = flags["strong_mouse"] & flags["strong_human"] & flags["enough_support"]
     flags["positional_usable"] = (
         flags["patterned_both"] & flags["reproducible_mouse"] & flags["reproducible_human"]
+    )
+    # An amplitude *difference* is only evidence when at least one species has a reproducible
+    # pattern to compare against; the ratio of two flat curves is a division artefact.
+    flags["amplitude_evidence"] = (
+        flags["enough_support"]
+        & (flags["strong_mouse"] | flags["strong_human"])
+        & flags["reproducible_mouse"]
+        & flags["reproducible_human"]
     )
 
     flags["inversion"] = (
@@ -2121,6 +2215,31 @@ def _phenotype_selfcheck():
         "assigned_class": [str(assigned[name]) for name in synthetic],
     })
     outcome["passed"] = outcome["expected_class"] == outcome["assigned_class"]
+
+    # The divergence score must be gated by interpretability: a gene with nothing interpretable scores
+    # exactly 0 instead of accumulating tiny-amplitude ratios, boundary shifts and noisy correlations.
+    # The score is gated by the flags, so they are joined onto the metrics frame first -
+    # exactly the order the notebook itself uses.
+    frame_with_flags = frame.join(flags)
+    scores = _spatial_discovery_score(frame_with_flags, CONFIG).set_axis(
+        frame["gene"].to_numpy()
+    )
+    uninterpretable = ["flat in both species", "too little shared support"]
+    outcome = pd.concat([outcome, pd.DataFrame([
+        {"synthetic_case": "score: no interpretable component scores exactly 0",
+         "expected_class": "0", "assigned_class": f"{float(scores[uninterpretable].abs().max()):.3g}",
+         "passed": bool(np.isclose(scores[uninterpretable].abs().max(), 0.0))},
+        {"synthetic_case": "score: an interpreted displacement contributes",
+         "expected_class": "> 0", "assigned_class": f"{float(scores['expected shifted later']):.3g}",
+         "passed": bool(scores["expected shifted later"] > 0)},
+        {"synthetic_case": "score: complex rewiring contributes via shape divergence",
+         "expected_class": "> 0", "assigned_class": f"{float(scores['expected complex rewiring']):.3g}",
+         "passed": bool(scores["expected complex rewiring"] > 0)},
+        {"synthetic_case": "score: a conserved gene scores below a rewired one",
+         "expected_class": "< complex",
+         "assigned_class": f"{float(scores['expected conserved']):.3g}",
+         "passed": bool(scores["expected conserved"] < scores["expected complex rewiring"])},
+    ])], ignore_index=True)
     return outcome
 
 
@@ -3754,7 +3873,18 @@ else:
 # balanced curves (the same quantity a whole-PT DE would report; when 05's pseudobulk whole-PT log fold
 # change is present it is shown alongside as a continuity check, not as the primary). Spatial signal =
 # `spatial_discovery_score`, which is built only from amplitude change, displacement and shape
-# divergence, and therefore cannot be moved by a level difference.
+# divergence - never from level - and each term counts **only where its evidence is interpretable**:
+# amplitude difference needs a reproducibly patterned species, displacement needs the full phase
+# criteria, shape divergence needs both species patterned and reproducible. A gene with nothing
+# interpretable scores exactly 0 instead of accumulating division-amplified ratios from flat curves,
+# boundary shifts and noisy correlations, so the weak/uncertain cloud sits at the origin rather than
+# dominating the continuous-only quadrant.
+#
+# One distinction to keep in mind when reading the quadrants: a gene can hold a non-zero score while
+# still being classified `weak / uncertain zonation` - that happens when one component *is*
+# interpretable (say a real amplitude difference) but the slice or specimen agreement needed for a
+# phase or species-specific class is not there. The class reflects that disagreement; the score only
+# reports which components are measurable.
 #
 # **Descriptive, by construction.** No p-values are used on the conventional axis: with one human donor
 # a species-wide test would not be calibrated. The quadrant counts and pathway table are effect-size

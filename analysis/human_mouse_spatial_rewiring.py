@@ -54,6 +54,13 @@
 # | 12 | Literature validation (deferred — placeholder) |
 # | 13 | Tables, notes and the auto-generated summary |
 #
+# Outputs are written to `results/human_vs_healthy_mouse/spatial_rewiring/` (`figures/`, `tables/`,
+# the fitted-curve `.npz` payloads and `analysis_notes.md`). The **stage cache is deliberately
+# 03/05's** `results/human_vs_healthy_mouse/stage_cache/` rather than a private subdirectory:
+# `cached_run_level_shape` keys on the fitter's source plus the fit parameters, so pointing at the
+# shared cache turns the pooled gene fit into a reuse instead of a silent recomputation. This
+# notebook's own per-specimen fits are cached there as `spatial_rewiring_specimen_curves`.
+#
 
 # %%
 # Purpose: configuration, direction conventions, roots and the output layout for this notebook.
@@ -4049,6 +4056,10 @@ of PT). Every metric is computed on the registered axis and on the unregistered 
 
 - Tables: `tables/` ({len(table_files)} files), figures: `figures/` ({len(figure_files)} files),
   curve payloads: this directory ({len(object_files)} `.npz`).
+- Stage cache: `{STAGE_CACHE_DIR.relative_to(PROJECT_DIR)}` - 03/05's directory, deliberately shared
+  so the pooled gene fit is reused rather than recomputed; this notebook's own stages there are
+  `spatial_rewiring_specimen_curves` (per-specimen fits) beside the inherited `section4_gene_fit`.
+  `PSEUDOSPACE_STAGE_CACHE=0` forces a full rebuild.
 - Section 12 (literature validation) is deferred: no published supplementary signature is stored in
   this repository; the marker audit is in `tables/literature_marker_audit.csv`.
 """

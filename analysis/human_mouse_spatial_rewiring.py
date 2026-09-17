@@ -2725,6 +2725,20 @@ from scipy.spatial.distance import squareform
 from sklearn.decomposition import PCA
 from sklearn.metrics import adjusted_rand_score, silhouette_score
 
+def _complete_difference_curves(values, label):
+    """Fill unsupported positions of a difference curve with 0 ("no divergence") and report it.
+
+    PCA and corrcoef need complete vectors, and a gene can be unsupported at the edges of the shared
+    grid. Filling those positions with zero difference is the neutral choice - it claims no
+    divergence where one species has no data - but the count is reported so it is never silent.
+    """
+    gaps = ~np.isfinite(values)
+    if gaps.any():
+        _report(f"{label} covering an unsupported stretch", int(gaps.any(axis=1).sum()), values.shape[0],
+                why="filled with 0 (no divergence) so the clustering has a complete vector")
+    return np.where(gaps, 0.0, values)
+
+
 rewiring_genes = gene_metrics.loc[
     gene_metrics["spatial_phenotype"].eq("complex shape rewiring")
     & ~gene_metrics["axis_basis_gene"]
@@ -2756,7 +2770,9 @@ _report("of those, with a non-degenerate difference curve", int(informative_rows
 
 rewiring_genes = rewiring_genes[informative_rows]
 rewiring_index = rewiring_index[informative_rows]
-difference_curves = difference_curves_all[informative_rows]
+difference_curves = _complete_difference_curves(
+    difference_curves_all[informative_rows], "complex-rewiring genes"
+)
 
 if len(rewiring_genes) < CONFIG["cluster_min_genes"]:
     print("Too few genes to cluster: the section is skipped, not forced.")
@@ -2765,7 +2781,7 @@ if len(rewiring_genes) < CONFIG["cluster_min_genes"]:
 else:
     n_components = int(min(10, difference_curves.shape[0] - 1, difference_curves.shape[1] - 1))
     pca = PCA(n_components=n_components, random_state=CONFIG["cluster_seed"])
-    component_scores = pca.transform(difference_curves)
+    component_scores = pca.fit_transform(difference_curves)
 
     functional_pca = pd.DataFrame({
         "component": np.arange(1, n_components + 1),
@@ -2903,9 +2919,10 @@ else:
 
     for variant_name, variant_mouse, variant_human_raw in variant_curve_sets:
         variant_registration = _register(variant_mouse, variant_human_raw)
-        variant_difference = (
+        variant_difference = _complete_difference_curves(
             _row_zscore(variant_registration["human_registered"][rewiring_index])
-            - _row_zscore(variant_mouse[rewiring_index])
+            - _row_zscore(variant_mouse[rewiring_index]),
+            "variant complex-rewiring genes",
         )
         variant_distance = 1.0 - np.corrcoef(variant_difference)
         variant_distance = np.clip(

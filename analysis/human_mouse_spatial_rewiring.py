@@ -2379,6 +2379,13 @@ representative_table = pd.concat(
     ignore_index=True,
 )
 
+representative_class_counts = (
+    representative_table.groupby("spatial_phenotype").size()
+    .reindex(REPRESENTATIVE_CLASSES).fillna(0).astype(int)
+)
+print("Representative genes available per class (a class with no eligible gene is left blank):")
+display(representative_class_counts.to_frame("n_genes_shown"))
+
 figure, axes = plt.subplots(
     len(REPRESENTATIVE_CLASSES), GENES_PER_CLASS,
     figsize=(3.4 * GENES_PER_CLASS, 1.85 * len(REPRESENTATIVE_CLASSES)),
@@ -2975,59 +2982,66 @@ heatmap_frame = pd.DataFrame([{
     "leading_genes": row.leading_genes,
 } for row in representatives])
 
-# A pathway can be significant for more than one phenotype; show its strongest per phenotype.
-heatmap_matrix = (
-    heatmap_frame
-    .pivot_table(index=["library", "pathway"], columns="spatial_phenotype",
-                 values="signed_strength", aggfunc="max")
-    .reindex(columns=[label for label in PHENOTYPE_CLASSES if label in heatmap_frame["spatial_phenotype"].unique()])
-)
+if heatmap_frame.empty:
+    print(f"No pathway x phenotype pair reached FDR < {CONFIG['enrichment_fdr']}: "
+          "the heatmap is skipped rather than drawn empty. The full enrichment table is still saved.")
+else:
+    # A pathway can be significant for more than one phenotype; show its strongest per phenotype.
+    heatmap_matrix = (
+        heatmap_frame
+        .pivot_table(index=["library", "pathway"], columns="spatial_phenotype",
+                     values="signed_strength", aggfunc="max")
+        .reindex(columns=[label for label in PHENOTYPE_CLASSES
+                          if label in set(heatmap_frame["spatial_phenotype"])])
+    )
+    heatmap_matrix = heatmap_matrix.reindex(
+        heatmap_matrix.abs().max(axis=1).sort_values(ascending=False).index
+    )
 
-heatmap_matrix = heatmap_matrix.reindex(
-    heatmap_matrix.abs().max(axis=1).sort_values(ascending=False).index
-)
+    heatmap_labels = [
+        f"{pathway}  [{library}]"
+        + ("" if pd.isna(group_of_pathway.get((library, pathway)))
+           else f" (group of {int(group_size_of_pathway[(library, pathway)])})")
+        for library, pathway in heatmap_matrix.index
+    ]
+    scale = float(np.nanmax(np.abs(heatmap_matrix.to_numpy())))
 
-row_order = heatmap_matrix.index
-heatmap_labels = [
-    f"{pathway}  [{library}]{'' if pd.isna(group_of_pathway.get((library, pathway))) else ' (group of ' + str(int(group_size_of_pathway[(library, pathway)])) + ')'}"
-    for library, pathway in heatmap_matrix.index
-]
+    figure, axis = plt.subplots(
+        1, 1,
+        figsize=(1.15 * heatmap_matrix.shape[1] + 8.0, max(5.0, 0.32 * heatmap_matrix.shape[0])),
+    )
 
-figure, axis = plt.subplots(
-    1, 1, figsize=(1.15 * heatmap_matrix.shape[1] + 8.0, max(5.0, 0.32 * heatmap_matrix.shape[0]))
-)
+    image = axis.imshow(
+        heatmap_matrix.to_numpy(), aspect="auto", interpolation="nearest", cmap="PuOr_r",
+        vmin=-scale, vmax=scale,
+    )
 
-image = axis.imshow(
-    heatmap_matrix.to_numpy(), aspect="auto", interpolation="nearest", cmap="PuOr_r",
-    vmin=-np.nanmax(np.abs(heatmap_matrix.to_numpy())),
-    vmax=np.nanmax(np.abs(heatmap_matrix.to_numpy())),
-)
+    axis.set_xticks(np.arange(heatmap_matrix.shape[1]))
+    axis.set_xticklabels([textwrap.fill(str(label), 18) for label in heatmap_matrix.columns],
+                         rotation=45, ha="right", fontsize=8)
+    axis.set_yticks(np.arange(heatmap_matrix.shape[0]))
+    axis.set_yticklabels([textwrap.fill(str(label), 46) for label in heatmap_labels], fontsize=7.5)
 
-axis.set_xticks(np.arange(heatmap_matrix.shape[1]))
-axis.set_xticklabels([textwrap.fill(str(label), 18) for label in heatmap_matrix.columns],
-                     rotation=45, ha="right", fontsize=8)
-axis.set_yticks(np.arange(heatmap_matrix.shape[0]))
-axis.set_yticklabels([textwrap.fill(str(label), 46) for label in heatmap_labels], fontsize=7.5)
+    for row_index in range(heatmap_matrix.shape[0]):
+        for column_index in range(heatmap_matrix.shape[1]):
+            value = heatmap_matrix.to_numpy()[row_index, column_index]
+            if np.isfinite(value):
+                axis.text(column_index, row_index, f"{value:.1f}", ha="center", va="center", fontsize=6.5)
 
-for row_index in range(heatmap_matrix.shape[0]):
-    for column_index in range(heatmap_matrix.shape[1]):
-        value = heatmap_matrix.to_numpy()[row_index, column_index]
-        if np.isfinite(value):
-            axis.text(column_index, row_index, f"{value:.1f}", ha="center", va="center", fontsize=6.5)
+    colour_bar = figure.colorbar(image, ax=axis, shrink=0.7)
+    colour_bar.set_label("Signed -log10(FDR):  + enriched,  - depleted\n(one term per redundancy group)")
 
-colour_bar = figure.colorbar(image, ax=axis, shrink=0.7)
-colour_bar.set_label("Signed -log10(FDR):  + enriched,  - depleted\n(one term per redundancy group)")
+    axis.set_title(
+        "Pathway spatial-phenotype enrichment (non-redundant representatives)\n"
+        "hypergeometric against the tested-ortholog universe, BH across the complete "
+        "pathway x phenotype family",
+        loc="left", fontsize=10,
+    )
+    figure.tight_layout()
+    _save_figure(figure, "pathway_spatial_phenotype_heatmap.png")
+    plt.show()
 
-axis.set_title(
-    "Pathway spatial-phenotype enrichment (non-redundant representatives)\n"
-    "hypergeometric against the tested-ortholog universe, BH across the complete pathway x phenotype family",
-    loc="left", fontsize=10,
-)
-figure.tight_layout()
-_save_figure(figure, "pathway_spatial_phenotype_heatmap.png")
-plt.show()
-
-_save_table(heatmap_frame, "pathway_spatial_phenotype_heatmap_terms.csv")
+    _save_table(heatmap_frame, "pathway_spatial_phenotype_heatmap_terms.csv")
 
 
 # %% [markdown]
@@ -3128,68 +3142,71 @@ for theme in plotted_themes:
     selected = members[:MAX_MEMBERS_PER_THEME]
     height_ratios.append(max(len(selected), 3))
 
-figure, axes = plt.subplots(
-    len(plotted_themes), 2,
-    figsize=(10.5, 0.30 * sum(height_ratios) + 1.6),
-    gridspec_kw={"height_ratios": height_ratios, "hspace": 0.75, "wspace": 0.05},
-)
-axes = np.atleast_2d(axes)
-
-for row_index, theme in enumerate(plotted_themes):
-    selection = theme_selections[theme]
-    members = selection["members"][:MAX_MEMBERS_PER_THEME]
-
-    human_centroid = _row_weighted_centroid(human_registered[members], grid_unit)
-    order = np.argsort(np.nan_to_num(human_centroid, nan=1.0))
-    ordered = np.asarray(members)[order]
-
-    mouse_block = _row_zscore(balanced_mouse[ordered])
-    human_block = _row_zscore(human_registered[ordered])
-
-    for column_index, (block, title) in enumerate([
-        (mouse_block, "mouse"), (human_block, "human (registered)"),
-    ]):
-        axis = axes[row_index, column_index]
-        image = axis.imshow(
-            block, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
-            extent=[0, 1, len(ordered) - 0.5, -0.5],
-        )
-        axis.set_yticks(np.arange(len(ordered)))
-        if column_index == 0:
-            axis.set_yticklabels(
-                [f"{gene_names[index]}  [{phenotype_by_row[index]}]" for index in ordered],
-                fontsize=6.5,
-            )
-            axis.set_ylabel(textwrap.fill(theme, 26), fontsize=8.5)
-        else:
-            axis.set_yticklabels([])
-
-        if row_index == 0:
-            axis.set_title(title, fontsize=9)
-        if row_index == len(plotted_themes) - 1:
-            axis.set_xlabel("PT position (unit): early -> late", fontsize=8)
-        axis.tick_params(labelsize=7)
-
-    best_fdr = theme_summary.loc[theme_summary["theme"].eq(theme), "best_fdr"].iloc[0]
-    best_label = theme_summary.loc[theme_summary["theme"].eq(theme), "best_phenotype"].iloc[0]
-    axes[row_index, 0].text(
-        0.01, -0.30,
-        f"{selection['library']}: {selection['pathway']}   "
-        f"(strongest enrichment: {best_label or 'none'}, FDR={best_fdr:.3g})"
-        if np.isfinite(best_fdr) else
-        f"{selection['library']}: {selection['pathway']}   (no significant phenotype enrichment)",
-        transform=axes[row_index, 0].transAxes, fontsize=7.5, va="top",
+if not plotted_themes:
+    print("No candidate theme matched a pathway in the membership file: the panel figure is skipped.")
+else:
+    figure, axes = plt.subplots(
+        len(plotted_themes), 2,
+        figsize=(10.5, 0.30 * sum(height_ratios) + 1.6),
+        gridspec_kw={"height_ratios": height_ratios, "hspace": 0.75, "wspace": 0.05},
     )
+    axes = np.atleast_2d(axes)
 
-figure.suptitle(
-    "Candidate pathway themes along the registered coordinate\n"
-    "each gene z-scored within species; rows ordered by human positional centroid; "
-    "row labels give the gene's spatial phenotype",
-    fontsize=10.5,
-)
-figure.tight_layout(rect=(0, 0, 1, 0.965))
-_save_figure(figure, "representative_pathway_spatial_heatmaps.png")
-plt.show()
+    for row_index, theme in enumerate(plotted_themes):
+        selection = theme_selections[theme]
+        members = selection["members"][:MAX_MEMBERS_PER_THEME]
+
+        human_centroid = _row_weighted_centroid(human_registered[members], grid_unit)
+        order = np.argsort(np.nan_to_num(human_centroid, nan=1.0))
+        ordered = np.asarray(members)[order]
+
+        mouse_block = _row_zscore(balanced_mouse[ordered])
+        human_block = _row_zscore(human_registered[ordered])
+
+        for column_index, (block, title) in enumerate([
+            (mouse_block, "mouse"), (human_block, "human (registered)"),
+        ]):
+            axis = axes[row_index, column_index]
+            image = axis.imshow(
+                block, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
+                extent=[0, 1, len(ordered) - 0.5, -0.5],
+            )
+            axis.set_yticks(np.arange(len(ordered)))
+            if column_index == 0:
+                axis.set_yticklabels(
+                    [f"{gene_names[index]}  [{phenotype_by_row[index]}]" for index in ordered],
+                    fontsize=6.5,
+                )
+                axis.set_ylabel(textwrap.fill(theme, 26), fontsize=8.5)
+            else:
+                axis.set_yticklabels([])
+
+            if row_index == 0:
+                axis.set_title(title, fontsize=9)
+            if row_index == len(plotted_themes) - 1:
+                axis.set_xlabel("PT position (unit): early -> late", fontsize=8)
+            axis.tick_params(labelsize=7)
+
+        best_fdr = theme_summary.loc[theme_summary["theme"].eq(theme), "best_fdr"].iloc[0]
+        best_label = theme_summary.loc[theme_summary["theme"].eq(theme), "best_phenotype"].iloc[0]
+        axes[row_index, 0].text(
+            0.01, -0.30,
+            f"{selection['library']}: {selection['pathway']}   "
+            f"(strongest enrichment: {best_label or 'none'}, FDR={best_fdr:.3g})"
+            if np.isfinite(best_fdr) else
+            f"{selection['library']}: {selection['pathway']}   (no significant phenotype enrichment)",
+            transform=axes[row_index, 0].transAxes, fontsize=7.5, va="top",
+        )
+
+    figure.suptitle(
+        "Candidate pathway themes along the registered coordinate\n"
+        "each gene z-scored within species; rows ordered by human positional centroid; "
+        "row labels give the gene's spatial phenotype",
+        fontsize=10.5,
+    )
+    figure.tight_layout(rect=(0, 0, 1, 0.965))
+    _save_figure(figure, "representative_pathway_spatial_heatmaps.png")
+    plt.show()
 
 
 # %% [markdown]

@@ -87,8 +87,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import scanpy as sc
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from scipy import sparse
 from scipy.stats import hypergeom, pearsonr, spearmanr
 from IPython.display import display
@@ -257,7 +259,10 @@ CONFIG = {
 
     # --- figures --------------------------------------------------------------------------
     "top_labels_per_panel": 12,
+    # The complete three-gene atlas is retained as a supplementary figure.  The main figure uses
+    # one purpose-selected exemplar per phenotype so it can be read at a single-column page scale.
     "representative_genes_per_class": 3,
+    "main_representative_genes_per_class": 1,
     "heatmap_genes_per_class": 6,
 }
 
@@ -295,6 +300,12 @@ PHENOTYPE_COLORS = {
 SPECIES_COLORS = {
     "mouse": "#0072B2",
     "human": "#D55E00",
+}
+
+LANDMARK_PANEL_COLORS = {
+    "S1": "#2C7FB8",
+    "S2": "#41AB5D",
+    "S3": "#D95F0E",
 }
 
 # Direction conventions, restated once so the sign of every column is unambiguous.
@@ -340,12 +351,56 @@ def _display_path(path):
         return path
 
 
-def _save_figure(fig, name, dpi=240):
-    """Write a figure into `figures/` and report the path relative to the repository root."""
+def _save_figure(fig, name, dpi=600):
+    """Write review and manuscript-ready raster/vector versions of a publication figure.
+
+    The PNG keeps notebook review convenient; the uncompressed TIFF, PDF and SVG support journal
+    submission and manuscript assembly.  The filename passed by each plotting cell stays the
+    canonical figure stem, so the four exports cannot silently drift apart.
+    """
     path = FIG_DIR / name
-    fig.savefig(path, dpi=dpi, bbox_inches="tight")
-    print(f"saved {_display_path(path)}")
+    # Render-time geometry audit is opt-in so the notebook does not depend on development-only
+    # tooling.  Set PSEUDOSPACE_FIGURE_QA_DIR to a directory containing audit_panel_alignment.py
+    # when preparing a manuscript bundle; a failing alignment then blocks export.
+    figure_qa_dir = os.environ.get("PSEUDOSPACE_FIGURE_QA_DIR")
+    if figure_qa_dir:
+        if figure_qa_dir not in sys.path:
+            sys.path.insert(0, figure_qa_dir)
+        from audit_panel_alignment import require_matplotlib_panel_alignment
+        require_matplotlib_panel_alignment(
+            fig,
+            json_out=path.with_suffix(".alignment.json"),
+            overlay_svg=path.with_suffix(".alignment.svg"),
+            tolerance_pt=1.5,
+            gutter_tolerance_pt=1.5,
+            require_panel_labels=False,
+            strict=True,
+        )
+    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
+    tiff_path = path.with_suffix(".tiff")
+    pdf_path = path.with_suffix(".pdf")
+    svg_path = path.with_suffix(".svg")
+    fig.savefig(tiff_path, dpi=dpi, bbox_inches="tight", facecolor="white")
+    fig.savefig(pdf_path, bbox_inches="tight", facecolor="white")
+    fig.savefig(svg_path, bbox_inches="tight", facecolor="white")
+    print(f"saved {_display_path(path)} (+ TIFF/PDF/SVG)")
     return path
+
+
+def _panel_label(axis, label):
+    """Place a stable, manuscript-style panel label outside the data rectangle."""
+    axis.text(-0.16, 1.07, label, transform=axis.transAxes, fontweight="bold",
+              fontsize=11, va="bottom", ha="left", clip_on=False)
+
+
+def _style_pt_axis(axis, *, xlabel=True, ylabel=None):
+    """Use the same positional vocabulary and lightweight grid across curve panels."""
+    if xlabel:
+        axis.set_xlabel("PT position (shared DPT): early → late")
+    if ylabel:
+        axis.set_ylabel(ylabel)
+    axis.set_xlim(0, 1)
+    axis.grid(axis="y", color="0.90", lw=0.6, zorder=0)
 
 
 def _save_table(frame, name, **kwargs):
@@ -382,13 +437,22 @@ def _report(label, kept, total=None, why="", indent=2):
 
 
 plt.rcParams.update({
-    "figure.dpi": 110,
-    "savefig.dpi": 240,
-    "font.size": 9,
-    "axes.titlesize": 10,
-    "axes.labelsize": 9,
+    "figure.dpi": 120,
+    "savefig.dpi": 600,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
+    "pdf.fonttype": 42,
+    "ps.fonttype": 42,
+    "svg.fonttype": "none",
+    "font.size": 8,
+    "axes.titlesize": 9,
+    "axes.labelsize": 8,
+    "axes.titlepad": 6,
+    "axes.labelpad": 3,
+    "axes.linewidth": 0.8,
     "legend.frameon": False,
-    "legend.fontsize": 8,
+    "legend.fontsize": 7,
+    "legend.handlelength": 1.8,
     "axes.spines.top": False,
     "axes.spines.right": False,
 })
@@ -1404,20 +1468,23 @@ print(
 
 validation_genes = ["Slc5a2", "Slc22a6", "Slc22a7"]
 
-figure, axes = plt.subplots(2, 2, figsize=(12, 7.6))
+figure, axes = plt.subplots(2, 2, figsize=(8.4, 5.6), layout="constrained")
 (ax_before, ax_positions), (ax_mapping, ax_after) = axes
 
 for panel, curves in landmark_registration["programs"].items():
-    first_panel = next(iter(landmark_registration["programs"]))
-    ax_before.plot(grid_unit, curves["mouse"], color=SPECIES_COLORS["mouse"], lw=1.8,
-                   label=f"{panel} (mouse)" if panel == first_panel else None)
-    ax_before.plot(grid_unit, curves["human"], color=SPECIES_COLORS["human"], lw=1.8, ls="--",
-                   label=f"{panel} (human)" if panel == first_panel else None)
-ax_before.set_title("Landmark programs before registration (solid = mouse, dashed = human)",
-                    loc="left")
-ax_before.set_xlabel("PT position (unit): early -> late")
+    ax_before.plot(grid_unit, curves["mouse"], color=LANDMARK_PANEL_COLORS[panel], lw=1.5)
+    ax_before.plot(grid_unit, curves["human"], color=LANDMARK_PANEL_COLORS[panel], lw=1.5, ls="--")
+ax_before.set_title("Landmark programmes before registration", loc="left", fontweight="bold")
+_style_pt_axis(ax_before)
 ax_before.set_ylabel("Mean member z-score")
-ax_before.legend()
+ax_before.legend(handles=[
+    Line2D([], [], color=LANDMARK_PANEL_COLORS[panel], lw=1.8, label=panel)
+    for panel in LANDMARK_PANELS
+] + [
+    Line2D([], [], color="0.25", lw=1.4, label="mouse"),
+    Line2D([], [], color="0.25", lw=1.4, ls="--", label="human"),
+], ncols=2, fontsize=5.8, loc="lower left")
+_panel_label(ax_before, "a")
 
 ax_positions.plot([0, 1], [0, 1], color="0.7", lw=1, ls=":", label="consistent ordering")
 ax_positions.scatter(landmark_table["mouse_centroid"], landmark_table["human_centroid"],
@@ -1431,7 +1498,8 @@ ax_positions.set_title(
 )
 ax_positions.set_xlabel("Mouse landmark centroid")
 ax_positions.set_ylabel("Human landmark centroid")
-ax_positions.legend()
+ax_positions.legend(fontsize=6)
+_panel_label(ax_positions, "b")
 
 ax_mapping.plot(grid_unit, grid_unit, color="0.7", lw=1, ls=":", label="identity")
 ax_mapping.plot(grid_unit, landmark_registration["mapped"], color="#444444", lw=2.0,
@@ -1443,7 +1511,8 @@ if len(landmark_registration["anchors"]):
 ax_mapping.set_title("Monotone human -> mouse mapping imposed on the landmarks", loc="left")
 ax_mapping.set_xlabel("Human PT position")
 ax_mapping.set_ylabel("Registered mouse PT position")
-ax_mapping.legend()
+ax_mapping.legend(fontsize=6)
+_panel_label(ax_mapping, "c")
 
 for gene in validation_genes:
     index = gene_lookup_tested.get(gene.upper())
@@ -1459,15 +1528,15 @@ for gene in validation_genes:
 ax_after.set_title("Canonical PT gradients on the registered axis", loc="left")
 ax_after.set_xlabel("PT position (unit, registered)")
 ax_after.set_ylabel("Fitted lognorm")
-ax_after.legend()
+ax_after.legend(fontsize=6)
+_panel_label(ax_after, "d")
 
 figure.suptitle(
-    "Cross-species registration of PT position from S1/S2/S3 landmark programs\n"
+    "Landmark registration is a sensitivity analysis, not the coordinate of record\n"
     "sensitivity axis only: the primary coordinate is 03's shared PT DPT "
-    "(2 mouse specimens, 1 human donor)",
-    fontsize=11,
+    "(2 mouse specimens, 2 slices from 1 human donor)",
+    fontsize=9.5,
 )
-figure.tight_layout()
 _save_figure(figure, "pt_cross_species_registration.png")
 plt.show()
 
@@ -2685,7 +2754,10 @@ else:
     display(architecture_null.round(4))
     _save_table(architecture_null, "conserved_architecture_null.csv")
 
-    figure, axes = plt.subplots(1, 3, figsize=(15, 4.6))
+    # Explicit equal-width geometry keeps the three null panels' plot rectangles and gutters aligned
+    # even though their y-axis labels and legends differ in length.
+    figure, axes = plt.subplots(1, 3, figsize=(10.2, 3.5))
+    figure.subplots_adjust(left=0.075, right=0.985, bottom=0.20, top=0.76, wspace=0.32)
 
     for kind, colour in zip(null_kinds, ["0.75", "0.45"]):
         axes[0].hist(null_curve[kind], bins=30, color=colour, alpha=0.9,
@@ -2725,13 +2797,13 @@ else:
                       loc="left", fontsize=9)
     axes[2].legend(fontsize=7)
 
+    for label, axis in zip(["a", "b", "c"], axes):
+        _panel_label(axis, label)
     figure.suptitle(
-        "Is there a conserved cross-species spatial architecture?\n"
-        f"{architecture_index.size:,} genes reproducibly patterned in both species; both nulls permute "
-        "human gene identities, the stratified one only within mouse-centroid tertiles",
-        fontsize=10.5,
+        "Permutation test of cross-species spatial architecture\n"
+        f"{architecture_index.size:,} genes patterned in both species; human gene identities are permuted globally or within mouse-centroid tertiles",
+        fontsize=9.2,
     )
-    figure.tight_layout()
     _save_figure(figure, "conserved_architecture_null.png")
     plt.show()
 
@@ -2871,39 +2943,39 @@ discovery_eligible = (
     & gene_metrics["enough_shared_support"]
 )
 
-figure, axes = plt.subplots(1, 3, figsize=(13, 4.3), sharey=True)
+figure, axes = plt.subplots(1, 3, figsize=(7.25, 2.75), sharey=True, layout="constrained")
 
 for axis, (panel, requested) in zip(axes, LANDMARK_PANELS.items()):
     members = [gene for gene in requested if gene.upper() in gene_lookup_tested]
     for gene in members:
         index = gene_lookup_tested[gene.upper()]
-        axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.0, alpha=0.55)
-        axis.plot(grid_unit, human_registered[index], color=SPECIES_COLORS["human"], lw=1.0,
-                  alpha=0.55, ls="--")
-        axis.annotate(gene, (grid_unit[int(np.nanargmax(balanced_mouse[index]))],
-                             float(np.nanmax(balanced_mouse[index]))),
-                      xytext=(2, 2), textcoords="offset points", fontsize=7)
+        # Retain the member curves, but make the aggregate programme the visual evidence.
+        axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=0.65,
+                  alpha=0.20, zorder=1)
+        axis.plot(grid_unit, balanced_human[index], color=SPECIES_COLORS["human"], lw=0.65,
+                  alpha=0.20, ls="--", zorder=1)
 
-    if panel in landmark_registration["programs"]:
-        programs = landmark_registration["programs"][panel]
-        axis.plot(grid_unit, programs["mouse"], color=SPECIES_COLORS["mouse"], lw=2.4)
-        axis.plot(grid_unit, programs["human"], color=SPECIES_COLORS["human"], lw=2.4, ls="--")
+    programs = landmark_registration["programs"][panel]
+    axis.plot(grid_unit, programs["mouse"], color=SPECIES_COLORS["mouse"], lw=2.1, zorder=3)
+    axis.plot(grid_unit, programs["human"], color=SPECIES_COLORS["human"], lw=2.1, ls="--", zorder=3)
+    axis.set_title(f"{panel} landmark programme", loc="left", fontweight="bold")
+    axis.text(0.02, 0.05, f"{len(members)} member genes", transform=axis.transAxes,
+              fontsize=6.5, color="0.35")
+    _style_pt_axis(axis, ylabel="Mean member z-score" if axis is axes[0] else None)
 
-    axis.set_title(f"{panel} program: {', '.join(members)}", loc="left")
-    axis.set_xlabel("Registered PT position (unit): early -> late")
-
-axes[0].set_ylabel("Fitted lognorm (genes) / mean z-score (program)")
+_panel_label(axes[0], "a")
 axes[0].legend(
     handles=[
-        Line2D([], [], color=SPECIES_COLORS["mouse"], lw=2.4, label="mouse (balanced)"),
-        Line2D([], [], color=SPECIES_COLORS["human"], lw=2.4, ls="--", label="human (registered)"),
-    ], loc="upper right",
+        Line2D([], [], color=SPECIES_COLORS["mouse"], lw=2.1, label="mouse, balanced curve"),
+        Line2D([], [], color=SPECIES_COLORS["human"], lw=2.1, ls="--", label="human, balanced curve"),
+        Line2D([], [], color="0.45", lw=0.65, alpha=0.35, label="individual landmark member"),
+    ], loc="upper right", fontsize=6.5,
 )
-figure.suptitle("Figure 1A - Canonical S1/S2/S3 territory alignment on the landmark-registered axis\n"
-                "sensitivity view: the primary analysis uses the shared PT DPT (section 2); "
-                "two human slices, one donor",
-                fontsize=11)
-figure.tight_layout()
+figure.suptitle(
+    "Primary coordinate: canonical PT landmark programmes on the shared DPT\n"
+    "Faint traces are member genes; balanced species curves summarise 2 mouse specimens and 2 human slices from one donor",
+    fontsize=9.5,
+)
 _save_figure(figure, "fig1a_pt_alignment.png")
 plt.show()
 
@@ -2915,79 +2987,92 @@ landscape = gene_metrics[discovery_eligible].dropna(
     subset=["mouse_amplitude", "human_amplitude", "shape_corr"]
 )
 
-figure, axes = plt.subplots(1, 2, figsize=(13.5, 6.0), width_ratios=[1.15, 1.0])
-ax_main, ax_margin = axes
-
-points = ax_main.scatter(
-    landscape["mouse_amplitude"], landscape["human_amplitude"],
-    c=landscape["shape_corr"], cmap="coolwarm", vmin=-1, vmax=1,
-    s=6, alpha=0.6, linewidths=0,
-)
-limit = float(np.nanpercentile(
-    np.concatenate([landscape["mouse_amplitude"], landscape["human_amplitude"]]), 99.5))
-limit = max(limit, 0.5)
-
-ax_main.plot([0, limit], [0, limit], color="0.4", lw=1, ls=":", label="equal zonation strength")
-ax_main.axvline(CONFIG["amplitude_patterned"], color="0.6", lw=0.8, ls="--")
-ax_main.axhline(CONFIG["amplitude_patterned"], color="0.6", lw=0.8, ls="--")
-ax_main.set_xlim(-0.02, limit)
-ax_main.set_ylim(-0.02, limit)
-ax_main.set_xlabel("Mouse zonation amplitude (peak-to-trough lognorm)")
-ax_main.set_ylabel("Human zonation amplitude (peak-to-trough lognorm)")
-
-label_candidates = pd.concat([
-    _top_genes_for_class("conserved zonation", 4),
-    _top_genes_for_class("weaker zonation in human", 3),
-    _top_genes_for_class("stronger zonation in human", 3),
-    _top_genes_for_class("complex shape rewiring", 3),
-    _top_genes_for_class("gradient inversion", 2),
-])
-for row in label_candidates.itertuples():
-    ax_main.annotate(row.gene, (row.mouse_amplitude, row.human_amplitude),
-                     xytext=(4, 3), textcoords="offset points", fontsize=7.5)
-
-ax_main.text(0.02, 0.97, "above the line:\nstronger zonation in human", transform=ax_main.transAxes,
-             fontsize=8, va="top")
-ax_main.text(0.02, 0.03, "below the line:\nweaker zonation in human", transform=ax_main.transAxes,
-             fontsize=8, va="bottom")
-ax_main.legend(loc="lower right")
-ax_main.set_title(f"Figure 1B - Zonation strength, {len(landscape):,} discovery-eligible orthologs\n"
-                  "colour = standardised curve correlation (level- and amplitude-free)",
-                  loc="left", fontsize=10)
-
-colour_bar = figure.colorbar(points, ax=ax_main, shrink=0.85)
-colour_bar.set_label("Standardised mouse-human curve correlation")
-
-# Right panel: the rewiring corner, stated numerically.
 strong_both = landscape[
     landscape["mouse_amplitude"].ge(CONFIG["amplitude_patterned"])
     & landscape["human_amplitude"].ge(CONFIG["amplitude_patterned"])
 ]
 quadrants = pd.DataFrame([
-    {"group": "strong in both, shape conserved (r >= conserved_corr)",
-     "n": int((strong_both["shape_corr"] >= CONFIG["conserved_corr"]).sum())},
-    {"group": "strong in both, shape intermediate",
-     "n": int(((strong_both["shape_corr"] < CONFIG["conserved_corr"])
-               & (strong_both["shape_corr"] > CONFIG["rewired_max_corr"])).sum())},
-    {"group": "strong in both, poor shape (r <= rewired_max_corr)",
-     "n": int((strong_both["shape_corr"] <= CONFIG["rewired_max_corr"]).sum())},
-    {"group": "mouse-dominant (mouse patterned, human flat)",
-     "n": int(((landscape["mouse_amplitude"] >= CONFIG["amplitude_patterned"])
-               & (landscape["human_amplitude"] <= CONFIG["amplitude_flat"])).sum())},
-    {"group": "human-dominant (human patterned, mouse flat)",
-     "n": int(((landscape["human_amplitude"] >= CONFIG["amplitude_patterned"])
-               & (landscape["mouse_amplitude"] <= CONFIG["amplitude_flat"])).sum())},
+    {"group": "strong in both: conserved shape", "n": int((strong_both["shape_corr"] >= CONFIG["conserved_corr"]).sum()),
+     "colour": PHENOTYPE_COLORS["conserved zonation"]},
+    {"group": "strong in both: intermediate shape", "n": int(((strong_both["shape_corr"] < CONFIG["conserved_corr"])
+               & (strong_both["shape_corr"] > CONFIG["rewired_max_corr"])).sum()), "colour": "#8F8F8F"},
+    {"group": "strong in both: rewired shape", "n": int((strong_both["shape_corr"] <= CONFIG["rewired_max_corr"]).sum()),
+     "colour": PHENOTYPE_COLORS["complex shape rewiring"]},
+    {"group": "mouse patterned / human flat", "n": int(((landscape["mouse_amplitude"] >= CONFIG["amplitude_patterned"])
+               & (landscape["human_amplitude"] <= CONFIG["amplitude_flat"])).sum()),
+     "colour": PHENOTYPE_COLORS["mouse-zonated / human-flat"]},
+    {"group": "human patterned / mouse flat", "n": int(((landscape["human_amplitude"] >= CONFIG["amplitude_patterned"])
+               & (landscape["mouse_amplitude"] <= CONFIG["amplitude_flat"])).sum()),
+     "colour": PHENOTYPE_COLORS["human-zonated / mouse-flat"]},
 ])
 
-ax_margin.barh(np.arange(len(quadrants)), quadrants["n"], color="#555555", alpha=0.85)
-ax_margin.set_yticks(np.arange(len(quadrants)))
-ax_margin.set_yticklabels([textwrap.fill(group, 34) for group in quadrants["group"]], fontsize=8)
-ax_margin.set_xlabel("Genes")
-ax_margin.set_title("Where the signal sits", loc="left", fontsize=10)
-for index, value in enumerate(quadrants["n"]):
-    ax_margin.text(value, index, f"  {value:,}", va="center", fontsize=8)
+figure = plt.figure(figsize=(8.5, 4.7), layout="constrained")
+grid_spec = figure.add_gridspec(2, 2, width_ratios=[1.30, 0.82], height_ratios=[1.0, 0.85])
+ax_main = figure.add_subplot(grid_spec[:, 0])
+ax_margin = figure.add_subplot(grid_spec[0, 1])
+ax_corr = figure.add_subplot(grid_spec[1, 1])
 
-figure.tight_layout()
+# All observations remain visible as a quiet background.  Colour is reserved for the subset where
+# both amplitudes clear the patterned threshold, where a shape correlation is interpretable.
+ax_main.scatter(landscape["mouse_amplitude"], landscape["human_amplitude"], s=5, alpha=0.12,
+                linewidths=0, color="0.45", rasterized=True, zorder=1)
+points = ax_main.scatter(
+    strong_both["mouse_amplitude"], strong_both["human_amplitude"], c=strong_both["shape_corr"],
+    cmap="RdYlBu_r", vmin=-1, vmax=1, s=8, alpha=0.70, linewidths=0, rasterized=True, zorder=2,
+)
+limit = max(float(np.nanmax(np.concatenate([
+    landscape["mouse_amplitude"].to_numpy(), landscape["human_amplitude"].to_numpy()
+])) * 1.03), 0.5)
+ax_main.plot([0, limit], [0, limit], color="0.30", lw=0.8, ls=":", zorder=0)
+ax_main.axvline(CONFIG["amplitude_patterned"], color="0.55", lw=0.75, ls="--", zorder=0)
+ax_main.axhline(CONFIG["amplitude_patterned"], color="0.55", lw=0.75, ls="--", zorder=0)
+ax_main.set(xlim=(-0.02, limit), ylim=(-0.02, limit),
+            xlabel="Mouse zonation amplitude (peak-to-trough lognorm)",
+            ylabel="Human zonation amplitude (peak-to-trough lognorm)")
+ax_main.text(0.98, 0.04, "dotted: equal amplitude\ndashed: patterned threshold",
+             transform=ax_main.transAxes, fontsize=6.4, ha="right", va="bottom", color="0.35")
+ax_main.set_title(f"Zonation landscape ({len(landscape):,} discovery-eligible orthologs)",
+                  loc="left", fontweight="bold")
+_panel_label(ax_main, "b")
+
+label_candidates = pd.concat([
+    _top_genes_for_class("conserved zonation", 2),
+    _top_genes_for_class("mouse-zonated / human-flat", 2),
+    _top_genes_for_class("human-zonated / mouse-flat", 2),
+    _top_genes_for_class("complex shape rewiring", 2),
+])
+for row in label_candidates.itertuples():
+    ax_main.annotate(row.gene, (row.mouse_amplitude, row.human_amplitude), xytext=(3, 3),
+                     textcoords="offset points", fontsize=6.2, color="0.20")
+colour_bar = figure.colorbar(points, ax=ax_main, pad=0.015, fraction=0.048)
+colour_bar.set_label("Shape correlation\n(both species patterned)", fontsize=7)
+colour_bar.ax.tick_params(labelsize=6.5)
+
+margin_positions = np.arange(len(quadrants))
+ax_margin.barh(margin_positions, quadrants["n"], color=quadrants["colour"], alpha=0.88)
+ax_margin.set_yticks(margin_positions)
+ax_margin.set_yticklabels([textwrap.fill(group, 27) for group in quadrants["group"]], fontsize=6.5)
+ax_margin.invert_yaxis()
+ax_margin.set_xlabel("Genes", fontsize=7)
+ax_margin.set_title("Signal composition", loc="left", fontweight="bold", fontsize=8.5)
+for index, value in enumerate(quadrants["n"]):
+    ax_margin.text(value, index, f" {value:,}", va="center", fontsize=6.5)
+ax_margin.grid(axis="x", color="0.92", lw=0.6)
+
+ax_corr.hist(strong_both["shape_corr"].dropna(), bins=np.linspace(-1, 1, 25), color="0.55",
+             edgecolor="white", lw=0.3)
+ax_corr.axvline(CONFIG["rewired_max_corr"], color=PHENOTYPE_COLORS["complex shape rewiring"],
+                lw=1.0, ls="--")
+ax_corr.axvline(CONFIG["conserved_corr"], color=PHENOTYPE_COLORS["conserved zonation"], lw=1.0, ls="--")
+ax_corr.set(xlim=(-1, 1), xlabel="Shape correlation", ylabel="Genes")
+ax_corr.set_title("Among genes patterned in both species", loc="left", fontsize=8.5, fontweight="bold")
+ax_corr.tick_params(labelsize=6.5)
+
+figure.suptitle(
+    "Amplitude and spatial-shape changes are separable in the primary shared PT DPT\n"
+    "Colour is shown only where both species have a patterned curve; all other eligible genes remain in grey",
+    fontsize=9.5,
+)
 _save_figure(figure, "zonation_amplitude_human_vs_mouse.png")
 plt.show()
 
@@ -3002,7 +3087,8 @@ phase_frame = gene_metrics[discovery_eligible].dropna(
             "residual_rms_after_shift"]
 )
 
-figure, axes = plt.subplots(1, 3, figsize=(16, 5.2), width_ratios=[1.0, 1.0, 1.15])
+figure, axes = plt.subplots(1, 3, figsize=(10.5, 3.65), width_ratios=[1.0, 1.0, 1.0])
+figure.subplots_adjust(left=0.065, right=0.99, bottom=0.20, top=0.78, wspace=0.34)
 ax_raw_registered, ax_shift_residual, ax_summary = axes
 
 # Panel 1: does a bounded displacement *explain* the difference?
@@ -3015,30 +3101,25 @@ ax_raw_registered, ax_shift_residual, ax_summary = axes
 ax_raw_registered.plot([-1, 1], [-1, 1], color="0.5", lw=1, ls=":", label="no change from shifting")
 ax_raw_registered.scatter(
     phase_frame["shape_corr"], phase_frame["post_shift_shape_corr"],
-    s=6, alpha=0.45, linewidths=0, color="#666666",
-    label=f"all genes with a usable pattern (n={len(phase_frame):,})",
-)
-improved = phase_frame[phase_frame["shift_improvement"] >= CONFIG["shift_improvement"]]
-ax_raw_registered.scatter(
-    improved["shape_corr"], improved["post_shift_shape_corr"],
-    s=6, alpha=0.30, linewidths=0, color="0.55",
-    label=f"correlation improves after translation (n={len(improved):,})",
+    s=5, alpha=0.18, linewidths=0, color="0.40", rasterized=True,
+    label=f"all usable patterns (n={len(phase_frame):,})",
 )
 phase_usable = phase_frame[phase_frame["shift_usable"]]
 ax_raw_registered.scatter(
     phase_usable["shape_corr"], phase_usable["post_shift_shape_corr"],
-    s=26, alpha=0.95, linewidths=0, color=PHENOTYPE_COLORS["shifted later in human"],
-    label=f"every phase criterion met (n={len(phase_usable):,})",
+    s=21, alpha=0.95, linewidths=0.3, edgecolors="white",
+    color=PHENOTYPE_COLORS["shifted later in human"],
+    label=f"interior displacement passes all criteria (n={len(phase_usable):,})",
 )
 ax_raw_registered.set_xlabel("Standardised curve correlation (shared PT DPT)")
 ax_raw_registered.set_ylabel(
-    f"Best correlation after displacement\n(|shift| <= {SHIFT_INTERIOR_LIMIT:.2f} of PT)"
+    f"Best correlation after displacement\n(|shift| ≤ {SHIFT_INTERIOR_LIMIT:.2f} of PT)"
 )
-ax_raw_registered.set_title("Phase: does a bounded displacement explain the difference?\n"
-                            "an improvement is not a rescue: orange = interior optimum, sufficient "
-                            "agreement, centroid corroboration and the alternate axis all pass",
-                            loc="left", fontsize=9.5)
-ax_raw_registered.legend(loc="upper left", fontsize=7)
+ax_raw_registered.set_title("A  |  Does bounded displacement rescue the shape?", loc="left",
+                           fontweight="bold")
+ax_raw_registered.text(0.03, 0.03,
+                        f"Orange: {len(phase_usable)} genes pass every displacement criterion.",
+                        transform=ax_raw_registered.transAxes, fontsize=5.9, va="bottom", color="0.30")
 
 # Panel 2: displacement against what is left after it.
 for label in ["shifted earlier in human", "shifted later in human", "gradient inversion",
@@ -3048,16 +3129,16 @@ for label in ["shifted earlier in human", "shifted later in human", "gradient in
         continue
     ax_shift_residual.scatter(
         block["best_shift_human_minus_mouse"], block["residual_rms_after_shift"],
-        s=9, alpha=0.7, linewidths=0, color=PHENOTYPE_COLORS[label], label=f"{label} (n={len(block):,})",
+        s=10, alpha=0.75, linewidths=0, color=PHENOTYPE_COLORS[label],
+        label=f"{label} (n={len(block):,})", rasterized=True,
     )
 ax_shift_residual.axvline(0, color="black", lw=0.8)
 ax_shift_residual.set_xlabel("Best displacement of the human program (fraction of PT)\n"
-                             "<- earlier in human     later in human ->")
+                             "earlier in human  ←     →  later in human")
 ax_shift_residual.set_ylabel("Standardised RMS difference after the best displacement")
-ax_shift_residual.set_title("Phase versus true rewiring\n"
-                            "high residual at small displacement = reshaped, not moved",
-                            loc="left", fontsize=10)
-ax_shift_residual.legend(loc="upper center", fontsize=7.5)
+ax_shift_residual.set_title("B  |  Displacement versus residual rewiring", loc="left", fontweight="bold")
+ax_shift_residual.legend(loc="lower left", fontsize=5.3, markerscale=0.8, ncols=2,
+                         labelspacing=0.25, columnspacing=0.8)
 
 class_counts = (
     gene_metrics[gene_metrics["spatial_phenotype"].isin(PHENOTYPE_CLASSES)]
@@ -3070,20 +3151,27 @@ robust_counts = (
 )
 
 y_positions = np.arange(len(PHENOTYPE_CLASSES))
-ax_summary.barh(y_positions, class_counts.to_numpy(), color="#BBBBBB", label="all genes in class")
+ax_summary.barh(y_positions, class_counts.to_numpy(), color="#D3D3D3", label="all genes in class")
 ax_summary.barh(y_positions, robust_counts.to_numpy(), color="#333333",
-                label=f"broad class kept in >= 80% of variants")
+                label="class stable in ≥80% of sensitivity variants")
 ax_summary.set_yticks(y_positions)
-ax_summary.set_yticklabels([textwrap.fill(label, 26) for label in PHENOTYPE_CLASSES], fontsize=8)
+ax_summary.set_yticklabels([textwrap.fill(label, 23) for label in PHENOTYPE_CLASSES], fontsize=6.3)
 ax_summary.set_xlabel("Genes")
-ax_summary.set_title("Class sizes, and how many survive the sensitivity panel", loc="left", fontsize=10)
-ax_summary.legend(loc="lower right")
+ax_summary.set_xscale("symlog", linthresh=100)
+ax_summary.set_title("C  |  Class size and stability\nlight = all; dark = stable in ≥80% of variants",
+                     loc="left", fontweight="bold", fontsize=7.7)
+ax_summary.invert_yaxis()
 for index, (total, robust) in enumerate(zip(class_counts.to_numpy(), robust_counts.to_numpy())):
-    ax_summary.text(total, index, f"  {total:,}", va="center", fontsize=7.5)
+    ax_summary.text(total, index, f" {total:,}", va="center", fontsize=5.8)
 
-figure.suptitle("Figure 1C - Separating positional displacement from residual trajectory rewiring",
-                fontsize=11)
-figure.tight_layout()
+for axis in axes:
+    axis.grid(axis="y", color="0.92", lw=0.55, zorder=0)
+
+figure.suptitle(
+    "Positional displacement is uncommon; most low-agreement curves remain mismatched after translation\n"
+    "Descriptive classifications on the shared PT DPT; no cross-species population-level inference",
+    fontsize=9.2,
+)
 _save_figure(figure, "phase_vs_shape_rewiring.png")
 plt.show()
 
@@ -3116,68 +3204,93 @@ representative_class_counts = (
 print("Representative genes available per class (a class with no eligible gene is left blank):")
 display(representative_class_counts.to_frame("n_genes_shown"))
 
-figure, axes = plt.subplots(
-    len(REPRESENTATIVE_CLASSES), GENES_PER_CLASS,
-    figsize=(3.4 * GENES_PER_CLASS, 1.85 * len(REPRESENTATIVE_CLASSES)),
-    sharex=True,
+main_representative_table = pd.concat(
+    [_top_genes_for_class(label, CONFIG["main_representative_genes_per_class"])
+     for label in REPRESENTATIVE_CLASSES], ignore_index=True,
 )
-axes = np.atleast_2d(axes)
 
+# A 3 × 3 plate keeps one carefully chosen exemplar from every class at a legible physical size.
+# The full 27-gene atlas is still exported below as supplementary material rather than being shrunk
+# until it can no longer support the claim it is meant to illustrate.
+figure, axes = plt.subplots(3, 3, figsize=(7.25, 6.45), sharex=True, layout="constrained")
+for panel_index, (axis, label) in enumerate(zip(axes.flat, REPRESENTATIVE_CLASSES)):
+    row_index, column_index = divmod(panel_index, 3)
+    block = main_representative_table[
+        main_representative_table["spatial_phenotype"].eq(label)
+    ]
+    if block.empty:
+        axis.set_visible(False)
+        continue
+
+    record = block.iloc[0]
+    index = int(np.flatnonzero(gene_names == record["gene"])[0])
+    for specimen in mouse_samples:
+        axis.plot(grid_unit, specimen_curves[specimen][index], color=SPECIES_COLORS["mouse"],
+                  lw=0.55, alpha=0.26, ls=":", zorder=1)
+    for specimen in human_samples:
+        axis.plot(grid_unit, specimen_curves[specimen][index], color=SPECIES_COLORS["human"],
+                  lw=0.55, alpha=0.26, ls=":", zorder=1)
+    axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.65, zorder=3)
+    axis.plot(grid_unit, balanced_human[index], color=SPECIES_COLORS["human"], lw=1.65, ls="--", zorder=3)
+    axis.set_title(f"{record['gene']}  |  {label}", loc="left", fontsize=7.1, fontweight="bold")
+    axis.text(0.02, 0.04,
+              f"Aₘ={record['mouse_amplitude']:.2f}; Aₕ={record['human_amplitude']:.2f}; "
+              f"r={record['shape_corr']:.2f}; Δpos={record['best_shift_human_minus_mouse']:+.2f}\n"
+              f"stability={record['robustness_score']:.2f}",
+              transform=axis.transAxes, fontsize=5.6, va="bottom", color="0.25",
+              bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.72, "pad": 1.0})
+    _style_pt_axis(axis, xlabel=row_index == 2,
+                   ylabel="Fitted lognorm" if column_index == 0 else None)
+    axis.tick_params(labelsize=6.2)
+
+_panel_label(axes[0, 0], "d")
+axes[0, 0].legend(
+    handles=[
+        Line2D([], [], color=SPECIES_COLORS["mouse"], lw=1.65, label="mouse, balanced"),
+        Line2D([], [], color=SPECIES_COLORS["human"], lw=1.65, ls="--", label="human, balanced"),
+        Line2D([], [], color="0.45", lw=0.7, ls=":", label="individual specimen/slice"),
+    ], loc="upper right", fontsize=5.7,
+)
+figure.suptitle(
+    "One high-evidence gene per spatial phenotype\n"
+    "Thin dotted curves show the two within-species fits; solid/dashed curves are equal-weight species summaries",
+    fontsize=9.2,
+)
+_save_figure(figure, "representative_gene_spatial_phenotypes.png")
+plt.show()
+
+# Retain every selected observation in a separate, full-resolution supplementary atlas.  It is saved
+# but deliberately not displayed inline: a 27-panel figure is unsuitable as a main manuscript panel.
+full_figure, full_axes = plt.subplots(
+    len(REPRESENTATIVE_CLASSES), GENES_PER_CLASS,
+    figsize=(8.0, 1.35 * len(REPRESENTATIVE_CLASSES)), sharex=True, layout="constrained",
+)
+full_axes = np.atleast_2d(full_axes)
 for row_index, label in enumerate(REPRESENTATIVE_CLASSES):
     block = representative_table[representative_table["spatial_phenotype"].eq(label)]
-
-    for column_index in range(GENES_PER_CLASS):
-        axis = axes[row_index, column_index]
-
+    for column_index, axis in enumerate(full_axes[row_index]):
         if column_index >= len(block):
             axis.set_visible(False)
             continue
-
         record = block.iloc[column_index]
         index = int(np.flatnonzero(gene_names == record["gene"])[0])
-
         for specimen in mouse_samples:
             axis.plot(grid_unit, specimen_curves[specimen][index], color=SPECIES_COLORS["mouse"],
-                      lw=0.8, alpha=0.35, ls=":")
+                      lw=0.45, alpha=0.25, ls=":")
         for specimen in human_samples:
             axis.plot(grid_unit, specimen_curves[specimen][index], color=SPECIES_COLORS["human"],
-                      lw=0.8, alpha=0.35, ls=":")
-
-        axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.9)
-        axis.plot(grid_unit, balanced_human[index], color=SPECIES_COLORS["human"], lw=1.9, ls="--")
-
-        axis.set_title(f"{record['gene']}\n"
-                       f"A_m={record['mouse_amplitude']:.2f} A_h={record['human_amplitude']:.2f} "
-                       f"r={record['shape_corr']:.2f}\n"
-                       f"shift={record['best_shift_human_minus_mouse']:+.2f} "
-                       f"robust={record['robustness_score']:.2f}",
-                       fontsize=7.5)
-
+                      lw=0.45, alpha=0.25, ls=":")
+        axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.1)
+        axis.plot(grid_unit, balanced_human[index], color=SPECIES_COLORS["human"], lw=1.1, ls="--")
+        axis.set_title(record["gene"], fontsize=6.3, fontweight="bold")
         if column_index == 0:
-            axis.set_ylabel(textwrap.fill(label, 18), fontsize=8)
+            axis.set_ylabel(textwrap.fill(label, 18), fontsize=6.5)
         if row_index == len(REPRESENTATIVE_CLASSES) - 1:
-            axis.set_xlabel("PT position (unit)", fontsize=8)
-
-    for axis in axes[row_index]:
-        axis.tick_params(labelsize=7)
-
-axes[0, 0].legend(
-    handles=[
-        Line2D([], [], color=SPECIES_COLORS["mouse"], lw=1.9, label="mouse (balanced)"),
-        Line2D([], [], color=SPECIES_COLORS["human"], lw=1.9, ls="--", label="human (balanced)"),
-        Line2D([], [], color="0.6", lw=0.8, ls=":", label="individual specimen/slice"),
-    ], loc="upper right", fontsize=7,
-)
-
-figure.suptitle(
-    "Figure 1D - Representative genes per spatial phenotype\n"
-    "dotted = each mouse specimen / human slice fitted separately; solid/dashed = equal-weight species curves\n"
-    "A_m / A_h = zonation amplitude, r = standardised curve correlation, shift = best displacement (+ = later in human)",
-    fontsize=10.5,
-)
-figure.tight_layout(rect=(0, 0, 1, 0.975))
-_save_figure(figure, "representative_gene_spatial_phenotypes.png")
-plt.show()
+            axis.set_xlabel("PT position", fontsize=6.5)
+        axis.tick_params(labelsize=5.5)
+full_figure.suptitle("Supplementary exemplar atlas: three high-evidence genes per phenotype", fontsize=8.5)
+_save_figure(full_figure, "supplementary_representative_gene_atlas.png")
+plt.close(full_figure)
 
 _save_table(representative_table, "representative_genes_per_class.csv")
 
@@ -3199,19 +3312,18 @@ heatmap_index = np.asarray([int(np.flatnonzero(gene_names == gene)[0])
 mouse_shape = _row_zscore(balanced_mouse[heatmap_index])
 human_shape = _row_zscore(balanced_human[heatmap_index])
 
-figure, axes = plt.subplots(
-    1, 2, figsize=(9.5, max(6.0, 0.21 * len(heatmap_index))), sharey=True
-)
+figure = plt.figure(figsize=(7.6, max(6.5, 0.175 * len(heatmap_index) + 0.8)), layout="constrained")
+grid_spec = figure.add_gridspec(1, 3, width_ratios=[1, 1, 0.045])
+axes = [figure.add_subplot(grid_spec[0, 0]), figure.add_subplot(grid_spec[0, 1])]
+colour_axis = figure.add_subplot(grid_spec[0, 2])
 
-for axis, matrix, title in zip(
-    axes, [mouse_shape, human_shape], ["Healthy mouse", "Human"]
-):
+for axis, matrix, title in zip(axes, [mouse_shape, human_shape], ["Healthy mouse", "Human"]):
     image = axis.imshow(
-        matrix, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
+        matrix, aspect="auto", interpolation="nearest", cmap="RdBu_r", vmin=-2.5, vmax=2.5,
         extent=[0, 1, len(heatmap_index) - 0.5, -0.5],
     )
-    axis.set_xlabel("PT position (unit, shared PT DPT): early -> late")
-    axis.set_title(title, fontsize=10)
+    _style_pt_axis(axis)
+    axis.set_title(title, fontsize=8.5, fontweight="bold")
 
     # Class boundaries.
     boundaries = np.cumsum([len(heatmap_table[heatmap_table["spatial_phenotype"].eq(label)])
@@ -3223,18 +3335,21 @@ axes[0].set_yticks(np.arange(len(heatmap_index)))
 axes[0].set_yticklabels(
     [f"{gene}   [{label}]" for gene, label in
      zip(heatmap_table["gene"], heatmap_table["spatial_phenotype"])],
-    fontsize=6.5,
+    fontsize=5.8,
 )
+axes[0].set_ylabel("Genes, grouped by spatial phenotype", fontsize=7)
+axes[1].tick_params(labelleft=False)
 
-colour_bar = figure.colorbar(image, ax=axes, label="Within-species curve z-score", shrink=0.6)
+colour_bar = figure.colorbar(image, cax=colour_axis, label="Within-species curve z-score")
+colour_bar.ax.tick_params(labelsize=6.5)
+colour_axis.set_label("<colorbar>")
 
 figure.suptitle(
-    "Figure 1E - Spatial organisation only\n"
-    "each gene z-scored within each species, so abundance differences cannot drive the pattern\n"
-    "rows grouped by spatial phenotype",
-    fontsize=10.5,
+    "Spatial organisation only: the same gene ordering in mouse and human\n"
+    "Each row is z-scored within species, so abundance differences cannot drive the pattern",
+    fontsize=9.2,
 )
-figure.tight_layout(rect=(0, 0, 1, 0.94))
+_panel_label(axes[0], "e")
 _save_figure(figure, "shape_only_gene_heatmap.png")
 plt.show()
 
@@ -3524,7 +3639,7 @@ else:
     # Figure: cluster mean difference curves and member genes.
     # ----------------------------------------------------------------------------------
 
-    figure, axes = plt.subplots(1, 2, figsize=(13, 4.6), width_ratios=[1.0, 1.25])
+    figure, axes = plt.subplots(1, 2, figsize=(8.8, 3.5), width_ratios=[1.0, 1.25], layout="constrained")
 
     for cluster in np.unique(cluster_ids):
         member_rows = np.flatnonzero(cluster_ids == cluster)
@@ -3550,10 +3665,11 @@ else:
     axes[1].set_title("Difference curves of the clustered genes", loc="left")
     figure.colorbar(image, ax=axes[1], label="z_human - z_mouse", shrink=0.85)
 
-    figure.suptitle("Residual (complex shape rewiring) difference curves - supplementary view\n"
-                    "z-scored within each species first, so this is spatial disagreement only",
-                    fontsize=10.5)
-    figure.tight_layout()
+    _panel_label(axes[0], "a")
+    _panel_label(axes[1], "b")
+    figure.suptitle("Residual complex-shape rewiring (supplementary)\n"
+                    "Each species is z-scored first, so values represent spatial disagreement only",
+                    fontsize=9.2)
     _save_figure(figure, "complex_rewiring_clusters.png")
     plt.show()
 
@@ -3926,45 +4042,53 @@ else:
                  .sort_values().index.tolist())
 
     figure, axis = plt.subplots(
-        1, 1, figsize=(1.5 * len(phenotype_columns) + 7.5, max(4.5, 0.42 * len(row_order)))
+        1, 1, figsize=(7.3, max(3.25, 0.52 * len(row_order) + 1.55)), layout="constrained"
     )
 
     significance_scale = float(significant_associations["minus_log10_fdr"].max())
+    consistency_x = len(phenotype_columns)
     for row_index, pathway_label in enumerate(row_order):
         block = significant_associations[significant_associations["pathway_label"].eq(pathway_label)]
-        consistency = sorted(set(block["member_consistency"]))
         for entry in block.itertuples():
             x_position = phenotype_columns.index(entry.spatial_phenotype)
             axis.scatter(
                 x_position, row_index,
-                s=45 + 45 * float(np.clip(entry.fold_enrichment, 0, 8)),
+                s=28 + 18 * float(np.clip(entry.fold_enrichment, 0, 10)),
                 c=[entry.minus_log10_fdr], cmap="viridis",
                 vmin=0, vmax=max(significance_scale, 1e-9),
-                edgecolors="black", linewidths=0.4, zorder=3,
+                edgecolors="#202020", linewidths=0.55, zorder=3,
             )
             axis.annotate(
                 f"{entry.member_fraction_in_phenotype:.0%}", (x_position, row_index),
-                xytext=(0, -10), textcoords="offset points", ha="center", fontsize=6.5,
+                xytext=(0, -11), textcoords="offset points", ha="center", fontsize=5.9,
             )
-        axis.text(-0.02, row_index, "  ".join(consistency), transform=axis.get_yaxis_transform(),
-                  ha="right", va="center", fontsize=6.5, color="0.35")
+        consistent = all(entry.member_consistency == "members consistent" for entry in block.itertuples())
+        axis.text(consistency_x, row_index, "yes" if consistent else "no", ha="center", va="center",
+                  fontsize=6.8, color=PHENOTYPE_COLORS["conserved zonation"] if consistent else "0.40",
+                  fontweight=("bold" if consistent else "normal"))
 
-    axis.set_xticks(np.arange(len(phenotype_columns)))
-    axis.set_xticklabels([textwrap.fill(label, 18) for label in phenotype_columns],
-                         rotation=30, ha="right", fontsize=8)
+    axis.set_xticks(np.arange(len(phenotype_columns) + 1))
+    axis.set_xticklabels([textwrap.fill(label, 17) for label in phenotype_columns] + ["Members\nconsistent?"],
+                         fontsize=7)
     axis.set_yticks(np.arange(len(row_order)))
-    axis.set_yticklabels([textwrap.fill(label, 46) for label in row_order], fontsize=7.5)
-    axis.set_xlim(-0.6, len(phenotype_columns) - 0.4)
+    axis.set_yticklabels([textwrap.fill(label, 39) for label in row_order], fontsize=6.6)
+    axis.set_xlim(-0.55, consistency_x + 0.55)
     axis.set_ylim(-0.6, len(row_order) - 0.4)
-    axis.set_xlabel("Spatial phenotype the pathway's members are over-represented in")
+    axis.invert_yaxis()
+    axis.set_xlabel("Spatial phenotype enriched among pathway members")
+    axis.grid(axis="x", color="0.92", lw=0.6, zorder=0)
     axis.set_title(
-        "Pathway genes over-represented in each spatial phenotype\n"
-        "dot size = fold enrichment, colour = -log10(FDR), label = share of the pathway's tested "
-        "members holding the phenotype\n"
-        "grey text = whether the members behave that way overall (phenotype-specific), not just often enough",
-        loc="left", fontsize=9.5,
+        "Pathway-by-phenotype enrichment evidence", loc="left", fontweight="bold", fontsize=9,
     )
-    figure.tight_layout()
+    colour_bar = figure.colorbar(axis.collections[0], ax=axis, pad=0.015, fraction=0.045)
+    colour_bar.set_label("−log₁₀(FDR)", fontsize=6.8)
+    colour_bar.ax.tick_params(labelsize=6.1)
+    _panel_label(axis, "a")
+    figure.suptitle(
+        f"Six pathway–phenotype associations pass family-wide FDR < {CONFIG['enrichment_fdr']}\n"
+        "Dot area = fold enrichment; colour = −log₁₀(FDR); label = member fraction. “Members consistent” is a stricter behavioural check, not a second significance test.",
+        fontsize=8.4,
+    )
     _save_figure(figure, "pathway_spatial_phenotype_dotplot.png")
     plt.show()
 
@@ -4006,14 +4130,14 @@ else:
     scale = float(np.nanmax(np.abs(heatmap_matrix.to_numpy())))
 
     figure, axis = plt.subplots(
-        1, 1, figsize=(1.15 * heatmap_matrix.shape[1] + 8.0,
-                       max(3.5, 0.42 * heatmap_matrix.shape[0]))
+        1, 1, figsize=(1.15 * heatmap_matrix.shape[1] + 6.5,
+                       max(3.0, 0.48 * heatmap_matrix.shape[0] + 1.2)), layout="constrained"
     )
     image = axis.imshow(heatmap_matrix.to_numpy(), aspect="auto", interpolation="nearest",
                         cmap="PuOr_r", vmin=-scale, vmax=scale)
     axis.set_xticks(np.arange(heatmap_matrix.shape[1]))
     axis.set_xticklabels([textwrap.fill(str(label), 18) for label in heatmap_matrix.columns],
-                         rotation=45, ha="right", fontsize=8)
+                         rotation=45, rotation_mode="anchor", ha="right", fontsize=8)
     axis.set_yticks(np.arange(heatmap_matrix.shape[0]))
     axis.set_yticklabels([textwrap.fill(f"{pathway}  [{library}]", 46)
                           for library, pathway in heatmap_matrix.index], fontsize=7.5)
@@ -4030,7 +4154,6 @@ else:
         "near-duplicate sets only; the dot plot above is the primary view",
         loc="left", fontsize=9.5,
     )
-    figure.tight_layout()
     _save_figure(figure, "pathway_spatial_phenotype_heatmap.png")
     plt.show()
 
@@ -4203,17 +4326,6 @@ theme_summary = pd.DataFrame(theme_rows)
 display(theme_summary.round(4))
 _save_table(theme_summary, "pathway_theme_summary.csv")
 
-# --------------------------------------------------------------------------------------
-# One row per theme: mouse block and human block, members ordered by positional centroid.
-# --------------------------------------------------------------------------------------
-
-plotted_themes = [theme for theme in PATHWAY_THEMES if theme in theme_selections]
-height_ratios = []
-for theme in plotted_themes:
-    members = theme_selections[theme]["members"]
-    selected = members[:MAX_MEMBERS_PER_THEME]
-    height_ratios.append(max(len(selected), 3))
-
 def _ordered_member_blocks(members, limit):
     """Limit members, order them by human positional centroid, and z-score each species' block.
 
@@ -4226,67 +4338,75 @@ def _ordered_member_blocks(members, limit):
     return ordered, _row_zscore(balanced_mouse[ordered]), _row_zscore(balanced_human[ordered])
 
 
+# One pathway per page: no raster strip is silently compressed to make a seven-theme dashboard fit.
+def _save_pathway_member_pair(*, members, title, subtitle, filename, limit):
+    """Save a legible mouse/human trajectory plate for one selected pathway term."""
+    ordered, mouse_block, human_block = _ordered_member_blocks(members, limit)
+    figure = plt.figure(figsize=(7.45, max(2.85, 0.18 * len(ordered) + 1.8)), layout="constrained")
+    grid_spec = figure.add_gridspec(1, 3, width_ratios=[1, 1, 0.045])
+    axes = [figure.add_subplot(grid_spec[0, 0]), figure.add_subplot(grid_spec[0, 1])]
+    colour_axis = figure.add_subplot(grid_spec[0, 2])
+    for axis, block, species in zip(axes, [mouse_block, human_block], ["Healthy mouse", "Human"]):
+        image = axis.imshow(block, aspect="auto", interpolation="nearest", cmap="RdBu_r", vmin=-2.5, vmax=2.5,
+                            extent=[0, 1, len(ordered) - 0.5, -0.5])
+        _style_pt_axis(axis)
+        axis.set_title(species, loc="left", fontsize=8.5, fontweight="bold")
+        axis.tick_params(labelsize=5.8)
+    axes[0].set_yticks(np.arange(len(ordered)))
+    axes[0].set_yticklabels([f"{gene_names[index]}  [{phenotype_by_row[index]}]" for index in ordered],
+                             fontsize=5.6)
+    axes[0].set_ylabel("Genes (ordered by human positional centroid)", fontsize=6.8)
+    axes[1].tick_params(labelleft=False)
+    colour_bar = figure.colorbar(image, cax=colour_axis, label="Within-species\ncurve z-score")
+    colour_bar.ax.tick_params(labelsize=5.8)
+    colour_axis.set_label("<colorbar>")
+    figure.suptitle(f"{title}\n{subtitle}; {len(ordered)} of {len(members)} tested members displayed",
+                    fontsize=8.7)
+    _save_figure(figure, filename)
+    plt.close(figure)
+
+
+# A compact index says which candidate themes have a significant association; full trajectory plates
+# are written one term per page below.  Candidate-theme inspection is not elevated to enrichment evidence.
+theme_display = theme_summary.copy()
+theme_display["minus_log10_best_fdr"] = -np.log10(theme_display["best_fdr"])
+theme_display = theme_display.sort_values("minus_log10_best_fdr", na_position="last")
+figure, axis = plt.subplots(1, 1, figsize=(7.0, 3.4), layout="constrained")
+positions = np.arange(len(theme_display))
+colours = [PHENOTYPE_COLORS.get(label, "0.65") if np.isfinite(fdr) and fdr < CONFIG["enrichment_fdr"] else "0.78"
+           for label, fdr in zip(theme_display["best_phenotype"], theme_display["best_fdr"])]
+axis.barh(positions, theme_display["minus_log10_best_fdr"].fillna(0), color=colours)
+axis.axvline(-np.log10(CONFIG["enrichment_fdr"]), color="0.35", lw=0.8, ls="--")
+axis.set_yticks(positions)
+axis.set_yticklabels(theme_display["theme"], fontsize=7)
+axis.invert_yaxis()
+axis.set_xlabel("−log₁₀(best family-wide FDR)")
+axis.set_title("Candidate pathway themes: evidence screen", loc="left", fontweight="bold")
+for position, row in enumerate(theme_display.itertuples()):
+    label = row.best_phenotype if np.isfinite(row.best_fdr) else "no tested association"
+    axis.text(max(row.minus_log10_best_fdr if np.isfinite(row.minus_log10_best_fdr) else 0, 0), position,
+              f"  {label}", va="center", fontsize=6.1, color="0.30")
+axis.text(0.0, 1.03, "Dashed line: FDR = 0.05. Colours denote the phenotype only for associations that pass it.",
+          transform=axis.transAxes, fontsize=6.2, va="bottom", color="0.30")
+_save_figure(figure, "representative_pathway_spatial_heatmaps.png")
+plt.show()
+
+plotted_themes = [theme for theme in PATHWAY_THEMES if theme in theme_selections]
 if not plotted_themes:
-    print("No candidate theme matched a pathway in the membership file: the panel figure is skipped.")
+    print("No candidate theme matched a pathway in the membership file: detailed plates are skipped.")
 else:
-    figure, axes = plt.subplots(
-        len(plotted_themes), 2,
-        figsize=(10.5, 0.30 * sum(height_ratios) + 1.6),
-        gridspec_kw={"height_ratios": height_ratios, "hspace": 0.75, "wspace": 0.05},
-    )
-    axes = np.atleast_2d(axes)
-
-    for row_index, theme in enumerate(plotted_themes):
+    for theme in plotted_themes:
         selection = theme_selections[theme]
-        ordered, mouse_block, human_block = _ordered_member_blocks(
-            selection["members"], MAX_MEMBERS_PER_THEME
-        )
-
-        for column_index, (block, title) in enumerate([
-            (mouse_block, "mouse"), (human_block, "human"),
-        ]):
-            axis = axes[row_index, column_index]
-            image = axis.imshow(
-                block, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
-                extent=[0, 1, len(ordered) - 0.5, -0.5],
-            )
-            axis.set_yticks(np.arange(len(ordered)))
-            if column_index == 0:
-                axis.set_yticklabels(
-                    [f"{gene_names[index]}  [{phenotype_by_row[index]}]" for index in ordered],
-                    fontsize=6.5,
-                )
-                axis.set_ylabel(textwrap.fill(theme, 26), fontsize=8.5)
-            else:
-                axis.set_yticklabels([])
-
-            if row_index == 0:
-                axis.set_title(title, fontsize=9)
-            if row_index == len(plotted_themes) - 1:
-                axis.set_xlabel("PT position (unit): early -> late", fontsize=8)
-            axis.tick_params(labelsize=7)
-
         best_fdr = theme_summary.loc[theme_summary["theme"].eq(theme), "best_fdr"].iloc[0]
         best_label = theme_summary.loc[theme_summary["theme"].eq(theme), "best_phenotype"].iloc[0]
-        axes[row_index, 0].text(
-            0.01, -0.30,
-            f"{selection['library']}: {selection['pathway']}   "
-            f"(strongest enrichment: {best_label or 'none'}, FDR={best_fdr:.3g})"
-            if np.isfinite(best_fdr) else
-            f"{selection['library']}: {selection['pathway']}   (no significant phenotype enrichment)",
-            transform=axes[row_index, 0].transAxes, fontsize=7.5, va="top",
+        subtitle = (f"{selection['library']}: {selection['pathway']}; strongest enrichment: "
+                    f"{best_label or 'none'} (FDR={best_fdr:.3g})" if np.isfinite(best_fdr) else
+                    f"{selection['library']}: {selection['pathway']}; no significant phenotype enrichment")
+        _save_pathway_member_pair(
+            members=selection["members"], title=f"Supplementary candidate pathway: {theme}", subtitle=subtitle,
+            filename=f"supplementary_candidate_pathway_{re.sub(r'[^a-z0-9]+', '_', theme.lower()).strip('_')}.png",
+            limit=MAX_MEMBERS_PER_THEME,
         )
-
-    figure.suptitle(
-        "Candidate pathway themes along the shared PT DPT\n"
-        "primary coordinate (shared PT DPT); each gene z-scored within species; "
-    "rows ordered by human positional centroid; "
-        "row labels give the gene's spatial phenotype",
-        fontsize=10.5,
-    )
-    figure.tight_layout(rect=(0, 0, 1, 0.965))
-    _save_figure(figure, "representative_pathway_spatial_heatmaps.png")
-    plt.show()
 
 
 # %%
@@ -4342,60 +4462,35 @@ else:
     if not strongest_selections:
         print("No plottable pathway in the strongest-findings selection.")
     else:
-        height_ratios = [max(min(len(entry["members"]), MAX_MEMBERS_PER_STRONGEST), 3)
-                         for entry in strongest_selections]
-
-        figure, axes = plt.subplots(
-            len(strongest_selections), 2,
-            figsize=(10.5, 0.30 * sum(height_ratios) + 1.6),
-            gridspec_kw={"height_ratios": height_ratios, "hspace": 0.85, "wspace": 0.05},
-        )
-        axes = np.atleast_2d(axes)
-
-        for row_index, entry in enumerate(strongest_selections):
-            ordered, mouse_block, human_block = _ordered_member_blocks(
-                entry["members"], MAX_MEMBERS_PER_STRONGEST
-            )
-
-            for column_index, (block, title) in enumerate([
-                (mouse_block, "mouse"), (human_block, "human"),
-            ]):
-                axis = axes[row_index, column_index]
-                axis.imshow(
-                    block, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
-                    extent=[0, 1, len(ordered) - 0.5, -0.5],
-                )
-                axis.set_yticks(np.arange(len(ordered)))
-                if column_index == 0:
-                    axis.set_yticklabels(
-                        [f"{gene_names[index]}  [{phenotype_by_row[index]}]" for index in ordered],
-                        fontsize=6.5,
-                    )
-                else:
-                    axis.set_yticklabels([])
-                if row_index == 0:
-                    axis.set_title(title, fontsize=9)
-                if row_index == len(strongest_selections) - 1:
-                    axis.set_xlabel("PT position (unit): early -> late", fontsize=8)
-                axis.tick_params(labelsize=7)
-
-            axes[row_index, 0].text(
-                0.01, -0.32,
-                f"{entry['library']}: {entry['pathway']}   ->   {entry['spatial_phenotype']}   "
-                f"(fold={entry['fold_enrichment']:.2f}, FDR={entry['fdr']:.3g}, "
-                f"{entry['n_members_in_universe']} members shown {len(ordered)})",
-                transform=axes[row_index, 0].transAxes, fontsize=7.5, va="top",
-            )
-
-        figure.suptitle(
-            "Strongest pathway findings along the shared PT DPT\n"
-            "non-redundant terms, each gene z-scored within species and row-labelled with its own "
-            "spatial phenotype",
-            fontsize=10.5,
-        )
-        figure.tight_layout(rect=(0, 0, 1, 0.955))
+        # The paper-facing overview is a readable evidence ranking; detailed member-level evidence is
+        # one supplementary plate per pathway so labels and trajectories retain their physical scale.
+        ranked = strongest_pathway_findings.sort_values("fdr").reset_index(drop=True)
+        figure, axis = plt.subplots(1, 1, figsize=(7.2, 3.35), layout="constrained")
+        positions = np.arange(len(ranked))
+        values = -np.log10(ranked["fdr"])
+        axis.barh(positions, values,
+                  color=[PHENOTYPE_COLORS.get(label, "0.55") for label in ranked["spatial_phenotype"]])
+        axis.axvline(-np.log10(CONFIG["enrichment_fdr"]), color="0.35", lw=0.8, ls="--")
+        axis.set_yticks(positions)
+        axis.set_yticklabels([textwrap.fill(row.pathway, 37) for row in ranked.itertuples()], fontsize=6.7)
+        axis.invert_yaxis()
+        axis.set_xlabel("−log₁₀(family-wide FDR)")
+        axis.set_title("Strongest non-redundant pathway associations", loc="left", fontweight="bold")
+        for position, row in enumerate(ranked.itertuples()):
+            axis.text(-0.02, position, row.spatial_phenotype, transform=axis.get_yaxis_transform(),
+                      ha="right", va="center", fontsize=5.8, color="0.30")
+        axis.text(0.0, 1.03, "Colour: associated spatial phenotype. Dashed line: FDR = 0.05.",
+                  transform=axis.transAxes, fontsize=6.2, va="bottom", color="0.30")
         _save_figure(figure, "strongest_pathway_spatial_heatmaps.png")
         plt.show()
+
+        for rank, entry in enumerate(strongest_selections, start=1):
+            subtitle = (f"{entry['library']}: {entry['pathway']} → {entry['spatial_phenotype']}; "
+                        f"fold={entry['fold_enrichment']:.2f}, FDR={entry['fdr']:.3g}")
+            _save_pathway_member_pair(
+                members=entry["members"], title=f"Supplementary pathway finding {rank}", subtitle=subtitle,
+                filename=f"supplementary_top_pathway_{rank:02d}.png", limit=MAX_MEMBERS_PER_STRONGEST,
+            )
 
 
 # %% [markdown]
@@ -4547,11 +4642,12 @@ quadrant_counts = pd.DataFrame([
 display(quadrant_counts.round(4))
 _save_table(quadrant_frame, "conventional_vs_continuous_gene_quadrants.csv")
 
-figure, axis = plt.subplots(1, 1, figsize=(8.2, 6.2))
+figure, axes = plt.subplots(1, 2, figsize=(9.4, 3.9), width_ratios=[1.35, 0.78], layout="constrained")
+axis, count_axis = axes
 
 weak = quadrant_frame[~quadrant_frame["strong_spatial_evidence"]]
-axis.scatter(weak["conventional_abs"], weak["spatial_discovery_score"], s=5, alpha=0.25,
-             linewidths=0, color="0.75",
+axis.scatter(weak["conventional_abs"], np.log10(1 + weak["spatial_discovery_score"]), s=4, alpha=0.12,
+             linewidths=0, color="0.55", rasterized=True,
              label=f"no strong spatial evidence (n={len(weak):,})")
 
 for label in PHENOTYPE_CLASSES:
@@ -4561,29 +4657,52 @@ for label in PHENOTYPE_CLASSES:
     if not len(block):
         continue
     axis.scatter(
-        block["conventional_abs"], block["spatial_discovery_score"],
-        s=9, alpha=0.75, linewidths=0, color=PHENOTYPE_COLORS[label], label=f"{label} (n={len(block):,})",
+        block["conventional_abs"], np.log10(1 + block["spatial_discovery_score"]),
+        s=8, alpha=0.72, linewidths=0, color=PHENOTYPE_COLORS[label], rasterized=True,
+        label=f"{label} (n={len(block):,})",
     )
 
-axis.axvline(conventional_median, color="black", lw=0.9, ls="--")
-axis.set_yscale("symlog", linthresh=0.2)
+axis.axvline(conventional_median, color="0.25", lw=0.8, ls="--")
 axis.set_xlabel("Conventional whole-PT effect: |level effect| (lognorm)")
-axis.set_ylabel("Continuous spatial divergence score")
-axis.set_title("Figure: conventional whole-PT effect versus continuous spatial signal\n"
-               "upper left = strong reproducible spatial remodelling with little whole-PT level "
-               "difference (the continuous-only quadrant)\n"
-               "coloured = strong spatial evidence kept in >= "
-               f"{CONFIG['spatial_strong_robustness']:.0%} of variants; dashed line = median "
-               "conventional effect",
-               loc="left", fontsize=9.5)
-axis.legend(fontsize=6.5, loc="upper right")
+axis.set_ylabel("log₁₀(1 + continuous spatial divergence score)")
+axis.set_title("Continuous spatial signal versus whole-PT level effect", loc="left", fontweight="bold")
+axis.text(0.98, 0.04, "Dashed: median whole-PT effect", transform=axis.transAxes,
+          ha="right", va="bottom", fontsize=6.0, color="0.30")
+axis.legend(fontsize=5.5, loc="upper right", markerscale=1.1)
+_panel_label(axis, "a")
 
 continuous_only = quadrant_frame[quadrant_labels["low conventional / strong spatial (continuous-only)"]]
-for row in continuous_only.nlargest(8, "spatial_discovery_score").itertuples():
-    axis.annotate(row.gene, (row.conventional_abs, row.spatial_discovery_score),
-                  xytext=(3, 3), textcoords="offset points", fontsize=7)
+for row in continuous_only.nlargest(5, "spatial_discovery_score").itertuples():
+    axis.annotate(row.gene, (row.conventional_abs, np.log1p(row.spatial_discovery_score) / np.log(10)),
+                  xytext=(2, 2), textcoords="offset points", fontsize=5.8)
 
-figure.tight_layout()
+count_matrix = np.array([
+    [quadrant_counts.loc[quadrant_counts["quadrant"].eq("low conventional / strong spatial (continuous-only)"), "n_genes"].iloc[0],
+     quadrant_counts.loc[quadrant_counts["quadrant"].eq("high conventional / strong spatial"), "n_genes"].iloc[0]],
+    [quadrant_counts.loc[quadrant_counts["quadrant"].eq("low conventional / weak spatial"), "n_genes"].iloc[0],
+     quadrant_counts.loc[quadrant_counts["quadrant"].eq("high conventional / weak spatial"), "n_genes"].iloc[0]],
+], dtype=float)
+count_image = count_axis.imshow(count_matrix, cmap="Blues", aspect="equal")
+for row_index in range(2):
+    for column_index in range(2):
+        n_genes = int(count_matrix[row_index, column_index])
+        count_axis.text(column_index, row_index, f"{n_genes:,}\n({n_genes / len(quadrant_frame):.1%})",
+                        ha="center", va="center", fontsize=7.8,
+                        color="white" if count_image.norm(n_genes) > 0.55 else "0.20",
+                        fontweight="bold")
+count_axis.add_patch(plt.Rectangle((-0.5, -0.5), 1, 1, fill=False,
+                                   ec=PHENOTYPE_COLORS["human-zonated / mouse-flat"], lw=2.2))
+count_axis.set_xticks([0, 1], ["Low\nwhole-PT effect", "High\nwhole-PT effect"], fontsize=6.8)
+count_axis.set_yticks([0, 1], ["Strong, stable\nspatial evidence", "Weak / unstable\nspatial evidence"], fontsize=6.8)
+count_axis.set_title("Quadrant counts", loc="left", fontweight="bold")
+count_axis.tick_params(length=0)
+_panel_label(count_axis, "b")
+
+figure.suptitle(
+    "Continuous spatial analysis identifies 289 stable-remodelling genes with below-median whole-PT effects\n"
+    "The highlighted cell is the descriptive ‘continuous-only’ quadrant; no species-level p-values are implied",
+    fontsize=9.1,
+)
 _save_figure(figure, "conventional_vs_continuous_genes.png")
 plt.show()
 
@@ -4778,45 +4897,50 @@ if comparator.empty:
     print("No pathway reached the spatial enrichment threshold, or none has a conventional GSEA "
           "result: the comparison figure is skipped.")
 else:
-    figure, axis = plt.subplots(1, 1, figsize=(8.5, 6.2))
-
     spatially_only = comparator[
         comparator["conventional_gsea_fdr"].isna()
         | comparator["conventional_gsea_fdr"].ge(CONFIG["enrichment_fdr"])
     ]
     both = comparator.drop(spatially_only.index)
+    comparator = comparator.sort_values("fdr").reset_index(drop=True)
+    spatial_only_mask = (comparator["conventional_gsea_fdr"].isna()
+                         | comparator["conventional_gsea_fdr"].ge(CONFIG["enrichment_fdr"]))
+    positions = np.arange(len(comparator))
 
-    axis.axhline(0, color="black", lw=0.8)
-    axis.axvline(0, color="black", lw=0.8)
-    axis.scatter(both["conventional_gsea_nes"], both["minus_log10_fdr"],
-                 s=38, alpha=0.85, linewidths=0.4, edgecolors="black", color="0.55",
-                 label=f"significant in both (n={len(both)})")
-    axis.scatter(spatially_only["conventional_gsea_nes"], spatially_only["minus_log10_fdr"],
-                 s=48, alpha=0.95, linewidths=0.4, edgecolors="black",
-                 color=PHENOTYPE_COLORS["human-zonated / mouse-flat"],
-                 label=f"spatial only (n={len(spatially_only)})")
+    figure, axes = plt.subplots(1, 2, figsize=(8.5, 3.7), sharey=True,
+                                width_ratios=[1.05, 0.92], layout="constrained")
+    nes_axis, fdr_axis = axes
+    colours = np.where(spatial_only_mask, PHENOTYPE_COLORS["human-zonated / mouse-flat"], "0.48")
+    for position, row in enumerate(comparator.itertuples()):
+        nes_axis.hlines(position, min(0, row.conventional_gsea_nes), 0, color="0.82", lw=1.0, zorder=1)
+    nes_axis.scatter(comparator["conventional_gsea_nes"], positions, s=38, color=colours,
+                     edgecolors="white", linewidths=0.5, zorder=3)
+    nes_axis.axvline(0, color="0.35", lw=0.8)
+    nes_axis.set_xlabel("Whole-PT level-effect GSEA NES\n(negative = lower human level ranking)")
+    nes_axis.set_yticks(positions)
+    nes_axis.set_yticklabels([textwrap.fill(row.pathway, 34) for row in comparator.itertuples()], fontsize=6.5)
+    nes_axis.invert_yaxis()
+    nes_axis.set_title("Conventional whole-PT ranking", loc="left", fontweight="bold")
+    _panel_label(nes_axis, "a")
 
-    for row in comparator.itertuples():
-        if row.minus_log10_fdr >= comparator["minus_log10_fdr"].quantile(0.5):
-            axis.annotate(textwrap.fill(str(row.pathway), 26),
-                          (row.conventional_gsea_nes, row.minus_log10_fdr),
-                          xytext=(4, 4), textcoords="offset points", fontsize=6.5)
+    fdr_axis.barh(positions, comparator["minus_log10_fdr"], color=colours, alpha=0.88)
+    fdr_axis.axvline(-np.log10(CONFIG["enrichment_fdr"]), color="0.35", lw=0.8, ls="--")
+    fdr_axis.set_xlabel("−log₁₀(spatial FDR)")
+    fdr_axis.set_title("Spatial phenotype enrichment", loc="left", fontweight="bold")
+    fdr_axis.tick_params(labelleft=False)
+    fdr_axis.legend(handles=[
+        Patch(facecolor=PHENOTYPE_COLORS["human-zonated / mouse-flat"], label=f"spatial only (n={len(spatially_only)})"),
+        Patch(facecolor="0.48", label=f"significant in both (n={len(both)})"),
+    ], loc="lower right", fontsize=6.0)
+    _panel_label(fdr_axis, "b")
 
-    axis.set_xlabel("Conventional comparator: whole-PT level-effect GSEA NES\n"
-                    "(negative = the pathway's genes rank low for higher-in-human level)")
-    axis.set_ylabel("Spatial enrichment: -log10(family-wide FDR)")
-    axis.set_title("Spatial enrichment against a fair conventional comparator\n"
-                   "the same pathways tested by a whole-PT preranked GSEA on the level effect",
-                   loc="left", fontsize=10)
-    axis.legend(fontsize=8)
-
-    figure.suptitle("Figure: is the spatial result visible to a conventional whole-PT analysis?\n"
-                    "points to the right/left are also ranked conventionally; high points with a "
-                    "near-zero NES are spatially only",
-                    fontsize=10.5)
-    figure.tight_layout()
-    _save_figure(figure, "conventional_vs_continuous_pathway_signal.png")
-    plt.show()
+    figure.suptitle(
+        "Three spatially significant pathway associations are not significant in whole-PT GSEA\n"
+        "All six associations rank toward lower human whole-PT level, so the continuous result specifies their spatial pattern rather than a near-zero NES",
+        fontsize=8.9,
+    )
+_save_figure(figure, "conventional_vs_continuous_pathway_signal.png")
+plt.show()
 
 
 # %% [markdown]
@@ -5042,70 +5166,43 @@ display(spatially_conserved_pathways_continuous.head(15).round(4))
 # Figure: what is conserved, what is remodelled.
 # --------------------------------------------------------------------------------------
 
-figure, axes = plt.subplots(1, 3, figsize=(19, 5.8), width_ratios=[1.0, 1.0, 1.15])
-ax_conserved, ax_ranking, ax_contrast = axes
+figure, axes = plt.subplots(1, 2, figsize=(8.5, 3.75), width_ratios=[1.0, 1.08], layout="constrained")
+ax_ranking, ax_top = axes
 
-top_conserved = spatially_conserved_pathways.nlargest(15, "fold_enrichment")
-positions = np.arange(len(top_conserved))
-ax_conserved.barh(positions, top_conserved["fold_enrichment"], color=PHENOTYPE_COLORS["conserved zonation"],
-                  alpha=0.9)
-ax_conserved.set_yticks(positions)
-ax_conserved.set_yticklabels(
-    [textwrap.fill(f"{row.pathway}", 40) for row in top_conserved.itertuples()], fontsize=7.5
-)
-ax_conserved.set_xlabel("Fold enrichment for conserved zonation")
-ax_conserved.set_title(f"Spatially conserved functions (FDR < {CONFIG['enrichment_fdr']})",
-                       loc="left", fontsize=10)
-for index, row in enumerate(top_conserved.itertuples()):
-    ax_conserved.text(row.fold_enrichment, index,
-                      f"  n={row.n_pathway_members_in_universe}, r={row.median_member_shape_corr:.2f}",
-                      va="center", fontsize=7)
-
-top_ranked = spatially_conserved_pathways_continuous.head(14)
-ranking_positions = np.arange(len(top_ranked))
-ax_ranking.barh(ranking_positions, top_ranked["conservation_gsea_nes"],
-                color=[PHENOTYPE_COLORS["conserved zonation"] if value > 0 else "#4D4D4D"
-                       for value in top_ranked["conservation_gsea_nes"]], alpha=0.9)
-ax_ranking.axvline(0, color="black", lw=0.8)
-ax_ranking.set_yticks(ranking_positions)
-ax_ranking.set_yticklabels([textwrap.fill(str(row.pathway), 38) for row in top_ranked.itertuples()],
-                           fontsize=7)
-ax_ranking.set_xlabel("Conservation NES (continuous ranking)")
-ax_ranking.set_title("Continuous conservation ranking\n"
-                     "both-species-patterned genes ranked by shape, amplitude and position",
-                     loc="left", fontsize=10)
-for index, row in enumerate(top_ranked.itertuples()):
-    ax_ranking.text(row.conservation_gsea_nes, index, f"  FDR {row.conservation_gsea_fdr:.2g}",
-                    va="center", fontsize=6.5)
-
-plot_frame = conserved_vs_divergent.dropna(
-    subset=["conserved_fold_enrichment", "divergent_fold_enrichment"]
+conservation_plot = conservation_results.dropna(
+    subset=["conservation_gsea_nes", "conservation_gsea_fdr"]
 ).copy()
+conservation_plot["minus_log10_fdr"] = -np.log10(conservation_plot["conservation_gsea_fdr"])
+ax_ranking.scatter(conservation_plot["conservation_gsea_nes"], conservation_plot["minus_log10_fdr"],
+                   s=10, alpha=0.35, color="0.45", linewidths=0, rasterized=True)
+ax_ranking.axvline(0, color="0.35", lw=0.8)
+ax_ranking.axhline(-np.log10(CONFIG["enrichment_fdr"]), color=PHENOTYPE_COLORS["conserved zonation"],
+                   lw=1.0, ls="--")
+ax_ranking.set_xlabel("Continuous conservation GSEA NES")
+ax_ranking.set_ylabel("−log₁₀(family-wide FDR)")
+ax_ranking.set_title("All pathway sets tested on the conservation ranking", loc="left", fontweight="bold")
+ax_ranking.text(0.98, 0.04, f"No set crosses FDR = {CONFIG['enrichment_fdr']}",
+                transform=ax_ranking.transAxes, ha="right", va="bottom", fontsize=6.4, color="0.30")
+_panel_label(ax_ranking, "a")
 
-for classification, colour in [
-    ("spatially conserved", PHENOTYPE_COLORS["conserved zonation"]),
-    ("spatially divergent", PHENOTYPE_COLORS["complex shape rewiring"]),
-    ("mixed (each significant)", "#8856A7"),
-]:
-    block = plot_frame[plot_frame["classification"].eq(classification)]
-    if not len(block):
-        continue
-    ax_contrast.scatter(block["conserved_fold_enrichment"], block["divergent_fold_enrichment"],
-                        s=22, alpha=0.75, color=colour, label=f"{classification} (n={len(block):,})")
+top_ranked = spatially_conserved_pathways_continuous.head(10).sort_values("conservation_gsea_nes")
+ranking_positions = np.arange(len(top_ranked))
+ax_top.barh(ranking_positions, top_ranked["conservation_gsea_nes"], color="#6BAE75", alpha=0.90)
+ax_top.axvline(0, color="0.35", lw=0.8)
+ax_top.set_yticks(ranking_positions)
+ax_top.set_yticklabels([textwrap.fill(str(row.pathway), 34) for row in top_ranked.itertuples()], fontsize=6.2)
+ax_top.set_xlabel("Conservation NES")
+ax_top.set_title("Top continuous conservation rankings", loc="left", fontweight="bold")
+for index, row in enumerate(top_ranked.itertuples()):
+    ax_top.text(row.conservation_gsea_nes, index, f"  FDR {row.conservation_gsea_fdr:.2g}",
+                va="center", fontsize=5.9)
+_panel_label(ax_top, "b")
 
-ax_contrast.axhline(1.0, color="black", lw=0.8, ls="--")
-ax_contrast.axvline(1.0, color="black", lw=0.8, ls="--")
-ax_contrast.set_xlabel("Fold enrichment for conserved zonation")
-ax_contrast.set_ylabel("Fold enrichment for any divergent phenotype")
-ax_contrast.set_title("Conserved versus remodelled programmes\n"
-                      "upper-left = remodelled, lower-right = conserved", loc="left", fontsize=10)
-ax_contrast.legend(fontsize=7.5)
-
-figure.suptitle("Figure: what keeps its spatial programme and what is remodelled\n"
-                "left: strict binary class (low power at this class size); middle: continuous "
-                "conservation ranking; right: conserved against divergent enrichment",
-                fontsize=10.5)
-figure.tight_layout()
+figure.suptitle(
+    "No pathway-level spatial conservation signal reaches family-wide FDR in this cohort\n"
+    "The strict conserved class contains few genes; continuous ranking is shown as the higher-powered sensitivity analysis, not evidence of absence",
+    fontsize=8.9,
+)
 _save_figure(figure, "conserved_vs_divergent_pathway_summary.png")
 plt.show()
 
@@ -5567,4 +5664,3 @@ if not metric_selfcheck["passed"].all():
     raise AssertionError(f"synthetic metric self-check failed: {failed}")
 
 print(f"All {len(metric_selfcheck)} synthetic metric self-checks passed.")
-

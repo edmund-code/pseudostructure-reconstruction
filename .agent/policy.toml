@@ -1,0 +1,27 @@
+# The efficiency loop's contract. Decisions belong to the human; behaviour belongs to the loop.
+[scope]
+# Applied without asking, because they only change how the agent works, and every one is revertible:
+auto_apply = [
+  "gate-before-handback",   # run the gate suite before hand-back; hand back only when green
+  "batch-rounds",           # one edit-pack-verify-commit cycle per work order
+  "quiet-tools",            # counts, windows and verdicts; never full dumps
+  "reply-style-compact",    # short milestone replies; tables on request
+  "subagent-recon",         # wide reconnaissance via subagents
+]
+# Proposed, never applied: these change standing instructions or the harness itself.
+requires_approval = [
+  "config-routing",         # model tiering / output caps in ~/.reasonix/config.toml
+  "agents-md-lean",         # splitting AGENTS.md
+  "overwrite_diverged_notebook",  # regenerating a notebook whose working copy differs from HEAD
+]
+
+[constraints]
+gates_must_pass = true          # tools/agent_gates.py is the hard constraint
+one_change_per_experiment = true
+revert_on_regression = true     # a change that does not beat its prediction is retired, not argued
+never_regenerate_diverged_notebook = true
+measure = ["rounds", "gate_pass_rate", "cost_usd"]
+
+[notes]
+telemetry = "~/.reasonix/stats/*.jsonl, read-only; the harness owns those files"
+state = ".agent/ (champion.json, log.jsonl, experiments/, gates.json)"

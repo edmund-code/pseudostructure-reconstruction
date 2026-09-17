@@ -1,0 +1,40 @@
+{
+ "version": 1,
+ "updated_utc": "2026-09-17T18:32:06+00:00",
+ "description": "The settings currently in force, with the measurement that justified each. Nothing here is a claim about quality - the gate suite is.",
+ "baseline_settings": {
+  "handback_gate": "ad-hoc",
+  "rounds_per_work_order": "one-per-item",
+  "tool_output": "unbounded",
+  "reply_style": "narrative",
+  "recon": "in-context",
+  "model_routing": "single-model",
+  "standing_instructions": "single-file"
+ },
+ "settings": {
+  "handback_gate": "gates-green-required",
+  "rounds_per_work_order": "one-per-item",
+  "tool_output": "unbounded",
+  "reply_style": "narrative",
+  "recon": "in-context",
+  "model_routing": "single-model",
+  "standing_instructions": "single-file"
+ },
+ "applied": [
+  "gate-before-handback"
+ ],
+ "rejected": [],
+ "baseline_measurement": {
+  "work_order": "human_mouse_spatial_rewiring build + two review rounds",
+  "window": {
+   "since": "2026-09-16T22:00",
+   "until": "2026-09-17T14:30"
+  },
+  "requests": 258,
+  "output_tokens": 763500,
+  "cache_miss_tokens": 142300,
+  "cost_usd": 0.9388,
+  "note": "context is ~99.8% cache hits, so the billable terms are output+reasoning and cache miss; the larger cost was rounds (7 user re-runs, ~34 verification cycles)"
+ },
+ "measurements": []
+}

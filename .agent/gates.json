@@ -1,0 +1,28 @@
+{
+ "ran_utc": "2026-09-17T18:36:20+00:00",
+ "passed": true,
+ "check_count": 4,
+ "passed_count": 3,
+ "checks": [
+  {
+   "name": "hygiene (staged)",
+   "status": "pass",
+   "detail": "Repository hygiene passed."
+  },
+  {
+   "name": "notebook name order",
+   "status": "pass",
+   "detail": "analysis/notebooks/06_human_mouse_spatial_rewiring.ipynb: name order clean"
+  },
+  {
+   "name": "notebook column audit",
+   "status": "pass",
+   "detail": "merge collisions between the metric frames and curve_table: none | UNRESOLVED READS: none"
+  },
+  {
+   "name": "working-copy revision",
+   "status": "warn",
+   "detail": "working copies diverge from HEAD in source: 05_gam_human_vs_mouse.ipynb (29 cells), 06_human_mouse_spatial_rewiring.ipynb (34 cells) - do NOT regenerate these files without reconciling first"
+  }
+ ]
+}

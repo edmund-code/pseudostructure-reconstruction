@@ -217,6 +217,15 @@ CONFIG = {
     # gene "high spatial" and empty two quadrants. The score then ranks *within* the strong group.
     "spatial_strong_robustness": 0.8,
 
+    # --- pathway ranking tests ------------------------------------------------------------
+    # The conventional comparator is a whole-PT preranked GSEA on the level effect - how a whole-PT
+    # paper would analyse these pathways - and the conservation view is the same test on a continuous
+    # conservation ranking, because the binary conserved class is too small for over-representation.
+    "gsea_permutations": 1000,
+    "gsea_seed": 42,
+    "gsea_min_size": 10,
+    "gsea_max_size": 500,
+
     # --- conserved-architecture null ------------------------------------------------------
     "null_permutations": 5000,          # this test is cheap; 200 was too few for a stable p
 
@@ -4420,6 +4429,16 @@ else:
 # evidence is now symmetric: both species reproducibly patterned, **or** one side patterned and the
 # other flat in every specimen/slice (the same evidence the species-specific classes already require).
 #
+# **What the conventional comparator is, and what a null result means.** The conventional axis here is
+# not the median absolute level effect of a pathway's members - that is a descriptive member statistic,
+# not how a whole-PT study tests a pathway. The comparator is a **whole-PT preranked GSEA on the
+# level-effect ranking**, so the spatial result is compared against the analysis a conventional paper
+# would actually run, and `continuous_only_pathways.csv` lists what is spatially significant while
+# escaping it. If that list comes out empty or nearly so, the honest reading is that conventional
+# analysis already reports these programmes as different at the level of whole-PT expression, and the
+# continuous framework's contribution is *how* they differ - zonation gain or loss, displacement,
+# gradient reversal, trajectory rewiring - rather than *that* they differ.
+#
 # **Descriptive, by construction.** No p-values are used on the conventional axis: with one human donor
 # a species-wide test would not be calibrated. The quadrant counts and pathway table are effect-size
 # statements that hold for this cohort.
@@ -4578,12 +4597,81 @@ for row in pathway_tested.itertuples():
 
 conventional_pathway_ranks = pd.Series(pathway_conventional_effect).rank(pct=True)
 
+# --------------------------------------------------------------------------------------
+# The fair conventional comparator: a whole-PT preranked GSEA on the *level effect*.
+#
+# The median absolute level effect of a pathway's members is a descriptive member statistic, not how
+# a conventional analysis would test a pathway. Ranking every gene by its whole-PT level effect and
+# running preranked GSEA gives the conventional answer the spatial result has to beat.
+# --------------------------------------------------------------------------------------
+
+import gseapy as gp
+
+pathway_gene_sets = {
+    f"{row.library}: {row.pathway}": [gene_names[index] for index in row.universe_members]
+    for row in pathway_tested.itertuples()
+    if len(row.universe_members) >= CONFIG["pathway_min_members"]
+}
+
+conventional_ranking = (
+    gene_metrics.loc[discovery_eligible, ["gene", "level_effect_human_minus_mouse"]]
+    .dropna()
+    .sort_values("level_effect_human_minus_mouse", ascending=False)
+    .reset_index(drop=True)
+)
+
+print(f"whole-PT preranked GSEA on the level-effect ranking: "
+      f"{len(conventional_ranking):,} genes, {len(pathway_gene_sets):,} pathway sets")
+
+conventional_gsea = gp.prerank(
+    rnk=conventional_ranking,
+    gene_sets=pathway_gene_sets,
+    min_size=CONFIG["gsea_min_size"],
+    max_size=CONFIG["gsea_max_size"],
+    permutation_num=CONFIG["gsea_permutations"],
+    seed=CONFIG["gsea_seed"],
+    verbose=False,
+)
+
+conventional_results = (
+    conventional_gsea.res2d.reset_index()
+    .rename(columns={"Term": "pathway_key", "NES": "conventional_gsea_nes",
+                     "NOM p-val": "conventional_gsea_p", "FDR q-val": "conventional_gsea_fdr",
+                     "Lead_genes": "conventional_leading_genes"})
+)
+conventional_results[["library", "pathway"]] = [
+    entry.split(": ", 1) if ": " in entry else (entry, entry)
+    for entry in conventional_results["pathway_key"]
+]
+conventional_results["conventional_gsea_fdr"] = pd.to_numeric(
+    conventional_results["conventional_gsea_fdr"], errors="coerce"
+)
+conventional_results["conventional_gsea_nes"] = pd.to_numeric(
+    conventional_results["conventional_gsea_nes"], errors="coerce"
+)
+conventional_results = conventional_results.sort_values("conventional_gsea_fdr").reset_index(drop=True)
+
+_report("pathways tested by the conventional GSEA", len(conventional_results),
+        len(pathway_gene_sets),
+        why=f"ranked by the whole-PT level effect; {CONFIG['gsea_permutations']} permutations")
+_report("of those, conventionally significant (FDR < enrichment_fdr)",
+        int((conventional_results["conventional_gsea_fdr"] < CONFIG["enrichment_fdr"]).sum()),
+        len(conventional_results))
+
+_save_table(conventional_results, "conventional_wholePT_preranked_gsea.csv")
+
+conventional_by_pathway = {
+    (row.library, row.pathway): (row.conventional_gsea_nes, row.conventional_gsea_fdr)
+    for row in conventional_results.itertuples()
+}
+
 summary_columns = [
     "library", "pathway", "spatial_phenotype", "fold_enrichment", "fdr", "leading_genes",
     "conventional_effect", "conventional_percentile", "n_members_in_universe",
     "median_member_abs_level_effect", "median_member_amplitude_log2_ratio",
     "median_member_abs_shift", "median_member_shape_corr", "median_member_spatial_score",
     "member_fraction_in_phenotype", "member_consistency",
+    "conventional_gsea_nes", "conventional_gsea_fdr", "minus_log10_fdr",
 ]
 
 pathway_spatial_rewiring_summary = pd.DataFrame([
@@ -4600,6 +4688,9 @@ pathway_spatial_rewiring_summary = pd.DataFrame([
         # and these columns say how much of the pathway that is.
         "member_fraction_in_phenotype": row.member_fraction_in_phenotype,
         "member_consistency": row.member_consistency,
+        "conventional_gsea_nes": conventional_by_pathway.get((row.library, row.pathway), (np.nan, np.nan))[0],
+        "conventional_gsea_fdr": conventional_by_pathway.get((row.library, row.pathway), (np.nan, np.nan))[1],
+        "minus_log10_fdr": row.minus_log10_fdr,
         **pathway_member_stats.get(f"{row.library}: {row.pathway}", {}),
     }
     for row in pathway_enrichment.itertuples()
@@ -4633,52 +4724,81 @@ else:
         .first()
     )
 
+# Spatially significant but *not* conventionally significant, on the fair comparator. If this set is
+# empty, that is the result: the conventional level analysis already ranks these pathways, and the
+# continuous framework's contribution is how they differ rather than that they differ.
 continuous_only_pathways = best_per_pathway[
-    best_per_pathway["conventional_percentile"] < 0.5
+    best_per_pathway["conventional_gsea_fdr"].isna()
+    | best_per_pathway["conventional_gsea_fdr"].ge(CONFIG["enrichment_fdr"])
 ].sort_values("fdr").rename(columns={
     "spatial_phenotype": "dominant_spatial_phenotype",
     "fold_enrichment": "enrichment_fold_enrichment",
     "fdr": "enrichment_fdr",
     "median_member_amplitude_log2_ratio": "median_member_abs_amplitude_log2_ratio",
 })[[
-    "pathway", "library", "conventional_effect", "conventional_percentile",
+    # The conventional comparator's own result travels with each row, so a reader can see the NES and
+    # FDR that made it "continuous-only" rather than taking the selection on trust.
+    "pathway", "library", "conventional_gsea_nes", "conventional_gsea_fdr",
+    "conventional_effect", "conventional_percentile",
     "dominant_spatial_phenotype", "enrichment_fdr", "enrichment_fold_enrichment",
+    "member_fraction_in_phenotype", "member_consistency",
     "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
     "median_member_shape_corr", "leading_genes",
 ]]
 
 _report("pathways with a significant spatial enrichment", len(best_per_pathway), len(pathway_tested))
-_report("of those, below the median conventional effect (continuous-only)",
+_report("of those, NOT conventionally significant (continuous-only)",
         len(continuous_only_pathways), len(best_per_pathway),
-        why="a whole-PT level comparison alone would have missed them")
+        why="spatially significant but unranked by the whole-PT level-effect GSEA")
+if continuous_only_pathways.empty:
+    print("  no pathway is spatially significant while escaping the conventional GSEA: the "
+          "conventional analysis already ranks these programmes by whole-PT level, so the continuous "
+          "framework's contribution here is *how* they differ (zonation change, displacement, shape), "
+          "not that they differ.")
 
 _save_table(continuous_only_pathways, "continuous_only_pathways.csv")
 
-top_spatial = best_per_pathway.nlargest(12, "median_member_spatial_score")
+comparator = best_per_pathway.dropna(subset=["conventional_gsea_nes"])
 
-if top_spatial.empty:
-    print("No pathway reached the enrichment threshold: the pathway panel is skipped.")
+if comparator.empty:
+    print("No pathway reached the spatial enrichment threshold, or none has a conventional GSEA "
+          "result: the comparison figure is skipped.")
 else:
-    figure, axis = plt.subplots(1, 1, figsize=(7.5, 5.4))
+    figure, axis = plt.subplots(1, 1, figsize=(8.5, 6.2))
 
-    positions = np.arange(len(top_spatial))
-    axis.barh(
-        positions, top_spatial["median_member_spatial_score"],
-        # The summary frame names the column `spatial_phenotype`; only the continuous-only table
-        # renames it to `dominant_spatial_phenotype`.
-        color=[PHENOTYPE_COLORS.get(label, "#888888")
-               for label in top_spatial["spatial_phenotype"]],
-        alpha=0.9,
-    )
-    axis.set_yticks(positions)
-    axis.set_yticklabels([textwrap.fill(str(row.pathway), 40) for row in top_spatial.itertuples()],
-                         fontsize=7.5)
-    axis.set_xlabel("Median member continuous spatial divergence score")
-    axis.set_title("Pathways carrying the strongest continuous spatial signal\n"
-                   "bar colour = dominant spatial phenotype", loc="left", fontsize=10)
+    spatially_only = comparator[
+        comparator["conventional_gsea_fdr"].isna()
+        | comparator["conventional_gsea_fdr"].ge(CONFIG["enrichment_fdr"])
+    ]
+    both = comparator.drop(spatially_only.index)
 
-    figure.suptitle("Figure: continuous spatial signal that a whole-PT comparison does not rank\n"
-                    "descriptive effect sizes for this cohort (2 mouse specimens, 1 human donor)",
+    axis.axhline(0, color="black", lw=0.8)
+    axis.axvline(0, color="black", lw=0.8)
+    axis.scatter(both["conventional_gsea_nes"], both["minus_log10_fdr"],
+                 s=38, alpha=0.85, linewidths=0.4, edgecolors="black", color="0.55",
+                 label=f"significant in both (n={len(both)})")
+    axis.scatter(spatially_only["conventional_gsea_nes"], spatially_only["minus_log10_fdr"],
+                 s=48, alpha=0.95, linewidths=0.4, edgecolors="black",
+                 color=PHENOTYPE_COLORS["human-zonated / mouse-flat"],
+                 label=f"spatial only (n={len(spatially_only)})")
+
+    for row in comparator.itertuples():
+        if row.minus_log10_fdr >= comparator["minus_log10_fdr"].quantile(0.5):
+            axis.annotate(textwrap.fill(str(row.pathway), 26),
+                          (row.conventional_gsea_nes, row.minus_log10_fdr),
+                          xytext=(4, 4), textcoords="offset points", fontsize=6.5)
+
+    axis.set_xlabel("Conventional comparator: whole-PT level-effect GSEA NES\n"
+                    "(negative = the pathway's genes rank low for higher-in-human level)")
+    axis.set_ylabel("Spatial enrichment: -log10(family-wide FDR)")
+    axis.set_title("Spatial enrichment against a fair conventional comparator\n"
+                   "the same pathways tested by a whole-PT preranked GSEA on the level effect",
+                   loc="left", fontsize=10)
+    axis.legend(fontsize=8)
+
+    figure.suptitle("Figure: is the spatial result visible to a conventional whole-PT analysis?\n"
+                    "points to the right/left are also ranked conventionally; high points with a "
+                    "near-zero NES are spatially only",
                     fontsize=10.5)
     figure.tight_layout()
     _save_figure(figure, "conventional_vs_continuous_pathway_signal.png")
@@ -4703,6 +4823,15 @@ else:
 # and the table carries both the fraction and the coherence status so the distinction is visible. The
 # contrast figure puts conserved enrichment against divergent enrichment on the same axes: a pathway in
 # the upper-left quadrant keeps its spatial programme; one in the lower-right has been remodelled.
+#
+# **Two views, because the strict class has little power.** A conserved zonation requires every
+# criterion at once, so only a small number of genes qualify and over-representation against that class
+# is a weak test. Loosening the class would trade one problem for another, so the same question is also
+# asked continuously: the genes patterned in both species are ranked by a conservation score (shape
+# agreement, amplitude similarity, positional agreement, each in SD units, equally weighted) and the
+# pathways are tested against that ranking. The binary table answers "which pathways are unusually rich
+# in genes that meet every criterion"; the continuous table answers "which pathways are unusually well
+# conserved on average". They can disagree, and when they do the continuous one is the powered view.
 #
 # **Limits.** Conservation here means conservation of the *spatial programme* in this cohort, not of
 # expression level (level is deliberately excluded from the conserved class) and not of function.
@@ -4795,11 +4924,112 @@ _save_table(conserved_vs_divergent, "conserved_vs_divergent_pathways.csv")
 print(conserved_vs_divergent["classification"].value_counts().to_string())
 
 # --------------------------------------------------------------------------------------
+# The powered view: a continuous conservation ranking, tested against the pathway sets.
+#
+# The binary class is deliberately strict, so few genes qualify and over-representation has almost no
+# power - which is what the empty/near-empty result above reflects. Rather than loosen the class, the
+# continuous framework is used: rank the genes that are patterned in both species by a conservation
+# score and test pathways against that ranking.
+# --------------------------------------------------------------------------------------
+
+conservation_components = pd.DataFrame({
+    "shape_agreement": gene_metrics["shape_corr"],
+    "amplitude_similarity": -gene_metrics["amplitude_log2_ratio_human_over_mouse"].abs(),
+    "positional_agreement": -np.abs(gene_metrics["centroid_shift_human_minus_mouse"]),
+}).loc[architecture_index]
+
+# Each component in SD units within the patterned set, then averaged with equal weight: a conservation
+# score in "standard deviations of conservation", not a probability.
+conservation_score = conservation_components.apply(
+    lambda column: (column - column.mean()) / column.std()
+).mean(axis=1)
+
+conservation_ranking = pd.DataFrame({
+    "gene": gene_metrics["gene"].to_numpy()[architecture_index],
+    "conservation_score": conservation_score.to_numpy(),
+}).dropna().sort_values("conservation_score", ascending=False).reset_index(drop=True)
+
+_report("genes in the strict conserved-zonation class",
+        int((gene_metrics["spatial_phenotype"] == "conserved zonation").sum()), len(gene_names),
+        why="the binary test above has little power at this size; the ranking below is the powered view")
+_report("genes ranked by the continuous conservation score", len(conservation_ranking),
+        architecture_index.size, why="both-species-patterned genes, ranked by shape, amplitude and position")
+
+conservation_gsea = gp.prerank(
+    rnk=conservation_ranking,
+    gene_sets=pathway_gene_sets,
+    min_size=CONFIG["gsea_min_size"],
+    max_size=CONFIG["gsea_max_size"],
+    permutation_num=CONFIG["gsea_permutations"],
+    seed=CONFIG["gsea_seed"],
+    verbose=False,
+)
+
+conservation_results = (
+    conservation_gsea.res2d.reset_index()
+    .rename(columns={"Term": "pathway_key", "NES": "conservation_gsea_nes",
+                     "NOM p-val": "conservation_gsea_p", "FDR q-val": "conservation_gsea_fdr",
+                     "Lead_genes": "conservation_leading_genes"})
+)
+conservation_results[["library", "pathway"]] = [
+    entry.split(": ", 1) if ": " in entry else (entry, entry)
+    for entry in conservation_results["pathway_key"]
+]
+conservation_results["conservation_gsea_nes"] = pd.to_numeric(
+    conservation_results["conservation_gsea_nes"], errors="coerce")
+conservation_results["conservation_gsea_fdr"] = pd.to_numeric(
+    conservation_results["conservation_gsea_fdr"], errors="coerce")
+
+# The conservation score only exists for the patterned genes, so member gene rows are mapped onto it
+# explicitly rather than indexed by their position in the full gene space.
+conservation_by_gene_row = pd.Series(conservation_score.to_numpy(), index=architecture_index)
+membership_members = {(row.library, row.pathway): row.member_list for row in membership.itertuples()}
+
+
+def _member_conservation(library, pathway):
+    """How many of a pathway's members are in the patterned set, and their median conservation."""
+    genes = membership_members.get((library, pathway), [])
+    member_rows = [gene_lookup_tested[str(gene).upper()] for gene in genes
+                   if str(gene).upper() in gene_lookup_tested]
+    ranked = [row_index for row_index in member_rows if row_index in conservation_by_gene_row.index]
+    if not ranked:
+        return 0, np.nan
+    return len(ranked), float(np.nanmedian(conservation_by_gene_row.reindex(ranked).to_numpy()))
+
+
+member_conservation_stats = [
+    _member_conservation(row.library, row.pathway) for row in conservation_results.itertuples()
+]
+
+conservation_results = conservation_results.assign(
+    n_members_ranked=[entry[0] for entry in member_conservation_stats],
+    median_member_conservation_score=[entry[1] for entry in member_conservation_stats],
+).sort_values("conservation_gsea_nes", ascending=False).reset_index(drop=True)
+
+spatially_conserved_pathways_continuous = conservation_results[[
+    "library", "pathway", "conservation_gsea_nes", "conservation_gsea_fdr",
+    "n_members_ranked", "median_member_conservation_score", "conservation_leading_genes",
+]]
+
+_save_table(spatially_conserved_pathways_continuous, "spatially_conserved_pathways_continuous.csv")
+
+_report("pathways relatively conserved (continuous NES > 0, FDR < enrichment_fdr)",
+        int(((conservation_results["conservation_gsea_nes"] > 0)
+             & (conservation_results["conservation_gsea_fdr"] < CONFIG["enrichment_fdr"])).sum()),
+        len(conservation_results))
+_report("pathways relatively divergent (continuous NES < 0, FDR < enrichment_fdr)",
+        int(((conservation_results["conservation_gsea_nes"] < 0)
+             & (conservation_results["conservation_gsea_fdr"] < CONFIG["enrichment_fdr"])).sum()),
+        len(conservation_results))
+
+display(spatially_conserved_pathways_continuous.head(15).round(4))
+
+# --------------------------------------------------------------------------------------
 # Figure: what is conserved, what is remodelled.
 # --------------------------------------------------------------------------------------
 
-figure, axes = plt.subplots(1, 2, figsize=(14, 5.8), width_ratios=[1.0, 1.15])
-ax_conserved, ax_contrast = axes
+figure, axes = plt.subplots(1, 3, figsize=(19, 5.8), width_ratios=[1.0, 1.0, 1.15])
+ax_conserved, ax_ranking, ax_contrast = axes
 
 top_conserved = spatially_conserved_pathways.nlargest(15, "fold_enrichment")
 positions = np.arange(len(top_conserved))
@@ -4816,6 +5046,23 @@ for index, row in enumerate(top_conserved.itertuples()):
     ax_conserved.text(row.fold_enrichment, index,
                       f"  n={row.n_pathway_members_in_universe}, r={row.median_member_shape_corr:.2f}",
                       va="center", fontsize=7)
+
+top_ranked = spatially_conserved_pathways_continuous.head(14)
+ranking_positions = np.arange(len(top_ranked))
+ax_ranking.barh(ranking_positions, top_ranked["conservation_gsea_nes"],
+                color=[PHENOTYPE_COLORS["conserved zonation"] if value > 0 else "#4D4D4D"
+                       for value in top_ranked["conservation_gsea_nes"]], alpha=0.9)
+ax_ranking.axvline(0, color="black", lw=0.8)
+ax_ranking.set_yticks(ranking_positions)
+ax_ranking.set_yticklabels([textwrap.fill(str(row.pathway), 38) for row in top_ranked.itertuples()],
+                           fontsize=7)
+ax_ranking.set_xlabel("Conservation NES (continuous ranking)")
+ax_ranking.set_title("Continuous conservation ranking\n"
+                     "both-species-patterned genes ranked by shape, amplitude and position",
+                     loc="left", fontsize=10)
+for index, row in enumerate(top_ranked.itertuples()):
+    ax_ranking.text(row.conservation_gsea_nes, index, f"  FDR {row.conservation_gsea_fdr:.2g}",
+                    va="center", fontsize=6.5)
 
 plot_frame = conserved_vs_divergent.dropna(
     subset=["conserved_fold_enrichment", "divergent_fold_enrichment"]
@@ -4840,9 +5087,10 @@ ax_contrast.set_title("Conserved versus remodelled programmes\n"
                       "upper-left = remodelled, lower-right = conserved", loc="left", fontsize=10)
 ax_contrast.legend(fontsize=7.5)
 
-figure.suptitle("Figure: contrast between spatially conserved and spatially divergent pathway families\n"
-                "pathway-level over-representation of genes in each phenotype class",
-                fontsize=11)
+figure.suptitle("Figure: what keeps its spatial programme and what is remodelled\n"
+                "left: strict binary class (low power at this class size); middle: continuous "
+                "conservation ranking; right: conserved against divergent enrichment",
+                fontsize=10.5)
 figure.tight_layout()
 _save_figure(figure, "conserved_vs_divergent_pathway_summary.png")
 plt.show()

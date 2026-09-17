@@ -239,11 +239,24 @@ TECHNICAL_GENE_PATTERNS = (
 )
 
 
+def _display_path(path):
+    """The path relative to the repository root when it lies inside it, otherwise the full path.
+
+    The PSEUDOSPACE_* roots may legitimately point outside the repository - that is how the project
+    keeps private data out of Git - so relative_to() cannot be assumed to succeed.
+    """
+    path = Path(path)
+    try:
+        return path.relative_to(PROJECT_DIR)
+    except ValueError:
+        return path
+
+
 def _save_figure(fig, name, dpi=240):
     """Write a figure into `figures/` and report the path relative to the repository root."""
     path = FIG_DIR / name
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
-    print(f"saved {path.relative_to(PROJECT_DIR)}")
+    print(f"saved {_display_path(path)}")
     return path
 
 
@@ -251,8 +264,21 @@ def _save_table(frame, name, **kwargs):
     """Write a table into `tables/` and report the path and the shape that was written."""
     path = TABLE_DIR / name
     frame.to_csv(path, index=False, **kwargs)
-    print(f"saved {path.relative_to(PROJECT_DIR)}  ({len(frame):,} rows x {frame.shape[1]} cols)")
+    print(f"saved {_display_path(path)}  ({len(frame):,} rows x {frame.shape[1]} cols)")
     return path
+
+
+def _numeric(frame, columns):
+    """Cast named columns to float so an empty (or all-NaN) table can still be compared and ranked.
+
+    A table built from an empty result set has object-dtype columns, and pandas refuses nlargest /
+    comparisons on object dtype. Casting keeps the empty case working instead of crashing the cell.
+    """
+    frame = frame.copy()
+    for column in columns:
+        if column in frame.columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return frame
 
 
 def _report(label, kept, total=None, why="", indent=2):
@@ -855,8 +881,8 @@ np.savez_compressed(
     **{f"curve__{name}": specimen_curves[name] for name in specimen_order},
 )
 
-print(f"saved {(OUT_DIR / 'balanced_gene_curves.npz').relative_to(PROJECT_DIR)}")
-print(f"saved {(OUT_DIR / 'specimen_gene_curves.npz').relative_to(PROJECT_DIR)}")
+print(f"saved {_display_path(OUT_DIR / 'balanced_gene_curves.npz')}")
+print(f"saved {_display_path(OUT_DIR / 'specimen_gene_curves.npz')}")
 
 # --------------------------------------------------------------------------------------
 # How much of the grid each specimen and each balanced curve actually supports.
@@ -912,7 +938,7 @@ common_balanced = mouse_support & human_support
 
 curve_table = pd.DataFrame({
     "gene": gene_names,
-    "n_shared_grid_points": shared_support.sum(axis=1),
+    "n_shared_grid_points_balanced": shared_support.sum(axis=1),
     "level_effect_balanced_human_minus_mouse":
         _nanmean_safe(np.where(common_balanced, balanced_human - balanced_mouse, np.nan)),
     "mouse_amplitude_balanced": _row_amplitude(balanced_mouse, common_balanced),
@@ -1154,7 +1180,7 @@ def _build_landmarks(mouse_curves, human_curves, verbose=True):
 landmark_programs, landmark_table, landmark_genes = _build_landmarks(balanced_mouse, balanced_human)
 
 _save_table(landmark_table, "registration_landmarks.csv")
-print(f"saved {(OUT_DIR / 'registration_landmarks.csv').relative_to(PROJECT_DIR)}")
+print(f"saved {_display_path(OUT_DIR / 'registration_landmarks.csv')}")
 
 
 # %%
@@ -1518,6 +1544,20 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
     })
 
 
+def _spatial_discovery_score(frame, config):
+    """Divergence score for any frame carrying the metric columns.
+
+    A divergence score, not a probability: each term is in units of its own threshold, so one unit of
+    the score is "one threshold's worth" of amplitude change, displacement, or shape divergence. Used
+    for the primary table and for every sensitivity variant's frame.
+    """
+    return (
+        (frame["amplitude_log2_ratio_human_over_mouse"].abs() / config["amplitude_change_major"]).fillna(0.0)
+        + (frame["best_shift_human_minus_mouse"].abs() / config["max_registration_shift"]).fillna(0.0)
+        + (1.0 - frame["shape_corr"].clip(-1.0, 1.0).fillna(1.0))
+    )
+
+
 # The unregistered axis carries the metrics a phase claim has to survive on, plus the amplitudes the
 # registration is allowed to change; everything else stays in the raw metric frames.
 unregistered_columns = [
@@ -1864,11 +1904,7 @@ gene_metrics["broad_phenotype"] = gene_metrics["spatial_phenotype"].map(BROAD_PH
 
 # A divergence score, not a probability: each term is in units of its own threshold, so 1 unit of the
 # score is "one threshold's worth" of amplitude change, displacement or shape divergence.
-gene_metrics["spatial_discovery_score"] = (
-    (gene_metrics["amplitude_log2_ratio_human_over_mouse"].abs() / CONFIG["amplitude_change_major"]).fillna(0.0)
-    + (gene_metrics["best_shift_human_minus_mouse"].abs() / CONFIG["max_registration_shift"]).fillna(0.0)
-    + (1.0 - gene_metrics["shape_corr"].clip(-1.0, 1.0).fillna(1.0))
-)
+gene_metrics["spatial_discovery_score"] = _spatial_discovery_score(gene_metrics, CONFIG)
 
 phenotype_summary = pd.DataFrame([
     {
@@ -2147,6 +2183,9 @@ for variant_name, variant_spec in sensitivity_variants.items():
     variant_metrics["enough_shared_support"] = (
         variant_metrics["n_shared_grid_points"] >= variant_spec["config"]["min_pattern_grid_points"]
     )
+
+    # The divergence score is a property of the metric frame, so each variant frame gets its own.
+    variant_metrics["spatial_discovery_score"] = _spatial_discovery_score(variant_metrics, variant_spec["config"])
 
     variant_flags = _phenotype_flags(
         variant_metrics, variant_spec["config"],
@@ -3078,7 +3117,13 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
                 "leading_genes": ";".join(gene_names[leading]),
             })
 
-    return pd.DataFrame(rows)
+    # Declared columns matter: with no surviving pair the frame must still be addressable by name
+    # rather than collapsing to a bare DataFrame with no columns at all.
+    return pd.DataFrame(rows, columns=[
+        "library", "pathway", "spatial_phenotype", "n_pathway_members_in_universe",
+        "n_universe_with_phenotype", "observed", "expected", "fold_enrichment", "p_value",
+        "leading_genes",
+    ])
 
 
 enrichment_rows = _phenotype_enrichment(
@@ -3086,6 +3131,10 @@ enrichment_rows = _phenotype_enrichment(
 )
 
 pathway_enrichment = pd.DataFrame(enrichment_rows)
+pathway_enrichment = _numeric(pathway_enrichment, [
+    "n_pathway_members_in_universe", "n_universe_with_phenotype", "observed", "expected",
+    "fold_enrichment", "p_value",
+])
 pathway_enrichment["fdr"] = bh_adjust(pathway_enrichment["p_value"].to_numpy())
 pathway_enrichment["minus_log10_fdr"] = -np.log10(
     np.maximum(pathway_enrichment["fdr"], 1e-300)
@@ -3741,6 +3790,13 @@ for row in pathway_tested.itertuples():
 
 conventional_pathway_ranks = pd.Series(pathway_conventional_effect).rank(pct=True)
 
+summary_columns = [
+    "library", "pathway", "spatial_phenotype", "fold_enrichment", "fdr", "leading_genes",
+    "conventional_effect", "conventional_percentile", "n_members_in_universe",
+    "median_member_abs_level_effect", "median_member_amplitude_log2_ratio",
+    "median_member_abs_shift", "median_member_shape_corr", "median_member_spatial_score",
+]
+
 pathway_spatial_rewiring_summary = pd.DataFrame([
     {
         "library": row.library,
@@ -3754,7 +3810,17 @@ pathway_spatial_rewiring_summary = pd.DataFrame([
         **pathway_member_stats.get(f"{row.library}: {row.pathway}", {}),
     }
     for row in pathway_enrichment.itertuples()
-]).sort_values(["fdr", "fold_enrichment"], ascending=[True, False]).reset_index(drop=True)
+], columns=summary_columns).sort_values(
+    ["fdr", "fold_enrichment"], ascending=[True, False]
+).reset_index(drop=True)
+
+# An empty result set leaves object-dtype columns, and both the ranking below and every downstream
+# comparison need them numeric.
+pathway_spatial_rewiring_summary = _numeric(
+    pathway_spatial_rewiring_summary,
+    [column for column in summary_columns
+     if column not in {"library", "pathway", "spatial_phenotype", "leading_genes"}],
+)
 
 _save_table(pathway_spatial_rewiring_summary, "pathway_spatial_rewiring_summary.csv")
 
@@ -3762,12 +3828,16 @@ significant_pathways = pathway_spatial_rewiring_summary[
     pathway_spatial_rewiring_summary["fdr"] < CONFIG["enrichment_fdr"]
 ].copy()
 
-best_per_pathway = (
-    significant_pathways
-    .sort_values("fdr")
-    .groupby(["library", "pathway"], as_index=False)
-    .first()
-)
+if significant_pathways.empty:
+    # Keep the columns: everything downstream addresses this frame by name.
+    best_per_pathway = significant_pathways.reindex(columns=significant_pathways.columns)
+else:
+    best_per_pathway = (
+        significant_pathways
+        .sort_values("fdr")
+        .groupby(["library", "pathway"], as_index=False)
+        .first()
+    )
 
 continuous_only_pathways = best_per_pathway[
     best_per_pathway["conventional_percentile"] < 0.5
@@ -3888,8 +3958,9 @@ divergent_enrichment = (
     pathway_enrichment[pathway_enrichment["spatial_phenotype"].isin(DIVERGENT_PHENOTYPES)]
     .sort_values("fdr")
     .groupby(["library", "pathway"], as_index=False)
-    .first()[["library", "pathway", "spatial_phenotype", "fold_enrichment", "fdr",
-              "n_pathway_members_in_universe", "leading_genes"]]
+    .first()
+    .reindex(columns=["library", "pathway", "spatial_phenotype", "fold_enrichment", "fdr",
+                      "n_pathway_members_in_universe", "leading_genes"])
     .rename(columns={
         "spatial_phenotype": "dominant_divergent_phenotype",
         "fold_enrichment": "divergent_fold_enrichment",
@@ -4035,7 +4106,7 @@ _save_table(literature_audit, "literature_marker_audit.csv")
 
 if EPITHELIAL_STRESS_PANEL_PATH.exists():
     print(f"project stress-marker panel available for the deferred signature work: "
-          f"{EPITHELIAL_STRESS_PANEL_PATH.relative_to(PROJECT_DIR)}")
+          f"{_display_path(EPITHELIAL_STRESS_PANEL_PATH)}")
 else:
     print("project stress-marker panel not found")
 
@@ -4128,13 +4199,13 @@ table_files = sorted(path.name for path in TABLE_DIR.glob("*.csv"))
 figure_files = sorted(path.name for path in FIG_DIR.glob("*.png"))
 object_files = sorted(path.name for path in OUT_DIR.glob("*.npz"))
 
-print(f"Tables ({len(table_files)}) in {TABLE_DIR.relative_to(PROJECT_DIR)}:")
+print(f"Tables ({len(table_files)}) in {_display_path(TABLE_DIR)}:")
 for name in table_files:
     print(f"  {name}")
-print(f"\nFigures ({len(figure_files)}) in {FIG_DIR.relative_to(PROJECT_DIR)}:")
+print(f"\nFigures ({len(figure_files)}) in {_display_path(FIG_DIR)}:")
 for name in figure_files:
     print(f"  {name}")
-print(f"\nCurve payloads ({len(object_files)}) in {OUT_DIR.relative_to(PROJECT_DIR)}:")
+print(f"\nCurve payloads ({len(object_files)}) in {_display_path(OUT_DIR)}:")
 for name in object_files:
     print(f"  {name}")
 
@@ -4149,7 +4220,7 @@ computed. Read together with the notebook's own section markdown, which states t
 
 ## Inputs and cohort
 
-- Input object: `{DPT_OUTPUT_PATH.relative_to(PROJECT_DIR)}` (03's PT-specific DPT; `total_scanpy_dpt`).
+- Input object: `{_display_path(DPT_OUTPUT_PATH)}` (03's PT-specific DPT; `total_scanpy_dpt`).
 - Mouse specimens: {', '.join(mouse_samples)}. Human slices: {', '.join(human_samples)} - **one donor**.
 - PT structures compared: {adata_pt.n_obs:,}. Shared pseudospace support: [{lo:.4f}, {hi:.4f}] on a
   {grid.size}-point grid; registration and shifts are reported in unit coordinates over that support.
@@ -4196,7 +4267,7 @@ of PT). Every metric is computed on the registered axis and on the unregistered 
 
 - Tables: `tables/` ({len(table_files)} files), figures: `figures/` ({len(figure_files)} files),
   curve payloads: this directory ({len(object_files)} `.npz`).
-- Stage cache: `{STAGE_CACHE_DIR.relative_to(PROJECT_DIR)}` - 03/05's directory, deliberately shared
+- Stage cache: `{_display_path(STAGE_CACHE_DIR)}` - 03/05's directory, deliberately shared
   so the pooled gene fit is reused rather than recomputed; this notebook's own stages there are
   `spatial_rewiring_specimen_curves` (per-specimen fits) beside the inherited `section4_gene_fit`.
   `PSEUDOSPACE_STAGE_CACHE=0` forces a full rebuild.
@@ -4205,7 +4276,7 @@ of PT). Every metric is computed on the registered axis and on the unregistered 
 """
 
 (OUT_DIR / "analysis_notes.md").write_text(analysis_notes)
-print(f"\nsaved {(OUT_DIR / 'analysis_notes.md').relative_to(PROJECT_DIR)}")
+print(f"\nsaved {_display_path(OUT_DIR / 'analysis_notes.md')}")
 
 
 # %% [markdown]
@@ -4297,7 +4368,7 @@ summary_lines.append("Caveats: two mouse specimens and two human slices from ONE
 summary_text = "\n".join(summary_lines)
 print(summary_text)
 (OUT_DIR / "analysis_summary.txt").write_text(summary_text + "\n")
-print(f"\nsaved {(OUT_DIR / 'analysis_summary.txt').relative_to(PROJECT_DIR)}")
+print(f"\nsaved {_display_path(OUT_DIR / 'analysis_summary.txt')}")
 
 
 # %%

@@ -2881,39 +2881,62 @@ pathway_tested = membership[
         CONFIG["pathway_min_members"], CONFIG["pathway_max_members"])
 ].copy()
 
-enrichment_rows = []
 
-for row in pathway_tested.itertuples():
-    members = np.asarray(
-        [index for index in row.universe_members if universe_mask[index]], dtype=int
-    )
-    if members.size < CONFIG["pathway_min_members"]:
-        continue
+def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_frame, config):
+    """Upper-tail hypergeometric over-representation of each phenotype among each pathway's members.
 
-    member_phenotypes = phenotype_by_row[members]
+    `phenotype_labels` is the per-gene phenotype array over every tested gene; `universe_members_index`
+    are the rows that form the background (the discovery-eligible genes); `pathway_frame` must carry
+    `universe_members` (row indices) plus `library`/`pathway`. Only over-representation is tested, so a
+    pathway that is *short* of a phenotype returns p ~ 1 rather than a small p - a shortfall is not
+    evidence of enrichment, and BH in the caller is applied across the complete pathway x phenotype
+    family. Kept as a function so the notebook's self-check can run it on a known-answer case.
+    """
+    universe_mask = np.zeros(phenotype_labels.size, dtype=bool)
+    universe_mask[universe_members_index] = True
+    universe_size = int(universe_members_index.size)
+    universe_counts = pd.Series(phenotype_labels[universe_members_index]).value_counts()
 
-    for label in PHENOTYPE_CLASSES:
-        n_with_phenotype = int(universe_phenotype_counts.get(label, 0))
-        if n_with_phenotype == 0:
+    rows = []
+    for pathway_row in pathway_frame.itertuples():
+        members = np.asarray(
+            [index for index in pathway_row.universe_members if universe_mask[index]], dtype=int
+        )
+        if members.size < config["pathway_min_members"]:
             continue
 
-        observed = int((member_phenotypes == label).sum())
-        expected = n_with_phenotype * members.size / universe_size
-        overlap = members[member_phenotypes == label]
-        leading = overlap[np.argsort(-discovery_score_by_row[overlap])][:10]
+        member_phenotypes = phenotype_labels[members]
 
-        enrichment_rows.append({
-            "library": row.library,
-            "pathway": row.pathway,
-            "spatial_phenotype": label,
-            "n_pathway_members_in_universe": int(members.size),
-            "n_universe_with_phenotype": n_with_phenotype,
-            "observed": observed,
-            "expected": expected,
-            "fold_enrichment": (observed / expected) if expected > 0 else np.nan,
-            "p_value": float(hypergeom.sf(observed - 1, universe_size, members.size, n_with_phenotype)),
-            "leading_genes": ";".join(gene_names[leading]),
-        })
+        for label in PHENOTYPE_CLASSES:
+            n_with_phenotype = int(universe_counts.get(label, 0))
+            if n_with_phenotype == 0:
+                continue
+
+            observed = int((member_phenotypes == label).sum())
+            expected = n_with_phenotype * members.size / universe_size
+            overlap = members[member_phenotypes == label]
+            leading = overlap[np.argsort(-discovery_score_by_row[overlap])][:10]
+
+            rows.append({
+                "library": pathway_row.library,
+                "pathway": pathway_row.pathway,
+                "spatial_phenotype": label,
+                "n_pathway_members_in_universe": int(members.size),
+                "n_universe_with_phenotype": n_with_phenotype,
+                "observed": observed,
+                "expected": expected,
+                "fold_enrichment": (observed / expected) if expected > 0 else np.nan,
+                "p_value": float(hypergeom.sf(observed - 1, universe_size, members.size,
+                                              n_with_phenotype)),
+                "leading_genes": ";".join(gene_names[leading]),
+            })
+
+    return pd.DataFrame(rows)
+
+
+enrichment_rows = _phenotype_enrichment(
+    phenotype_by_row, universe_index, pathway_tested, CONFIG
+)
 
 pathway_enrichment = pd.DataFrame(enrichment_rows)
 pathway_enrichment["fdr"] = bh_adjust(pathway_enrichment["p_value"].to_numpy())
@@ -3058,6 +3081,83 @@ else:
     plt.show()
 
     _save_table(heatmap_frame, "pathway_spatial_phenotype_heatmap_terms.csv")
+
+
+# %%
+# Purpose: known-answer self-check of the over-representation test.
+
+def _enrichment_selfcheck():
+    """Run the enrichment test on a synthetic phenotype assignment with hand-computed answers.
+
+    The enrichment step decides which functional programmes the notebook reports, and its arithmetic
+    (background size, eligible members, upper tail, family-wide correction) is easy to get subtly
+    wrong while still producing plausible-looking numbers. This checks it against values computed by
+    hand: 60 background genes, a pathway holding 20 of them, 15 of which share a phenotype gives
+    expected = 5, fold = 3, p = hypergeom.sf(14, 60, 20, 15).
+    """
+    labels = np.array(
+        ["conserved zonation"] * 15
+        + ["shifted later in human"] * 5
+        + ["weak / uncertain zonation"] * 30
+        + ["excluded"] * int(len(gene_names) - 50)
+    )
+    background = np.arange(60)
+    pathway_frame = pd.DataFrame({
+        "library": ["synthetic", "synthetic"],
+        "pathway": ["enriched_case", "shortfall_case"],
+        "universe_members": [list(range(20)), list(range(20, 40))],
+    })
+
+    table = _phenotype_enrichment(labels, background, pathway_frame, CONFIG)
+
+    def _pair(pathway, phenotype):
+        block = table[table["pathway"].eq(pathway) & table["spatial_phenotype"].eq(phenotype)]
+        return block.iloc[0] if len(block) else None
+
+    enriched = _pair("enriched_case", "conserved zonation")
+    shortfall = _pair("shortfall_case", "conserved zonation")
+
+    # Derive which pathway holds every gene of the shifted phenotype from the construction itself,
+    # instead of assuming it: the answer follows from the indices above.
+    shifted_rows = [row for row in
+                    (pathway_frame.iloc[0], pathway_frame.iloc[1])
+                    if set(np.flatnonzero(labels == "shifted later in human"))
+                    <= set(row["universe_members"])]
+    shifted = _pair(shifted_rows[0]["pathway"], "shifted later in human") if shifted_rows else None
+
+    checks = [
+        ("enriched pair: background size is the discovery-eligible universe",
+         enriched is not None and int(enriched["n_universe_with_phenotype"]) == 15),
+        ("enriched pair: eligible members are counted inside the universe",
+         enriched is not None and int(enriched["n_pathway_members_in_universe"]) == 20),
+        ("enriched pair: observed overlap is counted exactly",
+         enriched is not None and int(enriched["observed"]) == 15),
+        ("enriched pair: expected is n*K/N = 5",
+         enriched is not None and abs(float(enriched["expected"]) - 5.0) < 1e-9),
+        ("enriched pair: fold enrichment is 3",
+         enriched is not None and abs(float(enriched["fold_enrichment"]) - 3.0) < 1e-9),
+        ("enriched pair: p is the hypergeometric upper tail",
+         enriched is not None and abs(float(enriched["p_value"])
+                                      - float(hypergeom.sf(14, 60, 20, 15))) < 1e-12),
+        ("shortfall is not reported as enrichment (p ~ 1)",
+         shortfall is None or float(shortfall["p_value"]) > 0.99),
+        ("a pathway holding every member of a phenotype returns a small p",
+         shifted is not None and float(shifted["p_value"]) < 0.01),
+        ("only phenotypes present in the background are tested",
+         "excluded" not in set(table["spatial_phenotype"])),
+    ]
+
+    return pd.DataFrame([{"check": name, "passed": bool(passed)} for name, passed in checks])
+
+
+enrichment_selfcheck = _enrichment_selfcheck()
+display(enrichment_selfcheck)
+
+if not enrichment_selfcheck["passed"].all():
+    failed = enrichment_selfcheck.loc[~enrichment_selfcheck["passed"], "check"].tolist()
+    raise AssertionError(f"synthetic enrichment self-check failed for: {failed}")
+
+print(f"All {len(enrichment_selfcheck)} synthetic enrichment self-checks passed.")
 
 
 # %% [markdown]

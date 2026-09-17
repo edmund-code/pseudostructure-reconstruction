@@ -1333,6 +1333,10 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
 
     # C - level- and amplitude-free: both curves are standardised over the shared points first.
     shape_corr = _row_pearson(z_mouse, z_human, mask=common)
+    # Rank-based counterpart. It needs every shared grid point to be supported in both species
+    # (ranks are meaningless across an unsupported gap), so it is NaN for edge-truncated genes and
+    # is reported as a diagnostic beside the Pearson correlation, never instead of it.
+    shape_spearman = _row_spearman(z_mouse, z_human, mask=common)
     pattern_rms_z = np.sqrt(_nanmean_safe(np.where(common, z_human - z_mouse, np.nan) ** 2))
 
     # D - where expression sits, in each species.
@@ -1361,6 +1365,7 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
         f"amplitude_difference_human_minus_mouse{suffix}": amplitude_difference,
         f"amplitude_log2_ratio_human_over_mouse{suffix}": amplitude_log2_ratio,
         f"shape_corr{suffix}": shape_corr,
+        f"shape_spearman{suffix}": shape_spearman,
         f"pattern_rms_z{suffix}": pattern_rms_z,
         f"best_shift_human_minus_mouse{suffix}": best_shift,
         f"registered_shape_corr{suffix}": best_corr,
@@ -1393,6 +1398,7 @@ unregistered_columns = [
     "human_amplitude_unregistered",
     "amplitude_log2_ratio_human_over_mouse_unregistered",
     "shape_corr_unregistered",
+    "shape_spearman_unregistered",
     "best_shift_human_minus_mouse_unregistered",
     "registered_shape_corr_unregistered",
     "shift_improvement_unregistered",
@@ -1443,6 +1449,9 @@ gene_metrics, primary_registration_used = _assemble_metrics(
 _report("genes with comparable curves on the registered axis",
         int(gene_metrics["enough_shared_support"].sum()), len(gene_names),
         why=f"both species support >= {CONFIG['min_pattern_grid_points']} shared grid points")
+_report("genes with a rank-based shape correlation",
+        int(np.isfinite(gene_metrics["shape_spearman"]).sum()), len(gene_names),
+        why="Spearman needs every shared grid point supported by both species; NaN elsewhere")
 _report("genes where registration changed the shared support",
         int((gene_metrics["n_shared_grid_points"]
              != gene_metrics["n_shared_grid_points_unregistered"]).sum()), len(gene_names))
@@ -1980,10 +1989,13 @@ def _sensitivity_variants():
     for label, updates in threshold_variants.items():
         variant_config = dict(CONFIG)
         variant_config.update(updates)
+        is_axis_variant = label == "axis-basis genes included"
         variants[label] = {
             "mouse": balanced_mouse, "human": balanced_human, "register": True,
-            "config": variant_config, "include_axis": label == "axis-basis genes included",
-            "note": "threshold / universe sensitivity",
+            "config": variant_config, "include_axis": is_axis_variant,
+            "note": ("axis-basis genes treated as ordinary discoverable genes - the reverse of the "
+                     "primary setting, so it shows what the exclusion is hiding"
+                     if is_axis_variant else "threshold / universe sensitivity"),
         }
 
     return variants
@@ -2050,6 +2062,10 @@ for variant_name, variant_spec in sensitivity_variants.items():
 sensitivity_summary = pd.DataFrame(sensitivity_summary_rows)
 display(sensitivity_summary.round(4))
 _save_table(sensitivity_summary, "sensitivity_summary.csv")
+
+
+# %%
+# Purpose: per-gene stability of the phenotype across the sensitivity variants.
 
 # --------------------------------------------------------------------------------------
 # Per-gene stability across the variants.
@@ -3426,6 +3442,207 @@ _save_figure(figure, "conventional_vs_continuous_pathway_signal.png")
 plt.show()
 
 
+# %%
+# Purpose: the gene-level conventional-versus-continuous comparison and its quadrant figure.
+
+conventional_level = gene_metrics["level_effect_human_minus_mouse"].abs()
+spatial_divergence = gene_metrics["spatial_discovery_score"]
+conventional_percentile = conventional_level.rank(pct=True)
+spatial_percentile = spatial_divergence.rank(pct=True)
+
+# Continuity check: 05's pseudobulk whole-PT log fold change, if that notebook has been run. It is a
+# sanity link between the conventional axis here and the one 05 reports, not an input.
+WHOLE_PT_LOGFOLD_PATH = UPSTREAM_DIR / "gene_rewiring" / "whole_PT_gene_logFC.csv"
+
+if WHOLE_PT_LOGFOLD_PATH.exists():
+    whole_pt_logfold = pd.read_csv(WHOLE_PT_LOGFOLD_PATH)
+    continuity = gene_metrics[["gene", "level_effect_human_minus_mouse"]].merge(
+        whole_pt_logfold[["gene", "log2fc_human_vs_mouse"]], on="gene", how="inner"
+    ).dropna()
+    print(f"05's whole-PT pseudobulk log2FC versus this notebook's level effect "
+          f"({len(continuity):,} shared genes): "
+          f"spearman={spearmanr(continuity['level_effect_human_minus_mouse'], continuity['log2fc_human_vs_mouse']).correlation:.3f}")
+else:
+    print(f"{WHOLE_PT_LOGFOLD_PATH.name} not found - continuity check against 05 skipped")
+
+quadrant_frame = gene_metrics[discovery_eligible].dropna(
+    subset=["level_effect_human_minus_mouse"]
+).copy()
+quadrant_frame["conventional_abs"] = quadrant_frame["level_effect_human_minus_mouse"].abs()
+
+conventional_median = float(np.nanmedian(conventional_level[discovery_eligible]))
+spatial_median = float(np.nanmedian(spatial_divergence[discovery_eligible]))
+
+quadrant_labels = {
+    "high conventional / high spatial":
+        quadrant_frame["conventional_abs"].ge(conventional_median)
+        & quadrant_frame["spatial_discovery_score"].ge(spatial_median),
+    "high conventional / low spatial":
+        quadrant_frame["conventional_abs"].ge(conventional_median)
+        & quadrant_frame["spatial_discovery_score"].lt(spatial_median),
+    "low conventional / high spatial (continuous-only)":
+        quadrant_frame["conventional_abs"].lt(conventional_median)
+        & quadrant_frame["spatial_discovery_score"].ge(spatial_median),
+    "low conventional / low spatial":
+        quadrant_frame["conventional_abs"].lt(conventional_median)
+        & quadrant_frame["spatial_discovery_score"].lt(spatial_median),
+}
+
+quadrant_frame["conventional_vs_continuous_quadrant"] = np.select(
+    list(quadrant_labels.values()), list(quadrant_labels), default="unassigned"
+)
+
+quadrant_counts = pd.DataFrame([
+    {
+        "quadrant": name,
+        "n_genes": int(np.asarray(mask).sum()),
+        "share": float(np.asarray(mask).mean()),
+        "most_common_spatial_phenotype": (
+            str(quadrant_frame.loc[np.asarray(mask), "spatial_phenotype"].mode().iloc[0])
+            if np.asarray(mask).any() else ""
+        ),
+    }
+    for name, mask in quadrant_labels.items()
+])
+display(quadrant_counts.round(4))
+_save_table(quadrant_frame, "conventional_vs_continuous_gene_quadrants.csv")
+
+figure, axis = plt.subplots(1, 1, figsize=(8.2, 6.2))
+
+for label in PHENOTYPE_CLASSES:
+    block = quadrant_frame[quadrant_frame["spatial_phenotype"].eq(label)]
+    if not len(block):
+        continue
+    axis.scatter(
+        block["conventional_abs"], block["spatial_discovery_score"],
+        s=6, alpha=0.5, linewidths=0, color=PHENOTYPE_COLORS[label], label=f"{label} (n={len(block):,})",
+    )
+
+axis.axvline(conventional_median, color="black", lw=0.9, ls="--")
+axis.axhline(spatial_median, color="black", lw=0.9, ls="--")
+axis.set_yscale("symlog", linthresh=0.2)
+axis.set_xlabel("Conventional whole-PT effect: |level effect| (lognorm)")
+axis.set_ylabel("Continuous spatial divergence score")
+axis.set_title("Figure: conventional whole-PT effect versus continuous spatial signal\n"
+               "upper left = continuous-only biology; dashed lines = medians",
+               loc="left", fontsize=10)
+axis.legend(fontsize=6.5, loc="upper right")
+
+for row in quadrant_frame.nlargest(8, "spatial_discovery_score").itertuples():
+    axis.annotate(row.gene, (row.conventional_abs, row.spatial_discovery_score),
+                  xytext=(3, 3), textcoords="offset points", fontsize=7)
+
+figure.tight_layout()
+_save_figure(figure, "conventional_vs_continuous_genes.png")
+plt.show()
+
+
+# %%
+# Purpose: the pathway-level continuous-only table and its figure.
+
+pathway_conventional_effect = {}
+pathway_member_stats = {}
+
+for row in pathway_tested.itertuples():
+    members = np.asarray([index for index in row.universe_members if universe_mask[index]], dtype=int)
+    if members.size == 0:
+        continue
+
+    label = f"{row.library}: {row.pathway}"
+    pathway_conventional_effect[label] = float(np.nanmedian(conventional_level.to_numpy()[members]))
+    pathway_member_stats[label] = {
+        "n_members_in_universe": int(members.size),
+        "median_member_abs_level_effect": float(np.nanmedian(conventional_level.to_numpy()[members])),
+        "median_member_amplitude_log2_ratio": float(np.nanmedian(
+            np.abs(gene_metrics["amplitude_log2_ratio_human_over_mouse"].to_numpy()[members]))),
+        "median_member_abs_shift": float(np.nanmedian(np.abs(
+            gene_metrics["best_shift_human_minus_mouse"].to_numpy()[members]))),
+        "median_member_shape_corr": float(np.nanmedian(
+            gene_metrics["shape_corr"].to_numpy()[members])),
+        "median_member_spatial_score": float(np.nanmedian(
+            spatial_divergence.to_numpy()[members])),
+    }
+
+conventional_pathway_ranks = pd.Series(pathway_conventional_effect).rank(pct=True)
+
+pathway_spatial_rewiring_summary = pd.DataFrame([
+    {
+        "library": row.library,
+        "pathway": row.pathway,
+        "spatial_phenotype": row.spatial_phenotype,
+        "fold_enrichment": row.fold_enrichment,
+        "fdr": row.fdr,
+        "leading_genes": row.leading_genes,
+        "conventional_effect": pathway_conventional_effect.get(f"{row.library}: {row.pathway}", np.nan),
+        "conventional_percentile": conventional_pathway_ranks.get(f"{row.library}: {row.pathway}", np.nan),
+        **pathway_member_stats.get(f"{row.library}: {row.pathway}", {}),
+    }
+    for row in pathway_enrichment.itertuples()
+]).sort_values(["fdr", "fold_enrichment"], ascending=[True, False]).reset_index(drop=True)
+
+_save_table(pathway_spatial_rewiring_summary, "pathway_spatial_rewiring_summary.csv")
+
+significant_pathways = pathway_spatial_rewiring_summary[
+    pathway_spatial_rewiring_summary["fdr"] < CONFIG["enrichment_fdr"]
+].copy()
+
+best_per_pathway = (
+    significant_pathways
+    .sort_values("fdr")
+    .groupby(["library", "pathway"], as_index=False)
+    .first()
+)
+
+continuous_only_pathways = best_per_pathway[
+    best_per_pathway["conventional_percentile"] < 0.5
+].sort_values("fdr").rename(columns={
+    "spatial_phenotype": "dominant_spatial_phenotype",
+    "fold_enrichment": "enrichment_fold_enrichment",
+    "fdr": "enrichment_fdr",
+    "median_member_amplitude_log2_ratio": "median_member_abs_amplitude_log2_ratio",
+})[[
+    "pathway", "library", "conventional_effect", "conventional_percentile",
+    "dominant_spatial_phenotype", "enrichment_fdr", "enrichment_fold_enrichment",
+    "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
+    "median_member_shape_corr", "leading_genes",
+]]
+
+_report("pathways with a significant spatial enrichment", len(best_per_pathway), len(pathway_tested))
+_report("of those, below the median conventional effect (continuous-only)",
+        len(continuous_only_pathways), len(best_per_pathway),
+        why="a whole-PT level comparison alone would have missed them")
+
+_save_table(continuous_only_pathways, "continuous_only_pathways.csv")
+
+top_spatial = best_per_pathway.nlargest(12, "median_member_spatial_score")
+
+if top_spatial.empty:
+    print("No pathway reached the enrichment threshold: the pathway panel is skipped.")
+else:
+    figure, axis = plt.subplots(1, 1, figsize=(7.5, 5.4))
+
+    positions = np.arange(len(top_spatial))
+    axis.barh(
+        positions, top_spatial["median_member_spatial_score"],
+        color=[PHENOTYPE_COLORS.get(label, "#888888")
+               for label in top_spatial["dominant_spatial_phenotype"]],
+        alpha=0.9,
+    )
+    axis.set_yticks(positions)
+    axis.set_yticklabels([textwrap.fill(str(row.pathway), 40) for row in top_spatial.itertuples()],
+                         fontsize=7.5)
+    axis.set_xlabel("Median member continuous spatial divergence score")
+    axis.set_title("Pathways carrying the strongest continuous spatial signal\n"
+                   "bar colour = dominant spatial phenotype", loc="left", fontsize=10)
+
+    figure.suptitle("Figure: continuous spatial signal that a whole-PT comparison does not rank\n"
+                    "descriptive effect sizes for this cohort (2 mouse specimens, 1 human donor)",
+                    fontsize=10.5)
+    figure.tight_layout()
+    _save_figure(figure, "conventional_vs_continuous_pathway_signal.png")
+    plt.show()
+
+
 # %% [markdown]
 # ## 11 - Spatially conserved functions
 #
@@ -3685,7 +3902,7 @@ atlas_columns = [
     "level_effect_human_minus_mouse", "level_effect_human_minus_mouse_unregistered",
     "mouse_amplitude", "human_amplitude", "amplitude_difference_human_minus_mouse",
     "amplitude_log2_ratio_human_over_mouse", "amplitude_log2_ratio_human_over_mouse_unregistered",
-    "shape_corr", "shape_corr_unregistered", "pattern_rms_z",
+    "shape_corr", "shape_corr_unregistered", "shape_spearman", "pattern_rms_z",
     "registered_shape_corr", "registered_shape_corr_unregistered",
     "best_shift_human_minus_mouse", "best_shift_human_minus_mouse_unregistered",
     "shift_improvement", "shift_improvement_unregistered", "residual_rms_after_shift",

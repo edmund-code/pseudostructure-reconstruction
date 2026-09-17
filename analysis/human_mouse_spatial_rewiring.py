@@ -5317,7 +5317,8 @@ anchored on S1/S2/S3 landmark program centroids ({landmark_registration['n_landm
 Metrics are level, amplitude, standardised shape correlation, positional centroid/peak/early-to-late
 gradient/half-max window, and a bounded displacement search (interpreted only to 0.30 of PT, the
 interior limit; the search itself looks to {CONFIG['shift_search_limit']}
-of PT). Every metric is computed on the registered axis and on the unregistered axis.
+of PT). Every metric is computed on the primary coordinate (03's shared PT DPT) and again on the
+alternate landmark-registered axis, whose columns carry ALT_SUFFIX.
 
 ## Caveats that constrain every number here
 

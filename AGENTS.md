@@ -20,7 +20,10 @@ subproject that produces its GeoJSON inputs.
   `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace, recomputes
   no coordinate), and `analysis/human_mouse_spatial_rewiring.py` (06: continuous PT conservation and
   spatial rewiring — reads 03's PT object, caches its own per-specimen fits, and cross-checks against
-  05's saved curves and atlas rather than consuming them).
+  05's saved curves and atlas rather than consuming them). 06 is the **frozen discovery notebook** for
+  the human vs healthy-mouse PT spatial analysis: its primary coordinate is 03's shared PT DPT, landmark
+  registration is only a sensitivity analysis, and the external validation of its leading pathway
+  candidates belongs in a separate analysis, not in it.
 - **Cohort**: 2 control mouse specimens, 2 AKI mouse specimens, and 2 human kidney slices. The two
   human slices are *named* cortex and medulla, but **both are in reality healthy human cortex** —
   do not treat the medulla-labelled slice as medullary tissue in any analysis or write-up.

@@ -554,6 +554,19 @@ def _nansum_safe(values, axis=1):
         return np.nansum(values, axis=axis)
 
 
+def _nanmin_safe(values, axis=1, keepdims=False):
+    """NumPy warns on an all-NaN slice; here that slice is a legitimately unsupported row."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return np.nanmin(values, axis=axis, keepdims=keepdims)
+
+
+def _nanmax_safe(values, axis=1, keepdims=False):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return np.nanmax(values, axis=axis, keepdims=keepdims)
+
+
 def _row_pearson(left, right, mask=None, min_points=8):
     """Row-wise Pearson correlation over the shared finite points, else NaN."""
     left = np.asarray(left, dtype=float)
@@ -615,7 +628,7 @@ def _row_amplitude(curve, mask=None):
         mask = np.isfinite(curve)
 
     values = np.where(mask, curve, np.nan)
-    return np.nanmax(values, axis=1) - np.nanmin(values, axis=1)
+    return _nanmax_safe(values) - _nanmin_safe(values)
 
 
 def _row_weighted_centroid(curve, x, mask=None):
@@ -625,7 +638,7 @@ def _row_weighted_centroid(curve, x, mask=None):
         mask = np.isfinite(curve)
 
     values = np.where(mask, curve, np.nan)
-    weights = np.clip(values - np.nanmin(values, axis=1, keepdims=True), 0.0, None)
+    weights = np.clip(values - _nanmin_safe(values, keepdims=True), 0.0, None)
 
     numerator = _nansum_safe(weights * np.asarray(x, dtype=float))
     denominator = _nansum_safe(weights)
@@ -667,8 +680,8 @@ def _row_halfmax_window(curve, x, mask=None):
         mask = np.isfinite(curve)
 
     values = np.where(mask, curve, np.nan)
-    low = np.nanmin(values, axis=1, keepdims=True)
-    high = np.nanmax(values, axis=1, keepdims=True)
+    low = _nanmin_safe(values, keepdims=True)
+    high = _nanmax_safe(values, keepdims=True)
     above = mask & (values >= low + 0.5 * (high - low))
 
     onset = np.where(above.any(axis=1), x[np.argmax(above, axis=1)], np.nan)
@@ -1036,7 +1049,11 @@ else:
 # cannot smooth away the rewiring we want to measure.
 #
 # **Limits.** With S1/S2/S3 the mapping is anchored by at most three points and is only as good as
-# those programs; residual misalignment inside a segment is not corrected. Landmark genes are flagged
+# those programs; residual misalignment inside a segment is not corrected. Two consequences the
+# code and the self-check both show: the mapping is exact at its anchors but only *evaluated* on
+# the fit grid, so reading it off-grid is accurate to about one grid step and no better; and a
+# landmark whose program is truncated by a species' support edge is realigned less well than one
+# measured in the middle of the supported range. Landmark genes are flagged
 # `axis_basis_gene` and are excluded from unbiased discovery below, because a program used to align
 # the two species cannot also be presented as a finding about them.
 #
@@ -1103,8 +1120,8 @@ def _build_landmarks(mouse_curves, human_curves, verbose=True):
         human_program = _program_curve(human_curves, member_index, grid_unit)
         programs[panel] = {"mouse": mouse_program, "human": human_program, "members": members}
 
-        mouse_amplitude = float(_row_amplitude(mouse_program[None, :]))
-        human_amplitude = float(_row_amplitude(human_program[None, :]))
+        mouse_amplitude = float(_row_amplitude(mouse_program[None, :])[0])
+        human_amplitude = float(_row_amplitude(human_program[None, :])[0])
         used = bool(
             mouse_amplitude >= CONFIG["amplitude_patterned"]
             and human_amplitude >= CONFIG["amplitude_patterned"]
@@ -1113,10 +1130,10 @@ def _build_landmarks(mouse_curves, human_curves, verbose=True):
         program_rows.append({
             "panel": panel, "species": "both", "n_members_used": len(present_index),
             "members": ";".join(members),
-            "mouse_centroid": float(_row_weighted_centroid(mouse_program[None, :], grid_unit)),
-            "human_centroid": float(_row_weighted_centroid(human_program[None, :], grid_unit)),
-            "mouse_peak": float(_row_peak_position(mouse_program[None, :], grid_unit)),
-            "human_peak": float(_row_peak_position(human_program[None, :], grid_unit)),
+            "mouse_centroid": float(_row_weighted_centroid(mouse_program[None, :], grid_unit)[0]),
+            "human_centroid": float(_row_weighted_centroid(human_program[None, :], grid_unit)[0]),
+            "mouse_peak": float(_row_peak_position(mouse_program[None, :], grid_unit)[0]),
+            "human_peak": float(_row_peak_position(human_program[None, :], grid_unit)[0]),
             "mouse_amplitude": mouse_amplitude, "human_amplitude": human_amplitude,
             "used": used,
         })
@@ -1275,6 +1292,111 @@ figure.suptitle("Cross-species registration of PT position from S1/S2/S3 landmar
 figure.tight_layout()
 _save_figure(figure, "pt_cross_species_registration.png")
 plt.show()
+
+
+# %%
+# Purpose: synthetic self-check of the landmark registration.
+
+def _registration_selfcheck():
+    """Register a synthetic pair of species whose human landmark programs are displaced later.
+
+    Every expectation is derived from the curves constructed here, not from stored numbers: the
+    human program is built as the mouse program displaced by a known fraction of PT, so the landmark
+    centroids must differ by that amount, and the mapping must send each human landmark centroid back
+    onto its mouse counterpart by construction (the anchors are interpolation points).
+    """
+    displaced = 0.12
+    centres = {"S1": 0.20, "S2": 0.50, "S3": 0.80}
+
+    landmark_indices = {
+        panel: [gene_lookup_tested[gene.upper()] for gene in genes
+                if gene.upper() in gene_lookup_tested]
+        for panel, genes in LANDMARK_PANELS.items()
+    }
+    usable_panels = {panel: index for panel, index in landmark_indices.items() if len(index) >= 2}
+
+    mouse_matrix = np.zeros((len(gene_names), grid_unit.size))
+    human_matrix = np.zeros((len(gene_names), grid_unit.size))
+    human_single_panel = np.zeros((len(gene_names), grid_unit.size))
+
+    for panel, index in usable_panels.items():
+        mouse_shape = np.exp(-((grid_unit - centres[panel]) ** 2) / (2 * 0.05 ** 2))
+        # H(s) = M(s - displaced), i.e. the human program occurs later along PT by `displaced`.
+        human_shape = np.interp(grid_unit, grid_unit + displaced, mouse_shape)
+        for gene_index in index:
+            mouse_matrix[gene_index] = mouse_shape
+            human_matrix[gene_index] = human_shape
+
+    if "S1" in usable_panels:
+        for gene_index in usable_panels["S1"]:
+            human_single_panel[gene_index] = np.interp(
+                grid_unit, grid_unit + displaced, mouse_matrix[gene_index]
+            )
+
+    programs, table, _ = _build_landmarks(mouse_matrix, human_matrix, verbose=False)
+    registration = _register(mouse_matrix, human_matrix)
+    used = table[table["used"]]
+
+    fallback = _register(mouse_matrix, human_single_panel)
+
+    def _program_correlation(panel, registered):
+        mouse_program = programs[panel]["mouse"]
+        human_program = (registered[panel] if isinstance(registered, dict)
+                         else programs[panel]["human"])
+        return float(_row_pearson(
+            mouse_program[None, :], np.asarray(human_program)[None, :])[0])
+
+    displaced_correlations, raw_correlations = [], []
+    for row in used.itertuples():
+        registered_program = _interp_rows(
+            programs[row.panel]["human"][None, :], registration["mapped"], grid_unit
+        )[0]
+        raw_correlations.append(float(_row_pearson(
+            programs[row.panel]["mouse"][None, :],
+            programs[row.panel]["human"][None, :])[0]))
+        displaced_correlations.append(float(_row_pearson(
+            programs[row.panel]["mouse"][None, :], registered_program[None, :])[0]))
+
+    grid_step = float(np.diff(grid_unit).max())
+    anchor_error = np.abs(
+        np.interp(used["human_centroid"].to_numpy(), grid_unit, registration["mapped"])
+        - used["mouse_centroid"].to_numpy()
+    ) if len(used) else np.array([])
+
+    checks = [
+        ("at least two landmark panels are usable on the synthetic curves",
+         len(used) >= 2),
+        ("each human landmark centroid sits later than its mouse counterpart by the displacement",
+         bool(len(used)) and bool(np.all(np.abs(
+             used["human_centroid"].to_numpy() - used["mouse_centroid"].to_numpy() - displaced
+         ) < 0.03))),
+        # The mapping is exact at its anchors, but it is only *evaluated* on the fit grid, so
+        # reading it off-grid is accurate to about one grid step and no better.
+        ("the mapping returns each mouse landmark centroid to within one grid step",
+         bool(len(anchor_error)) and bool(np.all(anchor_error <= grid_step))),
+        ("registration raises the landmark program agreement, panel by panel",
+         bool(displaced_correlations)
+         and bool(np.all(np.asarray(displaced_correlations) > np.asarray(raw_correlations)))),
+        ("registration recovers a displaced landmark program to a median correlation above 0.95",
+         bool(displaced_correlations) and float(np.median(displaced_correlations)) > 0.95),
+        ("a single usable landmark falls back to the identity mapping",
+         np.allclose(fallback["mapped"], grid_unit)),
+        ("the fallback reports no anchors", len(fallback["anchors"]) == 0),
+        ("the registered human curves keep their support mask",
+         registration["human_registered_mask"].shape == (len(gene_names), grid_unit.size)),
+    ]
+
+    return pd.DataFrame([{"check": name, "passed": bool(passed)} for name, passed in checks])
+
+
+registration_selfcheck = _registration_selfcheck()
+display(registration_selfcheck)
+
+if not registration_selfcheck["passed"].all():
+    failed = registration_selfcheck.loc[~registration_selfcheck["passed"], "check"].tolist()
+    raise AssertionError(f"synthetic registration self-check failed for: {failed}")
+
+print(f"All {len(registration_selfcheck)} synthetic registration self-checks passed.")
 
 
 # %% [markdown]

@@ -15,10 +15,12 @@ subproject that produces its GeoJSON inputs.
   notebooks — enforced by `tools/check_repository_hygiene.py`. Real data lives outside the repo and
   is passed in by path; see [data/README.md](data/README.md) and [docs/data/access.md](docs/data/access.md).
 - Entry points: the notebooks in `analysis/notebooks/`, with generated `.py` mirrors at
-  `analysis/mouse_only_pseudospace.py` (active mouse-only workflow) and
+  `analysis/mouse_only_pseudospace.py` (active mouse-only workflow),
   `analysis/human_vs_healthy_mouse.py` (cross-species),
-  and `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace,
-  recomputes no coordinate).
+  `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace, recomputes
+  no coordinate), and `analysis/human_mouse_spatial_rewiring.py` (06: continuous PT conservation and
+  spatial rewiring — reads 03's PT object, caches its own per-specimen fits, and cross-checks against
+  05's saved curves and atlas rather than consuming them).
 - **Cohort**: 2 control mouse specimens, 2 AKI mouse specimens, and 2 human kidney slices. The two
   human slices are *named* cortex and medulla, but **both are in reality healthy human cortex** —
   do not treat the medulla-labelled slice as medullary tissue in any analysis or write-up.
@@ -161,8 +163,9 @@ tables under `docs/results/`.
   Pairing:
   `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py`,
   `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`,
-  `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`, and
-  `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`.
+  `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`,
+  `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`, and
+  `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`.
   (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
@@ -174,6 +177,8 @@ tables under `docs/results/`.
     analysis/notebooks/04_mouse_workflow_comparison.ipynb
   jupytext --to py:percent --output analysis/gam_human_vs_mouse.py \
     analysis/notebooks/05_gam_human_vs_mouse.ipynb
+  jupytext --to py:percent --output analysis/human_mouse_spatial_rewiring.py \
+    analysis/notebooks/06_human_mouse_spatial_rewiring.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.

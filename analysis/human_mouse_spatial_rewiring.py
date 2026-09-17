@@ -1656,13 +1656,24 @@ def _phenotype_flags(metrics, config, include_axis_genes=False):
         & shift.abs().lt(config["minimum_shift"])
         & amplitude_log2.abs().le(config["amplitude_change_small"])
     )
+    # The amplitude classes deliberately do NOT require both curves to clear the "patterned"
+    # threshold: a human curve that has dropped below it is the clearest case of weakening. They
+    # require reproducibility in both species, a reproducible stronger-shaped curve, and shape
+    # agreement, so a flat or noisy curve cannot be given an amplitude label (a flat curve has no
+    # usable shape correlation at all, and the species-specific classes take priority anyway).
+    flags["amplitude_class_usable"] = (
+        flags["enough_support"]
+        & flags["reproducible_mouse"]
+        & flags["reproducible_human"]
+        & (np.maximum(mouse_amplitude, human_amplitude) >= config["amplitude_patterned"])
+    )
     flags["weaker_in_human"] = (
-        flags["positional_usable"]
+        flags["amplitude_class_usable"]
         & metrics["shape_corr"].ge(config["conserved_corr"])
         & amplitude_log2.le(-config["amplitude_change_major"])
     )
     flags["stronger_in_human"] = (
-        flags["positional_usable"]
+        flags["amplitude_class_usable"]
         & metrics["shape_corr"].ge(config["conserved_corr"])
         & amplitude_log2.ge(config["amplitude_change_major"])
     )
@@ -1757,6 +1768,124 @@ _save_table(phenotype_summary, "gene_spatial_phenotype_summary.csv")
 
 print("Spatial phenotype counts (all tested orthologs):")
 print(gene_metrics["spatial_phenotype"].value_counts().to_string())
+
+
+# %%
+# Purpose: synthetic self-check of the phenotype logic - the classes must come out as intended.
+
+def _phenotype_selfcheck():
+    """Build synthetic metric rows with known expected classes and check the classifier.
+
+    The classification is the one piece of this notebook that is easy to get subtly wrong (a
+    threshold in the wrong place, a priority order inverted, an amplitude class that silently
+    requires the very thing it is meant to detect), and it is not covered by the curve-level
+    self-check at the end. Every row here is a constructed metric profile, not data.
+    """
+    reference = dict(
+        mouse_amplitude=0.4, human_amplitude=0.4, amplitude_log2_ratio_human_over_mouse=0.0,
+        best_shift_human_minus_mouse=0.0, best_shift_human_minus_mouse_unregistered=0.0,
+        registered_shape_corr=0.95, registered_shape_corr_unregistered=0.95,
+        shift_improvement=0.01, shift_improvement_unregistered=0.01,
+        shape_corr=0.9, mouse_reproducibility=0.8, human_reproducibility=0.8,
+        mouse_early_to_late=0.3, human_early_to_late=0.3,
+        detected_in_both_species=True, technical_gene=False, axis_basis_gene=False,
+        enough_shared_support=True,
+        **{f"amplitude__{sample}": 0.4 for sample in mouse_samples + human_samples},
+    )
+
+    def gene(**overrides):
+        row = dict(reference)
+        row.update(overrides)
+        return row
+
+    synthetic = {
+        "expected conserved": (gene(), "conserved zonation"),
+        "expected weaker in human": (
+            gene(human_amplitude=0.1, amplitude_log2_ratio_human_over_mouse=-2.0),
+            "weaker zonation in human"),
+        "expected stronger in human": (
+            gene(human_amplitude=0.8, amplitude_log2_ratio_human_over_mouse=1.0),
+            "stronger zonation in human"),
+        "expected mouse-zonated / human-flat": (
+            gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
+                 registered_shape_corr=0.2,
+                 **{f"amplitude__{sample}": 0.03 for sample in human_samples}),
+            "mouse-zonated / human-flat"),
+        "expected human-zonated / mouse-flat": (
+            gene(mouse_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=3.7, shape_corr=0.1,
+                 registered_shape_corr=0.2,
+                 **{f"amplitude__{sample}": 0.03 for sample in mouse_samples}),
+            "human-zonated / mouse-flat"),
+        "expected shifted later": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
+                 best_shift_human_minus_mouse_unregistered=0.14, registered_shape_corr=0.93,
+                 registered_shape_corr_unregistered=0.92, shift_improvement=0.4,
+                 shift_improvement_unregistered=0.35),
+            "shifted later in human"),
+        "expected shifted earlier": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=-0.15,
+                 best_shift_human_minus_mouse_unregistered=-0.14, registered_shape_corr=0.93,
+                 registered_shape_corr_unregistered=0.92, shift_improvement=0.4,
+                 shift_improvement_unregistered=0.35),
+            "shifted earlier in human"),
+        "shift on one coordinate only stays complex": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
+                 best_shift_human_minus_mouse_unregistered=0.0, registered_shape_corr=0.93,
+                 registered_shape_corr_unregistered=0.95, shift_improvement=0.4,
+                 shift_improvement_unregistered=0.01),
+            "complex shape rewiring"),
+        "expected gradient inversion": (
+            gene(shape_corr=-0.8, mouse_early_to_late=0.4, human_early_to_late=-0.4),
+            "gradient inversion"),
+        "expected complex rewiring": (
+            gene(shape_corr=0.1, registered_shape_corr=0.3), "complex shape rewiring"),
+        "flat in both species": (
+            gene(mouse_amplitude=0.02, human_amplitude=0.02, shape_corr=np.nan,
+                 **{f"amplitude__{sample}": 0.02 for sample in mouse_samples + human_samples}),
+            "weak / uncertain zonation"),
+        "flat in one human slice only is not human-flat": (
+            gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
+                 registered_shape_corr=0.2, human_reproducibility=np.nan,
+                 **{f"amplitude__{human_samples[0]}": 0.5,
+                    f"amplitude__{human_samples[-1]}": 0.02}),
+            "weak / uncertain zonation"),
+        "axis-basis gene": (gene(axis_basis_gene=True), "excluded"),
+        "technical gene": (gene(technical_gene=True), "excluded"),
+        "not measured in both inputs": (gene(detected_in_both_species=False), "excluded"),
+        "too little shared support": (gene(enough_shared_support=False), "weak / uncertain zonation"),
+    }
+
+    frame = pd.DataFrame({name: row for name, (row, _) in synthetic.items()}).T
+    frame = frame.reset_index().rename(columns={"index": "gene"})
+    for column in frame.columns:
+        if column == "gene":
+            continue
+        frame[column] = frame[column].astype(float)
+
+    for flag in ("detected_in_both_species", "technical_gene", "axis_basis_gene",
+                 "enough_shared_support"):
+        frame[flag] = frame[flag].astype(bool)
+
+    flags = _phenotype_flags(frame, CONFIG)
+    assigned = pd.Series(_assign_phenotypes(flags), index=frame["gene"])
+
+    outcome = pd.DataFrame({
+        "synthetic_case": list(synthetic),
+        "expected_class": [expected for _, expected in synthetic.values()],
+        "assigned_class": [str(assigned[name]) for name in synthetic],
+    })
+    outcome["passed"] = outcome["expected_class"] == outcome["assigned_class"]
+    return outcome
+
+
+phenotype_selfcheck = _phenotype_selfcheck()
+display(phenotype_selfcheck)
+
+if not phenotype_selfcheck["passed"].all():
+    failed = phenotype_selfcheck.loc[~phenotype_selfcheck["passed"], "synthetic_case"].tolist()
+    raise AssertionError(f"synthetic phenotype self-check failed for: {failed}")
+
+print(f"All {len(phenotype_selfcheck)} synthetic phenotype self-checks passed.")
 
 
 # %% [markdown]

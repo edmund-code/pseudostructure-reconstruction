@@ -3079,6 +3079,8 @@ else:
 # **How the panels are built.** Members are ordered by positional centroid, each gene's curve is z-scored
 # within each species, mouse and human blocks are drawn next to each other on the same gene order, and
 # every gene row is annotated with its own spatial phenotype. Rows are genes, never samples.
+# The candidate themes are shown first, then the strongest non-redundant enrichment findings
+# overall in the same layout, so a pathway outside the theme list can still appear.
 #
 
 # %%
@@ -3158,6 +3160,18 @@ for theme in plotted_themes:
     selected = members[:MAX_MEMBERS_PER_THEME]
     height_ratios.append(max(len(selected), 3))
 
+def _ordered_member_blocks(members, limit):
+    """Limit members, order them by human positional centroid, and z-score each species' block.
+
+    Shared by the candidate-theme panels and the strongest-findings panels so the two figures cannot
+    drift apart in ordering, scaling or colour limits.
+    """
+    selected = np.asarray(members[:limit], dtype=int)
+    centroids = _row_weighted_centroid(human_registered[selected], grid_unit)
+    ordered = selected[np.argsort(np.nan_to_num(centroids, nan=1.0))]
+    return ordered, _row_zscore(balanced_mouse[ordered]), _row_zscore(human_registered[ordered])
+
+
 if not plotted_themes:
     print("No candidate theme matched a pathway in the membership file: the panel figure is skipped.")
 else:
@@ -3170,14 +3184,9 @@ else:
 
     for row_index, theme in enumerate(plotted_themes):
         selection = theme_selections[theme]
-        members = selection["members"][:MAX_MEMBERS_PER_THEME]
-
-        human_centroid = _row_weighted_centroid(human_registered[members], grid_unit)
-        order = np.argsort(np.nan_to_num(human_centroid, nan=1.0))
-        ordered = np.asarray(members)[order]
-
-        mouse_block = _row_zscore(balanced_mouse[ordered])
-        human_block = _row_zscore(human_registered[ordered])
+        ordered, mouse_block, human_block = _ordered_member_blocks(
+            selection["members"], MAX_MEMBERS_PER_THEME
+        )
 
         for column_index, (block, title) in enumerate([
             (mouse_block, "mouse"), (human_block, "human (registered)"),
@@ -3225,6 +3234,115 @@ else:
     plt.show()
 
 
+# %%
+# Purpose: the same panels for the strongest pathway findings overall, not only the candidate themes.
+
+STRONGEST_PATHWAYS_TO_PLOT = 6
+MAX_MEMBERS_PER_STRONGEST = 20
+
+if heatmap_frame.empty:
+    print(f"No pathway x phenotype pair reached FDR < {CONFIG['enrichment_fdr']}: "
+          "the strongest-findings panels are skipped.")
+    strongest_pathway_findings = pd.DataFrame()
+else:
+    strongest_rows = (
+        heatmap_frame
+        .sort_values("fdr")
+        .drop_duplicates(subset=["pathway"])
+        .head(STRONGEST_PATHWAYS_TO_PLOT)
+        .reset_index(drop=True)
+    )
+
+    strongest_selections = []
+    for row in strongest_rows.itertuples():
+        match = membership[
+            membership["library"].eq(row.library) & membership["pathway"].eq(row.pathway)
+        ]
+        if not len(match):
+            continue
+        members = [
+            gene_lookup_tested[str(gene).upper()] for gene in match.iloc[0]["member_list"]
+            if str(gene).upper() in gene_lookup_tested
+        ]
+        if len(members) < 2:
+            continue
+        strongest_selections.append({
+            "library": row.library,
+            "pathway": row.pathway,
+            "spatial_phenotype": row.spatial_phenotype,
+            "fdr": row.fdr,
+            "fold_enrichment": row.fold_enrichment,
+            "n_members_in_universe": len(members),
+            "leading_genes": row.leading_genes,
+            "members": members,
+        })
+
+    strongest_pathway_findings = pd.DataFrame(
+        [{key: value for key, value in entry.items() if key != "members"}
+         for entry in strongest_selections]
+    )
+    display(strongest_pathway_findings.round(4))
+    _save_table(strongest_pathway_findings, "strongest_pathway_findings.csv")
+
+    if not strongest_selections:
+        print("No plottable pathway in the strongest-findings selection.")
+    else:
+        height_ratios = [max(min(len(entry["members"]), MAX_MEMBERS_PER_STRONGEST), 3)
+                         for entry in strongest_selections]
+
+        figure, axes = plt.subplots(
+            len(strongest_selections), 2,
+            figsize=(10.5, 0.30 * sum(height_ratios) + 1.6),
+            gridspec_kw={"height_ratios": height_ratios, "hspace": 0.85, "wspace": 0.05},
+        )
+        axes = np.atleast_2d(axes)
+
+        for row_index, entry in enumerate(strongest_selections):
+            ordered, mouse_block, human_block = _ordered_member_blocks(
+                entry["members"], MAX_MEMBERS_PER_STRONGEST
+            )
+
+            for column_index, (block, title) in enumerate([
+                (mouse_block, "mouse"), (human_block, "human (registered)"),
+            ]):
+                axis = axes[row_index, column_index]
+                axis.imshow(
+                    block, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
+                    extent=[0, 1, len(ordered) - 0.5, -0.5],
+                )
+                axis.set_yticks(np.arange(len(ordered)))
+                if column_index == 0:
+                    axis.set_yticklabels(
+                        [f"{gene_names[index]}  [{phenotype_by_row[index]}]" for index in ordered],
+                        fontsize=6.5,
+                    )
+                else:
+                    axis.set_yticklabels([])
+                if row_index == 0:
+                    axis.set_title(title, fontsize=9)
+                if row_index == len(strongest_selections) - 1:
+                    axis.set_xlabel("PT position (unit): early -> late", fontsize=8)
+                axis.tick_params(labelsize=7)
+
+            axes[row_index, 0].text(
+                0.01, -0.32,
+                f"{entry['library']}: {entry['pathway']}   ->   {entry['spatial_phenotype']}   "
+                f"(fold={entry['fold_enrichment']:.2f}, FDR={entry['fdr']:.3g}, "
+                f"{entry['n_members_in_universe']} members shown {len(ordered)})",
+                transform=axes[row_index, 0].transAxes, fontsize=7.5, va="top",
+            )
+
+        figure.suptitle(
+            "Strongest pathway findings along the registered coordinate\n"
+            "non-redundant terms, each gene z-scored within species and row-labelled with its own "
+            "spatial phenotype",
+            fontsize=10.5,
+        )
+        figure.tight_layout(rect=(0, 0, 1, 0.955))
+        _save_figure(figure, "strongest_pathway_spatial_heatmaps.png")
+        plt.show()
+
+
 # %% [markdown]
 # ## 10 - Conventional whole-PT signal versus continuous spatial signal
 #
@@ -3252,195 +3370,6 @@ else:
 # enriched in a spatial phenotype at family-wide FDR < `enrichment_fdr` while its conventional effect
 # sits below the median of all tested pathways. Both conditions are reported in the table.
 #
-
-# %%
-# Purpose: conventional whole-PT effect versus continuous spatial divergence, genes and pathways.
-
-conventional_level = gene_metrics["level_effect_human_minus_mouse"].abs()
-spatial_divergence = gene_metrics["spatial_discovery_score"]
-conventional_percentile = conventional_level.rank(pct=True)
-spatial_percentile = spatial_divergence.rank(pct=True)
-
-# Continuity check: 05's pseudobulk whole-PT log fold change, if that notebook has been run.
-WHOLE_PT_LOGFOLD_PATH = UPSTREAM_DIR / "gene_rewiring" / "whole_PT_gene_logFC.csv"
-
-if WHOLE_PT_LOGFOLD_PATH.exists():
-    whole_pt_logfold = pd.read_csv(WHOLE_PT_LOGFOLD_PATH)
-    continuity = gene_metrics[["gene", "level_effect_human_minus_mouse"]].merge(
-        whole_pt_logfold[["gene", "log2fc_human_vs_mouse"]], on="gene", how="inner"
-    ).dropna()
-    print(f"05's whole-PT pseudobulk log2FC vs this notebook's level effect "
-          f"({len(continuity):,} shared genes): "
-          f"spearman={spearmanr(continuity['level_effect_human_minus_mouse'], continuity['log2fc_human_vs_mouse']).correlation:.3f}")
-else:
-    print(f"{WHOLE_PT_LOGFOLD_PATH.name} not found - continuity check against 05 skipped")
-
-quadrant_frame = gene_metrics[discovery_eligible].dropna(subset=["level_effect_human_minus_mouse"]).copy()
-quadrant_frame["conventional_abs"] = quadrant_frame["level_effect_human_minus_mouse"].abs()
-conventional_median = float(np.nanmedian(conventional_level[discovery_eligible]))
-spatial_median = float(np.nanmedian(spatial_divergence[discovery_eligible]))
-
-figure, axes = plt.subplots(1, 2, figsize=(14, 5.6), width_ratios=[1.15, 1.0])
-ax_genes, ax_pathways = axes
-
-for label in ["conserved zonation", "weaker zonation in human", "stronger zonation in human",
-              "mouse-zonated / human-flat", "human-zonated / mouse-flat", "shifted earlier in human",
-              "shifted later in human", "gradient inversion", "complex shape rewiring",
-              "weak / uncertain zonation"]:
-    block = quadrant_frame[quadrant_frame["spatial_phenotype"].eq(label)]
-    if not len(block):
-        continue
-    ax_genes.scatter(
-        block["conventional_abs"], block["spatial_discovery_score"],
-        s=6, alpha=0.5, linewidths=0, color=PHENOTYPE_COLORS[label],
-        label=f"{label} (n={len(block):,})",
-    )
-
-ax_genes.axvline(conventional_median, color="black", lw=0.9, ls="--")
-ax_genes.axhline(spatial_median, color="black", lw=0.9, ls="--")
-ax_genes.set_yscale("symlog", linthresh=0.2)
-ax_genes.set_xlabel("Conventional whole-PT effect |level effect| (lognorm)")
-ax_genes.set_ylabel("Continuous spatial divergence score")
-ax_genes.set_title("Genes: conventional versus spatial signal\n"
-                   "upper-left = continuous-only biology", loc="left", fontsize=10)
-ax_genes.legend(fontsize=6.5, loc="upper right", ncol=1)
-
-for row in quadrant_frame.nlargest(6, "spatial_discovery_score").itertuples():
-    ax_genes.annotate(row.gene, (row.conventional_abs, row.spatial_discovery_score),
-                      xytext=(3, 3), textcoords="offset points", fontsize=7)
-
-quadrant_counts = pd.DataFrame([
-    {
-        "quadrant": name,
-        "n_genes": int(len(selection)),
-        "share": float(len(selection) / len(quadrant_frame)),
-    }
-    for name, selection in [
-        ("high conventional / high spatial",
-         quadrant_frame[(quadrant_frame["conventional_abs"] >= conventional_median)
-                        & (quadrant_frame["spatial_discovery_score"] >= spatial_median)]),
-        ("high conventional / low spatial",
-         quadrant_frame[(quadrant_frame["conventional_abs"] >= conventional_median)
-                        & (quadrant_frame["spatial_discovery_score"] < spatial_median)]),
-        ("low conventional / high spatial (continuous-only)",
-         quadrant_frame[(quadrant_frame["conventional_abs"] < conventional_median)
-                        & (quadrant_frame["spatial_discovery_score"] >= spatial_median)]),
-        ("low conventional / low spatial",
-         quadrant_frame[(quadrant_frame["conventional_abs"] < conventional_median)
-                        & (quadrant_frame["spatial_discovery_score"] < spatial_median)]),
-    ]
-])
-display(quadrant_counts.round(4))
-
-# --------------------------------------------------------------------------------------
-# The same comparison at pathway level.
-# --------------------------------------------------------------------------------------
-
-pathway_conventional_effect = {}
-pathway_member_stats = {}
-
-for row in pathway_tested.itertuples():
-    members = np.asarray([index for index in row.universe_members if universe_mask[index]], dtype=int)
-    if members.size == 0:
-        continue
-    label = f"{row.library}: {row.pathway}"
-    pathway_conventional_effect[label] = float(np.nanmedian(conventional_level.to_numpy()[members]))
-    pathway_member_stats[label] = {
-        "n_members_in_universe": int(members.size),
-        "median_member_abs_level_effect": float(np.nanmedian(conventional_level.to_numpy()[members])),
-        "median_member_amplitude_log2_ratio": float(np.nanmedian(
-            np.abs(gene_metrics["amplitude_log2_ratio_human_over_mouse"].to_numpy()[members]))),
-        "median_member_abs_shift": float(np.nanmedian(np.abs(
-            gene_metrics["best_shift_human_minus_mouse"].to_numpy()[members]))),
-        "median_member_shape_corr": float(np.nanmedian(
-            gene_metrics["shape_corr"].to_numpy()[members])),
-        "median_member_spatial_score": float(np.nanmedian(
-            spatial_divergence.to_numpy()[members])),
-    }
-
-conventional_pathway_ranks = pd.Series(pathway_conventional_effect).rank(pct=True)
-
-pathway_spatial_rewiring_summary = pd.DataFrame([
-    {
-        "library": row.library,
-        "pathway": row.pathway,
-        "spatial_phenotype": row.spatial_phenotype,
-        "fold_enrichment": row.fold_enrichment,
-        "fdr": row.fdr,
-        "leading_genes": row.leading_genes,
-        "conventional_effect": pathway_conventional_effect.get(f"{row.library}: {row.pathway}", np.nan),
-        "conventional_percentile": conventional_pathway_ranks.get(f"{row.library}: {row.pathway}", np.nan),
-        **pathway_member_stats.get(f"{row.library}: {row.pathway}", {}),
-    }
-    for row in pathway_enrichment.itertuples()
-]).sort_values(["fdr", "fold_enrichment"], ascending=[True, False]).reset_index(drop=True)
-
-_save_table(pathway_spatial_rewiring_summary, "pathway_spatial_rewiring_summary.csv")
-
-significant_pathways = pathway_spatial_rewiring_summary[
-    pathway_spatial_rewiring_summary["fdr"] < CONFIG["enrichment_fdr"]
-].copy()
-
-best_per_pathway = (
-    significant_pathways
-    .sort_values("fdr")
-    .groupby(["library", "pathway"], as_index=False)
-    .first()
-)
-
-continuous_only_pathways = best_per_pathway[
-    best_per_pathway["conventional_percentile"] < 0.5
-].sort_values("fdr").rename(columns={
-    "spatial_phenotype": "dominant_spatial_phenotype",
-    "fold_enrichment": "enrichment_fold_enrichment",
-    "fdr": "enrichment_fdr",
-    "median_member_amplitude_log2_ratio": "median_member_abs_amplitude_log2_ratio",
-})[[
-    "pathway", "library", "conventional_effect", "conventional_percentile",
-    "dominant_spatial_phenotype", "enrichment_fdr", "enrichment_fold_enrichment",
-    "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
-    "median_member_shape_corr", "leading_genes",
-]]
-
-_report("pathways with a significant spatial enrichment", len(best_per_pathway), len(pathway_tested))
-_report("of those, below the median conventional effect (continuous-only)",
-        len(continuous_only_pathways), len(best_per_pathway),
-        why="a level difference alone would have missed them")
-
-_save_table(continuous_only_pathways, "continuous_only_pathways.csv")
-
-# --------------------------------------------------------------------------------------
-# Pathway-level figure.
-# --------------------------------------------------------------------------------------
-
-top_conventional = best_per_pathway.nlargest(12, "conventional_effect")
-top_spatial = best_per_pathway.nlargest(12, "median_member_spatial_score")
-
-for axis, block, title, column in [
-    (ax_pathways, top_spatial, "Strongest continuous spatial signal", "median_member_spatial_score"),
-]:
-    positions = np.arange(len(block))
-    axis.barh(
-        positions, block[column], color=[
-            PHENOTYPE_COLORS.get(label, "#888888") for label in block["dominant_spatial_phenotype"]
-        ], alpha=0.9,
-    )
-    axis.set_yticks(positions)
-    axis.set_yticklabels(
-        [textwrap.fill(f"{row.pathway}", 38) for row in block.itertuples()], fontsize=7.5
-    )
-    axis.set_xlabel(column.replace("_", " "))
-    axis.set_title(f"{title}\nbar colour = dominant spatial phenotype", loc="left", fontsize=10)
-
-figure.suptitle(
-    "Figure: conventional whole-PT effect versus continuous spatial signal\n"
-    "descriptive effect sizes for this cohort (2 mouse specimens, 1 human donor)",
-    fontsize=11,
-)
-figure.tight_layout()
-_save_figure(figure, "conventional_vs_continuous_pathway_signal.png")
-plt.show()
-
 
 # %%
 # Purpose: the gene-level conventional-versus-continuous comparison and its quadrant figure.

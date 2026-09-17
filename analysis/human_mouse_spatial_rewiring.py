@@ -2575,15 +2575,33 @@ rewiring_index = np.asarray([gene_lookup_tested[str(gene).upper()] for gene in r
 _report("genes in the complex shape rewiring class", len(rewiring_genes),
         why=f"clustering runs only if there are >= {CONFIG['cluster_min_genes']}")
 
+# A flat difference curve carries no rewiring shape to cluster, and a zero-variance row would make
+# the correlation distance - and therefore the silhouette score - undefined. Such genes are reported
+# and left out rather than silently perturbing the linkage.
+if len(rewiring_genes):
+    difference_curves_all = (
+        _row_zscore(human_registered[rewiring_index]) - _row_zscore(balanced_mouse[rewiring_index])
+    )
+    difference_spread = (
+        np.nanmax(difference_curves_all, axis=1) - np.nanmin(difference_curves_all, axis=1)
+    )
+    informative_rows = np.flatnonzero(np.isfinite(difference_spread) & (difference_spread > 0))
+else:
+    difference_curves_all = np.zeros((0, grid_unit.size))
+    informative_rows = np.zeros(0, dtype=int)
+
+_report("of those, with a non-degenerate difference curve", int(informative_rows.size),
+        len(rewiring_genes), why="a flat difference curve cannot be clustered")
+
+rewiring_genes = rewiring_genes[informative_rows]
+rewiring_index = rewiring_index[informative_rows]
+difference_curves = difference_curves_all[informative_rows]
+
 if len(rewiring_genes) < CONFIG["cluster_min_genes"]:
     print("Too few genes to cluster: the section is skipped, not forced.")
     complex_rewiring_clusters = pd.DataFrame()
     complex_cluster_profiles = pd.DataFrame()
 else:
-    difference_curves = (
-        _row_zscore(human_registered[rewiring_index]) - _row_zscore(balanced_mouse[rewiring_index])
-    )
-
     n_components = int(min(10, difference_curves.shape[0] - 1, difference_curves.shape[1] - 1))
     pca = PCA(n_components=n_components, random_state=CONFIG["cluster_seed"])
     component_scores = pca.transform(difference_curves)

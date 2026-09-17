@@ -3005,25 +3005,40 @@ phase_frame = gene_metrics[discovery_eligible].dropna(
 figure, axes = plt.subplots(1, 3, figsize=(16, 5.2), width_ratios=[1.0, 1.0, 1.15])
 ax_raw_registered, ax_shift_residual, ax_summary = axes
 
-# Panel 1: does a bounded displacement rescue the agreement?
+# Panel 1: does a bounded displacement *explain* the difference?
+#
+# Translation almost always improves the correlation somewhat, so an improvement is not evidence of a
+# displacement and must not be drawn as one. Orange marks only genes whose displacement meets every
+# phase criterion - the classification the notebook actually reports - and the merely-improved cloud
+# stays grey. The visual message then supports the result rather than contradicting it: clean shifts
+# are rare.
 ax_raw_registered.plot([-1, 1], [-1, 1], color="0.5", lw=1, ls=":", label="no change from shifting")
 ax_raw_registered.scatter(
     phase_frame["shape_corr"], phase_frame["post_shift_shape_corr"],
     s=6, alpha=0.45, linewidths=0, color="#666666",
+    label=f"all genes with a usable pattern (n={len(phase_frame):,})",
 )
-rescued = phase_frame[phase_frame["shift_improvement"] >= CONFIG["shift_improvement"]]
+improved = phase_frame[phase_frame["shift_improvement"] >= CONFIG["shift_improvement"]]
 ax_raw_registered.scatter(
-    rescued["shape_corr"], rescued["post_shift_shape_corr"],
-    s=9, alpha=0.8, linewidths=0, color=PHENOTYPE_COLORS["shifted later in human"],
+    improved["shape_corr"], improved["post_shift_shape_corr"],
+    s=6, alpha=0.30, linewidths=0, color="0.55",
+    label=f"correlation improves after translation (n={len(improved):,})",
 )
-ax_raw_registered.set_xlabel("Standardised curve correlation (registered axis)")
+phase_usable = phase_frame[phase_frame["shift_usable"]]
+ax_raw_registered.scatter(
+    phase_usable["shape_corr"], phase_usable["post_shift_shape_corr"],
+    s=26, alpha=0.95, linewidths=0, color=PHENOTYPE_COLORS["shifted later in human"],
+    label=f"every phase criterion met (n={len(phase_usable):,})",
+)
+ax_raw_registered.set_xlabel("Standardised curve correlation (shared PT DPT)")
 ax_raw_registered.set_ylabel(
     f"Best correlation after displacement\n(|shift| <= {SHIFT_INTERIOR_LIMIT:.2f} of PT)"
 )
-ax_raw_registered.set_title("Phase: a bounded displacement explains the difference\n"
-                            f"orange = improvement >= {CONFIG['shift_improvement']} "
-                            f"(n={len(rescued):,} of {len(phase_frame):,})", loc="left", fontsize=10)
-ax_raw_registered.legend(loc="upper left")
+ax_raw_registered.set_title("Phase: does a bounded displacement explain the difference?\n"
+                            "an improvement is not a rescue: orange = interior optimum, sufficient "
+                            "agreement, centroid corroboration and the alternate axis all pass",
+                            loc="left", fontsize=9.5)
+ax_raw_registered.legend(loc="upper left", fontsize=7)
 
 # Panel 2: displacement against what is left after it.
 for label in ["shifted earlier in human", "shifted later in human", "gradient inversion",
@@ -3149,7 +3164,7 @@ for row_index, label in enumerate(REPRESENTATIVE_CLASSES):
 axes[0, 0].legend(
     handles=[
         Line2D([], [], color=SPECIES_COLORS["mouse"], lw=1.9, label="mouse (balanced)"),
-        Line2D([], [], color=SPECIES_COLORS["human"], lw=1.9, ls="--", label="human (registered)"),
+        Line2D([], [], color=SPECIES_COLORS["human"], lw=1.9, ls="--", label="human (balanced)"),
         Line2D([], [], color="0.6", lw=0.8, ls=":", label="individual specimen/slice"),
     ], loc="upper right", fontsize=7,
 )
@@ -4228,7 +4243,7 @@ else:
         )
 
         for column_index, (block, title) in enumerate([
-            (mouse_block, "mouse"), (human_block, "human (registered)"),
+            (mouse_block, "mouse"), (human_block, "human"),
         ]):
             axis = axes[row_index, column_index]
             image = axis.imshow(
@@ -4263,7 +4278,7 @@ else:
         )
 
     figure.suptitle(
-        "Candidate pathway themes along the registered coordinate\n"
+        "Candidate pathway themes along the shared PT DPT\n"
         "primary coordinate (shared PT DPT); each gene z-scored within species; "
     "rows ordered by human positional centroid; "
         "row labels give the gene's spatial phenotype",
@@ -4343,7 +4358,7 @@ else:
             )
 
             for column_index, (block, title) in enumerate([
-                (mouse_block, "mouse"), (human_block, "human (registered)"),
+                (mouse_block, "mouse"), (human_block, "human"),
             ]):
                 axis = axes[row_index, column_index]
                 axis.imshow(
@@ -4373,7 +4388,7 @@ else:
             )
 
         figure.suptitle(
-            "Strongest pathway findings along the registered coordinate\n"
+            "Strongest pathway findings along the shared PT DPT\n"
             "non-redundant terms, each gene z-scored within species and row-labelled with its own "
             "spatial phenotype",
             fontsize=10.5,
@@ -4433,8 +4448,11 @@ else:
 # not the median absolute level effect of a pathway's members - that is a descriptive member statistic,
 # not how a whole-PT study tests a pathway. The comparator is a **whole-PT preranked GSEA on the
 # level-effect ranking**, so the spatial result is compared against the analysis a conventional paper
-# would actually run, and `continuous_only_pathways.csv` lists what is spatially significant while
-# escaping it. If that list comes out empty or nearly so, the honest reading is that conventional
+# would actually run. `spatially_only_pathways.csv` lists what is spatially significant while not
+# reaching significance there - and the name matters, because "spatially only" does **not** mean
+# "conventionally weak": these pathways can carry large absolute member level effects. What the
+# whole-PT GSEA lacks is a *coherent direction*, since reorganising a pathway along PT moves its
+# genes different ways and their whole-PT shifts cancel. If that list comes out empty or nearly so, the honest reading is that conventional
 # analysis already reports these programmes as different at the level of whole-PT expression, and the
 # continuous framework's contribution is *how* they differ - zonation gain or loss, displacement,
 # gradient reversal, trajectory rewiring - rather than *that* they differ.
@@ -4443,9 +4461,10 @@ else:
 # a species-wide test would not be calibrated. The quadrant counts and pathway table are effect-size
 # statements that hold for this cohort.
 #
-# **What counts as evidence.** For a pathway to count as *continuous-only*, its member genes must be
-# enriched in a spatial phenotype at family-wide FDR < `enrichment_fdr` while its conventional effect
-# sits below the median of all tested pathways. Both conditions are reported in the table.
+# **What counts as evidence, at pathway level.** A pathway is *spatially only* when its member genes are
+# enriched in a spatial phenotype at family-wide FDR < `enrichment_fdr` **and** the conventional
+# whole-PT GSEA does not reach that threshold for it. Both results are reported in the table, so the
+# selection can be checked rather than trusted.
 #
 
 # %%
@@ -4570,9 +4589,8 @@ plt.show()
 
 
 # %%
-# Purpose: the pathway-level continuous-only table and its figure.
+# Purpose: the pathway-level spatially-only table, and the conventional comparator.
 
-pathway_conventional_effect = {}
 pathway_member_stats = {}
 
 for row in pathway_tested.itertuples():
@@ -4581,7 +4599,6 @@ for row in pathway_tested.itertuples():
         continue
 
     label = f"{row.library}: {row.pathway}"
-    pathway_conventional_effect[label] = float(np.nanmedian(conventional_level.to_numpy()[members]))
     pathway_member_stats[label] = {
         "n_members_in_universe": int(members.size),
         "median_member_abs_level_effect": float(np.nanmedian(conventional_level.to_numpy()[members])),
@@ -4594,8 +4611,6 @@ for row in pathway_tested.itertuples():
         "median_member_spatial_score": float(np.nanmedian(
             spatial_divergence.to_numpy()[members])),
     }
-
-conventional_pathway_ranks = pd.Series(pathway_conventional_effect).rank(pct=True)
 
 # --------------------------------------------------------------------------------------
 # The fair conventional comparator: a whole-PT preranked GSEA on the *level effect*.
@@ -4667,7 +4682,7 @@ conventional_by_pathway = {
 
 summary_columns = [
     "library", "pathway", "spatial_phenotype", "fold_enrichment", "fdr", "leading_genes",
-    "conventional_effect", "conventional_percentile", "n_members_in_universe",
+    "n_members_in_universe",
     "median_member_abs_level_effect", "median_member_amplitude_log2_ratio",
     "median_member_abs_shift", "median_member_shape_corr", "median_member_spatial_score",
     "member_fraction_in_phenotype", "member_consistency",
@@ -4682,8 +4697,6 @@ pathway_spatial_rewiring_summary = pd.DataFrame([
         "fold_enrichment": row.fold_enrichment,
         "fdr": row.fdr,
         "leading_genes": row.leading_genes,
-        "conventional_effect": pathway_conventional_effect.get(f"{row.library}: {row.pathway}", np.nan),
-        "conventional_percentile": conventional_pathway_ranks.get(f"{row.library}: {row.pathway}", np.nan),
         # Coherence travels with the association: "enriched for genes classified as X" is the claim,
         # and these columns say how much of the pathway that is.
         "member_fraction_in_phenotype": row.member_fraction_in_phenotype,
@@ -4727,7 +4740,7 @@ else:
 # Spatially significant but *not* conventionally significant, on the fair comparator. If this set is
 # empty, that is the result: the conventional level analysis already ranks these pathways, and the
 # continuous framework's contribution is how they differ rather than that they differ.
-continuous_only_pathways = best_per_pathway[
+spatially_only_pathways = best_per_pathway[
     best_per_pathway["conventional_gsea_fdr"].isna()
     | best_per_pathway["conventional_gsea_fdr"].ge(CONFIG["enrichment_fdr"])
 ].sort_values("fdr").rename(columns={
@@ -4737,9 +4750,11 @@ continuous_only_pathways = best_per_pathway[
     "median_member_amplitude_log2_ratio": "median_member_abs_amplitude_log2_ratio",
 })[[
     # The conventional comparator's own result travels with each row, so a reader can see the NES and
-    # FDR that made it "continuous-only" rather than taking the selection on trust.
+    # FDR that the selection was made on rather than taking it on trust. Note what "spatially only"
+    # does *not* mean: these pathways can carry large absolute member level effects. What the whole-PT
+    # GSEA lacks is a coherent directional signal, which is exactly what reorganisation along PT
+    # produces - the genes move in different directions, so their whole-PT shifts cancel.
     "pathway", "library", "conventional_gsea_nes", "conventional_gsea_fdr",
-    "conventional_effect", "conventional_percentile",
     "dominant_spatial_phenotype", "enrichment_fdr", "enrichment_fold_enrichment",
     "member_fraction_in_phenotype", "member_consistency",
     "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
@@ -4747,16 +4762,15 @@ continuous_only_pathways = best_per_pathway[
 ]]
 
 _report("pathways with a significant spatial enrichment", len(best_per_pathway), len(pathway_tested))
-_report("of those, NOT conventionally significant (continuous-only)",
-        len(continuous_only_pathways), len(best_per_pathway),
-        why="spatially significant but unranked by the whole-PT level-effect GSEA")
-if continuous_only_pathways.empty:
-    print("  no pathway is spatially significant while escaping the conventional GSEA: the "
-          "conventional analysis already ranks these programmes by whole-PT level, so the continuous "
-          "framework's contribution here is *how* they differ (zonation change, displacement, shape), "
-          "not that they differ.")
+_report("of those, not significant in the conventional whole-PT GSEA (spatially only)",
+        len(spatially_only_pathways), len(best_per_pathway),
+        why="the whole-PT level-effect GSEA finds no coherent direction for them")
+if spatially_only_pathways.empty:
+    print("  every spatially significant pathway also reaches significance in the conventional "
+          "whole-PT GSEA, so the continuous framework's contribution for them is *how* they differ "
+          "(zonation change, displacement, shape) rather than *that* they differ.")
 
-_save_table(continuous_only_pathways, "continuous_only_pathways.csv")
+_save_table(spatially_only_pathways, "spatially_only_pathways.csv")
 
 comparator = best_per_pathway.dropna(subset=["conventional_gsea_nes"])
 
@@ -5110,6 +5124,14 @@ plt.show()
 # (`VCAM1`, `DCDC2`, `HAVCR1`, `SPP1`, `PROM1`, `VIM`, `S100A6`, `ANXA4`) and the project's own
 # `celltyping/epithelial_stress_marker_profiles.csv` panel.
 #
+# **What this section is for, and what it is not.** The discovery notebook's job ends with the results
+# above; the validation that would turn them into a biological claim happens outside it. The concrete
+# target, once an independent anatomically-resolved dataset is available: do the member genes of the
+# strongest pathway candidates - branched-chain amino-acid degradation and fatty-acid metabolism among
+# the complex-rewired, and the PPAR and oxidative-phosphorylation subsets among the inverted - reproduce
+# their early-to-late human/mouse relationships there? That is a question about genes in external data,
+# not more statistics in this notebook, so no further enrichment modelling is added here.
+#
 # **The decision taken.** Rather than present a handful of marker genes as if it were a signature, the
 # markers are registered here as an explicit, auditable list and the scoring is deferred until a
 # published signature is available or the panel is reviewed. The cell below records the list and reports
@@ -5162,9 +5184,12 @@ else:
 _report("literature markers present in the tested universe",
         int(literature_audit["present_in_tested_universe"].sum()), len(literature_audit),
         why="a signature cannot be scored on genes the object does not carry")
-print("Section 12 scoring is deferred: no published supplementary signature is stored in this "
-      "repository. When one is available, it is scored here along the registered coordinate and "
-      "compared with the phenotype assignments above - never used to create them.")
+print("Section 12 scoring is deferred. No published supplementary signature is stored in this "
+      "repository, and the validation that matters next is external rather than statistical: the "
+      "member genes of the strongest pathway candidates (BCAA degradation, fatty-acid metabolism, "
+      "and the PPAR / OXPHOS subsets) checked against an independent anatomically-resolved dataset.")
+print("When a signature does become available it is scored along the primary coordinate and compared "
+      "with the phenotype assignments above - never used to create them.")
 
 
 # %% [markdown]
@@ -5420,13 +5445,19 @@ for row in divergent_enrichment.sort_values("divergent_fdr").head(8).itertuples(
     summary_lines.append(f"  {row.pathway} [{row.library}] -> {row.dominant_divergent_phenotype} "
                          f"fold={row.divergent_fold_enrichment:.2f} FDR={row.divergent_fdr:.3g}")
 summary_lines.append("")
-summary_lines.append("Continuous-only signal (significant spatial enrichment, conventional effect "
-                     "below the pathway median):")
-summary_lines.append(f"  {len(continuous_only_pathways):,} pathways")
-for row in continuous_only_pathways.head(8).itertuples():
-    summary_lines.append(f"  {row.pathway} [{row.library}] -> {row.dominant_spatial_phenotype} "
-                         f"FDR={row.enrichment_fdr:.3g} conventional percentile "
-                         f"{row.conventional_percentile:.2f}")
+summary_lines.append("Spatially significant, conventional-GSEA non-significant pathways:")
+summary_lines.append(f"  {len(spatially_only_pathways):,} of {len(best_per_pathway):,} spatially "
+                     "significant pathways are not significant in the whole-PT level-effect GSEA")
+for row in spatially_only_pathways.head(8).itertuples():
+    summary_lines.append(
+        f"  {row.pathway} [{row.library}] -> {row.dominant_spatial_phenotype} "
+        f"spatial FDR={row.enrichment_fdr:.3g}, conventional GSEA NES={row.conventional_gsea_nes:+.2f} "
+        f"(FDR {row.conventional_gsea_fdr:.2g}), members {row.member_fraction_in_phenotype:.0%} in "
+        f"phenotype"
+    )
+summary_lines.append("  (these pathways can carry large absolute member level effects; what the "
+                     "whole-PT GSEA lacks is a coherent direction, which reorganisation along PT "
+                     "produces)")
 summary_lines.append("")
 summary_lines.append("Caveats: two mouse specimens and two human slices from ONE donor; no "
                      "population-level species inference is reported; species is confounded with "

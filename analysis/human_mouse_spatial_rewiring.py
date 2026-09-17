@@ -218,7 +218,8 @@ CONFIG = {
     "spatial_strong_robustness": 0.8,
 
     # --- conserved-architecture null ------------------------------------------------------
-    "null_permutations": 200,
+    "null_permutations": 5000,          # this test is cheap; 200 was too few for a stable p
+
     "null_seed": 0,
     "null_min_genes": 50,                  # below this the conservation question is not answerable
 
@@ -228,13 +229,13 @@ CONFIG = {
     "enrichment_fdr": 0.05,
     "enrichment_min_members_flagged": 3,
 
-    # A pathway-level label needs coherence, not just over-representation: enrichment says the
-    # phenotype is commoner among the members than in the background, coherence asks whether the
-    # pathway as a whole behaves that way. Without it, "5 of 82 members are conserved" becomes "this
-    # pathway is a conserved programme".
-    "pathway_coherence_min_fraction": 0.15,          # members holding the phenotype
-    "pathway_coherence_max_median_amplitude_log2": 1.0,
-    "pathway_coherence_min_median_shape_corr": 0.0,
+    # A pathway-level label needs member consistency, not just over-representation: enrichment says
+    # the phenotype is commoner among the members than in the background; consistency asks whether the
+    # members behave that way overall. Without it, "5 of 82 members are conserved" becomes "this
+    # pathway is a conserved programme". The behavioural test is phenotype-specific, because a
+    # negative median shape correlation is the *expected* signature of inversion or complex rewiring.
+    "pathway_consistency_min_fraction": 0.15,             # share of members holding the phenotype
+    "pathway_consistency_min_median_shape_corr": 0.0,     # only applied to conserved zonation
     # Only near-duplicate sets are collapsed: a lenient threshold reduces 1,511 pathways to a handful
     # of groups and hides the associations the section exists to report.
     "pathway_redundancy_overlap": 0.85,
@@ -2563,6 +2564,13 @@ _report("discovery-eligible genes robust under >= 80% of variants",
 # against the null's spread. A conserved architecture at the level of *whole pathways* is a much weaker
 # claim than this, and this test deliberately stays at the level of individual curves.
 #
+# **How to read the result.** The claim this test supports is narrow and should be stated that way:
+# ortholog identity preserves PT positional information **above** what random pairing, or pairing within
+# the same broad PT territory, would give - but the absolute concordance is modest and heterogeneous
+# across genes, not a demonstration that mouse and human PT trajectories are near-identical. Report the
+# observed statistic, both nulls and the effect size together; "conserved architecture" without the
+# numbers overstates it.
+#
 # **Limits.** The null presumes gene exchangeability within the patterned set: it does not model the
 # possibility that a few strong genes drive the median, so the per-gene distribution is shown in the
 # figure rather than summarised only by its median. It is also strictly a statement about this cohort -
@@ -2613,38 +2621,53 @@ else:
                                             nan_policy="omit").correlation)
     observed_centroid_shift = float(np.nanmedian(np.abs(human_centroids - mouse_centroids)))
 
-    # The null breaks the ortholog pairing and nothing else: the human curves (and centroids) are
-    # permuted across genes, so each species keeps its own distribution of shapes and positions.
+    # Two nulls. The exchangeable one breaks the ortholog pairing across the whole set - which mouse
+    # curve belongs with which human curve - and nothing else. The *stratified* one permutes human
+    # identities only within mouse-centroid terciles, so the question becomes "do orthologs match
+    # better than genes that already occupy roughly the same PT territory", which is a much harder bar
+    # for a positional claim (and the one a reviewer will ask for).
+    mouse_tertile_edges = np.nanquantile(mouse_centroids, [1.0 / 3.0, 2.0 / 3.0])
+    mouse_tertiles = np.digitize(mouse_centroids, mouse_tertile_edges)
+    tertile_rows = [np.flatnonzero(mouse_tertiles == level)
+                    for level in np.unique(mouse_tertiles)]
+
+    null_kinds = ["exchangeable", "stratified within mouse-centroid tertiles"]
     null_rng = np.random.default_rng(CONFIG["null_seed"])
-    null_curve_correlations = np.empty(CONFIG["null_permutations"])
-    null_centroid_rhos = np.empty(CONFIG["null_permutations"])
+    null_curve = {kind: np.empty(CONFIG["null_permutations"]) for kind in null_kinds}
+    null_centroid = {kind: np.empty(CONFIG["null_permutations"]) for kind in null_kinds}
 
     for permutation in range(CONFIG["null_permutations"]):
-        order = null_rng.permutation(architecture_index.size)
-        null_curve_correlations[permutation] = _matched_median_correlation(human_z_architecture[order])
-        null_centroid_rhos[permutation] = float(spearmanr(mouse_centroids, human_centroids[order],
-                                                          nan_policy="omit").correlation)
+        orders = {"exchangeable": null_rng.permutation(architecture_index.size)}
+        stratified = np.arange(architecture_index.size)
+        for rows in tertile_rows:
+            stratified[rows] = rows[null_rng.permutation(rows.size)]
+        orders[null_kinds[1]] = stratified
+
+        for kind, order in orders.items():
+            null_curve[kind][permutation] = _matched_median_correlation(human_z_architecture[order])
+            null_centroid[kind][permutation] = float(spearmanr(
+                mouse_centroids, human_centroids[order], nan_policy="omit").correlation)
 
     def _empirical_p(observed, null):
         return float((1 + int((null >= observed).sum())) / (1 + null.size))
 
     architecture_null = pd.DataFrame([
         {
-            "statistic": "median matched human-mouse curve correlation (standardised)",
-            "observed": observed_curve_correlation,
-            "null_median": float(np.median(null_curve_correlations)),
-            "null_sd": float(np.std(null_curve_correlations)),
-            "observed_minus_null_median": observed_curve_correlation - float(np.median(null_curve_correlations)),
-            "empirical_p": _empirical_p(observed_curve_correlation, null_curve_correlations),
-        },
-        {
-            "statistic": "mouse-human positional centroid rank correlation",
-            "observed": observed_centroid_rho,
-            "null_median": float(np.median(null_centroid_rhos)),
-            "null_sd": float(np.std(null_centroid_rhos)),
-            "observed_minus_null_median": observed_centroid_rho - float(np.median(null_centroid_rhos)),
-            "empirical_p": _empirical_p(observed_centroid_rho, null_centroid_rhos),
-        },
+            "statistic": statistic,
+            "null": kind,
+            "observed": observed,
+            "null_median": float(np.median(null_values)),
+            "null_sd": float(np.std(null_values)),
+            "observed_minus_null_median": observed - float(np.median(null_values)),
+            "empirical_p": _empirical_p(observed, null_values),
+        }
+        for statistic, observed, nulls in [
+            ("median matched human-mouse curve correlation (standardised)",
+             observed_curve_correlation, null_curve),
+            ("mouse-human positional centroid rank correlation",
+             observed_centroid_rho, null_centroid),
+        ]
+        for kind, null_values in nulls.items()
     ])
     architecture_null.insert(0, "n_genes", architecture_index.size)
     architecture_null["n_permutations"] = CONFIG["null_permutations"]
@@ -2655,40 +2678,48 @@ else:
 
     figure, axes = plt.subplots(1, 3, figsize=(15, 4.6))
 
-    axes[0].hist(null_curve_correlations, bins=30, color="0.75",
-                 label=f"null (n={CONFIG['null_permutations']} permutations)")
+    for kind, colour in zip(null_kinds, ["0.75", "0.45"]):
+        axes[0].hist(null_curve[kind], bins=30, color=colour, alpha=0.9,
+                     label=f"{kind} (n={CONFIG['null_permutations']})")
     axes[0].axvline(observed_curve_correlation, color=PHENOTYPE_COLORS["conserved zonation"], lw=2.2,
-                    label=f"observed {observed_curve_correlation:.2f}")
+                    label=f"observed {observed_curve_correlation:.3f}")
     axes[0].set_xlabel("Median matched curve correlation")
     axes[0].set_ylabel("Permutations")
-    axes[0].set_title(f"Curve shape: observed vs permuted pairing\n"
-                      f"empirical p = {_empirical_p(observed_curve_correlation, null_curve_correlations):.3g}",
-                      loc="left", fontsize=9.5)
+    axes[0].set_title("Curve shape: observed vs both nulls\n"
+                      f"p = {_empirical_p(observed_curve_correlation, null_curve[null_kinds[0]]):.3g} "
+                      "(exchangeable), "
+                      f"{_empirical_p(observed_curve_correlation, null_curve[null_kinds[1]]):.3g} "
+                      "(stratified)",
+                      loc="left", fontsize=9)
     axes[0].legend(fontsize=7)
 
-    axes[1].hist(null_centroid_rhos, bins=30, color="0.75")
+    for kind, colour in zip(null_kinds, ["0.75", "0.45"]):
+        axes[1].hist(null_centroid[kind], bins=30, color=colour, alpha=0.9, label=kind)
     axes[1].axvline(observed_centroid_rho, color=PHENOTYPE_COLORS["human-zonated / mouse-flat"], lw=2.2,
-                    label=f"observed {observed_centroid_rho:.2f}")
+                    label=f"observed {observed_centroid_rho:.3f}")
     axes[1].set_xlabel("Mouse-human centroid rank correlation")
     axes[1].set_ylabel("Permutations")
-    axes[1].set_title(f"Positional concordance: observed vs permuted pairing\n"
-                      f"empirical p = {_empirical_p(observed_centroid_rho, null_centroid_rhos):.3g}",
-                      loc="left", fontsize=9.5)
+    axes[1].set_title("Positional concordance: observed vs both nulls\n"
+                      f"p = {_empirical_p(observed_centroid_rho, null_centroid[null_kinds[0]]):.3g} "
+                      "(exchangeable), "
+                      f"{_empirical_p(observed_centroid_rho, null_centroid[null_kinds[1]]):.3g} "
+                      "(stratified)",
+                      loc="left", fontsize=9)
     axes[1].legend(fontsize=7)
 
     axes[2].plot([0, 1], [0, 1], color="0.7", lw=1, ls=":", label="identical position")
-    axes[2].scatter(mouse_centroids, human_centroids, s=8, alpha=0.5, linewidths=0,
-                    color="#444444")
+    axes[2].scatter(mouse_centroids, human_centroids, s=8, alpha=0.5, linewidths=0, color="#444444")
     axes[2].set_xlabel("Mouse positional centroid")
     axes[2].set_ylabel("Human positional centroid")
-    axes[2].set_title(f"Matched positions\nmedian |shift| = {observed_centroid_shift:.3f} of PT",
-                      loc="left", fontsize=9.5)
+    axes[2].set_title(f"Matched positions\nmedian |shift| = {observed_centroid_shift:.3f} of PT, "
+                      f"rank correlation {observed_centroid_rho:.3f}",
+                      loc="left", fontsize=9)
     axes[2].legend(fontsize=7)
 
     figure.suptitle(
         "Is there a conserved cross-species spatial architecture?\n"
-        f"{architecture_index.size:,} genes reproducibly patterned in both species; the null permutes "
-        "human gene identities",
+        f"{architecture_index.size:,} genes reproducibly patterned in both species; both nulls permute "
+        "human gene identities, the stratified one only within mouse-centroid tertiles",
         fontsize=10.5,
     )
     figure.tight_layout()
@@ -3523,12 +3554,14 @@ else:
 # **What counts as evidence - and what it licenses.** A fold enrichment with a family-wide FDR below
 # `enrichment_fdr` establishes that a pathway's genes are **over-represented among genes classified as**
 # that phenotype. That is not the same claim as "this pathway is a conserved/rewired programme", so each
-# association also carries a **coherence** check: the share of the pathway's tested members that hold the
-# phenotype (`member_fraction_in_phenotype`, at least `pathway_coherence_min_fraction`), and the median
-# behaviour of those members (shape correlation at least `pathway_coherence_min_median_shape_corr`,
-# absolute amplitude change at most `pathway_coherence_max_median_amplitude_log2`). A pathway that fails
-# coherence is reported as "enriched, members not globally coherent" - a real result about its member
-# genes, and not a claim about the pathway as a whole. Leading genes are named in every row so the
+# association also carries a **member-consistency** check: the share of the pathway's tested members
+# that hold the phenotype (`member_fraction_in_phenotype`, at least `pathway_consistency_min_fraction`),
+# and whether those members behave the way the phenotype claims. That behavioural test is
+# **phenotype-specific** (`member_median_shape_corr`, `member_median_amplitude_log2`,
+# `member_median_shift`): a negative median shape correlation is the expected signature of an inversion
+# or a complex rewiring, whereas a conserved-zonation pathway whose members are not shape-conserved is
+# not conserved. A pathway that fails consistency is labelled "enrichment only", which is a real result
+# about its member genes and not a claim about the pathway as a whole. Leading genes are named in every row so the
 # signal can be checked against a single strong gene. Redundant databases overlap heavily, so the companion heatmap collapses redundancy groups with 03's
 # `summarize_pathway_redundancy` - but only near-duplicate sets (overlap >= `pathway_redundancy_overlap`,
 # 0.85): a lenient threshold would reduce 1,511 pathways to a few dozen groups and hide the associations
@@ -3618,6 +3651,45 @@ pathway_tested = membership[
 ].copy()
 
 
+def _member_consistency(label, medians, config):
+    """Does this pathway's membership of a phenotype describe the pathway's members, for that phenotype?
+
+    Phenotype-specific on purpose. A single "median shape correlation >= 0" rule would mark every
+    inversion and complex-rewiring pathway inconsistent, because a negative or low median shape
+    correlation is exactly what those phenotypes *are*; conversely a conserved-zonation pathway that
+    is not shape-conserved is not conserved. So consistency means "the members behave the way this
+    phenotype claims", and what that requires differs per phenotype.
+    """
+    fraction = medians["fraction"]
+    if not np.isfinite(fraction) or fraction < config["pathway_consistency_min_fraction"]:
+        return "enrichment only (too few members hold the phenotype)"
+
+    shape = medians["shape_corr"]
+    amplitude = medians["amplitude_log2"]
+    shift = medians["shift"]
+
+    if label == "conserved zonation":
+        consistent = shape >= config["pathway_consistency_min_median_shape_corr"]
+    elif label == "weaker zonation in human":
+        consistent = np.isfinite(amplitude) and amplitude <= 0
+    elif label == "stronger zonation in human":
+        consistent = np.isfinite(amplitude) and amplitude >= 0
+    elif label == "shifted earlier in human":
+        consistent = np.isfinite(shift) and shift <= 0
+    elif label == "shifted later in human":
+        consistent = np.isfinite(shift) and shift >= 0
+    elif label == "gradient inversion":
+        consistent = np.isfinite(shape) and shape <= 0
+    elif label == "complex shape rewiring":
+        consistent = np.isfinite(shape) and shape < config["conserved_corr"]
+    elif label in {"mouse-zonated / human-flat", "human-zonated / mouse-flat"}:
+        consistent = np.isfinite(amplitude) and abs(amplitude) >= config["amplitude_change_major"]
+    else:
+        return "not assessed"
+
+    return "members consistent" if consistent else "enrichment only (members not consistent)"
+
+
 def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_frame, config,
                           member_evidence=None):
     """Upper-tail hypergeometric over-representation of each phenotype among each pathway's members.
@@ -3662,23 +3734,26 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
             # about membership; coherence is a statement about behaviour.
             fraction_in_phenotype = observed / members.size if members.size else np.nan
             if member_evidence is None:
-                member_shape_corr = member_amplitude = member_abs_shift = np.nan
-                coherence_status = "not assessed"
+                member_shape_corr = member_amplitude = member_shift = np.nan
+                member_abs_amplitude = member_abs_shift = np.nan
+                member_consistency = "not assessed"
             else:
                 member_shape_corr = float(np.nanmedian(
                     member_evidence["shape_corr"].to_numpy()[members]))
                 member_amplitude = float(np.nanmedian(
+                    member_evidence["amplitude_log2"].to_numpy()[members]))
+                member_abs_amplitude = float(np.nanmedian(
                     np.abs(member_evidence["amplitude_log2"].to_numpy()[members])))
+                member_shift = float(np.nanmedian(
+                    member_evidence["shift"].to_numpy()[members]))
                 member_abs_shift = float(np.nanmedian(
                     member_evidence["abs_shift"].to_numpy()[members]))
-                coherent = bool(
-                    np.isfinite(fraction_in_phenotype)
-                    and fraction_in_phenotype >= config["pathway_coherence_min_fraction"]
-                    and member_amplitude <= config["pathway_coherence_max_median_amplitude_log2"]
-                    and member_shape_corr >= config["pathway_coherence_min_median_shape_corr"]
-                )
-                coherence_status = ("coherent" if coherent
-                                    else "enriched, members not globally coherent")
+                member_consistency = _member_consistency(label, {
+                    "fraction": fraction_in_phenotype,
+                    "shape_corr": member_shape_corr,
+                    "amplitude_log2": member_amplitude,
+                    "shift": member_shift,
+                }, config)
 
             rows.append({
                 "library": pathway_row.library,
@@ -3693,10 +3768,12 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
                                               n_with_phenotype)),
                 "leading_genes": ";".join(gene_names[leading]),
                 "member_fraction_in_phenotype": fraction_in_phenotype,
-                "coherence_member_median_shape_corr": member_shape_corr,
-                "coherence_member_median_abs_amplitude_log2": member_amplitude,
-                "coherence_member_median_abs_shift": member_abs_shift,
-                "coherence_status": coherence_status,
+                "member_median_shape_corr": member_shape_corr,
+                "member_median_amplitude_log2": member_amplitude,
+                "member_median_abs_amplitude_log2": member_abs_amplitude,
+                "member_median_shift": member_shift,
+                "member_median_abs_shift": member_abs_shift,
+                "member_consistency": member_consistency,
             })
 
     # Declared columns matter: with no surviving pair the frame must still be addressable by name
@@ -3704,9 +3781,9 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
     return pd.DataFrame(rows, columns=[
         "library", "pathway", "spatial_phenotype", "n_pathway_members_in_universe",
         "n_universe_with_phenotype", "observed", "expected", "fold_enrichment", "p_value",
-        "leading_genes", "member_fraction_in_phenotype", "coherence_member_median_shape_corr",
-        "coherence_member_median_abs_amplitude_log2", "coherence_member_median_abs_shift",
-        "coherence_status",
+        "leading_genes", "member_fraction_in_phenotype", "member_median_shape_corr",
+        "member_median_amplitude_log2", "member_median_abs_amplitude_log2", "member_median_shift",
+        "member_median_abs_shift", "member_consistency",
     ])
 
 
@@ -3714,6 +3791,7 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
 member_evidence = pd.DataFrame({
     "shape_corr": gene_metrics["shape_corr"].to_numpy(),
     "amplitude_log2": gene_metrics["amplitude_log2_ratio_human_over_mouse"].to_numpy(),
+    "shift": gene_metrics["best_shift_human_minus_mouse"].to_numpy(),
     "abs_shift": np.abs(gene_metrics["best_shift_human_minus_mouse"].to_numpy()),
 })
 
@@ -3724,9 +3802,9 @@ enrichment_rows = _phenotype_enrichment(
 pathway_enrichment = pd.DataFrame(enrichment_rows)
 pathway_enrichment = _numeric(pathway_enrichment, [
     "n_pathway_members_in_universe", "n_universe_with_phenotype", "observed", "expected",
-    "fold_enrichment", "p_value", "member_fraction_in_phenotype",
-    "coherence_member_median_shape_corr", "coherence_member_median_abs_amplitude_log2",
-    "coherence_member_median_abs_shift",
+    "fold_enrichment", "p_value", "member_fraction_in_phenotype", "member_median_shape_corr",
+    "member_median_amplitude_log2", "member_median_abs_amplitude_log2", "member_median_shift",
+    "member_median_abs_shift",
 ])
 pathway_enrichment["fdr"] = bh_adjust(pathway_enrichment["p_value"].to_numpy())
 pathway_enrichment["minus_log10_fdr"] = -np.log10(
@@ -3830,7 +3908,7 @@ else:
     significance_scale = float(significant_associations["minus_log10_fdr"].max())
     for row_index, pathway_label in enumerate(row_order):
         block = significant_associations[significant_associations["pathway_label"].eq(pathway_label)]
-        coherence = sorted(set(block["coherence_status"]))
+        consistency = sorted(set(block["member_consistency"]))
         for entry in block.itertuples():
             x_position = phenotype_columns.index(entry.spatial_phenotype)
             axis.scatter(
@@ -3844,7 +3922,7 @@ else:
                 f"{entry.member_fraction_in_phenotype:.0%}", (x_position, row_index),
                 xytext=(0, -10), textcoords="offset points", ha="center", fontsize=6.5,
             )
-        axis.text(-0.02, row_index, "  ".join(coherence), transform=axis.get_yaxis_transform(),
+        axis.text(-0.02, row_index, "  ".join(consistency), transform=axis.get_yaxis_transform(),
                   ha="right", va="center", fontsize=6.5, color="0.35")
 
     axis.set_xticks(np.arange(len(phenotype_columns)))
@@ -3859,7 +3937,7 @@ else:
         "Pathway genes over-represented in each spatial phenotype\n"
         "dot size = fold enrichment, colour = -log10(FDR), label = share of the pathway's tested "
         "members holding the phenotype\n"
-        "grey text = coherence (whether the members behave that way overall, not just often enough)",
+        "grey text = whether the members behave that way overall (phenotype-specific), not just often enough",
         loc="left", fontsize=9.5,
     )
     figure.tight_layout()
@@ -3886,7 +3964,7 @@ else:
         "signed_strength": row.signed_strength, "fdr": row.fdr,
         "fold_enrichment": row.fold_enrichment,
         "member_fraction_in_phenotype": row.member_fraction_in_phenotype,
-        "coherence_status": row.coherence_status,
+        "member_consistency": row.member_consistency,
         "redundancy_group": row.redundancy_group,
         "group_size": row.redundancy_group_size,
         "leading_genes": row.leading_genes,
@@ -4505,7 +4583,7 @@ summary_columns = [
     "conventional_effect", "conventional_percentile", "n_members_in_universe",
     "median_member_abs_level_effect", "median_member_amplitude_log2_ratio",
     "median_member_abs_shift", "median_member_shape_corr", "median_member_spatial_score",
-    "member_fraction_in_phenotype", "coherence_status",
+    "member_fraction_in_phenotype", "member_consistency",
 ]
 
 pathway_spatial_rewiring_summary = pd.DataFrame([
@@ -4521,7 +4599,7 @@ pathway_spatial_rewiring_summary = pd.DataFrame([
         # Coherence travels with the association: "enriched for genes classified as X" is the claim,
         # and these columns say how much of the pathway that is.
         "member_fraction_in_phenotype": row.member_fraction_in_phenotype,
-        "coherence_status": row.coherence_status,
+        "member_consistency": row.member_consistency,
         **pathway_member_stats.get(f"{row.library}: {row.pathway}", {}),
     }
     for row in pathway_enrichment.itertuples()
@@ -4535,7 +4613,7 @@ pathway_spatial_rewiring_summary = _numeric(
     pathway_spatial_rewiring_summary,
     [column for column in summary_columns
      if column not in {"library", "pathway", "spatial_phenotype", "leading_genes",
-                       "coherence_status"}],
+                       "member_consistency"}],
 )
 
 _save_table(pathway_spatial_rewiring_summary, "pathway_spatial_rewiring_summary.csv")
@@ -4620,7 +4698,7 @@ else:
 # **What counts as evidence.** A pathway whose member genes are enriched for conserved zonation at
 # family-wide FDR < `enrichment_fdr`, reported with its member count, the member fraction holding the
 # class, and the median shape correlation of its members. The language matters here: an enriched pathway
-# is "enriched for genes classified as conserved zonation" unless its members are also coherent (see
+# is "enriched for genes classified as conserved zonation" unless its members are also consistent (see
 # section 8) - a few conserved genes inside a 82-member set does not make the set a conserved programme,
 # and the table carries both the fraction and the coherence status so the distinction is visible. The
 # contrast figure puts conserved enrichment against divergent enrichment on the same axes: a pathway in
@@ -4666,8 +4744,8 @@ spatially_conserved_pathways = conserved_enrichment[
     conserved_enrichment["fdr"] < CONFIG["enrichment_fdr"]
 ][[
     "library", "pathway", "n_pathway_members_in_universe", "observed", "expected",
-    "fold_enrichment", "p_value", "fdr", "member_fraction_in_phenotype", "coherence_status",
-    "coherence_member_median_shape_corr", "coherence_member_median_abs_amplitude_log2",
+    "fold_enrichment", "p_value", "fdr", "member_fraction_in_phenotype", "member_consistency",
+    "member_median_shape_corr", "member_median_amplitude_log2",
     "median_member_shape_corr", "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
     "leading_genes",
 ]]

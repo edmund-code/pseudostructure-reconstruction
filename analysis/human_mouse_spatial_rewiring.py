@@ -55,6 +55,7 @@
 # | 3 | Level / amplitude / shape / position / phase / inversion metrics per gene |
 # | 4 | Mutually exclusive spatial phenotypes |
 # | 5 | Sensitivity of every phenotype to the analysis choices |
+# | 5b | Is there a conserved spatial architecture? Permutation null on both-species-patterned genes |
 # | 6 | Primary figures (1A–1E) |
 # | 7 | Clustering of the residual "complex shape rewiring" curves only |
 # | 8 | Pathway enrichment against the spatial phenotypes |
@@ -210,6 +211,11 @@ CONFIG = {
     "gradient_min_abs": 0.10,              # both species need an appreciable early-to-late slope
     "inversion_max_corr": 0.30,
 
+    # --- conserved-architecture null ------------------------------------------------------
+    "null_permutations": 200,
+    "null_seed": 0,
+    "null_min_genes": 50,                  # below this the conservation question is not answerable
+
     # --- pathway enrichment ---------------------------------------------------------------
     "pathway_min_members": 10,
     "pathway_max_members": 500,
@@ -255,6 +261,20 @@ ALT_COLUMNS = [f"{name}{ALT_SUFFIX}" for name in [
     "best_shift_human_minus_mouse", "registered_shape_corr", "shift_improvement",
     "centroid_shift_human_minus_mouse", "gradient_change_human_minus_mouse",
 ]]
+
+PHENOTYPE_COLORS = {
+    "conserved zonation": "#1B7837",
+    "weaker zonation in human": "#8C6BB1",
+    "stronger zonation in human": "#762A83",
+    "mouse-zonated / human-flat": "#0072B2",
+    "human-zonated / mouse-flat": "#D55E00",
+    "shifted earlier in human": "#E69F00",
+    "shifted later in human": "#9E4F00",
+    "gradient inversion": "#C2185B",
+    "complex shape rewiring": "#4D4D4D",
+    "weak / uncertain zonation": "#BDBDBD",
+    "excluded": "#E8E8E8",
+}
 
 SPECIES_COLORS = {
     "mouse": "#0072B2",
@@ -2490,6 +2510,160 @@ _report("discovery-eligible genes robust under >= 80% of variants",
 
 
 # %% [markdown]
+# ## 5b - Is there a conserved cross-species spatial architecture?
+#
+# **Why this section exists.** Everything up to here has been decomposing differences. Before describing
+# the exceptions, the analysis owes a threshold-independent answer to a prior question: *is there a
+# conserved spatial architecture at all?* The phenotype classes cannot answer it - "172 genes are
+# conserved zonation" depends on where the thresholds were put - so this section asks the question
+# directly, on the genes that are reproducibly patterned in **both** species.
+#
+# **How.** Two statistics over that set, each with a null obtained by permuting human gene identities
+# (i.e. breaking the ortholog pairing while keeping each species' own distribution of curves intact):
+# the median matched human-mouse curve correlation after within-species standardisation, and the rank
+# correlation between mouse and human positional centroids. The permutation destroys exactly the thing
+# being tested - which mouse curve belongs with which human curve - and nothing else, so it is the right
+# null for a conservation claim.
+#
+# **What counts as evidence.** An observed statistic far outside the permutation distribution, reported
+# as an empirical p-value `(1 + #{null >= observed}) / (1 + n_permutations)` and as the effect size
+# against the null's spread. A conserved architecture at the level of *whole pathways* is a much weaker
+# claim than this, and this test deliberately stays at the level of individual curves.
+#
+# **Limits.** The null presumes gene exchangeability within the patterned set: it does not model the
+# possibility that a few strong genes drive the median, so the per-gene distribution is shown in the
+# figure rather than summarised only by its median. It is also strictly a statement about this cohort -
+# two mouse specimens and one human donor - and about continuous *shape* and *position*, not about
+# levels. Positive results here license the phrase "conserved spatial architecture" for these data and
+# nothing wider.
+#
+
+# %%
+# Purpose: the conserved-architecture test - matched curve correlation and centroid concordance vs a null.
+
+architecture_mask = (
+    gene_metrics["mouse_amplitude"].ge(CONFIG["amplitude_patterned"])
+    & gene_metrics["human_amplitude"].ge(CONFIG["amplitude_patterned"])
+    & gene_metrics["mouse_reproducibility"].ge(CONFIG["within_species_corr"])
+    & gene_metrics["human_reproducibility"].ge(CONFIG["within_species_corr"])
+    & gene_metrics["enough_shared_support"]
+    & gene_metrics["detected_in_both_species"]
+    & ~gene_metrics["axis_basis_gene"]
+    & ~gene_metrics["technical_gene"]
+)
+
+architecture_index = np.flatnonzero(architecture_mask.to_numpy())
+
+_report("genes reproducibly patterned in both species", architecture_index.size, len(gene_names),
+        why="the set the conservation question is asked about; axis, technical and non-comparable genes excluded")
+
+if architecture_index.size < CONFIG["null_min_genes"]:
+    print(f"Fewer than {CONFIG['null_min_genes']} genes qualify: the conservation test is skipped "
+          "rather than run on a set too small to answer the question.")
+    architecture_null = pd.DataFrame()
+else:
+    mouse_z_architecture = _row_zscore(balanced_mouse[architecture_index])
+    human_z_architecture = _row_zscore(balanced_human[architecture_index])
+
+    def _matched_median_correlation(human_matrix):
+        """Median standardised correlation between each mouse curve and the human curve paired with it."""
+        mask = _finite_row_mask(mouse_z_architecture, human_matrix)
+        correlation = _row_pearson(mouse_z_architecture, human_matrix, mask=mask,
+                                   min_points=CONFIG["min_pattern_grid_points"])
+        return float(np.nanmedian(correlation))
+
+    observed_curve_correlation = _matched_median_correlation(human_z_architecture)
+
+    mouse_centroids = gene_metrics["mouse_position_centroid"].to_numpy()[architecture_index]
+    human_centroids = gene_metrics["human_position_centroid"].to_numpy()[architecture_index]
+    observed_centroid_rho = float(spearmanr(mouse_centroids, human_centroids,
+                                            nan_policy="omit").correlation)
+    observed_centroid_shift = float(np.nanmedian(np.abs(human_centroids - mouse_centroids)))
+
+    # The null breaks the ortholog pairing and nothing else: the human curves (and centroids) are
+    # permuted across genes, so each species keeps its own distribution of shapes and positions.
+    null_rng = np.random.default_rng(CONFIG["null_seed"])
+    null_curve_correlations = np.empty(CONFIG["null_permutations"])
+    null_centroid_rhos = np.empty(CONFIG["null_permutations"])
+
+    for permutation in range(CONFIG["null_permutations"]):
+        order = null_rng.permutation(architecture_index.size)
+        null_curve_correlations[permutation] = _matched_median_correlation(human_z_architecture[order])
+        null_centroid_rhos[permutation] = float(spearmanr(mouse_centroids, human_centroids[order],
+                                                          nan_policy="omit").correlation)
+
+    def _empirical_p(observed, null):
+        return float((1 + int((null >= observed).sum())) / (1 + null.size))
+
+    architecture_null = pd.DataFrame([
+        {
+            "statistic": "median matched human-mouse curve correlation (standardised)",
+            "observed": observed_curve_correlation,
+            "null_median": float(np.median(null_curve_correlations)),
+            "null_sd": float(np.std(null_curve_correlations)),
+            "observed_minus_null_median": observed_curve_correlation - float(np.median(null_curve_correlations)),
+            "empirical_p": _empirical_p(observed_curve_correlation, null_curve_correlations),
+        },
+        {
+            "statistic": "mouse-human positional centroid rank correlation",
+            "observed": observed_centroid_rho,
+            "null_median": float(np.median(null_centroid_rhos)),
+            "null_sd": float(np.std(null_centroid_rhos)),
+            "observed_minus_null_median": observed_centroid_rho - float(np.median(null_centroid_rhos)),
+            "empirical_p": _empirical_p(observed_centroid_rho, null_centroid_rhos),
+        },
+    ])
+    architecture_null.insert(0, "n_genes", architecture_index.size)
+    architecture_null["n_permutations"] = CONFIG["null_permutations"]
+    architecture_null["median_abs_centroid_shift"] = observed_centroid_shift
+
+    display(architecture_null.round(4))
+    _save_table(architecture_null, "conserved_architecture_null.csv")
+
+    figure, axes = plt.subplots(1, 3, figsize=(15, 4.6))
+
+    axes[0].hist(null_curve_correlations, bins=30, color="0.75",
+                 label=f"null (n={CONFIG['null_permutations']} permutations)")
+    axes[0].axvline(observed_curve_correlation, color=PHENOTYPE_COLORS["conserved zonation"], lw=2.2,
+                    label=f"observed {observed_curve_correlation:.2f}")
+    axes[0].set_xlabel("Median matched curve correlation")
+    axes[0].set_ylabel("Permutations")
+    axes[0].set_title(f"Curve shape: observed vs permuted pairing\n"
+                      f"empirical p = {_empirical_p(observed_curve_correlation, null_curve_correlations):.3g}",
+                      loc="left", fontsize=9.5)
+    axes[0].legend(fontsize=7)
+
+    axes[1].hist(null_centroid_rhos, bins=30, color="0.75")
+    axes[1].axvline(observed_centroid_rho, color=PHENOTYPE_COLORS["human-zonated / mouse-flat"], lw=2.2,
+                    label=f"observed {observed_centroid_rho:.2f}")
+    axes[1].set_xlabel("Mouse-human centroid rank correlation")
+    axes[1].set_ylabel("Permutations")
+    axes[1].set_title(f"Positional concordance: observed vs permuted pairing\n"
+                      f"empirical p = {_empirical_p(observed_centroid_rho, null_centroid_rhos):.3g}",
+                      loc="left", fontsize=9.5)
+    axes[1].legend(fontsize=7)
+
+    axes[2].plot([0, 1], [0, 1], color="0.7", lw=1, ls=":", label="identical position")
+    axes[2].scatter(mouse_centroids, human_centroids, s=8, alpha=0.5, linewidths=0,
+                    color="#444444")
+    axes[2].set_xlabel("Mouse positional centroid")
+    axes[2].set_ylabel("Human positional centroid")
+    axes[2].set_title(f"Matched positions\nmedian |shift| = {observed_centroid_shift:.3f} of PT",
+                      loc="left", fontsize=9.5)
+    axes[2].legend(fontsize=7)
+
+    figure.suptitle(
+        "Is there a conserved cross-species spatial architecture?\n"
+        f"{architecture_index.size:,} genes reproducibly patterned in both species; the null permutes "
+        "human gene identities",
+        fontsize=10.5,
+    )
+    figure.tight_layout()
+    _save_figure(figure, "conserved_architecture_null.png")
+    plt.show()
+
+
+# %% [markdown]
 # ## 6 - Primary figures
 #
 # Five figures, each answering one part of the question:
@@ -2514,21 +2688,7 @@ _report("discovery-eligible genes robust under >= 80% of variants",
 # %%
 # Purpose: figure 1A - PT alignment on the registered coordinate.
 
-PHENOTYPE_COLORS = {
-    "conserved zonation": "#1B7837",
-    "weaker zonation in human": "#8C6BB1",
-    "stronger zonation in human": "#762A83",
-    "mouse-zonated / human-flat": "#0072B2",
-    "human-zonated / mouse-flat": "#D55E00",
-    "shifted earlier in human": "#E69F00",
-    "shifted later in human": "#9E4F00",
-    "gradient inversion": "#C2185B",
-    "complex shape rewiring": "#4D4D4D",
-    "weak / uncertain zonation": "#BDBDBD",
-    "excluded": "#E8E8E8",
-}
-
-
+# The phenotype palette is defined with the other shared constants in the setup cell.
 # What each phenotype's exemplars must demonstrate, and therefore how they are ranked. A single
 # global divergence score picks genes that score high for *any* reason - which is how a "shifted"
 # exemplar ends up being a gene whose amplitudes differ - so each class ranks by the evidence it is
@@ -2994,7 +3154,16 @@ _save_table(heatmap_table, "shape_only_heatmap_gene_selection.csv")
 
 
 # %% [markdown]
-# ## 7 - Clustering the residual rewiring, and only that
+# ## 7 - Clustering the residual rewiring (supplementary view)
+#
+# **Status: supplementary, not a headline result.** Section 4's classes are the primary classification.
+# The clusters below are an exploratory view of the one class that framework cannot describe, and two
+# properties keep them out of the main text: the clusters come out strongly imbalanced (a large "gradient
+# reversal" cluster beside a handful of genes in the smallest one), and the adjusted Rand index against
+# the leave-one-out variants spreads widely rather than concentrating near 1. Both numbers are printed
+# with the results rather than left for a reader to discover, and the cluster names are derived from the
+# mean difference curves at run time - so the cluster count, sizes and names should be read as this
+# cohort's answer, not as a fixed taxonomy.
 #
 # **Why clustering appears here and not earlier.** The classes in section 4 are predefined and
 # interpretable; most of the biology the paper will quote is already named by them. What they cannot
@@ -3173,8 +3342,23 @@ else:
                                  "best_shift_human_minus_mouse"]))),
         })
 
+    # Two clusters can share a name when their mean curves have the same morphology; disambiguate so
+    # the table, the figure and the text stay referable to each other.
+    shared_names = pd.Series(list(names_by_cluster.values())).value_counts()
+    for cluster, cluster_name in list(names_by_cluster.items()):
+        if shared_names[cluster_name] > 1:
+            names_by_cluster[cluster] = f"{cluster_name} (cluster {cluster})"
+
     complex_cluster_profiles = pd.DataFrame(profile_rows).sort_values("n_genes", ascending=False)
+    complex_cluster_profiles["cluster_name"] = [
+        names_by_cluster[int(cluster)] for cluster in complex_cluster_profiles["cluster"]
+    ]
     display(complex_cluster_profiles.round(3))
+
+    _report("clusters (supplementary view)", len(complex_cluster_profiles),
+            why=f"largest {int(complex_cluster_profiles['n_genes'].max())} genes, "
+                f"smallest {int(complex_cluster_profiles['n_genes'].min())} - imbalanced, "
+                "which is one reason this is not a main result")
 
     complex_rewiring_clusters = pd.DataFrame({
         "gene": rewiring_genes,
@@ -3238,6 +3422,12 @@ else:
 
     complex_cluster_stability = pd.DataFrame(stability_rows)
     display(complex_cluster_stability.round(3))
+
+    if len(complex_cluster_stability):
+        print("  cluster stability, adjusted Rand index against the primary labels: "
+              f"min {complex_cluster_stability['adjusted_rand_index_vs_primary'].min():.3f}, "
+              f"max {complex_cluster_stability['adjusted_rand_index_vs_primary'].max():.3f} "
+              "- a wide spread is the second reason these clusters stay supplementary")
     _save_table(complex_cluster_stability, "complex_rewiring_cluster_stability.csv")
 
     # ----------------------------------------------------------------------------------
@@ -3270,7 +3460,7 @@ else:
     axes[1].set_title("Difference curves of the clustered genes", loc="left")
     figure.colorbar(image, ax=axes[1], label="z_human - z_mouse", shrink=0.85)
 
-    figure.suptitle("Residual (complex shape rewiring) difference curves\n"
+    figure.suptitle("Residual (complex shape rewiring) difference curves - supplementary view\n"
                     "z-scored within each species first, so this is spatial disagreement only",
                     fontsize=10.5)
     figure.tight_layout()
@@ -4798,6 +4988,16 @@ summary_lines.append(f"  genes keeping the same broad phenotype in every variant
                      f"{_count(gene_metrics['robustness_score'] == 1):,}")
 summary_lines.append(f"  discovery-eligible genes robust in >= 80% of variants: "
                      f"{_count(gene_metrics['robustness_score'].ge(0.8) & discovery_eligible):,}")
+summary_lines.append("")
+if len(architecture_null):
+    for row in architecture_null.itertuples():
+        summary_lines.append(
+            f"Conserved architecture ({row.n_genes:,} genes patterned in both species): "
+            f"{row.statistic} = {row.observed:.3f} vs null {row.null_median:.3f} "
+            f"(empirical p = {row.empirical_p:.3g})"
+        )
+else:
+    summary_lines.append("Conserved architecture: not assessed (too few both-species-patterned genes)")
 summary_lines.append("")
 summary_lines.append(f"Significant pathway x phenotype enrichments (FDR < {CONFIG['enrichment_fdr']}): "
                      f"{len(best_per_pathway):,} pathways of {len(pathway_tested):,} tested")

@@ -204,12 +204,18 @@ CONFIG = {
     "shift_step": 0.01,
     "minimum_shift": 0.08,                 # a shift must exceed this to be interpreted
     "centroid_shift_tolerance": 0.10,      # the centroid shift must corroborate the curve shift
-    "registered_corr": 0.80,               # ... and must reach this shape agreement
+    "post_shift_corr": 0.80,               # ... and must reach this shape agreement
     "shift_improvement": 0.10,             # ... and improve on the unshifted correlation by this
 
     # --- gradient inversion ---------------------------------------------------------------
     "gradient_min_abs": 0.10,              # both species need an appreciable early-to-late slope
     "inversion_max_corr": 0.30,
+
+    # --- conventional versus continuous ------------------------------------------------
+    # Strong spatial evidence is a categorical state, not a median split of the score: the gated
+    # score is exactly 0 for every gene with nothing interpretable, so a median split would call every
+    # gene "high spatial" and empty two quadrants. The score then ranks *within* the strong group.
+    "spatial_strong_robustness": 0.8,
 
     # --- conserved-architecture null ------------------------------------------------------
     "null_permutations": 200,
@@ -258,7 +264,7 @@ SHIFT_INTERIOR_LIMIT = CONFIG["shift_search_limit"] - CONFIG["shift_interior_mar
 ALT_COLUMNS = [f"{name}{ALT_SUFFIX}" for name in [
     "n_shared_grid_points", "level_effect_human_minus_mouse", "mouse_amplitude",
     "human_amplitude", "amplitude_log2_ratio_human_over_mouse", "shape_corr", "shape_spearman",
-    "best_shift_human_minus_mouse", "registered_shape_corr", "shift_improvement",
+    "best_shift_human_minus_mouse", "post_shift_shape_corr", "shift_improvement",
     "centroid_shift_human_minus_mouse", "gradient_change_human_minus_mouse",
 ]]
 
@@ -1573,7 +1579,7 @@ print(f"All {len(registration_selfcheck)} synthetic registration self-checks pas
 # | B | `mouse_amplitude`, `human_amplitude`, `amplitude_log2_ratio_human_over_mouse` | how strong is each species' zonation? | level |
 # | C | `shape_corr` (standardised), `pattern_rms_z` | do the two curves have the same spatial pattern? | level **and** amplitude |
 # | D | `mouse_position_centroid`, `human_position_centroid`, peak, early-to-late gradient, half-max width | where does expression sit along PT in each species? | level, amplitude |
-# | E | `best_shift_human_minus_mouse`, `registered_shape_corr`, `shift_improvement`, `residual_rms_after_shift` | is a modified *position* enough to explain the difference? | level, amplitude |
+# | E | `best_shift_human_minus_mouse`, `post_shift_shape_corr`, `shift_improvement`, `residual_rms_after_shift` | is a modified *position* enough to explain the difference? | level, amplitude |
 # | F | `mouse_early_to_late`, `human_early_to_late` | do the two species run in opposite directions? | level, amplitude |
 #
 # **How to read the phase metric.** `best_shift` is the horizontal displacement that best aligns the
@@ -1583,7 +1589,7 @@ print(f"All {len(registration_selfcheck)} synthetic registration self-checks pas
 # that agreement keeps improving outwards - those genes are flagged (`shift_at_search_boundary`) and are
 # never called shifted. An interpreted displacement must be (a) interior, with |shift| at or below the
 # 0.30 interior limit, (b) at least `minimum_shift` with a real `shift_improvement` and
-# `registered_shape_corr` >= `registered_corr`, (c) corroborated by the independent positional centroid
+# `post_shift_shape_corr` >= `post_shift_corr`, (c) corroborated by the independent positional centroid
 # within `centroid_shift_tolerance`, and (d) reproduced with the same sign on the alternate coordinate.
 # Section 5 re-derives every phenotype there, and the primary coordinate is 03's shared PT DPT
 # (section 2).
@@ -1665,7 +1671,7 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
         f"shape_spearman{suffix}": shape_spearman,
         f"pattern_rms_z{suffix}": pattern_rms_z,
         f"best_shift_human_minus_mouse{suffix}": best_shift,
-        f"registered_shape_corr{suffix}": best_corr,
+        f"post_shift_shape_corr{suffix}": best_corr,
         f"shift_improvement{suffix}": best_corr - shape_corr,
         f"residual_rms_after_shift{suffix}": residual_rms,
         f"shift_at_search_boundary{suffix}": at_boundary,
@@ -1693,8 +1699,10 @@ def _spatial_discovery_score(frame, config):
     Each term counts **only where the evidence for it is interpretable**, which is the difference
     between measuring divergence and measuring noise:
 
-    * amplitude change counts only when at least one species is reproducibly patterned - the ratio of
-      two flat curves is a division artefact, not a loss of zonation;
+    * amplitude change counts when the comparison is interpretable: both species reproducibly
+      patterned, or one side patterned and the other flat in every specimen/slice. The ratio of two
+      flat curves is a division artefact - but the *loss* of zonation in one species is real evidence,
+      and requiring both curves to correlate would score that case zero;
     * displacement counts only when the full phase criteria pass (interior optimum, agreement with the
       mouse curve, corroboration by the centroid, reproduction on the alternate coordinate);
     * shape divergence counts only when both species are patterned and reproducible.
@@ -1783,7 +1791,7 @@ _report(f"genes where the alternate axis ({ALT_SUFFIX.lstrip('_')}) changed the 
 display(gene_metrics[[
     "gene", "level_effect_human_minus_mouse", "mouse_amplitude", "human_amplitude",
     "amplitude_log2_ratio_human_over_mouse", "shape_corr", "best_shift_human_minus_mouse",
-    "registered_shape_corr", "centroid_shift_human_minus_mouse",
+    "post_shift_shape_corr", "centroid_shift_human_minus_mouse",
 ]].head(10).round(4))
 
 
@@ -1825,7 +1833,7 @@ DIAGNOSTIC_QUANTILES = [0.5, 0.75, 0.9, 0.95, 0.99]
 
 diagnostic_columns = [
     "mouse_amplitude", "human_amplitude", "mouse_reproducibility", "human_reproducibility",
-    "shape_corr", "registered_shape_corr", "amplitude_log2_ratio_human_over_mouse",
+    "shape_corr", "post_shift_shape_corr", "amplitude_log2_ratio_human_over_mouse",
     "best_shift_human_minus_mouse", "level_effect_human_minus_mouse",
 ]
 
@@ -1959,13 +1967,24 @@ def _phenotype_flags(metrics, config, include_axis_genes=False):
     flags["positional_usable"] = (
         flags["patterned_both"] & flags["reproducible_mouse"] & flags["reproducible_human"]
     )
-    # An amplitude *difference* is only evidence when at least one species has a reproducible
-    # pattern to compare against; the ratio of two flat curves is a division artefact.
-    flags["amplitude_evidence"] = (
-        flags["enough_support"]
-        & (flags["strong_mouse"] | flags["strong_human"])
-        & flags["reproducible_mouse"]
-        & flags["reproducible_human"]
+    # An amplitude *difference* is evidence when the comparison is interpretable, which is not the
+    # same as requiring both species to correlate. Two ways to be interpretable, and they must be
+    # symmetric: (i) both species reproducibly patterned, or (ii) one side reproducibly patterned and
+    # the other flat in *every* specimen/slice. Without (ii), a gene that loses its zonation entirely
+    # would score zero - the flat side's curve correlation is undefined precisely because it is flat,
+    # which is the evidence, not a failure to measure.
+    both_sides_patterned_and_reproducible = (
+        flags["strong_mouse"] & flags["strong_human"]
+        & flags["reproducible_mouse"] & flags["reproducible_human"]
+    )
+    mouse_zonated_human_flat = (
+        flags["strong_mouse"] & flags["reproducible_mouse"] & flags["flat_human_every_slice"]
+    )
+    human_zonated_mouse_flat = (
+        flags["strong_human"] & flags["reproducible_human"] & flags["flat_mouse_every_slice"]
+    )
+    flags["amplitude_evidence"] = flags["enough_support"] & (
+        both_sides_patterned_and_reproducible | mouse_zonated_human_flat | human_zonated_mouse_flat
     )
 
     flags["inversion"] = (
@@ -1995,10 +2014,10 @@ def _phenotype_flags(metrics, config, include_axis_genes=False):
         & flags["shift_interior"]
         & ~flags["shift_at_boundary"]
         & flags["shift_centroid_agrees"]
-        & metrics["registered_shape_corr"].ge(config["registered_corr"])
+        & metrics["post_shift_shape_corr"].ge(config["post_shift_corr"])
         & shift.abs().ge(config["minimum_shift"])
         & metrics["shift_improvement"].ge(config["shift_improvement"])
-        & metrics[f"registered_shape_corr{ALT_SUFFIX}"].ge(config["registered_corr"])
+        & metrics[f"post_shift_shape_corr{ALT_SUFFIX}"].ge(config["post_shift_corr"])
         & metrics[f"shift_improvement{ALT_SUFFIX}"].ge(config["shift_improvement"])
         & (np.sign(shift) == np.sign(alternate_shift))
         & alternate_shift.abs().ge(config["minimum_shift"])
@@ -2105,8 +2124,8 @@ phenotype_summary = pd.DataFrame([
             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "human_amplitude"])),
         "median_shape_corr": float(np.nanmedian(
             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "shape_corr"])),
-        "median_registered_shape_corr": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "registered_shape_corr"])),
+        "median_post_shift_shape_corr": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "post_shift_shape_corr"])),
         "median_abs_shift": float(np.nanmedian(np.abs(
             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "best_shift_human_minus_mouse"]))),
         "median_discovery_score": float(np.nanmedian(
@@ -2136,7 +2155,7 @@ def _phenotype_selfcheck():
     reference = dict(
         mouse_amplitude=0.4, human_amplitude=0.4, amplitude_log2_ratio_human_over_mouse=0.0,
         best_shift_human_minus_mouse=0.0, best_shift_human_minus_mouse_unregistered=0.0,
-        registered_shape_corr=0.95, registered_shape_corr_unregistered=0.95,
+        post_shift_shape_corr=0.95, post_shift_shape_corr_unregistered=0.95,
         shift_improvement=0.01, shift_improvement_unregistered=0.01,
         shift_at_search_boundary=False, centroid_shift_human_minus_mouse=0.0,
         shape_corr=0.9, mouse_reproducibility=0.8, human_reproducibility=0.8,
@@ -2161,57 +2180,57 @@ def _phenotype_selfcheck():
             "stronger zonation in human"),
         "expected mouse-zonated / human-flat": (
             gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
-                 registered_shape_corr=0.2,
+                 post_shift_shape_corr=0.2,
                  **{f"amplitude__{sample}": 0.03 for sample in human_samples}),
             "mouse-zonated / human-flat"),
         "expected human-zonated / mouse-flat": (
             gene(mouse_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=3.7, shape_corr=0.1,
-                 registered_shape_corr=0.2,
+                 post_shift_shape_corr=0.2,
                  **{f"amplitude__{sample}": 0.03 for sample in mouse_samples}),
             "human-zonated / mouse-flat"),
         "expected shifted later": (
             gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
                  best_shift_human_minus_mouse_unregistered=0.14, centroid_shift_human_minus_mouse=0.15,
-                 registered_shape_corr=0.93, registered_shape_corr_unregistered=0.92, shift_improvement=0.4,
+                 post_shift_shape_corr=0.93, post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
                  shift_improvement_unregistered=0.35),
             "shifted later in human"),
         "expected shifted earlier": (
             gene(shape_corr=0.4, best_shift_human_minus_mouse=-0.15,
                  best_shift_human_minus_mouse_unregistered=-0.14, centroid_shift_human_minus_mouse=-0.15,
-                 registered_shape_corr=0.93, registered_shape_corr_unregistered=0.92, shift_improvement=0.4,
+                 post_shift_shape_corr=0.93, post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
                  shift_improvement_unregistered=0.35),
             "shifted earlier in human"),
         "an optimum pinned to the search boundary is not a displacement": (
             gene(shape_corr=0.4, best_shift_human_minus_mouse=0.35,
                  best_shift_human_minus_mouse_unregistered=0.35, centroid_shift_human_minus_mouse=0.35,
-                 shift_at_search_boundary=True, registered_shape_corr=0.93,
-                 registered_shape_corr_unregistered=0.92, shift_improvement=0.4,
+                 shift_at_search_boundary=True, post_shift_shape_corr=0.93,
+                 post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
                  shift_improvement_unregistered=0.35),
             "complex shape rewiring"),
         "an interior shift the centroid contradicts is not interpreted": (
             gene(shape_corr=0.4, best_shift_human_minus_mouse=0.16,
                  best_shift_human_minus_mouse_unregistered=0.15, centroid_shift_human_minus_mouse=-0.16,
-                 registered_shape_corr=0.93, registered_shape_corr_unregistered=0.92, shift_improvement=0.4,
+                 post_shift_shape_corr=0.93, post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
                  shift_improvement_unregistered=0.35),
             "complex shape rewiring"),
         "shift on one coordinate only stays complex": (
             gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
-                 best_shift_human_minus_mouse_unregistered=0.0, registered_shape_corr=0.93,
-                 registered_shape_corr_unregistered=0.95, shift_improvement=0.4,
+                 best_shift_human_minus_mouse_unregistered=0.0, post_shift_shape_corr=0.93,
+                 post_shift_shape_corr_unregistered=0.95, shift_improvement=0.4,
                  shift_improvement_unregistered=0.01),
             "complex shape rewiring"),
         "expected gradient inversion": (
             gene(shape_corr=-0.8, mouse_early_to_late=0.4, human_early_to_late=-0.4),
             "gradient inversion"),
         "expected complex rewiring": (
-            gene(shape_corr=0.1, registered_shape_corr=0.3), "complex shape rewiring"),
+            gene(shape_corr=0.1, post_shift_shape_corr=0.3), "complex shape rewiring"),
         "flat in both species": (
             gene(mouse_amplitude=0.02, human_amplitude=0.02, shape_corr=np.nan,
                  **{f"amplitude__{sample}": 0.02 for sample in mouse_samples + human_samples}),
             "weak / uncertain zonation"),
         "flat in one human slice only is not human-flat": (
             gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
-                 registered_shape_corr=0.2, human_reproducibility=np.nan,
+                 post_shift_shape_corr=0.2, human_reproducibility=np.nan,
                  **{f"amplitude__{human_samples[0]}": 0.5,
                     f"amplitude__{human_samples[-1]}": 0.02}),
             "weak / uncertain zonation"),
@@ -2266,6 +2285,20 @@ def _phenotype_selfcheck():
         {"synthetic_case": "score: complex rewiring contributes via shape divergence",
          "expected_class": "> 0", "assigned_class": f"{float(scores['expected complex rewiring']):.3g}",
          "passed": bool(scores["expected complex rewiring"] > 0)},
+        {"synthetic_case": "score: mouse-zonated / human-flat keeps its amplitude evidence",
+         "expected_class": "> 0",
+         "assigned_class": f"{float(scores['expected mouse-zonated / human-flat']):.3g}",
+         "passed": bool(scores["expected mouse-zonated / human-flat"] > 0)},
+        {"synthetic_case": "score: human-zonated / mouse-flat keeps its amplitude evidence",
+         "expected_class": "> 0",
+         "assigned_class": f"{float(scores['expected human-zonated / mouse-flat']):.3g}",
+         "passed": bool(scores["expected human-zonated / mouse-flat"] > 0)},
+        {"synthetic_case": "score: the two species-specific directions are symmetric",
+         "expected_class": "equal",
+         "assigned_class": f"{float(scores['expected mouse-zonated / human-flat'] / scores['expected human-zonated / mouse-flat']):.3f}",
+         "passed": bool(np.isclose(scores["expected mouse-zonated / human-flat"],
+                                   scores["expected human-zonated / mouse-flat"],
+                                   rtol=0.05))},
         {"synthetic_case": "score: a conserved gene scores below a rewired one",
          "expected_class": "< complex",
          "assigned_class": f"{float(scores['expected conserved']):.3g}",
@@ -2730,14 +2763,14 @@ CLASS_EVIDENCE = {
         "label": "best agreement after an interior displacement, with comparable amplitudes",
         "filter": lambda block: block["shift_interior"]
         & block["amplitude_log2_ratio_human_over_mouse"].abs().le(1.0),
-        "rank": ["registered_shape_corr", "shift_improvement", "residual_rms_after_shift"],
+        "rank": ["post_shift_shape_corr", "shift_improvement", "residual_rms_after_shift"],
         "ascending": [False, False, True],
     },
     "shifted later in human": {
         "label": "best agreement after an interior displacement, with comparable amplitudes",
         "filter": lambda block: block["shift_interior"]
         & block["amplitude_log2_ratio_human_over_mouse"].abs().le(1.0),
-        "rank": ["registered_shape_corr", "shift_improvement", "residual_rms_after_shift"],
+        "rank": ["post_shift_shape_corr", "shift_improvement", "residual_rms_after_shift"],
         "ascending": [False, False, True],
     },
     "gradient inversion": {
@@ -2925,7 +2958,7 @@ _save_table(landscape, "zonation_landscape_eligible_genes.csv")
 # Purpose: figure 1C - positional displacement versus residual shape mismatch.
 
 phase_frame = gene_metrics[discovery_eligible].dropna(
-    subset=["shape_corr", "registered_shape_corr", "best_shift_human_minus_mouse",
+    subset=["shape_corr", "post_shift_shape_corr", "best_shift_human_minus_mouse",
             "residual_rms_after_shift"]
 )
 
@@ -2935,12 +2968,12 @@ ax_raw_registered, ax_shift_residual, ax_summary = axes
 # Panel 1: does a bounded displacement rescue the agreement?
 ax_raw_registered.plot([-1, 1], [-1, 1], color="0.5", lw=1, ls=":", label="no change from shifting")
 ax_raw_registered.scatter(
-    phase_frame["shape_corr"], phase_frame["registered_shape_corr"],
+    phase_frame["shape_corr"], phase_frame["post_shift_shape_corr"],
     s=6, alpha=0.45, linewidths=0, color="#666666",
 )
 rescued = phase_frame[phase_frame["shift_improvement"] >= CONFIG["shift_improvement"]]
 ax_raw_registered.scatter(
-    rescued["shape_corr"], rescued["registered_shape_corr"],
+    rescued["shape_corr"], rescued["post_shift_shape_corr"],
     s=9, alpha=0.8, linewidths=0, color=PHENOTYPE_COLORS["shifted later in human"],
 )
 ax_raw_registered.set_xlabel("Standardised curve correlation (registered axis)")
@@ -3056,7 +3089,7 @@ for row_index, label in enumerate(REPRESENTATIVE_CLASSES):
                       lw=0.8, alpha=0.35, ls=":")
 
         axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.9)
-        axis.plot(grid_unit, human_registered[index], color=SPECIES_COLORS["human"], lw=1.9, ls="--")
+        axis.plot(grid_unit, balanced_human[index], color=SPECIES_COLORS["human"], lw=1.9, ls="--")
 
         axis.set_title(f"{record['gene']}\n"
                        f"A_m={record['mouse_amplitude']:.2f} A_h={record['human_amplitude']:.2f} "
@@ -3109,20 +3142,20 @@ heatmap_index = np.asarray([int(np.flatnonzero(gene_names == gene)[0])
                             for gene in heatmap_table["gene"]], dtype=int)
 
 mouse_shape = _row_zscore(balanced_mouse[heatmap_index])
-human_shape = _row_zscore(human_registered[heatmap_index])
+human_shape = _row_zscore(balanced_human[heatmap_index])
 
 figure, axes = plt.subplots(
     1, 2, figsize=(9.5, max(6.0, 0.21 * len(heatmap_index))), sharey=True
 )
 
 for axis, matrix, title in zip(
-    axes, [mouse_shape, human_shape], ["Healthy mouse", "Human (registered)"]
+    axes, [mouse_shape, human_shape], ["Healthy mouse", "Human"]
 ):
     image = axis.imshow(
         matrix, aspect="auto", interpolation="nearest", cmap="bwr", vmin=-2.5, vmax=2.5,
         extent=[0, 1, len(heatmap_index) - 0.5, -0.5],
     )
-    axis.set_xlabel("PT position (registered, unit): early -> late")
+    axis.set_xlabel("PT position (unit, shared PT DPT): early -> late")
     axis.set_title(title, fontsize=10)
 
     # Class boundaries.
@@ -3221,8 +3254,9 @@ _report("genes in the complex shape rewiring class", len(rewiring_genes),
 # the correlation distance - and therefore the silhouette score - undefined. Such genes are reported
 # and left out rather than silently perturbing the linkage.
 if len(rewiring_genes):
+    # The primary coordinate: the shared PT DPT, not the landmark-registered axis.
     difference_curves_all = (
-        _row_zscore(human_registered[rewiring_index]) - _row_zscore(balanced_mouse[rewiring_index])
+        _row_zscore(balanced_human[rewiring_index]) - _row_zscore(balanced_mouse[rewiring_index])
     )
     difference_spread = (
         np.nanmax(difference_curves_all, axis=1) - np.nanmin(difference_curves_all, axis=1)
@@ -3400,9 +3434,10 @@ else:
         ))
 
     for variant_name, variant_mouse, variant_human_raw in variant_curve_sets:
-        variant_registration = _register(variant_mouse, variant_human_raw)
+        # Same coordinate choice as the primary clustering: the variant's curves on the shared PT DPT,
+        # so the stability check varies the curves rather than the coordinate as well.
         variant_difference = _complete_difference_curves(
-            _row_zscore(variant_registration["human_registered"][rewiring_index])
+            _row_zscore(variant_human_raw[rewiring_index])
             - _row_zscore(variant_mouse[rewiring_index]),
             "variant complex-rewiring genes",
         )
@@ -4084,9 +4119,9 @@ def _ordered_member_blocks(members, limit):
     drift apart in ordering, scaling or colour limits.
     """
     selected = np.asarray(members[:limit], dtype=int)
-    centroids = _row_weighted_centroid(human_registered[selected], grid_unit)
+    centroids = _row_weighted_centroid(balanced_human[selected], grid_unit)
     ordered = selected[np.argsort(np.nan_to_num(centroids, nan=1.0))]
-    return ordered, _row_zscore(balanced_mouse[ordered]), _row_zscore(human_registered[ordered])
+    return ordered, _row_zscore(balanced_mouse[ordered]), _row_zscore(balanced_human[ordered])
 
 
 if not plotted_themes:
@@ -4142,7 +4177,8 @@ else:
 
     figure.suptitle(
         "Candidate pathway themes along the registered coordinate\n"
-        "each gene z-scored within species; rows ordered by human positional centroid; "
+        "primary coordinate (shared PT DPT); each gene z-scored within species; "
+    "rows ordered by human positional centroid; "
         "row labels give the gene's spatial phenotype",
         fontsize=10.5,
     )
@@ -4290,6 +4326,22 @@ else:
 # phase or species-specific class is not there. The class reflects that disagreement; the score only
 # reports which components are measurable.
 #
+# **How the quadrants are drawn - and why not by a median split.** The conventional axis is continuous
+# and well behaved, so its median is a fair boundary. The spatial axis is not: the gated score is exactly
+# 0 for every gene with no interpretable component (that is the point of the gate), so its median in this
+# cohort is 0 and a "score >= median" rule would call *every* gene high-spatial and leave two quadrants
+# empty. Strong spatial evidence is therefore treated as a **categorical** state - a non-weak phenotype
+# that kept its broad class in at least `spatial_strong_robustness` of the section-5 variants - and the
+# continuous score is used only to rank genes inside that group. The upper-left quadrant then answers the
+# question the section exists for: reproducible spatial remodelling despite a small whole-PT level
+# difference.
+#
+# **One asymmetry the score no longer has.** Amplitude evidence used to require reproducible
+# correlation in *both* species, which is undefined for a species that has lost its zonation - so
+# "mouse-zonated / human-flat" genes scored zero while their mirror image scored high. Amplitude
+# evidence is now symmetric: both species reproducibly patterned, **or** one side patterned and the
+# other flat in every specimen/slice (the same evidence the species-specific classes already require).
+#
 # **Descriptive, by construction.** No p-values are used on the conventional axis: with one human donor
 # a species-wide test would not be calibrated. The quadrant counts and pathway table are effect-size
 # statements that hold for this cohort.
@@ -4328,21 +4380,36 @@ quadrant_frame = gene_metrics[discovery_eligible].dropna(
 quadrant_frame["conventional_abs"] = quadrant_frame["level_effect_human_minus_mouse"].abs()
 
 conventional_median = float(np.nanmedian(conventional_level[discovery_eligible]))
-spatial_median = float(np.nanmedian(spatial_divergence[discovery_eligible]))
+
+# Strong spatial evidence is categorical, and deliberately so. The gated score is exactly 0 for every
+# gene with no interpretable component, which in this cohort is most genes - so its median is 0 and a
+# median split would make "high spatial" mean "score >= 0", i.e. every gene, leaving two quadrants
+# empty. The categorical rule below asks for a non-weak phenotype that survived the sensitivity panel;
+# the continuous score is then used only to rank genes inside that group.
+quadrant_frame["strong_spatial_evidence"] = (
+    quadrant_frame["spatial_phenotype"].ne("weak / uncertain zonation")
+    & quadrant_frame["spatial_phenotype"].ne("excluded")
+    & quadrant_frame["robustness_score"].ge(CONFIG["spatial_strong_robustness"])
+)
+
+_report("genes with strong, reproducible spatial evidence",
+        int(quadrant_frame["strong_spatial_evidence"].sum()), len(quadrant_frame),
+        why=f"non-weak phenotype kept in >= {CONFIG['spatial_strong_robustness']:.0%} of the "
+            "sensitivity variants")
 
 quadrant_labels = {
-    "high conventional / high spatial":
+    "high conventional / strong spatial":
         quadrant_frame["conventional_abs"].ge(conventional_median)
-        & quadrant_frame["spatial_discovery_score"].ge(spatial_median),
-    "high conventional / low spatial":
+        & quadrant_frame["strong_spatial_evidence"],
+    "high conventional / weak spatial":
         quadrant_frame["conventional_abs"].ge(conventional_median)
-        & quadrant_frame["spatial_discovery_score"].lt(spatial_median),
-    "low conventional / high spatial (continuous-only)":
+        & ~quadrant_frame["strong_spatial_evidence"],
+    "low conventional / strong spatial (continuous-only)":
         quadrant_frame["conventional_abs"].lt(conventional_median)
-        & quadrant_frame["spatial_discovery_score"].ge(spatial_median),
-    "low conventional / low spatial":
+        & quadrant_frame["strong_spatial_evidence"],
+    "low conventional / weak spatial":
         quadrant_frame["conventional_abs"].lt(conventional_median)
-        & quadrant_frame["spatial_discovery_score"].lt(spatial_median),
+        & ~quadrant_frame["strong_spatial_evidence"],
 }
 
 quadrant_frame["conventional_vs_continuous_quadrant"] = np.select(
@@ -4366,26 +4433,37 @@ _save_table(quadrant_frame, "conventional_vs_continuous_gene_quadrants.csv")
 
 figure, axis = plt.subplots(1, 1, figsize=(8.2, 6.2))
 
+weak = quadrant_frame[~quadrant_frame["strong_spatial_evidence"]]
+axis.scatter(weak["conventional_abs"], weak["spatial_discovery_score"], s=5, alpha=0.25,
+             linewidths=0, color="0.75",
+             label=f"no strong spatial evidence (n={len(weak):,})")
+
 for label in PHENOTYPE_CLASSES:
-    block = quadrant_frame[quadrant_frame["spatial_phenotype"].eq(label)]
+    block = quadrant_frame[
+        quadrant_frame["spatial_phenotype"].eq(label) & quadrant_frame["strong_spatial_evidence"]
+    ]
     if not len(block):
         continue
     axis.scatter(
         block["conventional_abs"], block["spatial_discovery_score"],
-        s=6, alpha=0.5, linewidths=0, color=PHENOTYPE_COLORS[label], label=f"{label} (n={len(block):,})",
+        s=9, alpha=0.75, linewidths=0, color=PHENOTYPE_COLORS[label], label=f"{label} (n={len(block):,})",
     )
 
 axis.axvline(conventional_median, color="black", lw=0.9, ls="--")
-axis.axhline(spatial_median, color="black", lw=0.9, ls="--")
 axis.set_yscale("symlog", linthresh=0.2)
 axis.set_xlabel("Conventional whole-PT effect: |level effect| (lognorm)")
 axis.set_ylabel("Continuous spatial divergence score")
 axis.set_title("Figure: conventional whole-PT effect versus continuous spatial signal\n"
-               "upper left = continuous-only biology; dashed lines = medians",
-               loc="left", fontsize=10)
+               "upper left = strong reproducible spatial remodelling with little whole-PT level "
+               "difference (the continuous-only quadrant)\n"
+               "coloured = strong spatial evidence kept in >= "
+               f"{CONFIG['spatial_strong_robustness']:.0%} of variants; dashed line = median "
+               "conventional effect",
+               loc="left", fontsize=9.5)
 axis.legend(fontsize=6.5, loc="upper right")
 
-for row in quadrant_frame.nlargest(8, "spatial_discovery_score").itertuples():
+continuous_only = quadrant_frame[quadrant_labels["low conventional / strong spatial (continuous-only)"]]
+for row in continuous_only.nlargest(8, "spatial_discovery_score").itertuples():
     axis.annotate(row.gene, (row.conventional_abs, row.spatial_discovery_score),
                   xytext=(3, 3), textcoords="offset points", fontsize=7)
 
@@ -4796,7 +4874,7 @@ atlas_columns = [
     "amplitude_log2_ratio_human_over_mouse",
     f"amplitude_log2_ratio_human_over_mouse{ALT_SUFFIX}",
     "shape_corr", f"shape_corr{ALT_SUFFIX}", "shape_spearman", "pattern_rms_z",
-    "registered_shape_corr", f"registered_shape_corr{ALT_SUFFIX}",
+    "post_shift_shape_corr", f"post_shift_shape_corr{ALT_SUFFIX}",
     "best_shift_human_minus_mouse", f"best_shift_human_minus_mouse{ALT_SUFFIX}",
     "shift_improvement", f"shift_improvement{ALT_SUFFIX}", "residual_rms_after_shift",
     "shift_at_search_boundary",
@@ -4832,7 +4910,7 @@ top_genes_by_spatial_phenotype = top_genes_by_spatial_phenotype.assign(
     "spatial_phenotype", "gene", "exemplar_evidence", "robustness_score",
     "spatial_discovery_score", "shift_interior", "shift_at_search_boundary",
     "mouse_amplitude", "human_amplitude", "amplitude_log2_ratio_human_over_mouse",
-    "shape_corr", "registered_shape_corr", "best_shift_human_minus_mouse",
+    "shape_corr", "post_shift_shape_corr", "best_shift_human_minus_mouse",
     "centroid_shift_human_minus_mouse", "level_effect_human_minus_mouse",
     "mouse_reproducibility", "human_reproducibility",
     "detection_mouse", "detection_human",

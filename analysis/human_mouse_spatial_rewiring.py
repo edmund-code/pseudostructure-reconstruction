@@ -216,6 +216,17 @@ CONFIG = {
     "enrichment_fdr": 0.05,
     "enrichment_min_members_flagged": 3,
 
+    # A pathway-level label needs coherence, not just over-representation: enrichment says the
+    # phenotype is commoner among the members than in the background, coherence asks whether the
+    # pathway as a whole behaves that way. Without it, "5 of 82 members are conserved" becomes "this
+    # pathway is a conserved programme".
+    "pathway_coherence_min_fraction": 0.15,          # members holding the phenotype
+    "pathway_coherence_max_median_amplitude_log2": 1.0,
+    "pathway_coherence_min_median_shape_corr": 0.0,
+    # Only near-duplicate sets are collapsed: a lenient threshold reduces 1,511 pathways to a handful
+    # of groups and hides the associations the section exists to report.
+    "pathway_redundancy_overlap": 0.85,
+
     # --- clustering of residual rewiring --------------------------------------------------
     "cluster_k_min": 4,
     "cluster_k_max": 8,
@@ -2518,19 +2529,106 @@ PHENOTYPE_COLORS = {
 }
 
 
+# What each phenotype's exemplars must demonstrate, and therefore how they are ranked. A single
+# global divergence score picks genes that score high for *any* reason - which is how a "shifted"
+# exemplar ends up being a gene whose amplitudes differ - so each class ranks by the evidence it is
+# supposed to illustrate, and shifted classes additionally require comparable amplitudes.
+CLASS_EVIDENCE = {
+    "conserved zonation": {
+        "label": "shape agreement first, then the smallest amplitude and position changes",
+        "filter": lambda block: block["shape_corr"].ge(CONFIG["conserved_corr"]),
+        "rank": ["shape_corr", "pattern_rms_z", "best_shift_human_minus_mouse"],
+        "ascending": [False, True, True],
+    },
+    "weaker zonation in human": {
+        "label": "largest amplitude loss with the shape intact and the position unchanged",
+        "filter": lambda block: block["shape_corr"].ge(CONFIG["conserved_corr"])
+        & block["best_shift_human_minus_mouse"].abs().lt(CONFIG["minimum_shift"]),
+        "rank": ["amplitude_log2_ratio_human_over_mouse", "shape_corr"],
+        "ascending": [True, False],
+    },
+    "stronger zonation in human": {
+        "label": "largest amplitude gain with the shape intact and the position unchanged",
+        "filter": lambda block: block["shape_corr"].ge(CONFIG["conserved_corr"])
+        & block["best_shift_human_minus_mouse"].abs().lt(CONFIG["minimum_shift"]),
+        "rank": ["amplitude_log2_ratio_human_over_mouse", "shape_corr"],
+        "ascending": [False, False],
+    },
+    "mouse-zonated / human-flat": {
+        "label": "largest mouse-to-human amplitude contrast",
+        "filter": lambda block: block["shift_at_search_boundary"].eq(False),
+        "rank": ["amplitude_log2_ratio_human_over_mouse", "mouse_amplitude"],
+        "ascending": [True, False],
+    },
+    "human-zonated / mouse-flat": {
+        "label": "largest human-to-mouse amplitude contrast",
+        "filter": lambda block: block["shift_at_search_boundary"].eq(False),
+        "rank": ["amplitude_log2_ratio_human_over_mouse", "human_amplitude"],
+        "ascending": [False, False],
+    },
+    "shifted earlier in human": {
+        "label": "best agreement after an interior displacement, with comparable amplitudes",
+        "filter": lambda block: block["shift_interior"]
+        & block["amplitude_log2_ratio_human_over_mouse"].abs().le(1.0),
+        "rank": ["registered_shape_corr", "shift_improvement", "residual_rms_after_shift"],
+        "ascending": [False, False, True],
+    },
+    "shifted later in human": {
+        "label": "best agreement after an interior displacement, with comparable amplitudes",
+        "filter": lambda block: block["shift_interior"]
+        & block["amplitude_log2_ratio_human_over_mouse"].abs().le(1.0),
+        "rank": ["registered_shape_corr", "shift_improvement", "residual_rms_after_shift"],
+        "ascending": [False, False, True],
+    },
+    "gradient inversion": {
+        "label": "strongest opposition between the two early-to-late gradients",
+        "filter": lambda block: block["mouse_early_to_late"].abs().ge(CONFIG["gradient_min_abs"])
+        & block["human_early_to_late"].abs().ge(CONFIG["gradient_min_abs"]),
+        "rank": ["gradient_change_human_minus_mouse", "mouse_early_to_late"],
+        "ascending": [False, False],
+    },
+    "complex shape rewiring": {
+        "label": "largest residual mismatch after the best displacement",
+        "filter": lambda block: block["shape_corr"].lt(CONFIG["conserved_corr"]),
+        "rank": ["residual_rms_after_shift", "shape_corr"],
+        "ascending": [False, True],
+    },
+}
+
+
 def _top_genes_for_class(label, n, prefer_robust=True):
-    """Top `n` genes of a class by divergence score, preferring genes stable across variants."""
+    """Top `n` genes of a class by that class's own evidence, preferring variant-stable genes.
+
+    Class-specific rather than one global score: a gene can score high for *any* reason - including an
+    amplitude difference - and still be a poor illustration of a displacement. Each class ranks by the
+    evidence it is meant to demonstrate; if the stricter filter empties the class, that is reported
+    rather than hidden, and the class as classified is used.
+    """
     block = gene_metrics[
         gene_metrics["spatial_phenotype"].eq(label)
         & ~gene_metrics["axis_basis_gene"]
         & ~gene_metrics["technical_gene"]
         & gene_metrics["detected_in_both_species"]
     ]
+
+    rule = CLASS_EVIDENCE.get(label)
+    if rule is None:
+        block = block.sort_values("spatial_discovery_score", ascending=False)
+    else:
+        strict = block[rule["filter"](block)]
+        if len(strict):
+            block = strict.sort_values(rule["rank"], ascending=rule["ascending"])
+        else:
+            print(f"  note: no {label} gene meets the stricter exemplar criteria "
+                  f"({rule['label']}); falling back to the class as classified")
+            block = block.sort_values("spatial_discovery_score", ascending=False)
+
     if prefer_robust and len(block):
         stable = block[block["robustness_score"].ge(0.8)]
         if len(stable) >= n:
             block = stable
-    return block.sort_values("spatial_discovery_score", ascending=False).head(n)
+
+    return block.head(n)
 
 
 discovery_eligible = (
@@ -3197,10 +3295,20 @@ else:
 # applied across the **complete** tested pathway x phenotype family (reported), so the FDRs are not
 # per-phenotype claims.
 #
-# **What counts as evidence.** A fold enrichment with a family-wide FDR below `enrichment_fdr`, plus the
-# leading genes being named in the table so a reader can see whether the signal is a coherent programme
-# or one strong gene. Redundant databases overlap heavily, so the heatmap collapses redundancy groups
-# (03's `summarize_pathway_redundancy`, overlap >= 0.6) and shows one representative per group.
+# **What counts as evidence - and what it licenses.** A fold enrichment with a family-wide FDR below
+# `enrichment_fdr` establishes that a pathway's genes are **over-represented among genes classified as**
+# that phenotype. That is not the same claim as "this pathway is a conserved/rewired programme", so each
+# association also carries a **coherence** check: the share of the pathway's tested members that hold the
+# phenotype (`member_fraction_in_phenotype`, at least `pathway_coherence_min_fraction`), and the median
+# behaviour of those members (shape correlation at least `pathway_coherence_min_median_shape_corr`,
+# absolute amplitude change at most `pathway_coherence_max_median_amplitude_log2`). A pathway that fails
+# coherence is reported as "enriched, members not globally coherent" - a real result about its member
+# genes, and not a claim about the pathway as a whole. Leading genes are named in every row so the
+# signal can be checked against a single strong gene. Redundant databases overlap heavily, so the companion heatmap collapses redundancy groups with 03's
+# `summarize_pathway_redundancy` - but only near-duplicate sets (overlap >= `pathway_redundancy_overlap`,
+# 0.85): a lenient threshold would reduce 1,511 pathways to a few dozen groups and hide the associations
+# this section exists to report. The primary figure shows **every** significant association directly, as
+# a dot plot, with the member fraction annotated on each dot.
 #
 # **Limits.** This is exploratory: the units of replication are specimens, and enrichment here is a
 # property of *this* gene set in *this* cohort, not a population claim. A phenotype with few genes makes
@@ -3285,12 +3393,16 @@ pathway_tested = membership[
 ].copy()
 
 
-def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_frame, config):
+def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_frame, config,
+                          member_evidence=None):
     """Upper-tail hypergeometric over-representation of each phenotype among each pathway's members.
 
     `phenotype_labels` is the per-gene phenotype array over every tested gene; `universe_members_index`
     are the rows that form the background (the discovery-eligible genes); `pathway_frame` must carry
-    `universe_members` (row indices) plus `library`/`pathway`. Only over-representation is tested, so a
+    `universe_members` (row indices) plus `library`/`pathway`. `member_evidence` is an optional frame of
+    per-gene evidence (`shape_corr`, `amplitude_log2`, `abs_shift`) used for the coherence columns:
+    enrichment is a statement about member *membership*, coherence is a statement about member
+    *behaviour*. Without an evidence frame the coherence columns are reported as not assessed. Only over-representation is tested, so a
     pathway that is *short* of a phenotype returns p ~ 1 rather than a small p - a shortfall is not
     evidence of enrichment, and BH in the caller is applied across the complete pathway x phenotype
     family. Kept as a function so the notebook's self-check can run it on a known-answer case.
@@ -3320,6 +3432,29 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
             overlap = members[member_phenotypes == label]
             leading = overlap[np.argsort(-discovery_score_by_row[overlap])][:10]
 
+            # Coherence: is this phenotype's share of the pathway large enough to describe the
+            # pathway, and do the members behave that way overall? Enrichment alone is a statement
+            # about membership; coherence is a statement about behaviour.
+            fraction_in_phenotype = observed / members.size if members.size else np.nan
+            if member_evidence is None:
+                member_shape_corr = member_amplitude = member_abs_shift = np.nan
+                coherence_status = "not assessed"
+            else:
+                member_shape_corr = float(np.nanmedian(
+                    member_evidence["shape_corr"].to_numpy()[members]))
+                member_amplitude = float(np.nanmedian(
+                    np.abs(member_evidence["amplitude_log2"].to_numpy()[members])))
+                member_abs_shift = float(np.nanmedian(
+                    member_evidence["abs_shift"].to_numpy()[members]))
+                coherent = bool(
+                    np.isfinite(fraction_in_phenotype)
+                    and fraction_in_phenotype >= config["pathway_coherence_min_fraction"]
+                    and member_amplitude <= config["pathway_coherence_max_median_amplitude_log2"]
+                    and member_shape_corr >= config["pathway_coherence_min_median_shape_corr"]
+                )
+                coherence_status = ("coherent" if coherent
+                                    else "enriched, members not globally coherent")
+
             rows.append({
                 "library": pathway_row.library,
                 "pathway": pathway_row.pathway,
@@ -3332,6 +3467,11 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
                 "p_value": float(hypergeom.sf(observed - 1, universe_size, members.size,
                                               n_with_phenotype)),
                 "leading_genes": ";".join(gene_names[leading]),
+                "member_fraction_in_phenotype": fraction_in_phenotype,
+                "coherence_member_median_shape_corr": member_shape_corr,
+                "coherence_member_median_abs_amplitude_log2": member_amplitude,
+                "coherence_member_median_abs_shift": member_abs_shift,
+                "coherence_status": coherence_status,
             })
 
     # Declared columns matter: with no surviving pair the frame must still be addressable by name
@@ -3339,18 +3479,29 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
     return pd.DataFrame(rows, columns=[
         "library", "pathway", "spatial_phenotype", "n_pathway_members_in_universe",
         "n_universe_with_phenotype", "observed", "expected", "fold_enrichment", "p_value",
-        "leading_genes",
+        "leading_genes", "member_fraction_in_phenotype", "coherence_member_median_shape_corr",
+        "coherence_member_median_abs_amplitude_log2", "coherence_member_median_abs_shift",
+        "coherence_status",
     ])
 
 
+# Per-gene evidence for the coherence columns: how the members behave, not only how many there are.
+member_evidence = pd.DataFrame({
+    "shape_corr": gene_metrics["shape_corr"].to_numpy(),
+    "amplitude_log2": gene_metrics["amplitude_log2_ratio_human_over_mouse"].to_numpy(),
+    "abs_shift": np.abs(gene_metrics["best_shift_human_minus_mouse"].to_numpy()),
+})
+
 enrichment_rows = _phenotype_enrichment(
-    phenotype_by_row, universe_index, pathway_tested, CONFIG
+    phenotype_by_row, universe_index, pathway_tested, CONFIG, member_evidence=member_evidence
 )
 
 pathway_enrichment = pd.DataFrame(enrichment_rows)
 pathway_enrichment = _numeric(pathway_enrichment, [
     "n_pathway_members_in_universe", "n_universe_with_phenotype", "observed", "expected",
-    "fold_enrichment", "p_value",
+    "fold_enrichment", "p_value", "member_fraction_in_phenotype",
+    "coherence_member_median_shape_corr", "coherence_member_median_abs_amplitude_log2",
+    "coherence_member_median_abs_shift",
 ])
 pathway_enrichment["fdr"] = bh_adjust(pathway_enrichment["p_value"].to_numpy())
 pathway_enrichment["minus_log10_fdr"] = -np.log10(
@@ -3383,111 +3534,174 @@ _save_table(pathway_enrichment, "pathway_spatial_phenotype_enrichment.csv")
 
 
 # %%
-# Purpose: the pathway x phenotype heatmap, collapsed to non-redundant representative terms.
+# Purpose: the significant pathway x phenotype associations, and the redundancy-collapsed view.
 
 redundancy_pairs, redundancy_groups = summarize_pathway_redundancy(
     membership.assign(genes_present=membership["member_list"]),
     gene_column="genes_present",
-    overlap_threshold=0.6,
+    overlap_threshold=CONFIG["pathway_redundancy_overlap"],
 )
 
 group_of_pathway = {
-    (row.library, row.pathway): int(row.redundancy_group)
-    for row in redundancy_groups.itertuples()
+    (row.library, row.pathway): int(row.redundancy_group) for row in redundancy_groups.itertuples()
 }
 group_size_of_pathway = {
-    (row.library, row.pathway): int(row.group_size)
-    for row in redundancy_groups.itertuples()
+    (row.library, row.pathway): int(row.group_size) for row in redundancy_groups.itertuples()
 }
 
-_report("pathway overlap pairs at >= 60% of the smaller set", len(redundancy_pairs))
-_report("redundancy groups", int(redundancy_groups["redundancy_group"].nunique()), len(redundancy_groups),
-        why="one representative per group is plotted")
+_report("pathway overlap pairs at >= the redundancy threshold", len(redundancy_pairs))
+_report("redundancy groups", int(redundancy_groups["redundancy_group"].nunique()),
+        len(redundancy_groups),
+        why=f"only near-duplicate sets are collapsed (overlap >= {CONFIG['pathway_redundancy_overlap']})")
 
-significant_pairs = pathway_enrichment[
+significant_associations = pathway_enrichment[
     pathway_enrichment["fdr"] < CONFIG["enrichment_fdr"]
 ].sort_values("fdr").reset_index(drop=True)
 
-representatives = []
-seen_groups = set()
-MAX_HEATMAP_PATHWAYS = 30
+significant_associations = significant_associations.assign(
+    redundancy_group=[group_of_pathway.get((library, pathway), np.nan)
+                      for library, pathway in zip(significant_associations["library"],
+                                                  significant_associations["pathway"])],
+    redundancy_group_size=[group_size_of_pathway.get((library, pathway), np.nan)
+                           for library, pathway in zip(significant_associations["library"],
+                                                       significant_associations["pathway"])],
+    pathway_label=[
+        f"{pathway}  [{library.replace('_2022', '').replace('MSigDB_Hallmark_2020', 'Hallmark').replace('KEGG_2019_Mouse', 'KEGG')}]"
+        for library, pathway in zip(significant_associations["library"],
+                                    significant_associations["pathway"])
+    ],
+)
 
-for row in significant_pairs.itertuples():
-    group = group_of_pathway.get((row.library, row.pathway), None)
-    if group is not None and group in seen_groups:
-        continue
-    if group is not None:
-        seen_groups.add(group)
-    representatives.append(row)
-    if len(representatives) >= MAX_HEATMAP_PATHWAYS:
-        break
+_report("significant pathway x phenotype associations",
+        len(significant_associations), len(pathway_enrichment),
+        why=f"family-wide FDR < {CONFIG['enrichment_fdr']}; shown directly, not collapsed away")
 
-heatmap_frame = pd.DataFrame([{
-    "library": row.library,
-    "pathway": row.pathway,
-    "spatial_phenotype": row.spatial_phenotype,
-    "signed_strength": row.signed_strength,
-    "fdr": row.fdr,
-    "fold_enrichment": row.fold_enrichment,
-    "redundancy_group": group_of_pathway.get((row.library, row.pathway), np.nan),
-    "group_size": group_size_of_pathway.get((row.library, row.pathway), np.nan),
-    "leading_genes": row.leading_genes,
-} for row in representatives])
+_save_table(significant_associations, "pathway_significant_associations.csv")
 
-if heatmap_frame.empty:
+# Bound unconditionally: section 9's strongest-findings panels read these whether or not this run
+# produced any significant association.
+heatmap_frame = pd.DataFrame()
+
+if significant_associations.empty:
     print(f"No pathway x phenotype pair reached FDR < {CONFIG['enrichment_fdr']}: "
-          "the heatmap is skipped rather than drawn empty. The full enrichment table is still saved.")
+          "both figures are skipped rather than drawn empty. The full table is still saved.")
 else:
-    # A pathway can be significant for more than one phenotype; show its strongest per phenotype.
+    # ----------------------------------------------------------------------------------
+    # Main figure: every significant association, as a dot plot.
+    #
+    # Cell value = the member fraction, which is the honest way to read an enrichment: how much of
+    # the pathway actually holds the phenotype. Dot size carries fold enrichment, colour carries
+    # significance, and the row label carries whether the pathway is *coherent* for that phenotype.
+    # ----------------------------------------------------------------------------------
+    phenotype_columns = [label for label in PHENOTYPE_CLASSES
+                         if label in set(significant_associations["spatial_phenotype"])]
+    row_order = (significant_associations.groupby("pathway_label")["fdr"].min()
+                 .sort_values().index.tolist())
+
+    figure, axis = plt.subplots(
+        1, 1, figsize=(1.5 * len(phenotype_columns) + 7.5, max(4.5, 0.42 * len(row_order)))
+    )
+
+    significance_scale = float(significant_associations["minus_log10_fdr"].max())
+    for row_index, pathway_label in enumerate(row_order):
+        block = significant_associations[significant_associations["pathway_label"].eq(pathway_label)]
+        coherence = sorted(set(block["coherence_status"]))
+        for entry in block.itertuples():
+            x_position = phenotype_columns.index(entry.spatial_phenotype)
+            axis.scatter(
+                x_position, row_index,
+                s=45 + 45 * float(np.clip(entry.fold_enrichment, 0, 8)),
+                c=[entry.minus_log10_fdr], cmap="viridis",
+                vmin=0, vmax=max(significance_scale, 1e-9),
+                edgecolors="black", linewidths=0.4, zorder=3,
+            )
+            axis.annotate(
+                f"{entry.member_fraction_in_phenotype:.0%}", (x_position, row_index),
+                xytext=(0, -10), textcoords="offset points", ha="center", fontsize=6.5,
+            )
+        axis.text(-0.02, row_index, "  ".join(coherence), transform=axis.get_yaxis_transform(),
+                  ha="right", va="center", fontsize=6.5, color="0.35")
+
+    axis.set_xticks(np.arange(len(phenotype_columns)))
+    axis.set_xticklabels([textwrap.fill(label, 18) for label in phenotype_columns],
+                         rotation=30, ha="right", fontsize=8)
+    axis.set_yticks(np.arange(len(row_order)))
+    axis.set_yticklabels([textwrap.fill(label, 46) for label in row_order], fontsize=7.5)
+    axis.set_xlim(-0.6, len(phenotype_columns) - 0.4)
+    axis.set_ylim(-0.6, len(row_order) - 0.4)
+    axis.set_xlabel("Spatial phenotype the pathway's members are over-represented in")
+    axis.set_title(
+        "Pathway genes over-represented in each spatial phenotype\n"
+        "dot size = fold enrichment, colour = -log10(FDR), label = share of the pathway's tested "
+        "members holding the phenotype\n"
+        "grey text = coherence (whether the members behave that way overall, not just often enough)",
+        loc="left", fontsize=9.5,
+    )
+    figure.tight_layout()
+    _save_figure(figure, "pathway_spatial_phenotype_dotplot.png")
+    plt.show()
+
+    # ----------------------------------------------------------------------------------
+    # Companion figure: the same associations collapsed to redundancy groups, so a pathway
+    # family appears once.
+    # ----------------------------------------------------------------------------------
+    representatives = []
+    seen_groups = set()
+    for row in significant_associations.itertuples():
+        group = row.redundancy_group
+        if np.isfinite(group) and int(group) in seen_groups:
+            continue
+        if np.isfinite(group):
+            seen_groups.add(int(group))
+        representatives.append(row)
+
+    heatmap_frame = pd.DataFrame([{
+        "library": row.library, "pathway": row.pathway,
+        "spatial_phenotype": row.spatial_phenotype,
+        "signed_strength": row.signed_strength, "fdr": row.fdr,
+        "fold_enrichment": row.fold_enrichment,
+        "member_fraction_in_phenotype": row.member_fraction_in_phenotype,
+        "coherence_status": row.coherence_status,
+        "redundancy_group": row.redundancy_group,
+        "group_size": row.redundancy_group_size,
+        "leading_genes": row.leading_genes,
+    } for row in representatives])
+
     heatmap_matrix = (
         heatmap_frame
         .pivot_table(index=["library", "pathway"], columns="spatial_phenotype",
                      values="signed_strength", aggfunc="max")
-        .reindex(columns=[label for label in PHENOTYPE_CLASSES
-                          if label in set(heatmap_frame["spatial_phenotype"])])
+        .reindex(columns=phenotype_columns)
     )
     heatmap_matrix = heatmap_matrix.reindex(
         heatmap_matrix.abs().max(axis=1).sort_values(ascending=False).index
     )
-
-    heatmap_labels = [
-        f"{pathway}  [{library}]"
-        + ("" if pd.isna(group_of_pathway.get((library, pathway)))
-           else f" (group of {int(group_size_of_pathway[(library, pathway)])})")
-        for library, pathway in heatmap_matrix.index
-    ]
     scale = float(np.nanmax(np.abs(heatmap_matrix.to_numpy())))
 
     figure, axis = plt.subplots(
-        1, 1,
-        figsize=(1.15 * heatmap_matrix.shape[1] + 8.0, max(5.0, 0.32 * heatmap_matrix.shape[0])),
+        1, 1, figsize=(1.15 * heatmap_matrix.shape[1] + 8.0,
+                       max(3.5, 0.42 * heatmap_matrix.shape[0]))
     )
-
-    image = axis.imshow(
-        heatmap_matrix.to_numpy(), aspect="auto", interpolation="nearest", cmap="PuOr_r",
-        vmin=-scale, vmax=scale,
-    )
-
+    image = axis.imshow(heatmap_matrix.to_numpy(), aspect="auto", interpolation="nearest",
+                        cmap="PuOr_r", vmin=-scale, vmax=scale)
     axis.set_xticks(np.arange(heatmap_matrix.shape[1]))
     axis.set_xticklabels([textwrap.fill(str(label), 18) for label in heatmap_matrix.columns],
                          rotation=45, ha="right", fontsize=8)
     axis.set_yticks(np.arange(heatmap_matrix.shape[0]))
-    axis.set_yticklabels([textwrap.fill(str(label), 46) for label in heatmap_labels], fontsize=7.5)
-
+    axis.set_yticklabels([textwrap.fill(f"{pathway}  [{library}]", 46)
+                          for library, pathway in heatmap_matrix.index], fontsize=7.5)
     for row_index in range(heatmap_matrix.shape[0]):
         for column_index in range(heatmap_matrix.shape[1]):
             value = heatmap_matrix.to_numpy()[row_index, column_index]
             if np.isfinite(value):
-                axis.text(column_index, row_index, f"{value:.1f}", ha="center", va="center", fontsize=6.5)
-
-    colour_bar = figure.colorbar(image, ax=axis, shrink=0.7)
-    colour_bar.set_label("Signed -log10(FDR):  + enriched,  - depleted\n(one term per redundancy group)")
-
+                axis.text(column_index, row_index, f"{value:.1f}", ha="center", va="center",
+                          fontsize=6.5)
+    figure.colorbar(image, ax=axis, shrink=0.7,
+                    label="Signed -log10(FDR): + enriched, - depleted\n(one term per redundancy group)")
     axis.set_title(
-        "Pathway spatial-phenotype enrichment (non-redundant representatives)\n"
-        "hypergeometric against the tested-ortholog universe, BH across the complete "
-        "pathway x phenotype family",
-        loc="left", fontsize=10,
+        "The same associations, collapsed to redundancy groups\n"
+        "near-duplicate sets only; the dot plot above is the primary view",
+        loc="left", fontsize=9.5,
     )
     figure.tight_layout()
     _save_figure(figure, "pathway_spatial_phenotype_heatmap.png")
@@ -4023,6 +4237,7 @@ summary_columns = [
     "conventional_effect", "conventional_percentile", "n_members_in_universe",
     "median_member_abs_level_effect", "median_member_amplitude_log2_ratio",
     "median_member_abs_shift", "median_member_shape_corr", "median_member_spatial_score",
+    "member_fraction_in_phenotype", "coherence_status",
 ]
 
 pathway_spatial_rewiring_summary = pd.DataFrame([
@@ -4035,6 +4250,10 @@ pathway_spatial_rewiring_summary = pd.DataFrame([
         "leading_genes": row.leading_genes,
         "conventional_effect": pathway_conventional_effect.get(f"{row.library}: {row.pathway}", np.nan),
         "conventional_percentile": conventional_pathway_ranks.get(f"{row.library}: {row.pathway}", np.nan),
+        # Coherence travels with the association: "enriched for genes classified as X" is the claim,
+        # and these columns say how much of the pathway that is.
+        "member_fraction_in_phenotype": row.member_fraction_in_phenotype,
+        "coherence_status": row.coherence_status,
         **pathway_member_stats.get(f"{row.library}: {row.pathway}", {}),
     }
     for row in pathway_enrichment.itertuples()
@@ -4047,7 +4266,8 @@ pathway_spatial_rewiring_summary = pd.DataFrame([
 pathway_spatial_rewiring_summary = _numeric(
     pathway_spatial_rewiring_summary,
     [column for column in summary_columns
-     if column not in {"library", "pathway", "spatial_phenotype", "leading_genes"}],
+     if column not in {"library", "pathway", "spatial_phenotype", "leading_genes",
+                       "coherence_status"}],
 )
 
 _save_table(pathway_spatial_rewiring_summary, "pathway_spatial_rewiring_summary.csv")
@@ -4130,8 +4350,11 @@ else:
 # enriched for any divergent phenotype.
 #
 # **What counts as evidence.** A pathway whose member genes are enriched for conserved zonation at
-# family-wide FDR < `enrichment_fdr`, reported with its member count and the median shape correlation of
-# its members, so that "conserved" is not a label applied to a large set with a few coherent genes. The
+# family-wide FDR < `enrichment_fdr`, reported with its member count, the member fraction holding the
+# class, and the median shape correlation of its members. The language matters here: an enriched pathway
+# is "enriched for genes classified as conserved zonation" unless its members are also coherent (see
+# section 8) - a few conserved genes inside a 82-member set does not make the set a conserved programme,
+# and the table carries both the fraction and the coherence status so the distinction is visible. The
 # contrast figure puts conserved enrichment against divergent enrichment on the same axes: a pathway in
 # the upper-left quadrant keeps its spatial programme; one in the lower-right has been remodelled.
 #
@@ -4175,8 +4398,10 @@ spatially_conserved_pathways = conserved_enrichment[
     conserved_enrichment["fdr"] < CONFIG["enrichment_fdr"]
 ][[
     "library", "pathway", "n_pathway_members_in_universe", "observed", "expected",
-    "fold_enrichment", "p_value", "fdr", "median_member_shape_corr",
-    "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift", "leading_genes",
+    "fold_enrichment", "p_value", "fdr", "member_fraction_in_phenotype", "coherence_status",
+    "coherence_member_median_shape_corr", "coherence_member_median_abs_amplitude_log2",
+    "median_member_shape_corr", "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
+    "leading_genes",
 ]]
 
 display(spatially_conserved_pathways.head(20).round(4))
@@ -4403,17 +4628,19 @@ _save_table(gene_spatial_rewiring_atlas, "gene_spatial_rewiring_atlas.csv")
 
 TOP_N_PER_CLASS = 25
 
-top_genes_by_spatial_phenotype = (
-    gene_metrics[
-        discovery_eligible & gene_metrics["spatial_phenotype"].isin(PHENOTYPE_CLASSES)
+# Ranked by each class's own evidence, exactly as the figures are, so the table and the panels agree.
+top_genes_by_spatial_phenotype = pd.concat(
+    [_top_genes_for_class(label, TOP_N_PER_CLASS) for label in PHENOTYPE_CLASSES],
+    ignore_index=True,
+)
+top_genes_by_spatial_phenotype = top_genes_by_spatial_phenotype.assign(
+    exemplar_evidence=[
+        CLASS_EVIDENCE[label]["label"] if label in CLASS_EVIDENCE else "global divergence score"
+        for label in top_genes_by_spatial_phenotype["spatial_phenotype"]
     ]
-    .sort_values(["spatial_phenotype", "robustness_score", "spatial_discovery_score"],
-                 ascending=[True, False, False])
-    .groupby("spatial_phenotype", group_keys=False)
-    .head(TOP_N_PER_CLASS)
-    .reset_index(drop=True)
 )[[
-    "spatial_phenotype", "gene", "robustness_score", "spatial_discovery_score",
+    "spatial_phenotype", "gene", "exemplar_evidence", "robustness_score",
+    "spatial_discovery_score", "shift_interior", "shift_at_search_boundary",
     "mouse_amplitude", "human_amplitude", "amplitude_log2_ratio_human_over_mouse",
     "shape_corr", "registered_shape_corr", "best_shift_human_minus_mouse",
     "centroid_shift_human_minus_mouse", "level_effect_human_minus_mouse",

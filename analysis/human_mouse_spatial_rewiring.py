@@ -3887,8 +3887,10 @@ else:
     positions = np.arange(len(top_spatial))
     axis.barh(
         positions, top_spatial["median_member_spatial_score"],
+        # The summary frame names the column `spatial_phenotype`; only the continuous-only table
+        # renames it to `dominant_spatial_phenotype`.
         color=[PHENOTYPE_COLORS.get(label, "#888888")
-               for label in top_spatial["dominant_spatial_phenotype"]],
+               for label in top_spatial["spatial_phenotype"]],
         alpha=0.9,
     )
     axis.set_yticks(positions)

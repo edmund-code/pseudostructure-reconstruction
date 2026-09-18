@@ -7,8 +7,9 @@ repository and no private data is touched. Real-data scale, values and figure qu
 
 Synthetic genes are built in regimes, so known groups land in known phenotype classes and the
 pathway enrichment comes out non-empty - that is what exercises the pathway figures, which empty
-synthetic results kept skipping. After the setup cell runs, CONFIG's clustering floors are lowered
-(test-only) because this cohort is far smaller than the real one.
+synthetic results kept skipping. One regime is a displacement regime: there is no shifted phenotype
+class any more, so it exercises the supporting-displacement path instead - the flag is set and the gene
+is classed by what its residual shape does.
 """
 import json, os, pathlib, shutil, sys, tempfile, traceback
 from contextlib import contextmanager
@@ -67,7 +68,7 @@ def build_tree(root: pathlib.Path):
     regimes[head + 180:] = "amplitude"
 
     amplitude = rng.uniform(0.2, 0.6, size=n_genes)
-    amplitude[:len(LANDMARKS)] = 0.5                  # landmarks must be patterned to anchor
+    amplitude[:len(LANDMARKS)] = 0.5                  # patterned, so the figure-1A QC panel has content
     centre = rng.uniform(0.15, 0.85, size=n_genes)
     displacement = np.zeros(n_genes)
     scale = np.ones(n_genes)
@@ -177,11 +178,6 @@ def main():
         for source, index in sources:
             try:
                 exec(compile(source, f"cell_{index}", "exec"), namespace)
-                # Test-only knob: this cohort is far smaller than the real one, so the clustering
-                # branch is only reachable with lower floors. Set after the setup cell built CONFIG.
-                if isinstance(namespace.get("CONFIG"), dict):
-                    namespace["CONFIG"].update({"cluster_min_genes": 8, "cluster_k_min": 3,
-                                                "cluster_k_max": 5})
             except Exception:
                 failures.append((index, source.split("\n")[0][:70], traceback.format_exc()))
                 print(f"!!! FAILED cell {index}: {source.split(chr(10))[0][:70]}")

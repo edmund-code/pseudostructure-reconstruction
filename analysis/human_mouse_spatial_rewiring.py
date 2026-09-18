@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Human versus healthy-mouse proximal tubule: continuous spatial conservation and rewiring
+# # Human versus healthy-mouse proximal tubule analysis
 #
 # Notebook 05 asked which genes are higher or lower across the whole proximal tubule (PT). That
 # question averages one coordinate away: a gene whose zonation is intact but displaced, or whose
@@ -12,10 +12,10 @@
 #
 # The objects that carry the analysis are **fitted expression curves along PT pseudospace** — a
 # balanced mouse curve and a balanced human curve per gene, each the equal-weight mean of its
-# specimens' own fitted curves. Absolute abundance and spatial pattern are then analysed separately
-# by construction: `level` is the mean vertical offset of the two curves, `amplitude` is peak-to-trough
-# of each curve, `shape` compares curves after each is standardised within its species, and `phase` is
-# a constrained horizontal displacement that has to earn its interpretation against a fixed maximum.
+# specimens' own fitted curves. Absolute abundance and spatial pattern are analysed separately by
+# construction: `level` is the mean vertical offset of the two curves, `amplitude` is peak-to-trough of
+# each curve, `shape` compares curves after each is standardised within its species, and `displacement`
+# is a constrained horizontal shift that has to earn its interpretation against a fixed maximum.
 #
 # ## Read this before the numbers
 #
@@ -24,46 +24,39 @@
 #   test. Every contrast is a descriptive effect size on a specific balanced-curve pair.
 # * Agreement between the two human slices, and between the two mouse specimens, is used as a
 #   **robustness** measure — "is this curve reproducible within a species" — never as replication-based
-#   inference. Section 5 does leave-one-slice-out as *slice sensitivity*, not as a replication test.
+#   inference. Section 3.2 leaves one slice out as *slice sensitivity*, not as a replication test.
 # * **Species is inseparable from sampling and from Harmony batch correction** in this cohort
 #   (`sample` is the batch key). A cross-species difference in a fitted curve is a difference between
 #   these two mice and this one donor, processed this way.
 # * Both human slices are anatomically cortex; the `MED1` label does not make the tissue medullary.
 # * Genes that were used to build or orient the PT coordinate are flagged (`axis_basis_gene`) and are
-#   excluded from every unbiased discovery list, but they are retained for validation plots.
+#   excluded from every unbiased discovery list, but they are retained for the QC and validation plots.
 # * Direction conventions, used everywhere below: **positive level effect = higher in human**;
 #   **positive shift = the human positional program occurs later along PT than the mouse program**;
 #   positive early-to-late gradient = expression increases from early to late PT.
 #
 # ## The coordinate this notebook analyses
 #
-# The primary coordinate is **03's shared PT DPT**, as in every other notebook here. Landmark-anchored
-# registration is computed in section 2 and used as a **sensitivity analysis** rather than as the
-# coordinate of record: in this cohort the human S1 and S2 landmark programmes are nearly coincident
-# and appear in the wrong centroid order, so a monotone mapping has to be imposed on them rather than
-# read off the data. Section 2 reports how much alignment is forced; section 5 re-derives every
-# phenotype on the registered axis; the alternate axis's columns carry the `_landmark_registered`
-# suffix throughout.
+# The coordinate is **03's shared PT DPT**, used exactly as 03 oriented it: no cross-species
+# re-registration is applied, so a displacement is read as evidence that the two species' spatial
+# programmes differ, not as an anatomical measurement between aligned axes. Two consequences are built
+# into the analysis rather than left to the reader. First, the displacement criteria are strict — an
+# interior optimum, a positional centroid that agrees, and an improved shape agreement — and a
+# displacement is reported as a **supporting measurement** of the genes carrying it rather than as a
+# phenotype class, so no gene's class rests on a coordinate difference alone. Second, a gene that is
+# flat or noisy in one species is never described as spatially rewired, whatever its level difference.
 #
 # ## Layout
 #
 # | Section | Question it answers |
 # | --- | --- |
 # | 0 | Setup, cohort, gene universe, direction conventions |
-# | 1 | Balanced species curves and within-species reproducibility |
-# | 2 | Landmark-anchored cross-species registration of PT position |
-# | 3 | Level / amplitude / shape / position / phase / inversion metrics per gene |
-# | 4 | Mutually exclusive spatial phenotypes |
-# | 5 | Sensitivity of every phenotype to the analysis choices |
-# | 5b | Is there a conserved spatial architecture? Permutation null on both-species-patterned genes |
-# | 6 | Primary figures (1A–1E) |
-# | 7 | Clustering of the residual "complex shape rewiring" curves only |
-# | 8 | Pathway enrichment against the spatial phenotypes |
-# | 9 | Pathway-level gene x pseudospace visualisation |
-# | 10 | Conventional whole-PT signal versus continuous spatial signal |
-# | 11 | Spatially conserved functions |
-# | 12 | Literature validation (deferred — placeholder) |
-# | 13 | Tables, notes and the auto-generated summary |
+# | 1 | Balanced human and mouse PT curves, and the curve-layer QC |
+# | 2 | How each gene differs along PT: the five quantities, and the conserved-architecture null |
+# | 3 | Spatial phenotypes, their robustness across the analysis choices, and the result figures |
+# | 4 | Which functional programs sit in which spatial phenotype |
+# | 5 | What the continuous analysis adds beyond the whole-PT comparison |
+# | 6 | Tables, the run inventory and the closing summary |
 #
 # Outputs are written to `results/human_vs_healthy_mouse/spatial_rewiring/` (`figures/`, `tables/`,
 # the fitted-curve `.npz` payloads and `analysis_notes.md`). The **stage cache is deliberately
@@ -157,7 +150,7 @@ STAGE_CACHE_ENABLED = stage_cache_enabled(None)
 
 # ======================================================================================
 # Analysis settings. Every threshold the notebook uses lives here, and the diagnostics cell in
-# section 4 reports the empirical distributions these values are read against.
+# section 3 reports the empirical distributions these values are read against.
 # ======================================================================================
 
 CONFIG = {
@@ -168,16 +161,13 @@ CONFIG = {
     "lambda_grid": np.logspace(-3, 3, 13),
 
     # --- coordinate -----------------------------------------------------------------------
-    # The primary coordinate is 03's shared PT DPT. Landmark registration is a *sensitivity*
-    # analysis, not the primary axis: in this cohort the human S1 and S2 landmark programmes are
-    # nearly coincident and appear in the wrong centroid order, so a monotone mapping has to be
-    # imposed on them and cannot be treated as an established biological alignment. Section 2
-    # reports exactly how much alignment is forced.
-    "primary_coordinate": "shared_dpt",
+    # One coordinate throughout: 03's shared PT DPT (the PT-specific `total_scanpy_dpt` column of
+    # `cross_species_pt_dpt.h5ad`). Every positional statement below is a statement about that axis
+    # in this cohort; no cross-species re-registration is applied to it.
 
     # --- gene universe -------------------------------------------------------------------
     "min_detected_fraction_all": 0.02,     # as in 03/05: >= 2% of all PT structures
-    "min_detection_each_species": 0.05,    # a landmark or pathway member must be seen in both
+    "min_detection_each_species": 0.05,    # a pathway member must be seen in both species
     "min_pattern_grid_points": 40,         # grid points both species must support before any metric
 
     # --- zonation ------------------------------------------------------------------------
@@ -196,7 +186,7 @@ CONFIG = {
     "amplitude_change_major": 0.75,        # |log2 human/mouse amplitude|, ~1.68x
     "amplitude_change_small": 0.40,        # ~1.32x: still "no major amplitude change"
 
-    # --- phase ---------------------------------------------------------------------------
+    # --- displacement (a supporting measurement, not a class) ------------------------------
     # The search is deliberately wider than any displacement this notebook will interpret: an
     # optimum that lands on the search boundary has not been estimated at all, it only says that
     # agreement keeps improving outwards. Interpreted displacements must sit inside the search
@@ -251,12 +241,6 @@ CONFIG = {
     # of groups and hides the associations the section exists to report.
     "pathway_redundancy_overlap": 0.85,
 
-    # --- clustering of residual rewiring --------------------------------------------------
-    "cluster_k_min": 4,
-    "cluster_k_max": 8,
-    "cluster_seed": 0,
-    "cluster_min_genes": 60,               # fewer than this and the section is skipped, not forced
-
     # --- figures --------------------------------------------------------------------------
     "top_labels_per_panel": 12,
     # The complete three-gene atlas is retained as a supplementary figure.  The main figure uses
@@ -266,22 +250,8 @@ CONFIG = {
     "heatmap_genes_per_class": 6,
 }
 
-# Column suffix for whichever coordinate is NOT primary, so every phenotype can be re-derived
-# on the alternate axis in section 5. The alternate axis is the landmark-registered one when the
-# shared DPT is primary, and vice versa.
-ALT_SUFFIX = ("_landmark_registered" if CONFIG["primary_coordinate"] == "shared_dpt"
-              else "_shared_dpt")
-
 # How far from the search boundary an optimum must sit to count as an interior estimate.
 SHIFT_INTERIOR_LIMIT = CONFIG["shift_search_limit"] - CONFIG["shift_interior_margin"]
-
-# The alternate coordinate's metric columns: the same metrics, one suffix away.
-ALT_COLUMNS = [f"{name}{ALT_SUFFIX}" for name in [
-    "n_shared_grid_points", "level_effect_human_minus_mouse", "mouse_amplitude",
-    "human_amplitude", "amplitude_log2_ratio_human_over_mouse", "shape_corr", "shape_spearman",
-    "best_shift_human_minus_mouse", "post_shift_shape_corr", "shift_improvement",
-    "centroid_shift_human_minus_mouse", "gradient_change_human_minus_mouse",
-]]
 
 PHENOTYPE_COLORS = {
     "conserved zonation": "#1B7837",
@@ -289,8 +259,6 @@ PHENOTYPE_COLORS = {
     "stronger zonation in human": "#762A83",
     "mouse-zonated / human-flat": "#0072B2",
     "human-zonated / mouse-flat": "#D55E00",
-    "shifted earlier in human": "#E69F00",
-    "shifted later in human": "#9E4F00",
     "gradient inversion": "#C2185B",
     "complex shape rewiring": "#4D4D4D",
     "weak / uncertain zonation": "#BDBDBD",
@@ -302,11 +270,9 @@ SPECIES_COLORS = {
     "human": "#D55E00",
 }
 
-LANDMARK_PANEL_COLORS = {
-    "S1": "#2C7FB8",
-    "S2": "#41AB5D",
-    "S3": "#D95F0E",
-}
+# The displacement metrics are a supporting measurement, not a class: this colour marks them wherever
+# they are drawn, so a displacement can never be mistaken for a phenotype.
+DISPLACEMENT_COLOR = "#E69F00"
 
 # Direction conventions, restated once so the sign of every column is unambiguous.
 DIRECTION_CONVENTIONS = {
@@ -317,17 +283,18 @@ DIRECTION_CONVENTIONS = {
     "pattern_rms_z": "standardised RMS difference; 0 = identical spatial pattern",
 }
 
-# Canonical PT landmark programs, taken from 03 (NEPHRON_AXIS_MARKERS and the PT fine panels) with
-# the S3 additions used for the mouse-only axis. They anchor the cross-species registration in
-# section 2 and are excluded from unbiased discovery.
-LANDMARK_PANELS = {
+# The canonical PT marker panels 03 uses to build and orient the PT coordinate (its
+# NEPHRON_AXIS_MARKERS and PT fine panels, plus the S3 additions used for the mouse-only axis). They
+# are used here for two things only: the `axis_basis_gene` flag below, so that the basis of the
+# coordinate cannot also be presented as a finding about it, and the curve-layer QC panel (figure 1A).
+AXIS_BASIS_PANELS = {
     "S1": ["Slc5a2", "Slc5a12", "Gatm", "Lrp2", "Cubn", "Slc34a1"],
     "S2": ["Slc22a6", "Slc13a3", "Cyp2e1"],
     "S3": ["Slc22a7", "Cyp7b1", "Slc7a13", "Slc6a18", "Acsm3"],
 }
 
 # Every gene that contributed to building or orienting the PT coordinate.
-AXIS_BASIS_GENES = tuple(sorted({gene for panel in LANDMARK_PANELS.values() for gene in panel}))
+AXIS_BASIS_GENES = tuple(sorted({gene for panel in AXIS_BASIS_PANELS.values() for gene in panel}))
 
 # Obvious technical features: mitochondrial and cytoplasmic ribosomal protein genes.
 TECHNICAL_GENE_PATTERNS = (
@@ -461,12 +428,11 @@ print("Project:      ", PROJECT_DIR)
 print("Input:        ", DPT_OUTPUT_PATH)
 print("Outputs:      ", OUT_DIR)
 print("Stage cache:  ", STAGE_CACHE_DIR, f"({'on' if STAGE_CACHE_ENABLED else 'off'})")
-print("Primary coordinate:", CONFIG["primary_coordinate"],
-      f"(alternate axis columns carry {ALT_SUFFIX})")
+print("Coordinate:   ", "03's shared PT DPT (`total_scanpy_dpt`); no re-registration applied")
 print("Direction conventions:")
 for _column, _meaning in DIRECTION_CONVENTIONS.items():
     print(f"  {_column}: {_meaning}")
-print("Landmark panels:", {k: len(v) for k, v in LANDMARK_PANELS.items()})
+print("Axis-basis genes flagged:", len(AXIS_BASIS_GENES))
 
 
 # %% [markdown]
@@ -595,9 +561,9 @@ print(f"  grid: {grid.size} points; internal knots: {len(knots)}")
 #
 # Two flags decide what may appear in an unbiased discovery list:
 #
-# * `axis_basis_gene` - the gene helped build or orient the PT coordinate (`LANDMARK_PANELS`). Keeping
+# * `axis_basis_gene` - the gene helped build or orient the PT coordinate (`AXIS_BASIS_GENES`). Keeping
 #   them would make the coordinate's own basis look like the strongest finding in it. They stay in the
-#   tables and are used in the registration and validation plots.
+#   tables and flag every unbiased discovery list.
 # * `technical_gene` - mitochondrial and cytoplasmic/mitochondrial ribosomal protein genes.
 #
 # Neither flag removes a gene from the object: everything is reported with its flags so the exclusion
@@ -677,14 +643,14 @@ detected_in_both_species = (
 )
 
 _report("axis-basis genes in the universe", int(axis_basis_gene.sum()), len(gene_names),
-        why=f"of {len(AXIS_BASIS_GENES)} landmark-panel genes")
+        why=f"of {len(AXIS_BASIS_GENES)} axis-basis genes")
 _report("technical genes in the universe", int(technical_gene.sum()), len(gene_names),
         why="mitochondrial / ribosomal protein")
 _report("detected in both species", int((detected_in_both_species & ~axis_basis_gene & ~technical_gene).sum()),
         len(gene_names), why=f"detection >= {CONFIG['min_detection_each_species']:.0%} per species, "
                              "axis and technical genes excluded")
 
-print(f"  axis-basis genes present as landmarks: "
+print(f"  axis-basis genes present in the universe: "
       f"{[gene for gene in AXIS_BASIS_GENES if gene.upper() in gene_lookup_tested]}")
 
 
@@ -697,7 +663,7 @@ print(f"  axis-basis genes present as landmarks: "
 # * **NaN means "no support here", not zero.** A specimen's curve is NaN outside its own pseudospace
 #   support, so a metric is always taken over a finite mask (`_finite_row_mask`) and reported as NaN
 #   when too few shared grid points remain.
-# * **Nothing extrapolates.** The phase search samples the human curve only inside its own support;
+# * **Nothing extrapolates.** The displacement search samples the human curve only inside its own support;
 #   grid points a displacement pushes outside it are dropped from that comparison, and out-of-support
 #   values never enter a correlation.
 # * **Amplitude-free and level-free by construction** where the metric claims to be: `_row_zscore`
@@ -892,7 +858,7 @@ def _interp_rows(values, source_x, target_x):
 
 
 def _row_shift_search(mouse_z, human_z, x_unit, search_limit, step, min_points=8):
-    """Constrained horizontal registration of each human z-curve onto its mouse z-curve.
+    """Constrained horizontal displacement of each human z-curve onto its mouse z-curve.
 
     Positive shift = the human positional program lies **later** along PT than the mouse program, so
     the human curve is sampled at ``x + shift`` and compared with the mouse curve at ``x``. The
@@ -935,7 +901,7 @@ def _row_shift_search(mouse_z, human_z, x_unit, search_limit, step, min_points=8
 
 
 # %% [markdown]
-# ## 1 - Balanced species curves
+# ## 1 - Balanced human and mouse PT curves
 #
 # **Why this metric.** Every cross-species statement in this notebook is a statement about the pair
 # `(balanced mouse curve, balanced human curve)` for one gene, so how those two curves are built is the
@@ -955,6 +921,11 @@ def _row_shift_search(mouse_z, human_z, x_unit, search_limit, step, min_points=8
 # agreement that later sections gate on, and records for each gene how many grid points both species
 # actually support. A gene whose balanced curves overlap on too few points cannot support any
 # positional reading, however interesting its mean difference is.
+#
+# **The QC panel.** The section closes with figure 1A: the canonical S1 (early), S2 (mid) and S3 (late)
+# PT programmes drawn on the shared coordinate. It is the one check the whole notebook depends on - if
+# the canonical programmes did not run early to late in both species, no curve metric below would mean
+# anything - so the peak positions and early-to-late slopes are printed with the figure.
 #
 # **Limits stated up front.** A specimen's curve is NaN outside its own pseudospace support, so the
 # balanced curves are read over the shared finite grid only (`n_shared_grid_points`). The per-gene
@@ -1181,8 +1152,8 @@ else:
 if PREVIOUS_ATLAS_PATH.exists():
     previous_atlas = pd.read_csv(PREVIOUS_ATLAS_PATH)
 
-    # atlas column -> this notebook's balanced-curve column. Names differ because the primary
-    # columns of the atlas written in section 13 are the *registered* metrics, not these.
+    # atlas column -> this notebook's balanced-curve column. The names differ; the comparison is
+    # on the same quantity, so the two runs can be read against each other directly.
     atlas_pairs = {
         "mouse_amplitude": "mouse_amplitude_balanced",
         "human_amplitude": "human_amplitude_balanced",
@@ -1205,496 +1176,141 @@ else:
     print(f"{PREVIOUS_ATLAS_PATH} not found - atlas comparison skipped")
 
 
-# %% [markdown]
-# ## 2 - Cross-species registration of PT position
-#
-# **Why this step exists.** The mouse and human curves are both functions of *this object's* DPT
-# coordinate. That coordinate is oriented by conserved PT markers in each species separately, so equal
-# numerical position in the two species need not mean the same anatomical position. Reading a
-# horizontal displacement off the unregistered axis would then be reading a coordinate artefact as
-# biology. So a monotone human -> mouse mapping is established from landmark programs first, and the
-# main analysis runs on the registered coordinate. The unregistered axis is kept as a sensitivity
-# analysis, and a gene is only called *shifted* if the effect survives both.
-#
-# **How the mapping is built.** Canonical PT landmark programs (`LANDMARK_PANELS`: S1, S2, S3, taken
-# from 03's own marker definitions) are scored per species as the mean of their members' within-species
-# z-scored balanced curves. A landmark is used only if at least two of its members are detected in
-# `>= 5%` of both species' structures - a marker that is barely expressed in one species cannot anchor
-# anything. Each used landmark contributes its weighted centroid in the two species as one anchor;
-# monotone piecewise-linear interpolation through the anchors, plus the endpoints `(0, 0)` and `(1, 1)`,
-# is the mapping. Anchor positions are sorted along the mouse axis and forced monotone, so the mapping
-# is monotone by construction.
-#
-# **What counts as evidence.** For the mapping itself: a small number of landmarks whose human
-# positions are ordered consistently with their mouse positions. For the rest of the notebook: every
-# "shift" claim has to survive the *unregistered* comparison too, which is exactly what section 5
-# tests. Registration is deliberately coarse: three programs, not the whole transcriptome, so that it
-# cannot smooth away the rewiring we want to measure.
-#
-# **How this notebook uses it.** The registered axis is *not* the primary coordinate. The primary
-# metrics are computed on 03's shared PT DPT; the registered axis carries the `_landmark_registered`
-# columns, and every phenotype is re-derived on it in section 5. A displacement is only interpreted
-# when it also appears on the alternate axis with the same sign, so registration informs the phase
-# analysis without defining the coordinate.
-#
-# **Limits.** With S1/S2/S3 the mapping is anchored by at most three points and is only as good as
-# those programs; residual misalignment inside a segment is not corrected. Two consequences the
-# code and the self-check both show: the mapping is exact at its anchors but only *evaluated* on
-# the fit grid, so reading it off-grid is accurate to about one grid step and no better; and a
-# landmark whose program is truncated by a species' support edge is realigned less well than one
-# measured in the middle of the supported range. Landmark genes are flagged
-# `axis_basis_gene` and are excluded from unbiased discovery below, because a program used to align
-# the two species cannot also be presented as a finding about them.
-#
-
 # %%
-# Purpose: landmark programs, their positions in each species, and the usable-landmark audit.
+# Purpose: figure 1A - curve-layer QC: the canonical PT programmes on the shared coordinate.
 
-detection_mouse_array = np.asarray(detection_mouse, dtype=float)
-detection_human_array = np.asarray(detection_human, dtype=float)
+# What this panel is for. Every metric below is a property of a *fitted curve*, so the curves have to
+# be aligned with the biology they claim to represent before any of them is read. The canonical early
+# (S1), mid (S2) and late (S3) PT programmes are therefore plotted on the shared PT DPT first. Each
+# species' programme curve is the equal-weight mean of its members' within-species z-scored balanced
+# curves, so the panel shows position rather than abundance. The expectation is the obvious one - S1
+# peaks early, S3 late, in *both* species - and the peak positions are printed beside the figure so the
+# claim is auditable rather than asserted.
 
-
-def _program_curve(curves, member_index, x_unit):
-    """Landmark program curve: mean of the members' within-species z-scored curves."""
-    z_scored = _row_zscore(curves[member_index])
-    return _nanmean_safe(z_scored, axis=0)
-
-
-def _build_landmarks(mouse_curves, human_curves, verbose=True):
-    """Score every landmark panel in both species and report which panels can anchor the mapping.
-
-    A panel is usable when at least two members are detected in >= `min_detection_each_species` of
-    both species, and its own program curve reaches `amplitude_patterned` in both species.
-    """
-    program_rows = []
-    gene_rows = []
-    programs = {}
-
-    for panel, requested in LANDMARK_PANELS.items():
-        present_index = []
-        members = []
-
-        for gene in requested:
-            index = gene_lookup_tested.get(gene.upper())
-            if index is None:
-                gene_rows.append({"panel": panel, "gene": gene, "present": False,
-                                  "detection_mouse": np.nan, "detection_human": np.nan,
-                                  "usable": False})
-                continue
-            detected_both = (
-                detection_mouse_array[index] >= CONFIG["min_detection_each_species"]
-                and detection_human_array[index] >= CONFIG["min_detection_each_species"]
-            )
-            gene_rows.append({
-                "panel": panel, "gene": gene, "present": True,
-                "detection_mouse": float(detection_mouse_array[index]),
-                "detection_human": float(detection_human_array[index]),
-                "usable": bool(detected_both),
-            })
-            if detected_both:
-                present_index.append(index)
-                members.append(gene)
-
-        if len(present_index) < 2:
-            program_rows.append({
-                "panel": panel, "species": "both", "n_members_used": len(present_index),
-                "members": ";".join(members), "mouse_centroid": np.nan, "human_centroid": np.nan,
-                "mouse_peak": np.nan, "human_peak": np.nan, "mouse_amplitude": np.nan,
-                "human_amplitude": np.nan, "used": False,
-            })
-            continue
-
-        member_index = np.asarray(present_index, dtype=int)
-        mouse_program = _program_curve(mouse_curves, member_index, grid_unit)
-        human_program = _program_curve(human_curves, member_index, grid_unit)
-        programs[panel] = {"mouse": mouse_program, "human": human_program, "members": members}
-
-        mouse_amplitude = float(_row_amplitude(mouse_program[None, :])[0])
-        human_amplitude = float(_row_amplitude(human_program[None, :])[0])
-        used = bool(
-            mouse_amplitude >= CONFIG["amplitude_patterned"]
-            and human_amplitude >= CONFIG["amplitude_patterned"]
-        )
-
-        program_rows.append({
-            "panel": panel, "species": "both", "n_members_used": len(present_index),
-            "members": ";".join(members),
-            "mouse_centroid": float(_row_weighted_centroid(mouse_program[None, :], grid_unit)[0]),
-            "human_centroid": float(_row_weighted_centroid(human_program[None, :], grid_unit)[0]),
-            "mouse_peak": float(_row_peak_position(mouse_program[None, :], grid_unit)[0]),
-            "human_peak": float(_row_peak_position(human_program[None, :], grid_unit)[0]),
-            "mouse_amplitude": mouse_amplitude, "human_amplitude": human_amplitude,
-            "used": used,
-        })
-
-    landmark_table = pd.DataFrame(program_rows)
-    landmark_genes = pd.DataFrame(gene_rows)
-
-    if verbose:
-        _report("usable landmark panels", int(landmark_table["used"].sum()), len(landmark_table),
-                why=">= 2 members detected in both species and an amplitude in both")
-        display(landmark_table.round(4))
-        print("  landmark gene audit:")
-        display(landmark_genes)
-
-    return programs, landmark_table, landmark_genes
+AXIS_BASIS_PANEL_ORDER = ["S1", "S2", "S3"]
 
 
-landmark_programs, landmark_table, landmark_genes = _build_landmarks(balanced_mouse, balanced_human)
-
-_save_table(landmark_table, "registration_landmarks.csv")
-print(f"saved {_display_path(OUT_DIR / 'registration_landmarks.csv')}")
-
-
-# %%
-# Purpose: the monotone landmark mapping, the registered human curves, and the registration figure.
+def _programme_curve(curves, members):
+    """The programme's curve: mean of its members' within-species z-scored balanced curves."""
+    rows = [gene_lookup_tested[gene.upper()] for gene in members if gene.upper() in gene_lookup_tested]
+    if not rows:
+        return np.full(curves.shape[1], np.nan)
+    return _nanmean_safe(_row_zscore(curves[rows]), axis=0)
 
 
-def _register(mouse_curves, human_curves, verbose=False):
-    """Landmark-anchored monotone human -> mouse registration, used as a sensitivity analysis.
+programme_members = {
+    panel: [gene for gene in AXIS_BASIS_PANELS[panel] if gene.upper() in gene_lookup_tested]
+    for panel in AXIS_BASIS_PANEL_ORDER
+}
+programme_curves = {
+    (panel, species_label): _programme_curve(curves, programme_members[panel])
+    for panel in AXIS_BASIS_PANEL_ORDER
+    for species_label, curves in (("mouse", balanced_mouse), ("human", balanced_human))
+}
 
-    Returns the mapping evaluated on the unit grid (`mapped`, human position -> mouse position), the
-    human curves resampled onto the mouse axis, and the support mask that resampling preserves.
-    With fewer than two usable landmarks the mapping falls back to the identity and says so.
-    """
-    programs, table, genes = _build_landmarks(mouse_curves, human_curves, verbose=False)
-    used = table[table["used"]].sort_values("mouse_centroid")
+figure, axes = plt.subplots(1, 3, figsize=(7.25, 2.6), sharey=True, layout="constrained")
 
-    if len(used) < 2:
-        mapped = grid_unit.copy()
-        anchors = pd.DataFrame(columns=["panel", "human_centroid", "mouse_centroid"])
-    else:
-        human_anchors = np.concatenate([[0.0], used["human_centroid"].to_numpy(), [1.0]])
-        mouse_anchors = np.concatenate([[0.0], used["mouse_centroid"].to_numpy(), [1.0]])
-        # Monotone by construction: the human anchors are forced non-decreasing along the mouse axis.
-        human_anchors = np.maximum.accumulate(human_anchors)
-        mapped = np.interp(grid_unit, human_anchors, mouse_anchors)
-        anchors = used[["panel", "human_centroid", "mouse_centroid"]].reset_index(drop=True)
+for axis, panel in zip(axes, AXIS_BASIS_PANEL_ORDER):
+    for gene in programme_members[panel]:
+        index = gene_lookup_tested[gene.upper()]
+        # Retain the member curves, but make the aggregate programme the visual evidence.
+        axis.plot(grid_unit, _row_zscore(balanced_mouse[[index]])[0], color=SPECIES_COLORS["mouse"],
+                  lw=0.65, alpha=0.20, zorder=1)
+        axis.plot(grid_unit, _row_zscore(balanced_human[[index]])[0], color=SPECIES_COLORS["human"],
+                  lw=0.65, alpha=0.20, ls="--", zorder=1)
 
-    human_registered = _interp_rows(human_curves, mapped, grid_unit)
-    support_indicator = _interp_rows(
-        np.isfinite(human_curves).astype(float), mapped, grid_unit
-    )
-    human_registered_mask = support_indicator >= 0.999
+    for species_label, line_style in (("mouse", "-"), ("human", "--")):
+        axis.plot(grid_unit, programme_curves[(panel, species_label)],
+                  color=SPECIES_COLORS[species_label], lw=2.1, ls=line_style, zorder=3)
+    axis.set_title(f"{panel} programme", loc="left", fontweight="bold")
+    axis.text(0.02, 0.05, f"{len(programme_members[panel])} member genes", transform=axis.transAxes,
+              fontsize=6.5, color="0.35")
+    _style_pt_axis(axis, ylabel="Mean member z-score" if axis is axes[0] else None)
 
-    if verbose:
-        print(f"  landmarks used: {len(used)} ({', '.join(anchors['panel']) if len(anchors) else 'none'})")
-        print(f"  max |mapped - identity|: {np.max(np.abs(mapped - grid_unit)):.4f} of PT")
-
-    return {
-        "mapped": mapped,
-        "human_registered": human_registered,
-        "human_registered_mask": human_registered_mask,
-        "anchors": anchors,
-        "n_landmarks": int(len(used)),
-        "programs": programs,
-        "landmark_table": table,
-        "landmark_genes": genes,
-    }
-
-
-landmark_registration = _register(balanced_mouse, balanced_human, verbose=True)
-
-human_registered = landmark_registration["human_registered"]
-human_registered_mask = landmark_registration["human_registered_mask"]
-registration_shift = landmark_registration["mapped"] - grid_unit
-
-registration_summary = pd.DataFrame({
-    "quantity": [
-        "landmarks_used",
-        "max_mapping_deviation_from_identity",
-        "median_mapping_deviation_from_identity",
-        "grid_points_supported_before",
-        "grid_points_supported_after",
-    ],
-    "value": [
-        landmark_registration["n_landmarks"],
-        float(np.max(np.abs(registration_shift))),
-        float(np.median(np.abs(registration_shift))),
-        int(np.isfinite(balanced_human).sum(axis=1).mean()),
-        int(human_registered_mask.sum(axis=1).mean()),
-    ],
-})
-display(registration_summary)
-
-# --------------------------------------------------------------------------------------
-# Why the registered axis is a sensitivity analysis and not the primary coordinate.
-#
-# The mapping is monotone *by construction*, so it will also align landmarks the data place out
-# of order - it has to, or it would not be a coordinate map. Both the ordering itself and the
-# size of the correction that monotonicity forces are reported here, so the amount of alignment
-# being imposed is visible rather than assumed.
-# --------------------------------------------------------------------------------------
-
-anchor_order = landmark_registration["landmark_table"]
-anchor_order = anchor_order[anchor_order["used"]].sort_values("mouse_centroid")
-human_centroids = anchor_order["human_centroid"].to_numpy()
-monotone_human = np.maximum.accumulate(human_centroids) if human_centroids.size else human_centroids
-
-landmark_ordering = pd.DataFrame({
-    "quantity": [
-        "landmarks_used",
-        "human_centroid_order_violations",
-        "max_human_centroid_correction_imposed",
-        "min_mouse_centroid_spacing",
-        "min_human_centroid_spacing",
-    ],
-    "value": [
-        landmark_registration["n_landmarks"],
-        int((np.diff(human_centroids) <= 0).sum()) if human_centroids.size > 1 else 0,
-        float(np.max(np.abs(monotone_human - human_centroids))) if human_centroids.size else np.nan,
-        float(np.min(np.diff(np.concatenate([[0.0], anchor_order["mouse_centroid"].to_numpy(), [1.0]]))))
-        if human_centroids.size else np.nan,
-        float(np.min(np.diff(np.concatenate([[0.0], monotone_human, [1.0]]))))
-        if human_centroids.size else np.nan,
-    ],
-})
-display(landmark_ordering)
-_save_table(landmark_ordering, "landmark_ordering_diagnostic.csv")
-
-print(
-    "Registration is a sensitivity analysis here, not the coordinate of record: the primary "
-    f"coordinate is 03's shared PT DPT ({CONFIG['primary_coordinate']}). The diagnostic above reports "
-    f"{int((np.diff(human_centroids) <= 0).sum()) if human_centroids.size > 1 else 0} human landmark "
-    "order violation(s), and how much alignment monotonicity had to impose to make the mapping valid."
+_panel_label(axes[0], "a")
+axes[0].legend(
+    handles=[
+        Line2D([], [], color=SPECIES_COLORS["mouse"], lw=2.1, label="mouse programme"),
+        Line2D([], [], color=SPECIES_COLORS["human"], lw=2.1, ls="--", label="human programme"),
+        Line2D([], [], color="0.45", lw=0.65, alpha=0.35, label="individual member gene"),
+    ], loc="upper right", fontsize=6.5,
 )
-
-
-# --------------------------------------------------------------------------------------
-# Figure: canonical programs before registration, landmark positions, the mapping, and the
-# canonical gradient genes after it. This is the sensitivity axis, so the panel also shows the
-# ordering the mapping had to impose.
-# --------------------------------------------------------------------------------------
-
-validation_genes = ["Slc5a2", "Slc22a6", "Slc22a7"]
-
-figure, axes = plt.subplots(2, 2, figsize=(8.4, 5.6), layout="constrained")
-(ax_before, ax_positions), (ax_mapping, ax_after) = axes
-
-for panel, curves in landmark_registration["programs"].items():
-    ax_before.plot(grid_unit, curves["mouse"], color=LANDMARK_PANEL_COLORS[panel], lw=1.5)
-    ax_before.plot(grid_unit, curves["human"], color=LANDMARK_PANEL_COLORS[panel], lw=1.5, ls="--")
-ax_before.set_title("Landmark programmes before registration", loc="left", fontweight="bold")
-_style_pt_axis(ax_before)
-ax_before.set_ylabel("Mean member z-score")
-ax_before.legend(handles=[
-    Line2D([], [], color=LANDMARK_PANEL_COLORS[panel], lw=1.8, label=panel)
-    for panel in LANDMARK_PANELS
-] + [
-    Line2D([], [], color="0.25", lw=1.4, label="mouse"),
-    Line2D([], [], color="0.25", lw=1.4, ls="--", label="human"),
-], ncols=2, fontsize=5.8, loc="lower left")
-_panel_label(ax_before, "a")
-
-ax_positions.plot([0, 1], [0, 1], color="0.7", lw=1, ls=":", label="consistent ordering")
-ax_positions.scatter(landmark_table["mouse_centroid"], landmark_table["human_centroid"],
-                     s=60, color="#444444", zorder=3, label="landmark centroid")
-for row in landmark_table.itertuples():
-    ax_positions.annotate(row.panel, (row.mouse_centroid, row.human_centroid),
-                          xytext=(4, 4), textcoords="offset points", fontsize=8)
-out_of_order = int((np.diff(human_centroids) <= 0).sum()) if human_centroids.size > 1 else 0
-ax_positions.set_title(
-    f"Landmark positions ({out_of_order} human order violation(s))", loc="left"
-)
-ax_positions.set_xlabel("Mouse landmark centroid")
-ax_positions.set_ylabel("Human landmark centroid")
-ax_positions.legend(fontsize=6)
-_panel_label(ax_positions, "b")
-
-ax_mapping.plot(grid_unit, grid_unit, color="0.7", lw=1, ls=":", label="identity")
-ax_mapping.plot(grid_unit, landmark_registration["mapped"], color="#444444", lw=2.0,
-                label="mapping m(human) -> mouse")
-if len(landmark_registration["anchors"]):
-    ax_mapping.scatter(landmark_registration["anchors"]["human_centroid"],
-                       landmark_registration["anchors"]["mouse_centroid"], s=45, color="#D55E00",
-                       zorder=3, label="anchors")
-ax_mapping.set_title("Monotone human -> mouse mapping imposed on the landmarks", loc="left")
-ax_mapping.set_xlabel("Human PT position")
-ax_mapping.set_ylabel("Registered mouse PT position")
-ax_mapping.legend(fontsize=6)
-_panel_label(ax_mapping, "c")
-
-for gene in validation_genes:
-    index = gene_lookup_tested.get(gene.upper())
-    if index is None:
-        continue
-    ax_after.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=1.8,
-                  label="mouse" if gene == validation_genes[0] else None)
-    ax_after.plot(grid_unit, human_registered[index], color=SPECIES_COLORS["human"], lw=1.8, ls="--",
-                  label="human (registered)" if gene == validation_genes[0] else None)
-    ax_after.annotate(gene, (grid_unit[int(np.nanargmax(balanced_mouse[index]))],
-                             float(np.nanmax(balanced_mouse[index]))),
-                      xytext=(2, 2), textcoords="offset points", fontsize=8)
-ax_after.set_title("Canonical PT gradients on the registered axis", loc="left")
-ax_after.set_xlabel("PT position (unit, registered)")
-ax_after.set_ylabel("Fitted lognorm")
-ax_after.legend(fontsize=6)
-_panel_label(ax_after, "d")
-
 figure.suptitle(
-    "Landmark registration is a sensitivity analysis, not the coordinate of record\n"
-    "sensitivity axis only: the primary coordinate is 03's shared PT DPT "
-    "(2 mouse specimens, 2 slices from 1 human donor)",
-    fontsize=9.5,
+    "Curve-layer QC: the canonical PT programmes sit early to late on the shared coordinate, in both species\n"
+    "Faint traces are member genes; each programme curve is their mean within-species z-scored curve",
+    fontsize=9.2,
 )
-_save_figure(figure, "pt_cross_species_registration.png")
+_save_figure(figure, "fig1a_pt_marker_programmes.png")
 plt.show()
 
+programme_peak_table = pd.DataFrame([
+    {"panel": panel, "species": species_label, "n_members": len(programme_members[panel]),
+     "peak_position": float(grid_unit[int(np.nanargmax(programme_curves[(panel, species_label)]))]),
+     "early_to_late_slope":
+         float(_row_early_to_late(programme_curves[(panel, species_label)][None, :], grid_unit)[0])}
+    for panel in AXIS_BASIS_PANEL_ORDER
+    for species_label in ("mouse", "human")
+])
+display(programme_peak_table.round(3))
+_save_table(programme_peak_table, "pt_marker_programme_peaks.csv")
 
-# %%
-# Purpose: synthetic self-check of the landmark registration.
+for species_label in ("mouse", "human"):
+    order = (programme_peak_table.loc[programme_peak_table["species"].eq(species_label)]
+             .sort_values("peak_position")["panel"].tolist())
+    print(f"  {species_label} programmes, ordered early to late by peak position: {order}")
 
-def _registration_selfcheck():
-    """Register a synthetic pair of species whose human landmark programs are displaced later.
-
-    Every expectation is derived from the curves constructed here, not from stored numbers: the
-    human program is built as the mouse program displaced by a known fraction of PT, so the landmark
-    centroids must differ by that amount, and the mapping must send each human landmark centroid back
-    onto its mouse counterpart by construction (the anchors are interpolation points).
-    """
-    displaced = 0.12
-    centres = {"S1": 0.20, "S2": 0.50, "S3": 0.80}
-
-    landmark_indices = {
-        panel: [gene_lookup_tested[gene.upper()] for gene in genes
-                if gene.upper() in gene_lookup_tested]
-        for panel, genes in LANDMARK_PANELS.items()
-    }
-    usable_panels = {panel: index for panel, index in landmark_indices.items() if len(index) >= 2}
-
-    mouse_matrix = np.zeros((len(gene_names), grid_unit.size))
-    human_matrix = np.zeros((len(gene_names), grid_unit.size))
-    human_single_panel = np.zeros((len(gene_names), grid_unit.size))
-
-    for panel, index in usable_panels.items():
-        mouse_shape = np.exp(-((grid_unit - centres[panel]) ** 2) / (2 * 0.05 ** 2))
-        # H(s) = M(s - displaced), i.e. the human program occurs later along PT by `displaced`.
-        human_shape = np.interp(grid_unit, grid_unit + displaced, mouse_shape)
-        for gene_index in index:
-            mouse_matrix[gene_index] = mouse_shape
-            human_matrix[gene_index] = human_shape
-
-    if "S1" in usable_panels:
-        for gene_index in usable_panels["S1"]:
-            human_single_panel[gene_index] = np.interp(
-                grid_unit, grid_unit + displaced, mouse_matrix[gene_index]
-            )
-
-    programs, table, _ = _build_landmarks(mouse_matrix, human_matrix, verbose=False)
-    registration = _register(mouse_matrix, human_matrix)
-    used = table[table["used"]]
-
-    fallback = _register(mouse_matrix, human_single_panel)
-
-    def _program_correlation(panel, registered):
-        mouse_program = programs[panel]["mouse"]
-        human_program = (registered[panel] if isinstance(registered, dict)
-                         else programs[panel]["human"])
-        return float(_row_pearson(
-            mouse_program[None, :], np.asarray(human_program)[None, :])[0])
-
-    displaced_correlations, raw_correlations = [], []
-    for row in used.itertuples():
-        registered_program = _interp_rows(
-            programs[row.panel]["human"][None, :], registration["mapped"], grid_unit
-        )[0]
-        raw_correlations.append(float(_row_pearson(
-            programs[row.panel]["mouse"][None, :],
-            programs[row.panel]["human"][None, :])[0]))
-        displaced_correlations.append(float(_row_pearson(
-            programs[row.panel]["mouse"][None, :], registered_program[None, :])[0]))
-
-    grid_step = float(np.diff(grid_unit).max())
-    anchor_error = np.abs(
-        np.interp(used["human_centroid"].to_numpy(), grid_unit, registration["mapped"])
-        - used["mouse_centroid"].to_numpy()
-    ) if len(used) else np.array([])
-
-    checks = [
-        ("at least two landmark panels are usable on the synthetic curves",
-         len(used) >= 2),
-        ("each human landmark centroid sits later than its mouse counterpart by the displacement",
-         bool(len(used)) and bool(np.all(np.abs(
-             used["human_centroid"].to_numpy() - used["mouse_centroid"].to_numpy() - displaced
-         ) < 0.03))),
-        # The mapping is exact at its anchors, but it is only *evaluated* on the fit grid, so
-        # reading it off-grid is accurate to about one grid step and no better.
-        ("the mapping returns each mouse landmark centroid to within one grid step",
-         bool(len(anchor_error)) and bool(np.all(anchor_error <= grid_step))),
-        ("registration raises the landmark program agreement, panel by panel",
-         bool(displaced_correlations)
-         and bool(np.all(np.asarray(displaced_correlations) > np.asarray(raw_correlations)))),
-        ("registration recovers a displaced landmark program to a median correlation above 0.95",
-         bool(displaced_correlations) and float(np.median(displaced_correlations)) > 0.95),
-        ("a single usable landmark falls back to the identity mapping",
-         np.allclose(fallback["mapped"], grid_unit)),
-        ("the fallback reports no anchors", len(fallback["anchors"]) == 0),
-        ("the registered human curves keep their support mask",
-         registration["human_registered_mask"].shape == (len(gene_names), grid_unit.size)),
-    ]
-
-    return pd.DataFrame([{"check": name, "passed": bool(passed)} for name, passed in checks])
-
-
-registration_selfcheck = _registration_selfcheck()
-display(registration_selfcheck)
-
-if not registration_selfcheck["passed"].all():
-    failed = registration_selfcheck.loc[~registration_selfcheck["passed"], "check"].tolist()
-    raise AssertionError(f"synthetic registration self-check failed for: {failed}")
-
-print(f"All {len(registration_selfcheck)} synthetic registration self-checks passed.")
 
 
 # %% [markdown]
-# ## 3 - Gene-level curve metrics
+# ## 2 - How each gene differs along PT
 #
-# Six quantities per gene, each answering a different question, in the order the decomposition is
-# written (level + amplitude + phase + residual):
+# ### 2.1 - The five quantities
+#
+# **Each answers a different question,** Each answers a different question, in the order the decomposition is written
+# (level + amplitude + position + shape):
 #
 # | | metric | question | invariant to |
 # | --- | --- | --- | --- |
 # | A | `level_effect_human_minus_mouse` | is the gene's overall abundance different? | nothing (this is the conventional DE-like component) |
 # | B | `mouse_amplitude`, `human_amplitude`, `amplitude_log2_ratio_human_over_mouse` | how strong is each species' zonation? | level |
-# | C | `shape_corr` (standardised), `pattern_rms_z` | do the two curves have the same spatial pattern? | level **and** amplitude |
-# | D | `mouse_position_centroid`, `human_position_centroid`, peak, early-to-late gradient, half-max width | where does expression sit along PT in each species? | level, amplitude |
-# | E | `best_shift_human_minus_mouse`, `post_shift_shape_corr`, `shift_improvement`, `residual_rms_after_shift` | is a modified *position* enough to explain the difference? | level, amplitude |
-# | F | `mouse_early_to_late`, `human_early_to_late` | do the two species run in opposite directions? | level, amplitude |
+# | C | `shape_corr` (standardised), `pattern_rms_z`, `shape_spearman` | do the two curves have the same spatial pattern? | level **and** amplitude |
+# | D | `mouse_position_centroid`, `human_position_centroid`, peak, half-max window | where does expression sit along PT in each species? | level, amplitude |
+# | E | `mouse_early_to_late`, `human_early_to_late` | do the two species run in opposite directions? | level, amplitude |
 #
-# **How to read the phase metric.** `best_shift` is the horizontal displacement that best aligns the
-# human curve to the mouse curve after both are standardised. Positive = the human program sits later
-# along PT. The search looks out to +/-0.35 of PT, deliberately **wider** than anything this notebook
-# will interpret: an optimum pinned to the search boundary has not been estimated at all, it only says
-# that agreement keeps improving outwards - those genes are flagged (`shift_at_search_boundary`) and are
-# never called shifted. An interpreted displacement must be (a) interior, with |shift| at or below the
-# 0.30 interior limit, (b) at least `minimum_shift` with a real `shift_improvement` and
-# `post_shift_shape_corr` >= `post_shift_corr`, (c) corroborated by the independent positional centroid
-# within `centroid_shift_tolerance`, and (d) reproduced with the same sign on the alternate coordinate.
-# Section 5 re-derives every phenotype there, and the primary coordinate is 03's shared PT DPT
-# (section 2).
+# **The one supporting measurement.** The displacement of the human programme relative to the mouse one
+# (`best_shift_human_minus_mouse` and its family) is computed for every gene but is deliberately *not*
+# one of the five: it answers "would a different position explain the difference?", which is a question
+# about A-D rather than a separate way of differing. `best_shift` is the horizontal displacement that
+# best aligns the human curve to the mouse curve after both are standardised; positive = the human
+# program sits later along PT. The search looks out to +/-0.35 of PT, deliberately **wider** than
+# anything this notebook will interpret: an optimum pinned to the search boundary has not been estimated
+# at all, it only says that agreement keeps improving outwards - those genes are flagged
+# (`shift_at_search_boundary`). An *interpreted* displacement must be (a) interior, with |shift| at or
+# below the 0.30 interior limit, (b) at least `minimum_shift` with a real `shift_improvement` and
+# `post_shift_shape_corr` >= `post_shift_corr`, and (c) corroborated by the independent positional
+# centroid within `centroid_shift_tolerance`. Genes meeting all three carry the `shift_usable` flag; the
+# count is reported with the classification, section 3 says what a gene whose *only* spatial difference
+# is a displacement is called, and figure 1C shows how rare such genes are.
 #
-# **Primary axis and alternate axis.** Every metric is computed twice: on the primary coordinate
-# (03's shared PT DPT) and on the alternate one (the section-2 landmark mapping applied to the human
-# curves, carried in the `_landmark_registered` columns). The shared-DPT values are the primary ones;
-# the alternate columns exist to test them - see section 2 for why registration is the sensitivity
-# analysis rather than the coordinate of record.
+# **What counts as evidence.** Only the combination: reproducibility within each species, enough shared
+# support, and adequate amplitude in both species. A gene that is flat or noisy in one species cannot be
+# called displaced, however large its level difference.
 #
-# **What would count as evidence.** Only the combination: reproducibility within each species, enough
-# shared support, adequate amplitude in both species, and — for phase claims — the shift surviving
-# both coordinate choices. A gene that is flat or noisy in one species cannot be called displaced,
-# however large its level difference.
+# **2.2 asks the aggregate version of the same question.** The five quantities are per gene; the next
+# subsection asks the threshold-free prior question - is there a conserved spatial architecture at all? -
+# so that the classification in section 3 is read against an answer that does not depend on section 3's
+# thresholds.
 #
 
 # %%
-# Purpose: level, amplitude, shape, position, phase and inversion metrics, registered and unregistered.
+# Purpose: level, amplitude, shape, position, displacement and inversion metrics on the shared PT DPT.
 
 mouse_mask = np.isfinite(balanced_mouse)
 human_mask_shared = np.isfinite(balanced_human)
-human_mask_registered = human_registered_mask
 
 
-def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, suffix=""):
-    """Every curve metric for one (mouse, human) balanced-curve pair, on one coordinate choice."""
+def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit):
+    """Every curve metric for one (mouse, human) balanced-curve pair on the shared PT DPT."""
     common = mouse_mask_values & human_mask_values
     n_shared = common.sum(axis=1)
 
@@ -1721,17 +1337,20 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
     shape_spearman = _row_spearman(z_mouse, z_human, mask=common)
     pattern_rms_z = np.sqrt(_nanmean_safe(np.where(common, z_human - z_mouse, np.nan) ** 2))
 
-    # D - where expression sits, in each species.
+    # D - where expression sits, in each species: centroid, peak and half-maximum window.
     mouse_centroid = _row_weighted_centroid(mouse, x_unit, common)
     human_centroid = _row_weighted_centroid(human, x_unit, common)
     mouse_peak = _row_peak_position(mouse, x_unit, common)
     human_peak = _row_peak_position(human, x_unit, common)
-    mouse_early_to_late = _row_early_to_late(mouse, x_unit, common)
-    human_early_to_late = _row_early_to_late(human, x_unit, common)
     mouse_onset, mouse_offset, mouse_width = _row_halfmax_window(mouse, x_unit, common)
     human_onset, human_offset, human_width = _row_halfmax_window(human, x_unit, common)
 
-    # E - the constrained phase search.
+    # E - the early-to-late gradient: the second positional summary, and the one whose *sign* the two
+    # species can disagree on.
+    mouse_early_to_late = _row_early_to_late(mouse, x_unit, common)
+    human_early_to_late = _row_early_to_late(human, x_unit, common)
+
+    # The supporting measurement - the constrained displacement search - is not one of the five.
     best_shift, best_corr, residual_rms, at_boundary = _row_shift_search(
         z_mouse, z_human, x_unit,
         CONFIG["shift_search_limit"], CONFIG["shift_step"],
@@ -1739,36 +1358,36 @@ def _curve_metrics(mouse, mouse_mask_values, human, human_mask_values, x_unit, s
     )
 
     return pd.DataFrame({
-        f"n_shared_grid_points{suffix}": n_shared,
-        f"enough_shared_support{suffix}": n_shared >= CONFIG["min_pattern_grid_points"],
-        f"level_effect_human_minus_mouse{suffix}": level,
-        f"mouse_amplitude{suffix}": mouse_amplitude,
-        f"human_amplitude{suffix}": human_amplitude,
-        f"amplitude_difference_human_minus_mouse{suffix}": amplitude_difference,
-        f"amplitude_log2_ratio_human_over_mouse{suffix}": amplitude_log2_ratio,
-        f"shape_corr{suffix}": shape_corr,
-        f"shape_spearman{suffix}": shape_spearman,
-        f"pattern_rms_z{suffix}": pattern_rms_z,
-        f"best_shift_human_minus_mouse{suffix}": best_shift,
-        f"post_shift_shape_corr{suffix}": best_corr,
-        f"shift_improvement{suffix}": best_corr - shape_corr,
-        f"residual_rms_after_shift{suffix}": residual_rms,
-        f"shift_at_search_boundary{suffix}": at_boundary,
-        f"mouse_position_centroid{suffix}": mouse_centroid,
-        f"human_position_centroid{suffix}": human_centroid,
-        f"centroid_shift_human_minus_mouse{suffix}": human_centroid - mouse_centroid,
-        f"mouse_peak_position{suffix}": mouse_peak,
-        f"human_peak_position{suffix}": human_peak,
-        f"peak_shift_human_minus_mouse{suffix}": human_peak - mouse_peak,
-        f"mouse_early_to_late{suffix}": mouse_early_to_late,
-        f"human_early_to_late{suffix}": human_early_to_late,
-        f"gradient_change_human_minus_mouse{suffix}": human_early_to_late - mouse_early_to_late,
-        f"mouse_halfmax_onset{suffix}": mouse_onset,
-        f"mouse_halfmax_offset{suffix}": mouse_offset,
-        f"mouse_halfmax_width{suffix}": mouse_width,
-        f"human_halfmax_onset{suffix}": human_onset,
-        f"human_halfmax_offset{suffix}": human_offset,
-        f"human_halfmax_width{suffix}": human_width,
+        "n_shared_grid_points": n_shared,
+        "enough_shared_support": n_shared >= CONFIG["min_pattern_grid_points"],
+        "level_effect_human_minus_mouse": level,
+        "mouse_amplitude": mouse_amplitude,
+        "human_amplitude": human_amplitude,
+        "amplitude_difference_human_minus_mouse": amplitude_difference,
+        "amplitude_log2_ratio_human_over_mouse": amplitude_log2_ratio,
+        "shape_corr": shape_corr,
+        "shape_spearman": shape_spearman,
+        "pattern_rms_z": pattern_rms_z,
+        "best_shift_human_minus_mouse": best_shift,
+        "post_shift_shape_corr": best_corr,
+        "shift_improvement": best_corr - shape_corr,
+        "residual_rms_after_shift": residual_rms,
+        "shift_at_search_boundary": at_boundary,
+        "mouse_position_centroid": mouse_centroid,
+        "human_position_centroid": human_centroid,
+        "centroid_shift_human_minus_mouse": human_centroid - mouse_centroid,
+        "mouse_peak_position": mouse_peak,
+        "human_peak_position": human_peak,
+        "peak_shift_human_minus_mouse": human_peak - mouse_peak,
+        "mouse_early_to_late": mouse_early_to_late,
+        "human_early_to_late": human_early_to_late,
+        "gradient_change_human_minus_mouse": human_early_to_late - mouse_early_to_late,
+        "mouse_halfmax_onset": mouse_onset,
+        "mouse_halfmax_offset": mouse_offset,
+        "mouse_halfmax_width": mouse_width,
+        "human_halfmax_onset": human_onset,
+        "human_halfmax_offset": human_offset,
+        "human_halfmax_width": human_width,
     })
 
 
@@ -1782,13 +1401,13 @@ def _spatial_discovery_score(frame, config):
       patterned, or one side patterned and the other flat in every specimen/slice. The ratio of two
       flat curves is a division artefact - but the *loss* of zonation in one species is real evidence,
       and requiring both curves to correlate would score that case zero;
-    * displacement counts only when the full phase criteria pass (interior optimum, agreement with the
-      mouse curve, corroboration by the centroid, reproduction on the alternate coordinate);
+    * displacement counts only when every displacement criterion passes (interior optimum, agreement
+      with the mouse curve, corroboration by the independent positional centroid);
     * shape divergence counts only when both species are patterned and reproducible.
 
     A gene with nothing interpretable therefore scores 0 rather than accumulating a large value out of
     tiny amplitudes, boundary shifts and noisy correlations. The frame must already carry the
-    phenotype flags (section 4), so the score is computed after them.
+    phenotype flags (section 3), so the score is computed after them.
     """
     amplitude_term = (frame["amplitude_log2_ratio_human_over_mouse"].abs()
                       / config["amplitude_change_major"]).where(frame["amplitude_evidence"], 0.0)
@@ -1799,73 +1418,34 @@ def _spatial_discovery_score(frame, config):
     return (amplitude_term.fillna(0.0) + phase_term.fillna(0.0) + shape_term.fillna(0.0))
 
 
-# ALT_COLUMNS (setup cell) names the alternate coordinate's metrics. Whichever axis is not primary
-# gets those columns, so the phase evidence a gene needs can be checked on both coordinates.
+def _assemble_metrics(mouse_curves, human_curves):
+    """The per-gene metric table on the shared PT DPT, joined onto the curve table.
 
-
-def _assemble_metrics(mouse_curves, human_curves, coordinate=None, registration=None):
-    """The per-gene metric table on the primary coordinate, plus the alternate coordinate's columns.
-
-    `coordinate` defaults to CONFIG["primary_coordinate"] and takes "shared_dpt" (03's PT DPT) or
-    "landmark_registered". Whichever axis is not primary is returned under ALT_SUFFIX, so a
-    phenotype can be re-derived on it. Shared by the primary analysis and by every sensitivity
-    variant, so a variant can only differ through the curves, the coordinate choice or the
-    thresholds - never through a different code path.
+    The primary analysis and every sensitivity variant run through this one function, so a variant
+    can only differ through its curves or its thresholds - never through a different code path.
     """
-    coordinate = coordinate or CONFIG["primary_coordinate"]
-    if coordinate not in {"shared_dpt", "landmark_registered"}:
-        raise ValueError(f"unknown coordinate {coordinate!r}")
-
     mouse_mask_values = np.isfinite(mouse_curves)
-    human_mask_shared = np.isfinite(human_curves)
-    used_registration = registration if registration is not None else _register(mouse_curves, human_curves)
+    human_mask_values = np.isfinite(human_curves)
 
-    shared_metrics = _curve_metrics(
-        mouse_curves, mouse_mask_values, human_curves, human_mask_shared, grid_unit
-    )
-    landmark_metrics = _curve_metrics(
-        mouse_curves, mouse_mask_values, used_registration["human_registered"],
-        used_registration["human_registered_mask"], grid_unit, suffix=ALT_SUFFIX,
+    metrics = _curve_metrics(
+        mouse_curves, mouse_mask_values, human_curves, human_mask_values, grid_unit
     )
 
-    if coordinate == "shared_dpt":
-        primary_metrics, alternate_metrics = shared_metrics, landmark_metrics
-    else:
-        # A variant that makes the registered axis primary: its columns take the plain names, and
-        # the shared-DPT metrics take the alternate suffix.
-        primary_metrics = landmark_metrics.rename(
-            columns={column: column[: -len(ALT_SUFFIX)]
-                     for column in landmark_metrics.columns if column.endswith(ALT_SUFFIX)}
-        )
-        alternate_metrics = shared_metrics.rename(
-            columns={name: f"{name}{ALT_SUFFIX}" for name in shared_metrics.columns}
-        )
-
-    assembled = (
+    return (
         pd.DataFrame({"gene": gene_names})
-        .join(primary_metrics)
-        .join(alternate_metrics[[column for column in ALT_COLUMNS
-                                 if column in alternate_metrics.columns]])
+        .join(metrics)
         .merge(curve_table, on="gene", how="left")
     )
-    return assembled, used_registration
 
 
-gene_metrics, landmark_registration_used = _assemble_metrics(
-    balanced_mouse, balanced_human, registration=landmark_registration
-)
+gene_metrics = _assemble_metrics(balanced_mouse, balanced_human)
 
-_report(f"genes with comparable curves on the primary coordinate "
-        f"({CONFIG['primary_coordinate']})",
+_report("genes with comparable curves on the shared PT DPT",
         int(gene_metrics["enough_shared_support"].sum()), len(gene_names),
         why=f"both species support >= {CONFIG['min_pattern_grid_points']} shared grid points")
 _report("genes with a rank-based shape correlation",
         int(np.isfinite(gene_metrics["shape_spearman"]).sum()), len(gene_names),
         why="Spearman needs every shared grid point supported by both species; NaN elsewhere")
-_report(f"genes where the alternate axis ({ALT_SUFFIX.lstrip('_')}) changed the shared support",
-        int((gene_metrics["n_shared_grid_points"]
-             != gene_metrics[f"n_shared_grid_points{ALT_SUFFIX}"]).sum()), len(gene_names),
-        why="the registered axis resamples the human curves, so a few edge genes lose a point")
 
 display(gene_metrics[[
     "gene", "level_effect_human_minus_mouse", "mouse_amplitude", "human_amplitude",
@@ -1875,759 +1455,12 @@ display(gene_metrics[[
 
 
 # %% [markdown]
-# ## 4 - Spatial phenotypes
-#
-# **The classes are a reading aid, not a test.** They compress the six metric families into the
-# categories the biological question needs — conserved zonation, weaker/stronger zonation in human,
-# mouse-zonated/human-flat, human-zonated/mouse-flat, shifted earlier/later in human, gradient
-# inversion, complex shape rewiring, weak/uncertain — and every one of them is a conjunction of
-# thresholds, evaluated in a fixed priority order. The component metrics stay in the atlas, so a
-# reader who disagrees with a threshold can re-derive a different partition without refitting
-# anything.
-#
-# **Priority order** (first match wins, highest priority listed last in the code so it overwrites):
-# excluded (not measured in both species, technical, or axis-basis) -> insufficient shared support ->
-# mouse-zonated/human-flat -> human-zonated/mouse-flat -> gradient inversion -> shifted
-# earlier/later -> conserved zonation -> weaker/stronger zonation in human -> complex shape rewiring ->
-# weak/uncertain.
-#
-# **How the thresholds were chosen.** The next cell reports the empirical distributions the thresholds
-# act on (amplitude, within-species reproducibility, shape correlation, displacement) and how many
-# genes each one selects. `CONFIG` holds the values; the distributions are printed so the choice is
-# auditable rather than inherited. They start from 03/05's operating values and were then checked
-# against these distributions.
-#
-# **Guardrails encoded here.** A gene is never called spatially rewired when one species is
-# essentially flat or noisy: every phase/shape/inversion class requires reproducibility within both
-# species and adequate amplitude in both. Flatness for the species-specific classes must be visible in
-# **each** specimen/slice, not only in the species mean — averaging two slices can flatten a curve that
-# neither slice has flat. And a large level effect never blocks a spatial label: level is not used in
-# the classification at all.
-#
-
-# %%
-# Purpose: the empirical distributions the section-4 thresholds act on, and how many genes each selects.
-
-DIAGNOSTIC_QUANTILES = [0.5, 0.75, 0.9, 0.95, 0.99]
-
-diagnostic_columns = [
-    "mouse_amplitude", "human_amplitude", "mouse_reproducibility", "human_reproducibility",
-    "shape_corr", "post_shift_shape_corr", "amplitude_log2_ratio_human_over_mouse",
-    "best_shift_human_minus_mouse", "level_effect_human_minus_mouse",
-]
-
-threshold_distributions = pd.DataFrame({
-    column: gene_metrics[column].abs().quantile(DIAGNOSTIC_QUANTILES)
-    for column in diagnostic_columns
-}).T
-
-threshold_distributions.columns = [f"q{int(q * 100)}" for q in DIAGNOSTIC_QUANTILES]
-threshold_distributions["median"] = gene_metrics[diagnostic_columns].abs().median()
-threshold_distributions["n_finite"] = gene_metrics[diagnostic_columns].notna().sum()
-
-print("Absolute-value quantiles of the metric distributions (thresholds are read against these):")
-display(threshold_distributions.round(4))
-
-enough_support = gene_metrics["enough_shared_support"]
-discovery_eligible = (
-    enough_support
-    & gene_metrics["detected_in_both_species"]
-    & ~gene_metrics["technical_gene"]
-    & ~gene_metrics["axis_basis_gene"]
-)
-
-threshold_selection = pd.DataFrame([
-    {"criterion": "patterned in mouse (amplitude >= amplitude_patterned)",
-     "n_genes": int((gene_metrics["mouse_amplitude"] >= CONFIG["amplitude_patterned"]).sum())},
-    {"criterion": "patterned in human (amplitude >= amplitude_patterned)",
-     "n_genes": int((gene_metrics["human_amplitude"] >= CONFIG["amplitude_patterned"]).sum())},
-    {"criterion": "flat in mouse (amplitude <= amplitude_flat)",
-     "n_genes": int((gene_metrics["mouse_amplitude"] <= CONFIG["amplitude_flat"]).sum())},
-    {"criterion": "flat in human (amplitude <= amplitude_flat)",
-     "n_genes": int((gene_metrics["human_amplitude"] <= CONFIG["amplitude_flat"]).sum())},
-    {"criterion": "reproducible within mouse (r >= within_species_corr)",
-     "n_genes": int((gene_metrics["mouse_reproducibility"] >= CONFIG["within_species_corr"]).sum())},
-    {"criterion": "reproducible within human (r >= within_species_corr)",
-     "n_genes": int((gene_metrics["human_reproducibility"] >= CONFIG["within_species_corr"]).sum())},
-    {"criterion": "shape agreement (shape_corr >= conserved_corr)",
-     "n_genes": int((gene_metrics["shape_corr"] >= CONFIG["conserved_corr"]).sum())},
-    {"criterion": "major amplitude change (|log2 ratio| >= amplitude_change_major)",
-     "n_genes": int((gene_metrics["amplitude_log2_ratio_human_over_mouse"].abs()
-                     >= CONFIG["amplitude_change_major"]).sum())},
-    {"criterion": "displacement found (|best shift| >= minimum_shift)",
-     "n_genes": int((gene_metrics["best_shift_human_minus_mouse"].abs()
-                     >= CONFIG["minimum_shift"]).sum())},
-    {"criterion": "displacement improves agreement (improvement >= shift_improvement)",
-     "n_genes": int((gene_metrics["shift_improvement"] >= CONFIG["shift_improvement"]).sum())},
-    {"criterion": "discovery-eligible (support + both species + no axis/technical flag)",
-     "n_genes": int(discovery_eligible.sum())},
-])
-
-display(threshold_selection)
-_report("discovery-eligible genes", int(discovery_eligible.sum()), len(gene_metrics),
-        why="insufficient shared support, not detected in both species, technical or axis-basis")
-
-
-# %%
-# Purpose: the spatial phenotype classes, the flags behind them, and the per-class summary.
-
-PHENOTYPE_CLASSES = [
-    "conserved zonation",
-    "weaker zonation in human",
-    "stronger zonation in human",
-    "mouse-zonated / human-flat",
-    "human-zonated / mouse-flat",
-    "shifted earlier in human",
-    "shifted later in human",
-    "gradient inversion",
-    "complex shape rewiring",
-    "weak / uncertain zonation",
-]
-
-# Fine class -> broad family, used for the sensitivity scoring in section 5.
-BROAD_PHENOTYPE = {
-    "conserved zonation": "conserved",
-    "weaker zonation in human": "amplitude-change",
-    "stronger zonation in human": "amplitude-change",
-    "mouse-zonated / human-flat": "species-specific zonation",
-    "human-zonated / mouse-flat": "species-specific zonation",
-    "shifted earlier in human": "phase",
-    "shifted later in human": "phase",
-    "gradient inversion": "inversion",
-    "complex shape rewiring": "complex rewiring",
-    "weak / uncertain zonation": "no spatial signal",
-    "excluded": "excluded",
-}
-
-
-def _phenotype_flags(metrics, config, include_axis_genes=False):
-    """Every boolean the classification uses, so the classes can be rebuilt differently."""
-    mouse_amplitude = metrics["mouse_amplitude"]
-    human_amplitude = metrics["human_amplitude"]
-    amplitude_log2 = metrics["amplitude_log2_ratio_human_over_mouse"]
-    shift = metrics["best_shift_human_minus_mouse"]
-
-    mouse_slice_columns = [f"amplitude__{name}" for name in mouse_samples]
-    human_slice_columns = [f"amplitude__{name}" for name in human_samples]
-
-    # "Flat" must be visible in every specimen/slice, not only in the averaged species curve.
-    no_slice_zonated_mouse = metrics[mouse_slice_columns].max(axis=1) < config["amplitude_patterned"]
-    no_slice_zonated_human = metrics[human_slice_columns].max(axis=1) < config["amplitude_patterned"]
-
-    flags = {}
-    flags["excluded"] = (
-        ~metrics["detected_in_both_species"]
-        | metrics["technical_gene"]
-        | (metrics["axis_basis_gene"] & ~include_axis_genes)
-    )
-    flags["enough_support"] = metrics["enough_shared_support"]
-
-    flags["strong_mouse"] = mouse_amplitude >= config["amplitude_patterned"]
-    flags["strong_human"] = human_amplitude >= config["amplitude_patterned"]
-
-    # NaN reproducibility is "not assessable" (a species with a single specimen) and is permissive.
-    flags["reproducible_mouse"] = (
-        metrics["mouse_reproducibility"].isna()
-        | metrics["mouse_reproducibility"].ge(config["within_species_corr"])
-    )
-    flags["reproducible_human"] = (
-        metrics["human_reproducibility"].isna()
-        | metrics["human_reproducibility"].ge(config["within_species_corr"])
-    )
-
-    flags["flat_mouse_every_slice"] = (
-        (mouse_amplitude <= config["amplitude_flat"]) & no_slice_zonated_mouse
-    )
-    flags["flat_human_every_slice"] = (
-        (human_amplitude <= config["amplitude_flat"]) & no_slice_zonated_human
-    )
-
-    flags["patterned_both"] = flags["strong_mouse"] & flags["strong_human"] & flags["enough_support"]
-    flags["positional_usable"] = (
-        flags["patterned_both"] & flags["reproducible_mouse"] & flags["reproducible_human"]
-    )
-    # An amplitude *difference* is evidence when the comparison is interpretable, which is not the
-    # same as requiring both species to correlate. Two ways to be interpretable, and they must be
-    # symmetric: (i) both species reproducibly patterned, or (ii) one side reproducibly patterned and
-    # the other flat in *every* specimen/slice. Without (ii), a gene that loses its zonation entirely
-    # would score zero - the flat side's curve correlation is undefined precisely because it is flat,
-    # which is the evidence, not a failure to measure.
-    both_sides_patterned_and_reproducible = (
-        flags["strong_mouse"] & flags["strong_human"]
-        & flags["reproducible_mouse"] & flags["reproducible_human"]
-    )
-    mouse_zonated_human_flat = (
-        flags["strong_mouse"] & flags["reproducible_mouse"] & flags["flat_human_every_slice"]
-    )
-    human_zonated_mouse_flat = (
-        flags["strong_human"] & flags["reproducible_human"] & flags["flat_mouse_every_slice"]
-    )
-    flags["amplitude_evidence"] = flags["enough_support"] & (
-        both_sides_patterned_and_reproducible | mouse_zonated_human_flat | human_zonated_mouse_flat
-    )
-
-    flags["inversion"] = (
-        flags["positional_usable"]
-        & (np.sign(metrics["mouse_early_to_late"]) != np.sign(metrics["human_early_to_late"]))
-        & metrics["mouse_early_to_late"].abs().ge(config["gradient_min_abs"])
-        & metrics["human_early_to_late"].abs().ge(config["gradient_min_abs"])
-        & metrics["shape_corr"].le(config["inversion_max_corr"])
-    )
-
-    # A displacement counts only when it is an *interior* optimum (not pinned to the search
-    # boundary, where the search has only established that agreement keeps improving outwards), it
-    # is corroborated by the independent positional centroid, and it reproduces on the alternate
-    # coordinate with the same sign.
-    alternate_shift = metrics[f"best_shift_human_minus_mouse{ALT_SUFFIX}"]
-    centroid_shift = metrics["centroid_shift_human_minus_mouse"]
-
-    flags["shift_interior"] = shift.abs().le(SHIFT_INTERIOR_LIMIT)
-    flags["shift_at_boundary"] = metrics["shift_at_search_boundary"]
-    flags["shift_centroid_agrees"] = (
-        (np.sign(centroid_shift) == np.sign(shift))
-        & (centroid_shift - shift).abs().le(config["centroid_shift_tolerance"])
-    )
-
-    flags["shift_usable"] = (
-        flags["positional_usable"]
-        & flags["shift_interior"]
-        & ~flags["shift_at_boundary"]
-        & flags["shift_centroid_agrees"]
-        & metrics["post_shift_shape_corr"].ge(config["post_shift_corr"])
-        & shift.abs().ge(config["minimum_shift"])
-        & metrics["shift_improvement"].ge(config["shift_improvement"])
-        & metrics[f"post_shift_shape_corr{ALT_SUFFIX}"].ge(config["post_shift_corr"])
-        & metrics[f"shift_improvement{ALT_SUFFIX}"].ge(config["shift_improvement"])
-        & (np.sign(shift) == np.sign(alternate_shift))
-        & alternate_shift.abs().ge(config["minimum_shift"])
-    )
-    flags["shifted_earlier"] = flags["shift_usable"] & shift.lt(0)
-    flags["shifted_later"] = flags["shift_usable"] & shift.gt(0)
-
-    flags["conserved"] = (
-        flags["positional_usable"]
-        & metrics["shape_corr"].ge(config["conserved_corr"])
-        & shift.abs().lt(config["minimum_shift"])
-        & amplitude_log2.abs().le(config["amplitude_change_small"])
-    )
-    # The amplitude classes deliberately do NOT require both curves to clear the "patterned"
-    # threshold: a human curve that has dropped below it is the clearest case of weakening. They
-    # require reproducibility in both species, a reproducible stronger-shaped curve, and shape
-    # agreement, so a flat or noisy curve cannot be given an amplitude label (a flat curve has no
-    # usable shape correlation at all, and the species-specific classes take priority anyway).
-    flags["amplitude_class_usable"] = (
-        flags["enough_support"]
-        & flags["reproducible_mouse"]
-        & flags["reproducible_human"]
-        & (np.maximum(mouse_amplitude, human_amplitude) >= config["amplitude_patterned"])
-    )
-    flags["weaker_in_human"] = (
-        flags["amplitude_class_usable"]
-        & metrics["shape_corr"].ge(config["conserved_corr"])
-        & amplitude_log2.le(-config["amplitude_change_major"])
-    )
-    flags["stronger_in_human"] = (
-        flags["amplitude_class_usable"]
-        & metrics["shape_corr"].ge(config["conserved_corr"])
-        & amplitude_log2.ge(config["amplitude_change_major"])
-    )
-
-    flags["mouse_zonated_human_flat"] = (
-        flags["strong_mouse"] & flags["reproducible_mouse"] & flags["flat_human_every_slice"]
-    )
-    flags["human_zonated_mouse_flat"] = (
-        flags["strong_human"] & flags["reproducible_human"] & flags["flat_mouse_every_slice"]
-    )
-
-    flags["complex_rewiring"] = (
-        flags["positional_usable"]
-        & metrics["shape_corr"].lt(config["conserved_corr"])
-        & ~flags["shift_usable"]
-        & ~flags["inversion"]
-        & amplitude_log2.abs().lt(config["amplitude_change_major"])
-    )
-
-    return pd.DataFrame(flags, index=metrics.index)
-
-
-def _assign_phenotypes(flags):
-    """Phenotype per gene. Later entries overwrite earlier ones: the list runs in priority order."""
-    labels = np.full(len(flags), "weak / uncertain zonation", dtype=object)
-
-    assignments = [
-        (flags["complex_rewiring"], "complex shape rewiring"),
-        (flags["stronger_in_human"], "stronger zonation in human"),
-        (flags["weaker_in_human"], "weaker zonation in human"),
-        (flags["conserved"], "conserved zonation"),
-        (flags["shifted_earlier"], "shifted earlier in human"),
-        (flags["shifted_later"], "shifted later in human"),
-        (flags["inversion"], "gradient inversion"),
-        (flags["human_zonated_mouse_flat"], "human-zonated / mouse-flat"),
-        (flags["mouse_zonated_human_flat"], "mouse-zonated / human-flat"),
-        (~flags["enough_support"], "weak / uncertain zonation"),
-        (flags["excluded"], "excluded"),
-    ]
-
-    for mask, label in assignments:
-        labels[np.asarray(mask, dtype=bool)] = label
-    return labels
-
-
-phenotype_flags = _phenotype_flags(gene_metrics, CONFIG)
-gene_metrics = gene_metrics.join(phenotype_flags)
-gene_metrics["spatial_phenotype"] = _assign_phenotypes(phenotype_flags)
-gene_metrics["broad_phenotype"] = gene_metrics["spatial_phenotype"].map(BROAD_PHENOTYPE)
-
-# A divergence score, not a probability: each term is in units of its own threshold, so 1 unit of the
-# score is "one threshold's worth" of amplitude change, displacement or shape divergence.
-gene_metrics["spatial_discovery_score"] = _spatial_discovery_score(gene_metrics, CONFIG)
-
-phenotype_summary = pd.DataFrame([
-    {
-        "spatial_phenotype": label,
-        "n_genes": int((gene_metrics["spatial_phenotype"] == label).sum()),
-        "median_abundance": float(np.nanmedian(np.mean(
-            [gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "abundance_mouse"],
-             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "abundance_human"]], axis=0))),
-        "median_detection": float(np.nanmedian(np.mean(
-            [gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "detection_mouse"],
-             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "detection_human"]], axis=0))),
-        "median_within_species_reproducibility": float(np.nanmedian(np.mean(
-            [gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "mouse_reproducibility"],
-             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "human_reproducibility"]], axis=0))),
-        "median_level_effect": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "level_effect_human_minus_mouse"])),
-        "median_mouse_amplitude": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "mouse_amplitude"])),
-        "median_human_amplitude": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "human_amplitude"])),
-        "median_shape_corr": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "shape_corr"])),
-        "median_post_shift_shape_corr": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "post_shift_shape_corr"])),
-        "median_abs_shift": float(np.nanmedian(np.abs(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "best_shift_human_minus_mouse"]))),
-        "median_discovery_score": float(np.nanmedian(
-            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "spatial_discovery_score"])),
-    }
-    for label in PHENOTYPE_CLASSES + ["excluded"]
-])
-
-display(phenotype_summary.round(4))
-_save_table(phenotype_summary, "gene_spatial_phenotype_summary.csv")
-
-print("Spatial phenotype counts (all tested orthologs):")
-print(gene_metrics["spatial_phenotype"].value_counts().to_string())
-
-
-# %%
-# Purpose: synthetic self-check of the phenotype logic - the classes must come out as intended.
-
-def _phenotype_selfcheck():
-    """Build synthetic metric rows with known expected classes and check the classifier.
-
-    The classification is the one piece of this notebook that is easy to get subtly wrong (a
-    threshold in the wrong place, a priority order inverted, an amplitude class that silently
-    requires the very thing it is meant to detect), and it is not covered by the curve-level
-    self-check at the end. Every row here is a constructed metric profile, not data.
-    """
-    reference = dict(
-        mouse_amplitude=0.4, human_amplitude=0.4, amplitude_log2_ratio_human_over_mouse=0.0,
-        best_shift_human_minus_mouse=0.0, best_shift_human_minus_mouse_unregistered=0.0,
-        post_shift_shape_corr=0.95, post_shift_shape_corr_unregistered=0.95,
-        shift_improvement=0.01, shift_improvement_unregistered=0.01,
-        shift_at_search_boundary=False, centroid_shift_human_minus_mouse=0.0,
-        shape_corr=0.9, mouse_reproducibility=0.8, human_reproducibility=0.8,
-        mouse_early_to_late=0.3, human_early_to_late=0.3,
-        detected_in_both_species=True, technical_gene=False, axis_basis_gene=False,
-        enough_shared_support=True,
-        **{f"amplitude__{sample}": 0.4 for sample in mouse_samples + human_samples},
-    )
-
-    def gene(**overrides):
-        row = dict(reference)
-        row.update(overrides)
-        return row
-
-    synthetic = {
-        "expected conserved": (gene(), "conserved zonation"),
-        "expected weaker in human": (
-            gene(human_amplitude=0.1, amplitude_log2_ratio_human_over_mouse=-2.0),
-            "weaker zonation in human"),
-        "expected stronger in human": (
-            gene(human_amplitude=0.8, amplitude_log2_ratio_human_over_mouse=1.0),
-            "stronger zonation in human"),
-        "expected mouse-zonated / human-flat": (
-            gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
-                 post_shift_shape_corr=0.2,
-                 **{f"amplitude__{sample}": 0.03 for sample in human_samples}),
-            "mouse-zonated / human-flat"),
-        "expected human-zonated / mouse-flat": (
-            gene(mouse_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=3.7, shape_corr=0.1,
-                 post_shift_shape_corr=0.2,
-                 **{f"amplitude__{sample}": 0.03 for sample in mouse_samples}),
-            "human-zonated / mouse-flat"),
-        "expected shifted later": (
-            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
-                 best_shift_human_minus_mouse_unregistered=0.14, centroid_shift_human_minus_mouse=0.15,
-                 post_shift_shape_corr=0.93, post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
-                 shift_improvement_unregistered=0.35),
-            "shifted later in human"),
-        "expected shifted earlier": (
-            gene(shape_corr=0.4, best_shift_human_minus_mouse=-0.15,
-                 best_shift_human_minus_mouse_unregistered=-0.14, centroid_shift_human_minus_mouse=-0.15,
-                 post_shift_shape_corr=0.93, post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
-                 shift_improvement_unregistered=0.35),
-            "shifted earlier in human"),
-        "an optimum pinned to the search boundary is not a displacement": (
-            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.35,
-                 best_shift_human_minus_mouse_unregistered=0.35, centroid_shift_human_minus_mouse=0.35,
-                 shift_at_search_boundary=True, post_shift_shape_corr=0.93,
-                 post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
-                 shift_improvement_unregistered=0.35),
-            "complex shape rewiring"),
-        "an interior shift the centroid contradicts is not interpreted": (
-            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.16,
-                 best_shift_human_minus_mouse_unregistered=0.15, centroid_shift_human_minus_mouse=-0.16,
-                 post_shift_shape_corr=0.93, post_shift_shape_corr_unregistered=0.92, shift_improvement=0.4,
-                 shift_improvement_unregistered=0.35),
-            "complex shape rewiring"),
-        "shift on one coordinate only stays complex": (
-            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
-                 best_shift_human_minus_mouse_unregistered=0.0, post_shift_shape_corr=0.93,
-                 post_shift_shape_corr_unregistered=0.95, shift_improvement=0.4,
-                 shift_improvement_unregistered=0.01),
-            "complex shape rewiring"),
-        "expected gradient inversion": (
-            gene(shape_corr=-0.8, mouse_early_to_late=0.4, human_early_to_late=-0.4),
-            "gradient inversion"),
-        "expected complex rewiring": (
-            gene(shape_corr=0.1, post_shift_shape_corr=0.3), "complex shape rewiring"),
-        "flat in both species": (
-            gene(mouse_amplitude=0.02, human_amplitude=0.02, shape_corr=np.nan,
-                 **{f"amplitude__{sample}": 0.02 for sample in mouse_samples + human_samples}),
-            "weak / uncertain zonation"),
-        "flat in one human slice only is not human-flat": (
-            gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
-                 post_shift_shape_corr=0.2, human_reproducibility=np.nan,
-                 **{f"amplitude__{human_samples[0]}": 0.5,
-                    f"amplitude__{human_samples[-1]}": 0.02}),
-            "weak / uncertain zonation"),
-        "axis-basis gene": (gene(axis_basis_gene=True), "excluded"),
-        "technical gene": (gene(technical_gene=True), "excluded"),
-        "not measured in both inputs": (gene(detected_in_both_species=False), "excluded"),
-        "too little shared support": (gene(enough_shared_support=False), "weak / uncertain zonation"),
-    }
-
-    frame = pd.DataFrame({name: row for name, (row, _) in synthetic.items()}).T
-    frame = frame.reset_index().rename(columns={"index": "gene"})
-    for column in frame.columns:
-        if column == "gene":
-            continue
-        frame[column] = frame[column].astype(float)
-
-    # The frames below name the alternate-coordinate columns with a literal suffix for readability;
-    # map them onto whichever suffix the setup cell chose.
-    frame = frame.rename(columns={column: column.replace("_unregistered", ALT_SUFFIX)
-                                  for column in frame.columns})
-
-    for flag in ("detected_in_both_species", "technical_gene", "axis_basis_gene",
-                 "enough_shared_support", "shift_at_search_boundary"):
-        frame[flag] = frame[flag].astype(bool)
-
-    flags = _phenotype_flags(frame, CONFIG)
-    assigned = pd.Series(_assign_phenotypes(flags), index=frame["gene"])
-
-    outcome = pd.DataFrame({
-        "synthetic_case": list(synthetic),
-        "expected_class": [expected for _, expected in synthetic.values()],
-        "assigned_class": [str(assigned[name]) for name in synthetic],
-    })
-    outcome["passed"] = outcome["expected_class"] == outcome["assigned_class"]
-
-    # The divergence score must be gated by interpretability: a gene with nothing interpretable scores
-    # exactly 0 instead of accumulating tiny-amplitude ratios, boundary shifts and noisy correlations.
-    # The score is gated by the flags, so they are joined onto the metrics frame first -
-    # exactly the order the notebook itself uses.
-    frame_with_flags = frame.join(flags)
-    scores = _spatial_discovery_score(frame_with_flags, CONFIG).set_axis(
-        frame["gene"].to_numpy()
-    )
-    uninterpretable = ["flat in both species", "too little shared support"]
-    outcome = pd.concat([outcome, pd.DataFrame([
-        {"synthetic_case": "score: no interpretable component scores exactly 0",
-         "expected_class": "0", "assigned_class": f"{float(scores[uninterpretable].abs().max()):.3g}",
-         "passed": bool(np.isclose(scores[uninterpretable].abs().max(), 0.0))},
-        {"synthetic_case": "score: an interpreted displacement contributes",
-         "expected_class": "> 0", "assigned_class": f"{float(scores['expected shifted later']):.3g}",
-         "passed": bool(scores["expected shifted later"] > 0)},
-        {"synthetic_case": "score: complex rewiring contributes via shape divergence",
-         "expected_class": "> 0", "assigned_class": f"{float(scores['expected complex rewiring']):.3g}",
-         "passed": bool(scores["expected complex rewiring"] > 0)},
-        {"synthetic_case": "score: mouse-zonated / human-flat keeps its amplitude evidence",
-         "expected_class": "> 0",
-         "assigned_class": f"{float(scores['expected mouse-zonated / human-flat']):.3g}",
-         "passed": bool(scores["expected mouse-zonated / human-flat"] > 0)},
-        {"synthetic_case": "score: human-zonated / mouse-flat keeps its amplitude evidence",
-         "expected_class": "> 0",
-         "assigned_class": f"{float(scores['expected human-zonated / mouse-flat']):.3g}",
-         "passed": bool(scores["expected human-zonated / mouse-flat"] > 0)},
-        {"synthetic_case": "score: the two species-specific directions are symmetric",
-         "expected_class": "equal",
-         "assigned_class": f"{float(scores['expected mouse-zonated / human-flat'] / scores['expected human-zonated / mouse-flat']):.3f}",
-         "passed": bool(np.isclose(scores["expected mouse-zonated / human-flat"],
-                                   scores["expected human-zonated / mouse-flat"],
-                                   rtol=0.05))},
-        {"synthetic_case": "score: a conserved gene scores below a rewired one",
-         "expected_class": "< complex",
-         "assigned_class": f"{float(scores['expected conserved']):.3g}",
-         "passed": bool(scores["expected conserved"] < scores["expected complex rewiring"])},
-    ])], ignore_index=True)
-    return outcome
-
-
-phenotype_selfcheck = _phenotype_selfcheck()
-display(phenotype_selfcheck)
-
-if not phenotype_selfcheck["passed"].all():
-    failed = phenotype_selfcheck.loc[~phenotype_selfcheck["passed"], "synthetic_case"].tolist()
-    raise AssertionError(f"synthetic phenotype self-check failed for: {failed}")
-
-print(f"All {len(phenotype_selfcheck)} synthetic phenotype self-checks passed.")
-
-
-# %% [markdown]
-# ## 5 - Sensitivity of every phenotype to the analysis choices
-#
-# **Why.** A phenotype class is a conjunction of thresholds applied to curves that were themselves
-# built under choices (specimen balancing, coordinate registration). Reporting one partition and
-# calling it the result would hide that. So the whole classification is re-derived under each choice
-# and the per-gene agreement is kept.
-#
-# **The variants.** (1) pooled tubule-weighted curves instead of equal-weight specimen curves;
-# (2) the landmark-registered axis as the coordinate of record - for this variant the cross-axis phase
-# requirement collapses onto that single axis by construction, so a gene that keeps its shift class here
-# kept it without needing the shared-DPT evidence; (3) leave out each mouse specimen; (4) leave out each human
-# slice; (5) amplitude thresholds scaled by 0.8 and 1.25; (6) the displacement threshold scaled by 0.75
-# and 1.25; (7) detection threshold at 2% and 10%; (8) axis-basis genes allowed into discovery.
-#
-# **How the variants are run.** Every variant re-derives landmarks and the mapping from *its own*
-# curves - a leave-one-out variant does not inherit the primary registration. All variants share one
-# code path (`_assemble_metrics` + `_phenotype_flags` + `_assign_phenotypes`), so a variant can only
-# differ through the curves, the coordinate choice or the thresholds.
-#
-# **What the numbers mean, and what they do not.** `robustness_score` is the fraction of variants that
-# keep a gene's **broad** phenotype (conserved / amplitude-change / species-specific zonation / phase /
-# inversion / complex rewiring / no spatial signal / excluded). It is a stability score, not a
-# significance measure. A gene that leaves the universe in a stricter-detection variant is counted as
-# not retaining its phenotype; that is deliberate, because "no longer measured" is a real change in
-# what can be claimed.
-#
-# **The one-donor caveat, stated plainly.** Leaving out a human slice is *slice sensitivity*. With a
-# single donor it cannot be biological replication, and no variant here produces a p-value.
-#
-
-# %%
-# Purpose: re-derive every phenotype under each analysis choice, and score per-gene stability.
-
-
-def _sensitivity_variants():
-    """Every variant the phenotypes are re-derived under: curves, coordinate choice and config."""
-    variants = {
-        "primary (shared DPT, specimen-balanced)": {
-            "mouse": balanced_mouse, "human": balanced_human, "config": CONFIG,
-            "coordinate": CONFIG["primary_coordinate"], "note": "the primary analysis",
-        },
-        "pooled tubule-weighted curves": {
-            "mouse": pooled_mouse, "human": pooled_human, "config": CONFIG,
-            "coordinate": CONFIG["primary_coordinate"],
-            "note": "pooled fit instead of equal-weight specimen curves",
-        },
-        "landmark-registered coordinate": {
-            "mouse": balanced_mouse, "human": balanced_human, "config": CONFIG,
-            "coordinate": "landmark_registered",
-            "note": "the section-2 landmark axis as the coordinate of record",
-        },
-    }
-
-    for name in mouse_samples:
-        remaining = [specimen for specimen in mouse_samples if specimen != name]
-        variants[f"leave out mouse specimen {name}"] = {
-            "mouse": specimen_balanced_curves(
-                {specimen: specimen_curves[specimen] for specimen in remaining}
-            ),
-            "human": balanced_human, "config": CONFIG,
-            "coordinate": CONFIG["primary_coordinate"], "note": "specimen sensitivity",
-        }
-
-    for name in human_samples:
-        remaining = [specimen for specimen in human_samples if specimen != name]
-        variants[f"leave out human slice {name}"] = {
-            "mouse": balanced_mouse,
-            "human": specimen_balanced_curves(
-                {specimen: specimen_curves[specimen] for specimen in remaining}
-            ),
-            "config": CONFIG, "coordinate": CONFIG["primary_coordinate"],
-            "note": "slice sensitivity, not replication (one donor)",
-        }
-
-    threshold_variants = {
-        "amplitude thresholds -20%": {
-            "amplitude_patterned": CONFIG["amplitude_patterned"] * 0.8,
-            "amplitude_flat": CONFIG["amplitude_flat"] * 0.8,
-        },
-        "amplitude thresholds +25%": {
-            "amplitude_patterned": CONFIG["amplitude_patterned"] * 1.25,
-            "amplitude_flat": CONFIG["amplitude_flat"] * 1.25,
-        },
-        "shift threshold -25%": {"minimum_shift": CONFIG["minimum_shift"] * 0.75},
-        "shift threshold +25%": {"minimum_shift": CONFIG["minimum_shift"] * 1.25},
-        "detection threshold 2%": {"min_detection_each_species": 0.02},
-        "detection threshold 10%": {"min_detection_each_species": 0.10},
-        "axis-basis genes included": {},
-    }
-
-    for label, updates in threshold_variants.items():
-        variant_config = dict(CONFIG)
-        variant_config.update(updates)
-        is_axis_variant = label == "axis-basis genes included"
-        variants[label] = {
-            "mouse": balanced_mouse, "human": balanced_human,
-            "coordinate": CONFIG["primary_coordinate"],
-            "config": variant_config, "include_axis": is_axis_variant,
-            "note": ("axis-basis genes treated as ordinary discoverable genes - the reverse of the "
-                     "primary setting, so it shows what the exclusion is hiding"
-                     if is_axis_variant else "threshold / universe sensitivity"),
-        }
-
-    return variants
-
-
-sensitivity_variants = _sensitivity_variants()
-sensitivity_summary_rows = []
-variant_phenotypes = {}
-
-for variant_name, variant_spec in sensitivity_variants.items():
-    variant_metrics, variant_registration = _assemble_metrics(
-        variant_spec["mouse"], variant_spec["human"], coordinate=variant_spec["coordinate"]
-    )
-
-    # The detection and support thresholds act on the universe, not on the curves.
-    variant_metrics["detected_in_both_species"] = (
-        (variant_metrics["detection_mouse"] >= variant_spec["config"]["min_detection_each_species"])
-        & (variant_metrics["detection_human"] >= variant_spec["config"]["min_detection_each_species"])
-    )
-    variant_metrics["enough_shared_support"] = (
-        variant_metrics["n_shared_grid_points"] >= variant_spec["config"]["min_pattern_grid_points"]
-    )
-
-    variant_flags = _phenotype_flags(
-        variant_metrics, variant_spec["config"],
-        include_axis_genes=variant_spec.get("include_axis", False),
-    )
-    # The divergence score is gated by the flags, so it is computed after them.
-    variant_metrics = variant_metrics.join(variant_flags)
-    variant_metrics["spatial_discovery_score"] = _spatial_discovery_score(
-        variant_metrics, variant_spec["config"]
-    )
-    variant_labels = pd.Series(_assign_phenotypes(variant_flags), index=gene_names)
-    variant_phenotypes[variant_name] = variant_labels
-
-    primary_labels = gene_metrics["spatial_phenotype"].to_numpy()
-    primary_broad = gene_metrics["broad_phenotype"].to_numpy()
-    variant_broad = variant_labels.map(BROAD_PHENOTYPE).to_numpy()
-
-    primary_score = gene_metrics["spatial_discovery_score"].to_numpy()
-    variant_score = variant_metrics["spatial_discovery_score"].to_numpy()
-    order_primary = np.argsort(-np.nan_to_num(primary_score))
-    order_variant = np.argsort(-np.nan_to_num(variant_score))
-
-    sensitivity_summary_rows.append({
-        "variant": variant_name,
-        "note": variant_spec["note"],
-        "n_landmarks_used": (np.nan if variant_registration is None
-                             else variant_registration["n_landmarks"]),
-        "same_fine_phenotype_share": float((variant_labels.to_numpy() == primary_labels).mean()),
-        "same_broad_phenotype_share": float((variant_broad == primary_broad).mean()),
-        "n_discovery_eligible": int((~variant_flags["excluded"] & variant_flags["enough_support"]).sum()),
-        "n_conserved": int((variant_labels == "conserved zonation").sum()),
-        "n_amplitude_change": int(variant_labels.isin(
-            ["weaker zonation in human", "stronger zonation in human"]).sum()),
-        "n_species_specific": int(variant_labels.isin(
-            ["mouse-zonated / human-flat", "human-zonated / mouse-flat"]).sum()),
-        "n_phase": int(variant_labels.isin(
-            ["shifted earlier in human", "shifted later in human"]).sum()),
-        "n_inversion": int((variant_labels == "gradient inversion").sum()),
-        "n_complex": int((variant_labels == "complex shape rewiring").sum()),
-        "spearman_discovery_score_vs_primary": float(
-            spearmanr(primary_score, variant_score, nan_policy="omit").correlation),
-        "top50_discovery_overlap": len(
-            set(gene_names[order_primary[:50]]) & set(gene_names[order_variant[:50]])
-        ) / 50.0,
-    })
-
-sensitivity_summary = pd.DataFrame(sensitivity_summary_rows)
-display(sensitivity_summary.round(4))
-_save_table(sensitivity_summary, "sensitivity_summary.csv")
-
-
-# %%
-# Purpose: per-gene stability of the phenotype across the sensitivity variants.
-
-# --------------------------------------------------------------------------------------
-# Per-gene stability across the variants.
-# --------------------------------------------------------------------------------------
-
-robustness = pd.DataFrame({
-    "gene": gene_metrics["gene"],
-    "spatial_phenotype": gene_metrics["spatial_phenotype"],
-    "broad_phenotype": gene_metrics["broad_phenotype"],
-})
-
-for variant_name, variant_labels in variant_phenotypes.items():
-    robustness[f"phenotype__{variant_name}"] = variant_labels.to_numpy()
-    robustness[f"broad__{variant_name}"] = variant_labels.map(BROAD_PHENOTYPE).to_numpy()
-
-broad_columns = [column for column in robustness if column.startswith("broad__")]
-robustness["n_variants_tested"] = robustness[broad_columns].notna().sum(axis=1)
-robustness["n_variants_same_broad_phenotype"] = (
-    robustness[broad_columns].to_numpy() == robustness["broad_phenotype"].to_numpy()[:, None]
-).sum(axis=1)
-robustness["robustness_score"] = (
-    robustness["n_variants_same_broad_phenotype"]
-    / robustness["n_variants_tested"].replace(0, np.nan)
-)
-
-gene_metrics = gene_metrics.merge(
-    robustness[["gene", "n_variants_tested", "n_variants_same_broad_phenotype", "robustness_score"]],
-    on="gene", how="left",
-)
-
-_save_table(robustness, "gene_spatial_phenotype_robustness.csv")
-
-print("Median robustness_score per primary phenotype (1.0 = unchanged broad class in every variant):")
-display(
-    robustness.groupby("spatial_phenotype")["robustness_score"]
-    .agg(genes="count", median_robustness="median", min_robustness="min")
-    .sort_values("median_robustness", ascending=False)
-    .round(3)
-)
-
-discovery_genes = ~gene_metrics["axis_basis_gene"] & ~gene_metrics["technical_gene"]
-_report("genes unchanged in their broad class under every variant",
-        int((gene_metrics["robustness_score"] == 1).sum()), len(gene_names))
-_report("discovery-eligible genes robust under >= 80% of variants",
-        int((gene_metrics["robustness_score"].ge(0.8) & discovery_genes).sum()), len(gene_names),
-        why="used to prioritise the genes shown in sections 6 and 9")
-
-
-# %% [markdown]
-# ## 5b - Is there a conserved cross-species spatial architecture?
+# ### 2.2 - Is there a conserved cross-species spatial architecture?
 #
 # **Why this section exists.** Everything up to here has been decomposing differences. Before describing
 # the exceptions, the analysis owes a threshold-independent answer to a prior question: *is there a
 # conserved spatial architecture at all?* The phenotype classes cannot answer it - "172 genes are
-# conserved zonation" depends on where the thresholds were put - so this section asks the question
+# conserved zonation" depends on where the thresholds were put - so this subsection asks the question
 # directly, on the genes that are reproducibly patterned in **both** species.
 #
 # **How.** Two statistics over that set, each with a null obtained by permuting human gene identities
@@ -2639,8 +1472,8 @@ _report("discovery-eligible genes robust under >= 80% of variants",
 #
 # **What counts as evidence.** An observed statistic far outside the permutation distribution, reported
 # as an empirical p-value `(1 + #{null >= observed}) / (1 + n_permutations)` and as the effect size
-# against the null's spread. A conserved architecture at the level of *whole pathways* is a much weaker
-# claim than this, and this test deliberately stays at the level of individual curves.
+# against the null's spread. A conserved architecture at the level of whole pathways would be a weaker
+# claim than this one, which deliberately stays at the level of individual curves.
 #
 # **How to read the result.** The claim this test supports is narrow and should be stated that way:
 # ortholog identity preserves PT positional information **above** what random pairing, or pairing within
@@ -2809,35 +1642,779 @@ else:
 
 
 # %% [markdown]
-# ## 6 - Primary figures
+# ## 3 - Spatial phenotypes
 #
-# Five figures, each answering one part of the question:
+# **The classes are a reading aid, not a test.** They compress the metric families into the categories
+# the biological question needs — conserved zonation, weaker/stronger zonation in human,
+# mouse-zonated/human-flat, human-zonated/mouse-flat, gradient inversion, complex shape rewiring,
+# weak/uncertain — and every one of them is a conjunction of thresholds, evaluated in a fixed priority
+# order. The component metrics stay in the atlas, so a reader who disagrees with a threshold can
+# re-derive a different partition without refitting anything.
 #
-# * **1A** — are homologous PT territories being compared at all? Canonical S1/S2/S3 programs and their
-#   member genes on the landmark-registered axis (the sensitivity coordinate; the primary analysis uses
-#   the shared PT DPT).
-# * **1B** — where does zonation strength sit relative to the identity line, and which genes have strong
-#   zonation in both species but poor shape agreement (the rewiring corner)?
-# * **1C** — phase versus residual mismatch: is a gene explained by displacement, or is it genuinely
-#   reshaped after the best possible displacement?
-# * **1D** — representative genes per class, with **both** specimens/slices drawn faintly behind the
-#   balanced curves, so within-species consistency is visible rather than asserted.
-# * **1E** — shape only: each gene z-scored *within each species*, so the heatmap cannot be driven by
-#   an abundance difference between human and mouse.
+# **Priority order** (first match wins, highest priority listed last in the code so it overwrites):
+# excluded (not measured in both species, technical, or axis-basis) -> insufficient shared support ->
+# mouse-zonated/human-flat -> human-zonated/mouse-flat -> gradient inversion -> conserved zonation ->
+# weaker/stronger zonation in human -> complex shape rewiring -> weak/uncertain.
 #
-# Genes are chosen by `spatial_discovery_score` within their class, preferring genes that kept their
-# broad class in at least 80% of the section-5 variants. Figures are readable without the code: every
-# panel states its class, sample sizes and direction convention.
+# **There is no "shifted" class, by decision.** A displacement is a supporting measurement here, not a
+# phenotype: the classes above describe *how* a spatial pattern differs (lost, gained, inverted,
+# reshaped), and a gene whose only difference is where its programme sits is reported through
+# `best_shift_human_minus_mouse` and the `shift_usable` flag instead. Such a gene is classed
+# `weak / uncertain zonation` — it is patterned in both species, but none of the classes describes it —
+# so that bucket holds two different situations and is always read with the flag beside it. The count of
+# corroborated displacements is reported with the class counts.
+#
+# **How the thresholds were chosen.** The next cell reports the empirical distributions the thresholds
+# act on (amplitude, within-species reproducibility, shape correlation, displacement) and how many
+# genes each one selects. `CONFIG` holds the values; the distributions are printed so the choice is
+# auditable rather than inherited. They start from 03/05's operating values and were then checked
+# against these distributions.
+#
+# **Guardrails encoded here.** A gene is never called spatially rewired when one species is essentially
+# flat or noisy: every shape and inversion class requires reproducibility within both species and
+# adequate amplitude in both. Flatness for the species-specific classes must be visible in **each**
+# specimen/slice, not only in the species mean — averaging two slices can flatten a curve that neither
+# slice has flat. And a large level effect never blocks a spatial label: level is not used in the
+# classification at all.
+#
+# **3.2 and 3.3.** Subsection 3.2 re-derives every class under the analysis choices (specimen balancing,
+# leave-one-out, threshold perturbations) and reports how stable a gene's class is; 3.3 shows the results
+# as figures.
 #
 
 # %%
-# Purpose: figure 1A - PT alignment on the registered coordinate.
+# Purpose: the empirical distributions the section-3 thresholds act on, and how many genes each selects.
 
-# The phenotype palette is defined with the other shared constants in the setup cell.
+DIAGNOSTIC_QUANTILES = [0.5, 0.75, 0.9, 0.95, 0.99]
+
+diagnostic_columns = [
+    "mouse_amplitude", "human_amplitude", "mouse_reproducibility", "human_reproducibility",
+    "shape_corr", "post_shift_shape_corr", "amplitude_log2_ratio_human_over_mouse",
+    "best_shift_human_minus_mouse", "level_effect_human_minus_mouse",
+]
+
+threshold_distributions = pd.DataFrame({
+    column: gene_metrics[column].abs().quantile(DIAGNOSTIC_QUANTILES)
+    for column in diagnostic_columns
+}).T
+
+threshold_distributions.columns = [f"q{int(q * 100)}" for q in DIAGNOSTIC_QUANTILES]
+threshold_distributions["median"] = gene_metrics[diagnostic_columns].abs().median()
+threshold_distributions["n_finite"] = gene_metrics[diagnostic_columns].notna().sum()
+
+print("Absolute-value quantiles of the metric distributions (thresholds are read against these):")
+display(threshold_distributions.round(4))
+
+enough_support = gene_metrics["enough_shared_support"]
+discovery_eligible = (
+    enough_support
+    & gene_metrics["detected_in_both_species"]
+    & ~gene_metrics["technical_gene"]
+    & ~gene_metrics["axis_basis_gene"]
+)
+
+threshold_selection = pd.DataFrame([
+    {"criterion": "patterned in mouse (amplitude >= amplitude_patterned)",
+     "n_genes": int((gene_metrics["mouse_amplitude"] >= CONFIG["amplitude_patterned"]).sum())},
+    {"criterion": "patterned in human (amplitude >= amplitude_patterned)",
+     "n_genes": int((gene_metrics["human_amplitude"] >= CONFIG["amplitude_patterned"]).sum())},
+    {"criterion": "flat in mouse (amplitude <= amplitude_flat)",
+     "n_genes": int((gene_metrics["mouse_amplitude"] <= CONFIG["amplitude_flat"]).sum())},
+    {"criterion": "flat in human (amplitude <= amplitude_flat)",
+     "n_genes": int((gene_metrics["human_amplitude"] <= CONFIG["amplitude_flat"]).sum())},
+    {"criterion": "reproducible within mouse (r >= within_species_corr)",
+     "n_genes": int((gene_metrics["mouse_reproducibility"] >= CONFIG["within_species_corr"]).sum())},
+    {"criterion": "reproducible within human (r >= within_species_corr)",
+     "n_genes": int((gene_metrics["human_reproducibility"] >= CONFIG["within_species_corr"]).sum())},
+    {"criterion": "shape agreement (shape_corr >= conserved_corr)",
+     "n_genes": int((gene_metrics["shape_corr"] >= CONFIG["conserved_corr"]).sum())},
+    {"criterion": "major amplitude change (|log2 ratio| >= amplitude_change_major)",
+     "n_genes": int((gene_metrics["amplitude_log2_ratio_human_over_mouse"].abs()
+                     >= CONFIG["amplitude_change_major"]).sum())},
+    {"criterion": "displacement found (|best shift| >= minimum_shift)",
+     "n_genes": int((gene_metrics["best_shift_human_minus_mouse"].abs()
+                     >= CONFIG["minimum_shift"]).sum())},
+    {"criterion": "displacement improves agreement (improvement >= shift_improvement)",
+     "n_genes": int((gene_metrics["shift_improvement"] >= CONFIG["shift_improvement"]).sum())},
+    {"criterion": "discovery-eligible (support + both species + no axis/technical flag)",
+     "n_genes": int(discovery_eligible.sum())},
+])
+
+display(threshold_selection)
+_report("discovery-eligible genes", int(discovery_eligible.sum()), len(gene_metrics),
+        why="insufficient shared support, not detected in both species, technical or axis-basis")
+
+
+# %%
+# Purpose: the spatial phenotype classes, the flags behind them, and the per-class summary.
+
+PHENOTYPE_CLASSES = [
+    "conserved zonation",
+    "weaker zonation in human",
+    "stronger zonation in human",
+    "mouse-zonated / human-flat",
+    "human-zonated / mouse-flat",
+    "gradient inversion",
+    "complex shape rewiring",
+    "weak / uncertain zonation",
+]
+
+# Fine class -> broad family, used for the robustness scoring in section 3.2.
+BROAD_PHENOTYPE = {
+    "conserved zonation": "conserved",
+    "weaker zonation in human": "amplitude-change",
+    "stronger zonation in human": "amplitude-change",
+    "mouse-zonated / human-flat": "species-specific zonation",
+    "human-zonated / mouse-flat": "species-specific zonation",
+    "gradient inversion": "inversion",
+    "complex shape rewiring": "complex rewiring",
+    "weak / uncertain zonation": "no spatial signal",
+    "excluded": "excluded",
+}
+
+
+def _phenotype_flags(metrics, config, include_axis_genes=False):
+    """Every boolean the classification uses, so the classes can be rebuilt differently."""
+    mouse_amplitude = metrics["mouse_amplitude"]
+    human_amplitude = metrics["human_amplitude"]
+    amplitude_log2 = metrics["amplitude_log2_ratio_human_over_mouse"]
+    shift = metrics["best_shift_human_minus_mouse"]
+
+    mouse_slice_columns = [f"amplitude__{name}" for name in mouse_samples]
+    human_slice_columns = [f"amplitude__{name}" for name in human_samples]
+
+    # "Flat" must be visible in every specimen/slice, not only in the averaged species curve.
+    no_slice_zonated_mouse = metrics[mouse_slice_columns].max(axis=1) < config["amplitude_patterned"]
+    no_slice_zonated_human = metrics[human_slice_columns].max(axis=1) < config["amplitude_patterned"]
+
+    flags = {}
+    flags["excluded"] = (
+        ~metrics["detected_in_both_species"]
+        | metrics["technical_gene"]
+        | (metrics["axis_basis_gene"] & ~include_axis_genes)
+    )
+    flags["enough_support"] = metrics["enough_shared_support"]
+
+    flags["strong_mouse"] = mouse_amplitude >= config["amplitude_patterned"]
+    flags["strong_human"] = human_amplitude >= config["amplitude_patterned"]
+
+    # NaN reproducibility is "not assessable" (a species with a single specimen) and is permissive.
+    flags["reproducible_mouse"] = (
+        metrics["mouse_reproducibility"].isna()
+        | metrics["mouse_reproducibility"].ge(config["within_species_corr"])
+    )
+    flags["reproducible_human"] = (
+        metrics["human_reproducibility"].isna()
+        | metrics["human_reproducibility"].ge(config["within_species_corr"])
+    )
+
+    flags["flat_mouse_every_slice"] = (
+        (mouse_amplitude <= config["amplitude_flat"]) & no_slice_zonated_mouse
+    )
+    flags["flat_human_every_slice"] = (
+        (human_amplitude <= config["amplitude_flat"]) & no_slice_zonated_human
+    )
+
+    flags["patterned_both"] = flags["strong_mouse"] & flags["strong_human"] & flags["enough_support"]
+    flags["positional_usable"] = (
+        flags["patterned_both"] & flags["reproducible_mouse"] & flags["reproducible_human"]
+    )
+    # An amplitude *difference* is evidence when the comparison is interpretable, which is not the
+    # same as requiring both species to correlate. Two ways to be interpretable, and they must be
+    # symmetric: (i) both species reproducibly patterned, or (ii) one side reproducibly patterned and
+    # the other flat in *every* specimen/slice. Without (ii), a gene that loses its zonation entirely
+    # would score zero - the flat side's curve correlation is undefined precisely because it is flat,
+    # which is the evidence, not a failure to measure.
+    both_sides_patterned_and_reproducible = (
+        flags["strong_mouse"] & flags["strong_human"]
+        & flags["reproducible_mouse"] & flags["reproducible_human"]
+    )
+    mouse_zonated_human_flat = (
+        flags["strong_mouse"] & flags["reproducible_mouse"] & flags["flat_human_every_slice"]
+    )
+    human_zonated_mouse_flat = (
+        flags["strong_human"] & flags["reproducible_human"] & flags["flat_mouse_every_slice"]
+    )
+    flags["amplitude_evidence"] = flags["enough_support"] & (
+        both_sides_patterned_and_reproducible | mouse_zonated_human_flat | human_zonated_mouse_flat
+    )
+
+    flags["inversion"] = (
+        flags["positional_usable"]
+        & (np.sign(metrics["mouse_early_to_late"]) != np.sign(metrics["human_early_to_late"]))
+        & metrics["mouse_early_to_late"].abs().ge(config["gradient_min_abs"])
+        & metrics["human_early_to_late"].abs().ge(config["gradient_min_abs"])
+        & metrics["shape_corr"].le(config["inversion_max_corr"])
+    )
+
+    # A displacement counts only when it is an *interior* optimum (not pinned to the search
+    # boundary, where the search has only established that agreement keeps improving outwards) and
+    # it is corroborated by the independent positional centroid.
+    centroid_shift = metrics["centroid_shift_human_minus_mouse"]
+
+    flags["shift_interior"] = shift.abs().le(SHIFT_INTERIOR_LIMIT)
+    flags["shift_at_boundary"] = metrics["shift_at_search_boundary"]
+    flags["shift_centroid_agrees"] = (
+        (np.sign(centroid_shift) == np.sign(shift))
+        & (centroid_shift - shift).abs().le(config["centroid_shift_tolerance"])
+    )
+
+    # `shift_usable` is a *supporting-metric* flag, not a phenotype class: it marks the genes whose
+    # measured displacement clears every criterion above, so the displacement can be reported beside
+    # the partition (and contribute to the divergence score) without being part of it. A gene whose
+    # only spatial difference is a displacement therefore falls through to `weak / uncertain
+    # zonation` - it is patterned in both species, but the classes below do not describe *how*.
+    flags["shift_usable"] = (
+        flags["positional_usable"]
+        & flags["shift_interior"]
+        & ~flags["shift_at_boundary"]
+        & flags["shift_centroid_agrees"]
+        & metrics["post_shift_shape_corr"].ge(config["post_shift_corr"])
+        & shift.abs().ge(config["minimum_shift"])
+        & metrics["shift_improvement"].ge(config["shift_improvement"])
+    )
+
+    flags["conserved"] = (
+        flags["positional_usable"]
+        & metrics["shape_corr"].ge(config["conserved_corr"])
+        & shift.abs().lt(config["minimum_shift"])
+        & amplitude_log2.abs().le(config["amplitude_change_small"])
+    )
+    # The amplitude classes deliberately do NOT require both curves to clear the "patterned"
+    # threshold: a human curve that has dropped below it is the clearest case of weakening. They
+    # require reproducibility in both species, a reproducible stronger-shaped curve, and shape
+    # agreement, so a flat or noisy curve cannot be given an amplitude label (a flat curve has no
+    # usable shape correlation at all, and the species-specific classes take priority anyway).
+    flags["amplitude_class_usable"] = (
+        flags["enough_support"]
+        & flags["reproducible_mouse"]
+        & flags["reproducible_human"]
+        & (np.maximum(mouse_amplitude, human_amplitude) >= config["amplitude_patterned"])
+    )
+    flags["weaker_in_human"] = (
+        flags["amplitude_class_usable"]
+        & metrics["shape_corr"].ge(config["conserved_corr"])
+        & amplitude_log2.le(-config["amplitude_change_major"])
+    )
+    flags["stronger_in_human"] = (
+        flags["amplitude_class_usable"]
+        & metrics["shape_corr"].ge(config["conserved_corr"])
+        & amplitude_log2.ge(config["amplitude_change_major"])
+    )
+
+    flags["mouse_zonated_human_flat"] = (
+        flags["strong_mouse"] & flags["reproducible_mouse"] & flags["flat_human_every_slice"]
+    )
+    flags["human_zonated_mouse_flat"] = (
+        flags["strong_human"] & flags["reproducible_human"] & flags["flat_mouse_every_slice"]
+    )
+
+    flags["complex_rewiring"] = (
+        flags["positional_usable"]
+        & metrics["shape_corr"].lt(config["conserved_corr"])
+        & ~flags["shift_usable"]
+        & ~flags["inversion"]
+        & amplitude_log2.abs().lt(config["amplitude_change_major"])
+    )
+
+    return pd.DataFrame(flags, index=metrics.index)
+
+
+def _assign_phenotypes(flags):
+    """Phenotype per gene. Later entries overwrite earlier ones: the list runs in priority order."""
+    labels = np.full(len(flags), "weak / uncertain zonation", dtype=object)
+
+    assignments = [
+        (flags["complex_rewiring"], "complex shape rewiring"),
+        (flags["stronger_in_human"], "stronger zonation in human"),
+        (flags["weaker_in_human"], "weaker zonation in human"),
+        (flags["conserved"], "conserved zonation"),
+        (flags["inversion"], "gradient inversion"),
+        (flags["human_zonated_mouse_flat"], "human-zonated / mouse-flat"),
+        (flags["mouse_zonated_human_flat"], "mouse-zonated / human-flat"),
+        (~flags["enough_support"], "weak / uncertain zonation"),
+        (flags["excluded"], "excluded"),
+    ]
+
+    for mask, label in assignments:
+        labels[np.asarray(mask, dtype=bool)] = label
+    return labels
+
+
+phenotype_flags = _phenotype_flags(gene_metrics, CONFIG)
+gene_metrics = gene_metrics.join(phenotype_flags)
+gene_metrics["spatial_phenotype"] = _assign_phenotypes(phenotype_flags)
+gene_metrics["broad_phenotype"] = gene_metrics["spatial_phenotype"].map(BROAD_PHENOTYPE)
+
+# A divergence score, not a probability: each term is in units of its own threshold, so 1 unit of the
+# score is "one threshold's worth" of amplitude change, displacement or shape divergence.
+gene_metrics["spatial_discovery_score"] = _spatial_discovery_score(gene_metrics, CONFIG)
+
+_report("genes carrying a corroborated displacement (supporting metric, not a class)",
+        int(gene_metrics["shift_usable"].sum()),
+        why="interior optimum, centroid-corroborated, and it improves the shape agreement")
+
+phenotype_summary = pd.DataFrame([
+    {
+        "spatial_phenotype": label,
+        "n_genes": int((gene_metrics["spatial_phenotype"] == label).sum()),
+        "median_abundance": float(np.nanmedian(np.mean(
+            [gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "abundance_mouse"],
+             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "abundance_human"]], axis=0))),
+        "median_detection": float(np.nanmedian(np.mean(
+            [gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "detection_mouse"],
+             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "detection_human"]], axis=0))),
+        "median_within_species_reproducibility": float(np.nanmedian(np.mean(
+            [gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "mouse_reproducibility"],
+             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "human_reproducibility"]], axis=0))),
+        "median_level_effect": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "level_effect_human_minus_mouse"])),
+        "median_mouse_amplitude": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "mouse_amplitude"])),
+        "median_human_amplitude": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "human_amplitude"])),
+        "median_shape_corr": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "shape_corr"])),
+        "median_post_shift_shape_corr": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "post_shift_shape_corr"])),
+        "median_abs_shift": float(np.nanmedian(np.abs(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "best_shift_human_minus_mouse"]))),
+        "median_discovery_score": float(np.nanmedian(
+            gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "spatial_discovery_score"])),
+    }
+    for label in PHENOTYPE_CLASSES + ["excluded"]
+])
+
+display(phenotype_summary.round(4))
+_save_table(phenotype_summary, "gene_spatial_phenotype_summary.csv")
+
+print("Spatial phenotype counts (all tested orthologs):")
+print(gene_metrics["spatial_phenotype"].value_counts().to_string())
+
+
+# %%
+# Purpose: synthetic self-check of the phenotype logic - the classes must come out as intended.
+
+def _phenotype_selfcheck():
+    """Build synthetic metric rows with known expected classes and check the classifier.
+
+    The classification is the one piece of this notebook that is easy to get subtly wrong (a
+    threshold in the wrong place, a priority order inverted, an amplitude class that silently
+    requires the very thing it is meant to detect), and it is not covered by the curve-level
+    self-check at the end. Every row here is a constructed metric profile, not data.
+    """
+    reference = dict(
+        mouse_amplitude=0.4, human_amplitude=0.4, amplitude_log2_ratio_human_over_mouse=0.0,
+        best_shift_human_minus_mouse=0.0,
+        post_shift_shape_corr=0.95,
+        shift_improvement=0.01,
+        shift_at_search_boundary=False, centroid_shift_human_minus_mouse=0.0,
+        shape_corr=0.9, mouse_reproducibility=0.8, human_reproducibility=0.8,
+        mouse_early_to_late=0.3, human_early_to_late=0.3,
+        detected_in_both_species=True, technical_gene=False, axis_basis_gene=False,
+        enough_shared_support=True,
+        **{f"amplitude__{sample}": 0.4 for sample in mouse_samples + human_samples},
+    )
+
+    def gene(**overrides):
+        row = dict(reference)
+        row.update(overrides)
+        return row
+
+    synthetic = {
+        "expected conserved": (gene(), "conserved zonation"),
+        "expected weaker in human": (
+            gene(human_amplitude=0.1, amplitude_log2_ratio_human_over_mouse=-2.0),
+            "weaker zonation in human"),
+        "expected stronger in human": (
+            gene(human_amplitude=0.8, amplitude_log2_ratio_human_over_mouse=1.0),
+            "stronger zonation in human"),
+        "expected mouse-zonated / human-flat": (
+            gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
+                 post_shift_shape_corr=0.2,
+                 **{f"amplitude__{sample}": 0.03 for sample in human_samples}),
+            "mouse-zonated / human-flat"),
+        "expected human-zonated / mouse-flat": (
+            gene(mouse_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=3.7, shape_corr=0.1,
+                 post_shift_shape_corr=0.2,
+                 **{f"amplitude__{sample}": 0.03 for sample in mouse_samples}),
+            "human-zonated / mouse-flat"),
+        # A displacement no longer defines a class. These two rows fix the demotion: the flag is
+        # set, and the gene is *not* labelled phase - it falls to the bucket for genes the classes do
+        # not describe.
+        "a corroborated, interior displacement": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.15,
+                 centroid_shift_human_minus_mouse=0.15,
+                 post_shift_shape_corr=0.93, shift_improvement=0.4),
+            "weak / uncertain zonation"),
+        "the same displacement pointing the other way": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=-0.15,
+                 centroid_shift_human_minus_mouse=-0.15,
+                 post_shift_shape_corr=0.93, shift_improvement=0.4),
+            "weak / uncertain zonation"),
+        "an optimum pinned to the search boundary is not a displacement": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.35,
+                 centroid_shift_human_minus_mouse=0.35, shift_at_search_boundary=True,
+                 post_shift_shape_corr=0.93, shift_improvement=0.4),
+            "complex shape rewiring"),
+        "an interior shift the centroid contradicts is not interpreted": (
+            gene(shape_corr=0.4, best_shift_human_minus_mouse=0.16,
+                 centroid_shift_human_minus_mouse=-0.16,
+                 post_shift_shape_corr=0.93, shift_improvement=0.4),
+            "complex shape rewiring"),
+        "expected gradient inversion": (
+            gene(shape_corr=-0.8, mouse_early_to_late=0.4, human_early_to_late=-0.4),
+            "gradient inversion"),
+        "expected complex rewiring": (
+            gene(shape_corr=0.1, post_shift_shape_corr=0.3), "complex shape rewiring"),
+        "flat in both species": (
+            gene(mouse_amplitude=0.02, human_amplitude=0.02, shape_corr=np.nan,
+                 **{f"amplitude__{sample}": 0.02 for sample in mouse_samples + human_samples}),
+            "weak / uncertain zonation"),
+        "flat in one human slice only is not human-flat": (
+            gene(human_amplitude=0.03, amplitude_log2_ratio_human_over_mouse=-3.7, shape_corr=0.1,
+                 post_shift_shape_corr=0.2, human_reproducibility=np.nan,
+                 **{f"amplitude__{human_samples[0]}": 0.5,
+                    f"amplitude__{human_samples[-1]}": 0.02}),
+            "weak / uncertain zonation"),
+        "axis-basis gene": (gene(axis_basis_gene=True), "excluded"),
+        "technical gene": (gene(technical_gene=True), "excluded"),
+        "not measured in both inputs": (gene(detected_in_both_species=False), "excluded"),
+        "too little shared support": (gene(enough_shared_support=False), "weak / uncertain zonation"),
+    }
+
+    frame = pd.DataFrame({name: row for name, (row, _) in synthetic.items()}).T
+    frame = frame.reset_index().rename(columns={"index": "gene"})
+    for column in frame.columns:
+        if column == "gene":
+            continue
+        frame[column] = frame[column].astype(float)
+
+    for flag in ("detected_in_both_species", "technical_gene", "axis_basis_gene",
+                 "enough_shared_support", "shift_at_search_boundary"):
+        frame[flag] = frame[flag].astype(bool)
+
+    flags = _phenotype_flags(frame, CONFIG)
+    # The score check joins the flags onto the metrics frame positionally, so `flags` keeps its default
+    # index; these two rows look a flag up by the synthetic case's name instead.
+    flags_by_gene = flags.set_axis(frame["gene"].to_numpy())
+    assigned = pd.Series(_assign_phenotypes(flags), index=frame["gene"])
+
+    outcome = pd.DataFrame({
+        "synthetic_case": list(synthetic),
+        "expected_class": [expected for _, expected in synthetic.values()],
+        "assigned_class": [str(assigned[name]) for name in synthetic],
+    })
+    outcome["passed"] = outcome["expected_class"] == outcome["assigned_class"]
+
+    # The divergence score must be gated by interpretability: a gene with nothing interpretable scores
+    # exactly 0 instead of accumulating tiny-amplitude ratios, boundary shifts and noisy correlations.
+    # The score is gated by the flags, so they are joined onto the metrics frame first -
+    # exactly the order the notebook itself uses.
+    frame_with_flags = frame.join(flags)
+    scores = _spatial_discovery_score(frame_with_flags, CONFIG).set_axis(
+        frame["gene"].to_numpy()
+    )
+    uninterpretable = ["flat in both species", "too little shared support"]
+    outcome = pd.concat([outcome, pd.DataFrame([
+        {"synthetic_case": "score: no interpretable component scores exactly 0",
+         "expected_class": "0", "assigned_class": f"{float(scores[uninterpretable].abs().max()):.3g}",
+         "passed": bool(np.isclose(scores[uninterpretable].abs().max(), 0.0))},
+        {"synthetic_case": "score: a corroborated displacement contributes",
+         "expected_class": "> 0",
+         "assigned_class": f"{float(scores['a corroborated, interior displacement']):.3g}",
+         "passed": bool(scores["a corroborated, interior displacement"] > 0)},
+        {"synthetic_case": "flags: a corroborated displacement sets shift_usable",
+         "expected_class": "True",
+         "assigned_class": str(bool(flags_by_gene.loc["a corroborated, interior displacement", "shift_usable"])),
+         "passed": bool(flags_by_gene.loc["a corroborated, interior displacement", "shift_usable"])},
+        {"synthetic_case": "flags: a boundary optimum never sets shift_usable",
+         "expected_class": "False",
+         "assigned_class": str(bool(flags_by_gene.loc[
+             "an optimum pinned to the search boundary is not a displacement", "shift_usable"])),
+         "passed": not bool(flags_by_gene.loc[
+             "an optimum pinned to the search boundary is not a displacement", "shift_usable"])},
+        {"synthetic_case": "score: complex rewiring contributes via shape divergence",
+         "expected_class": "> 0", "assigned_class": f"{float(scores['expected complex rewiring']):.3g}",
+         "passed": bool(scores["expected complex rewiring"] > 0)},
+        {"synthetic_case": "score: mouse-zonated / human-flat keeps its amplitude evidence",
+         "expected_class": "> 0",
+         "assigned_class": f"{float(scores['expected mouse-zonated / human-flat']):.3g}",
+         "passed": bool(scores["expected mouse-zonated / human-flat"] > 0)},
+        {"synthetic_case": "score: human-zonated / mouse-flat keeps its amplitude evidence",
+         "expected_class": "> 0",
+         "assigned_class": f"{float(scores['expected human-zonated / mouse-flat']):.3g}",
+         "passed": bool(scores["expected human-zonated / mouse-flat"] > 0)},
+        {"synthetic_case": "score: the two species-specific directions are symmetric",
+         "expected_class": "equal",
+         "assigned_class": f"{float(scores['expected mouse-zonated / human-flat'] / scores['expected human-zonated / mouse-flat']):.3f}",
+         "passed": bool(np.isclose(scores["expected mouse-zonated / human-flat"],
+                                   scores["expected human-zonated / mouse-flat"],
+                                   rtol=0.05))},
+        {"synthetic_case": "score: a conserved gene scores below a rewired one",
+         "expected_class": "< complex",
+         "assigned_class": f"{float(scores['expected conserved']):.3g}",
+         "passed": bool(scores["expected conserved"] < scores["expected complex rewiring"])},
+    ])], ignore_index=True)
+    return outcome
+
+
+phenotype_selfcheck = _phenotype_selfcheck()
+display(phenotype_selfcheck)
+
+if not phenotype_selfcheck["passed"].all():
+    failed = phenotype_selfcheck.loc[~phenotype_selfcheck["passed"], "synthetic_case"].tolist()
+    raise AssertionError(f"synthetic phenotype self-check failed for: {failed}")
+
+print(f"All {len(phenotype_selfcheck)} synthetic phenotype self-checks passed.")
+
+
+# %% [markdown]
+# ### 3.2 - Robustness of the phenotypes across the analysis choices
+#
+# **Why.** A phenotype class is a conjunction of thresholds applied to curves that were themselves built
+# under choices (specimen balancing, the detection threshold). Reporting one partition and calling it the
+# result would hide that, so the whole classification is re-derived under each choice and the per-gene
+# agreement is kept.
+#
+# **The variants.** (1) pooled tubule-weighted curves instead of equal-weight specimen curves; (2) leave
+# out each mouse specimen (two variants); (3) leave out each human slice (two variants - *slice
+# sensitivity*, not replication); (4) amplitude thresholds scaled by 0.8 and 1.25; (5) the displacement
+# threshold scaled by 0.75 and 1.25; (6) detection threshold at 2% and 10%; (7) axis-basis genes allowed
+# into discovery. Twelve variants in total, beside the primary analysis.
+#
+# **How they are run.** All variants share one code path (`_assemble_metrics` + `_phenotype_flags` +
+# `_assign_phenotypes`), so a variant can only differ through its curves or its thresholds. The
+# per-variant class counts are written to `tables/sensitivity_summary.csv`; the table shown here keeps
+# only the stability columns.
+#
+# **What the numbers mean, and what they do not.** `robustness_score` is the fraction of variants that
+# keep a gene's **broad** phenotype (conserved / amplitude-change / species-specific zonation / inversion
+# / complex rewiring / no spatial signal / excluded). It is a stability score, not a significance
+# measure. A gene that leaves the universe in a stricter-detection variant is counted as not retaining
+# its phenotype; that is deliberate, because "no longer measured" is a real change in what can be
+# claimed. Nothing here walks through every variant: the per-gene score is in the atlas, and the
+# fraction of each class that retains its broad class is reported once.
+#
+# **The one-donor caveat, stated plainly.** Leaving out a human slice cannot be biological replication
+# with a single donor, and no variant here produces a p-value.
+#
+
+# %%
+# Purpose: re-derive every phenotype under each analysis choice, and score per-gene stability.
+
+
+def _sensitivity_variants():
+    """Every variant the phenotypes are re-derived under: the curves and the thresholds."""
+    variants = {
+        "primary (shared DPT, specimen-balanced)": {
+            "mouse": balanced_mouse, "human": balanced_human, "config": CONFIG,
+            "note": "the primary analysis",
+        },
+        "pooled tubule-weighted curves": {
+            "mouse": pooled_mouse, "human": pooled_human, "config": CONFIG,
+            "note": "pooled fit instead of equal-weight specimen curves",
+        },
+    }
+
+    for name in mouse_samples:
+        remaining = [specimen for specimen in mouse_samples if specimen != name]
+        variants[f"leave out mouse specimen {name}"] = {
+            "mouse": specimen_balanced_curves(
+                {specimen: specimen_curves[specimen] for specimen in remaining}
+            ),
+            "human": balanced_human, "config": CONFIG,
+            "note": "specimen sensitivity",
+        }
+
+    for name in human_samples:
+        remaining = [specimen for specimen in human_samples if specimen != name]
+        variants[f"leave out human slice {name}"] = {
+            "mouse": balanced_mouse,
+            "human": specimen_balanced_curves(
+                {specimen: specimen_curves[specimen] for specimen in remaining}
+            ),
+            "config": CONFIG,
+            "note": "slice sensitivity, not replication (one donor)",
+        }
+
+    threshold_variants = {
+        "amplitude thresholds -20%": {
+            "amplitude_patterned": CONFIG["amplitude_patterned"] * 0.8,
+            "amplitude_flat": CONFIG["amplitude_flat"] * 0.8,
+        },
+        "amplitude thresholds +25%": {
+            "amplitude_patterned": CONFIG["amplitude_patterned"] * 1.25,
+            "amplitude_flat": CONFIG["amplitude_flat"] * 1.25,
+        },
+        "shift threshold -25%": {"minimum_shift": CONFIG["minimum_shift"] * 0.75},
+        "shift threshold +25%": {"minimum_shift": CONFIG["minimum_shift"] * 1.25},
+        "detection threshold 2%": {"min_detection_each_species": 0.02},
+        "detection threshold 10%": {"min_detection_each_species": 0.10},
+        "axis-basis genes included": {},
+    }
+
+    for label, updates in threshold_variants.items():
+        variant_config = dict(CONFIG)
+        variant_config.update(updates)
+        is_axis_variant = label == "axis-basis genes included"
+        variants[label] = {
+            "mouse": balanced_mouse, "human": balanced_human,
+            "config": variant_config, "include_axis": is_axis_variant,
+            "note": ("axis-basis genes treated as ordinary discoverable genes - the reverse of the "
+                     "primary setting, so it shows what the exclusion is hiding"
+                     if is_axis_variant else "threshold / universe sensitivity"),
+        }
+
+    return variants
+
+
+sensitivity_variants = _sensitivity_variants()
+sensitivity_summary_rows = []
+variant_phenotypes = {}
+
+for variant_name, variant_spec in sensitivity_variants.items():
+    variant_metrics = _assemble_metrics(variant_spec["mouse"], variant_spec["human"])
+
+    # The detection and support thresholds act on the universe, not on the curves.
+    variant_metrics["detected_in_both_species"] = (
+        (variant_metrics["detection_mouse"] >= variant_spec["config"]["min_detection_each_species"])
+        & (variant_metrics["detection_human"] >= variant_spec["config"]["min_detection_each_species"])
+    )
+    variant_metrics["enough_shared_support"] = (
+        variant_metrics["n_shared_grid_points"] >= variant_spec["config"]["min_pattern_grid_points"]
+    )
+
+    variant_flags = _phenotype_flags(
+        variant_metrics, variant_spec["config"],
+        include_axis_genes=variant_spec.get("include_axis", False),
+    )
+    # The divergence score is gated by the flags, so it is computed after them.
+    variant_metrics = variant_metrics.join(variant_flags)
+    variant_metrics["spatial_discovery_score"] = _spatial_discovery_score(
+        variant_metrics, variant_spec["config"]
+    )
+    variant_labels = pd.Series(_assign_phenotypes(variant_flags), index=gene_names)
+    variant_phenotypes[variant_name] = variant_labels
+
+    primary_labels = gene_metrics["spatial_phenotype"].to_numpy()
+    primary_broad = gene_metrics["broad_phenotype"].to_numpy()
+    variant_broad = variant_labels.map(BROAD_PHENOTYPE).to_numpy()
+
+    primary_score = gene_metrics["spatial_discovery_score"].to_numpy()
+    variant_score = variant_metrics["spatial_discovery_score"].to_numpy()
+    order_primary = np.argsort(-np.nan_to_num(primary_score))
+    order_variant = np.argsort(-np.nan_to_num(variant_score))
+
+    sensitivity_summary_rows.append({
+        "variant": variant_name,
+        "note": variant_spec["note"],
+        "same_fine_phenotype_share": float((variant_labels.to_numpy() == primary_labels).mean()),
+        "same_broad_phenotype_share": float((variant_broad == primary_broad).mean()),
+        "n_discovery_eligible": int((~variant_flags["excluded"] & variant_flags["enough_support"]).sum()),
+        "n_conserved": int((variant_labels == "conserved zonation").sum()),
+        "n_amplitude_change": int(variant_labels.isin(
+            ["weaker zonation in human", "stronger zonation in human"]).sum()),
+        "n_species_specific": int(variant_labels.isin(
+            ["mouse-zonated / human-flat", "human-zonated / mouse-flat"]).sum()),
+        "n_inversion": int((variant_labels == "gradient inversion").sum()),
+        "n_complex": int((variant_labels == "complex shape rewiring").sum()),
+        "spearman_discovery_score_vs_primary": float(
+            spearmanr(primary_score, variant_score, nan_policy="omit").correlation),
+        "top50_discovery_overlap": len(
+            set(gene_names[order_primary[:50]]) & set(gene_names[order_variant[:50]])
+        ) / 50.0,
+    })
+
+sensitivity_summary = pd.DataFrame(sensitivity_summary_rows)
+
+# The per-class counts of every variant are written to `tables/`; only the stability columns are
+# displayed, because they are the ones the robustness claim is read from.
+STABILITY_COLUMNS = [
+    "variant", "note", "same_broad_phenotype_share", "same_fine_phenotype_share",
+    "spearman_discovery_score_vs_primary", "top50_discovery_overlap",
+]
+display(sensitivity_summary[STABILITY_COLUMNS].round(3))
+_save_table(sensitivity_summary, "sensitivity_summary.csv")
+
+
+# %%
+# Purpose: per-gene stability of the phenotype across the sensitivity variants.
+
+# --------------------------------------------------------------------------------------
+# Per-gene stability across the variants.
+# --------------------------------------------------------------------------------------
+
+robustness = pd.DataFrame({
+    "gene": gene_metrics["gene"],
+    "spatial_phenotype": gene_metrics["spatial_phenotype"],
+    "broad_phenotype": gene_metrics["broad_phenotype"],
+})
+
+for variant_name, variant_labels in variant_phenotypes.items():
+    robustness[f"phenotype__{variant_name}"] = variant_labels.to_numpy()
+    robustness[f"broad__{variant_name}"] = variant_labels.map(BROAD_PHENOTYPE).to_numpy()
+
+broad_columns = [column for column in robustness if column.startswith("broad__")]
+robustness["n_variants_tested"] = robustness[broad_columns].notna().sum(axis=1)
+robustness["n_variants_same_broad_phenotype"] = (
+    robustness[broad_columns].to_numpy() == robustness["broad_phenotype"].to_numpy()[:, None]
+).sum(axis=1)
+robustness["robustness_score"] = (
+    robustness["n_variants_same_broad_phenotype"]
+    / robustness["n_variants_tested"].replace(0, np.nan)
+)
+
+gene_metrics = gene_metrics.merge(
+    robustness[["gene", "n_variants_tested", "n_variants_same_broad_phenotype", "robustness_score"]],
+    on="gene", how="left",
+)
+
+_save_table(robustness, "gene_spatial_phenotype_robustness.csv")
+
+print("Median robustness_score per primary phenotype (1.0 = unchanged broad class in every variant):")
+display(
+    robustness.groupby("spatial_phenotype")["robustness_score"]
+    .agg(genes="count", median_robustness="median", min_robustness="min")
+    .sort_values("median_robustness", ascending=False)
+    .round(3)
+)
+
+discovery_genes = ~gene_metrics["axis_basis_gene"] & ~gene_metrics["technical_gene"]
+_report("genes unchanged in their broad class under every variant",
+        int((gene_metrics["robustness_score"] == 1).sum()), len(gene_names))
+_report("discovery-eligible genes robust under >= 80% of variants",
+        int((gene_metrics["robustness_score"].ge(0.8) & discovery_genes).sum()), len(gene_names),
+        why="used to prioritise the genes shown in sections 3.3 and 4.2")
+
+
+# %% [markdown]
+# ### 3.3 - The result figures
+#
+# Four figures, each answering one part of the question (the curve-layer QC panel is figure 1A, at the
+# end of section 1):
+#
+# * **1B** — where does zonation strength sit relative to the identity line, and which genes have strong
+#   zonation in both species but poor shape agreement (the rewiring corner)?
+# * **1C** — displacement versus residual mismatch: is a gene explained by a positional change, or is it
+#   genuinely reshaped after the best possible displacement? A displacement is drawn only for genes whose
+#   criteria are met, in the supporting-measurement colour.
+# * **1D** — representative genes per class, with **both** specimens/slices drawn faintly behind the
+#   balanced curves, so within-species consistency is visible rather than asserted.
+# * **1E** — shape only: each gene z-scored *within each species*, so the heatmap cannot be driven by an
+#   abundance difference between human and mouse.
+#
+# Genes are chosen by class-specific evidence (the ranking cell below), preferring genes that kept their
+# broad class in at least 80% of the 3.2 variants. Figures are readable without the code: every panel
+# states its class, sample sizes and direction convention.
+#
+
+# %%
+# Purpose: the per-class exemplar ranking that the figure cells below use.
+
 # What each phenotype's exemplars must demonstrate, and therefore how they are ranked. A single
-# global divergence score picks genes that score high for *any* reason - which is how a "shifted"
-# exemplar ends up being a gene whose amplitudes differ - so each class ranks by the evidence it is
-# supposed to illustrate, and shifted classes additionally require comparable amplitudes.
+# global divergence score picks genes that score high for *any* reason, so each class ranks by the
+# evidence it is supposed to illustrate.
 CLASS_EVIDENCE = {
     "conserved zonation": {
         "label": "shape agreement first, then the smallest amplitude and position changes",
@@ -2870,20 +2447,6 @@ CLASS_EVIDENCE = {
         "filter": lambda block: block["shift_at_search_boundary"].eq(False),
         "rank": ["amplitude_log2_ratio_human_over_mouse", "human_amplitude"],
         "ascending": [False, False],
-    },
-    "shifted earlier in human": {
-        "label": "best agreement after an interior displacement, with comparable amplitudes",
-        "filter": lambda block: block["shift_interior"]
-        & block["amplitude_log2_ratio_human_over_mouse"].abs().le(1.0),
-        "rank": ["post_shift_shape_corr", "shift_improvement", "residual_rms_after_shift"],
-        "ascending": [False, False, True],
-    },
-    "shifted later in human": {
-        "label": "best agreement after an interior displacement, with comparable amplitudes",
-        "filter": lambda block: block["shift_interior"]
-        & block["amplitude_log2_ratio_human_over_mouse"].abs().le(1.0),
-        "rank": ["post_shift_shape_corr", "shift_improvement", "residual_rms_after_shift"],
-        "ascending": [False, False, True],
     },
     "gradient inversion": {
         "label": "strongest opposition between the two early-to-late gradients",
@@ -2943,41 +2506,6 @@ discovery_eligible = (
     & gene_metrics["enough_shared_support"]
 )
 
-figure, axes = plt.subplots(1, 3, figsize=(7.25, 2.75), sharey=True, layout="constrained")
-
-for axis, (panel, requested) in zip(axes, LANDMARK_PANELS.items()):
-    members = [gene for gene in requested if gene.upper() in gene_lookup_tested]
-    for gene in members:
-        index = gene_lookup_tested[gene.upper()]
-        # Retain the member curves, but make the aggregate programme the visual evidence.
-        axis.plot(grid_unit, balanced_mouse[index], color=SPECIES_COLORS["mouse"], lw=0.65,
-                  alpha=0.20, zorder=1)
-        axis.plot(grid_unit, balanced_human[index], color=SPECIES_COLORS["human"], lw=0.65,
-                  alpha=0.20, ls="--", zorder=1)
-
-    programs = landmark_registration["programs"][panel]
-    axis.plot(grid_unit, programs["mouse"], color=SPECIES_COLORS["mouse"], lw=2.1, zorder=3)
-    axis.plot(grid_unit, programs["human"], color=SPECIES_COLORS["human"], lw=2.1, ls="--", zorder=3)
-    axis.set_title(f"{panel} landmark programme", loc="left", fontweight="bold")
-    axis.text(0.02, 0.05, f"{len(members)} member genes", transform=axis.transAxes,
-              fontsize=6.5, color="0.35")
-    _style_pt_axis(axis, ylabel="Mean member z-score" if axis is axes[0] else None)
-
-_panel_label(axes[0], "a")
-axes[0].legend(
-    handles=[
-        Line2D([], [], color=SPECIES_COLORS["mouse"], lw=2.1, label="mouse, balanced curve"),
-        Line2D([], [], color=SPECIES_COLORS["human"], lw=2.1, ls="--", label="human, balanced curve"),
-        Line2D([], [], color="0.45", lw=0.65, alpha=0.35, label="individual landmark member"),
-    ], loc="upper right", fontsize=6.5,
-)
-figure.suptitle(
-    "Primary coordinate: canonical PT landmark programmes on the shared DPT\n"
-    "Faint traces are member genes; balanced species curves summarise 2 mouse specimens and 2 human slices from one donor",
-    fontsize=9.5,
-)
-_save_figure(figure, "fig1a_pt_alignment.png")
-plt.show()
 
 
 # %%
@@ -3080,51 +2608,50 @@ _save_table(landscape, "zonation_landscape_eligible_genes.csv")
 
 
 # %%
-# Purpose: figure 1C - positional displacement versus residual shape mismatch.
+# Purpose: figure 1C - displacement versus residual shape mismatch.
 
-phase_frame = gene_metrics[discovery_eligible].dropna(
+displacement_frame = gene_metrics[discovery_eligible].dropna(
     subset=["shape_corr", "post_shift_shape_corr", "best_shift_human_minus_mouse",
             "residual_rms_after_shift"]
 )
 
 figure, axes = plt.subplots(1, 3, figsize=(10.5, 3.65), width_ratios=[1.0, 1.0, 1.0])
 figure.subplots_adjust(left=0.065, right=0.99, bottom=0.20, top=0.78, wspace=0.34)
-ax_raw_registered, ax_shift_residual, ax_summary = axes
+ax_raw, ax_shift_residual, ax_summary = axes
 
 # Panel 1: does a bounded displacement *explain* the difference?
 #
 # Translation almost always improves the correlation somewhat, so an improvement is not evidence of a
 # displacement and must not be drawn as one. Orange marks only genes whose displacement meets every
-# phase criterion - the classification the notebook actually reports - and the merely-improved cloud
-# stays grey. The visual message then supports the result rather than contradicting it: clean shifts
+# criterion - a supporting measurement, not a phenotype class - and the merely-improved cloud stays
+# grey. The visual message then supports the result rather than contradicting it: clean displacements
 # are rare.
-ax_raw_registered.plot([-1, 1], [-1, 1], color="0.5", lw=1, ls=":", label="no change from shifting")
-ax_raw_registered.scatter(
-    phase_frame["shape_corr"], phase_frame["post_shift_shape_corr"],
+ax_raw.plot([-1, 1], [-1, 1], color="0.5", lw=1, ls=":", label="no change from shifting")
+ax_raw.scatter(
+    displacement_frame["shape_corr"], displacement_frame["post_shift_shape_corr"],
     s=5, alpha=0.18, linewidths=0, color="0.40", rasterized=True,
-    label=f"all usable patterns (n={len(phase_frame):,})",
+    label=f"all usable patterns (n={len(displacement_frame):,})",
 )
-phase_usable = phase_frame[phase_frame["shift_usable"]]
-ax_raw_registered.scatter(
-    phase_usable["shape_corr"], phase_usable["post_shift_shape_corr"],
+displacement_usable = displacement_frame[displacement_frame["shift_usable"]]
+ax_raw.scatter(
+    displacement_usable["shape_corr"], displacement_usable["post_shift_shape_corr"],
     s=21, alpha=0.95, linewidths=0.3, edgecolors="white",
-    color=PHENOTYPE_COLORS["shifted later in human"],
-    label=f"interior displacement passes all criteria (n={len(phase_usable):,})",
+    color=DISPLACEMENT_COLOR,
+    label=f"interior displacement passes all criteria (n={len(displacement_usable):,})",
 )
-ax_raw_registered.set_xlabel("Standardised curve correlation (shared PT DPT)")
-ax_raw_registered.set_ylabel(
+ax_raw.set_xlabel("Standardised curve correlation (shared PT DPT)")
+ax_raw.set_ylabel(
     f"Best correlation after displacement\n(|shift| ≤ {SHIFT_INTERIOR_LIMIT:.2f} of PT)"
 )
-ax_raw_registered.set_title("A  |  Does bounded displacement rescue the shape?", loc="left",
+ax_raw.set_title("A  |  Does bounded displacement rescue the shape?", loc="left",
                            fontweight="bold")
-ax_raw_registered.text(0.03, 0.03,
-                        f"Orange: {len(phase_usable)} genes pass every displacement criterion.",
-                        transform=ax_raw_registered.transAxes, fontsize=5.9, va="bottom", color="0.30")
+ax_raw.text(0.03, 0.03,
+                        f"Orange: {len(displacement_usable)} genes pass every displacement criterion.",
+                        transform=ax_raw.transAxes, fontsize=5.9, va="bottom", color="0.30")
 
 # Panel 2: displacement against what is left after it.
-for label in ["shifted earlier in human", "shifted later in human", "gradient inversion",
-              "complex shape rewiring", "conserved zonation"]:
-    block = phase_frame[phase_frame["spatial_phenotype"].eq(label)]
+for label in ["gradient inversion", "complex shape rewiring", "conserved zonation"]:
+    block = displacement_frame[displacement_frame["spatial_phenotype"].eq(label)]
     if not len(block):
         continue
     ax_shift_residual.scatter(
@@ -3185,8 +2712,6 @@ REPRESENTATIVE_CLASSES = [
     "stronger zonation in human",
     "mouse-zonated / human-flat",
     "human-zonated / mouse-flat",
-    "shifted earlier in human",
-    "shifted later in human",
     "gradient inversion",
     "complex shape rewiring",
 ]
@@ -3209,9 +2734,9 @@ main_representative_table = pd.concat(
      for label in REPRESENTATIVE_CLASSES], ignore_index=True,
 )
 
-# A 3 × 3 plate keeps one carefully chosen exemplar from every class at a legible physical size.
-# The full 27-gene atlas is still exported below as supplementary material rather than being shrunk
-# until it can no longer support the claim it is meant to illustrate.
+# A 3 × 3 plate holds one exemplar per class at a legible physical size; the two panels the seven
+# classes leave over stay empty. The full per-class selection is still exported below as supplementary
+# material rather than being shrunk until it can no longer support the claim it is meant to illustrate.
 figure, axes = plt.subplots(3, 3, figsize=(7.25, 6.45), sharex=True, layout="constrained")
 for panel_index, (axis, label) in enumerate(zip(axes.flat, REPRESENTATIVE_CLASSES)):
     row_index, column_index = divmod(panel_index, 3)
@@ -3260,7 +2785,7 @@ _save_figure(figure, "representative_gene_spatial_phenotypes.png")
 plt.show()
 
 # Retain every selected observation in a separate, full-resolution supplementary atlas.  It is saved
-# but deliberately not displayed inline: a 27-panel figure is unsuitable as a main manuscript panel.
+# but deliberately not displayed inline: a multi-panel figure is unsuitable as a main manuscript panel.
 full_figure, full_axes = plt.subplots(
     len(REPRESENTATIVE_CLASSES), GENES_PER_CLASS,
     figsize=(8.0, 1.35 * len(REPRESENTATIVE_CLASSES)), sharex=True, layout="constrained",
@@ -3357,325 +2882,7 @@ _save_table(heatmap_table, "shape_only_heatmap_gene_selection.csv")
 
 
 # %% [markdown]
-# ## 7 - Clustering the residual rewiring (supplementary view)
-#
-# **Status: supplementary, not a headline result.** Section 4's classes are the primary classification.
-# The clusters below are an exploratory view of the one class that framework cannot describe, and two
-# properties keep them out of the main text: the clusters come out strongly imbalanced (a large "gradient
-# reversal" cluster beside a handful of genes in the smallest one), and the adjusted Rand index against
-# the leave-one-out variants spreads widely rather than concentrating near 1. Both numbers are printed
-# with the results rather than left for a reader to discover, and the cluster names are derived from the
-# mean difference curves at run time - so the cluster count, sizes and names should be read as this
-# cohort's answer, not as a fixed taxonomy.
-#
-# **Why clustering appears here and not earlier.** The classes in section 4 are predefined and
-# interpretable; most of the biology the paper will quote is already named by them. What they cannot
-# describe is the *shape* of a divergence that is neither a displacement nor an amplitude change — the
-# `complex shape rewiring` class. That class is the one place where unsupervised structure can add
-# something, so it is the only place clustering is used, exactly as the question demands.
-#
-# **What is clustered.** The difference curves `D_g(s) = z_human,g(s) - z_mouse,g(s)` on the primary
-# (shared PT DPT) axis: each species standardised within itself first, so a cluster cannot be created by abundance or
-# by overall zonation strength, only by *where* the two species' patterns disagree.
-#
-# **How.** Functional PCA on the difference curves, hierarchical clustering (average linkage, 1 -
-# correlation distance) on them, `k` chosen in 4–8 by silhouette score. Every cluster is then named
-# from its own mean difference curve - which third of PT gains or loses, whether it is biphasic, and
-# whether the difference runs against the mouse gradient - never from a textbook pathway name.
-# Stability is checked by recomputing the clustering on each leave-one-specimen / leave-one-slice
-# variant and reporting the adjusted Rand index against the primary labels. If the class is too small
-# to cluster (`cluster_min_genes`), the section says so and is skipped rather than forced.
-#
-
-# %%
-# Purpose: clustering of the residual complex-rewiring difference curves, with stability and naming.
-
-from scipy.cluster.hierarchy import fcluster, linkage
-from scipy.spatial.distance import squareform
-from sklearn.decomposition import PCA
-from sklearn.metrics import adjusted_rand_score, silhouette_score
-
-def _complete_difference_curves(values, label):
-    """Fill unsupported positions of a difference curve with 0 ("no divergence") and report it.
-
-    PCA and corrcoef need complete vectors, and a gene can be unsupported at the edges of the shared
-    grid. Filling those positions with zero difference is the neutral choice - it claims no
-    divergence where one species has no data - but the count is reported so it is never silent.
-    """
-    gaps = ~np.isfinite(values)
-    if gaps.any():
-        _report(f"{label} covering an unsupported stretch", int(gaps.any(axis=1).sum()), values.shape[0],
-                why="filled with 0 (no divergence) so the clustering has a complete vector")
-    return np.where(gaps, 0.0, values)
-
-
-rewiring_genes = gene_metrics.loc[
-    gene_metrics["spatial_phenotype"].eq("complex shape rewiring")
-    & ~gene_metrics["axis_basis_gene"]
-    & ~gene_metrics["technical_gene"],
-    "gene",
-].to_numpy()
-rewiring_index = np.asarray([gene_lookup_tested[str(gene).upper()] for gene in rewiring_genes], dtype=int)
-
-_report("genes in the complex shape rewiring class", len(rewiring_genes),
-        why=f"clustering runs only if there are >= {CONFIG['cluster_min_genes']}")
-
-# A flat difference curve carries no rewiring shape to cluster, and a zero-variance row would make
-# the correlation distance - and therefore the silhouette score - undefined. Such genes are reported
-# and left out rather than silently perturbing the linkage.
-if len(rewiring_genes):
-    # The primary coordinate: the shared PT DPT, not the landmark-registered axis.
-    difference_curves_all = (
-        _row_zscore(balanced_human[rewiring_index]) - _row_zscore(balanced_mouse[rewiring_index])
-    )
-    difference_spread = (
-        np.nanmax(difference_curves_all, axis=1) - np.nanmin(difference_curves_all, axis=1)
-    )
-    informative_rows = np.flatnonzero(np.isfinite(difference_spread) & (difference_spread > 0))
-else:
-    difference_curves_all = np.zeros((0, grid_unit.size))
-    informative_rows = np.zeros(0, dtype=int)
-
-_report("of those, with a non-degenerate difference curve", int(informative_rows.size),
-        len(rewiring_genes), why="a flat difference curve cannot be clustered")
-
-rewiring_genes = rewiring_genes[informative_rows]
-rewiring_index = rewiring_index[informative_rows]
-difference_curves = _complete_difference_curves(
-    difference_curves_all[informative_rows], "complex-rewiring genes"
-)
-
-if len(rewiring_genes) < CONFIG["cluster_min_genes"]:
-    print("Too few genes to cluster: the section is skipped, not forced.")
-    complex_rewiring_clusters = pd.DataFrame()
-    complex_cluster_profiles = pd.DataFrame()
-else:
-    n_components = int(min(10, difference_curves.shape[0] - 1, difference_curves.shape[1] - 1))
-    pca = PCA(n_components=n_components, random_state=CONFIG["cluster_seed"])
-    component_scores = pca.fit_transform(difference_curves)
-
-    functional_pca = pd.DataFrame({
-        "component": np.arange(1, n_components + 1),
-        "explained_variance_ratio": pca.explained_variance_ratio_,
-        "cumulative": np.cumsum(pca.explained_variance_ratio_),
-    })
-    display(functional_pca.round(4))
-
-    correlation_distance = 1.0 - np.corrcoef(difference_curves)
-    correlation_distance = np.clip(
-        np.where(np.isfinite(correlation_distance), correlation_distance, 1.0), 0.0, 2.0
-    )
-    np.fill_diagonal(correlation_distance, 0.0)
-    linkage_matrix = linkage(squareform(correlation_distance, checks=False), method="average")
-
-    choice_rows = []
-    for k in range(CONFIG["cluster_k_min"], CONFIG["cluster_k_max"] + 1):
-        candidate = fcluster(linkage_matrix, k, criterion="maxclust")
-        if np.unique(candidate).size < 2:
-            continue
-        sizes = np.bincount(candidate)[1:]
-        choice_rows.append({
-            "k": k,
-            "silhouette": float(silhouette_score(difference_curves, candidate, metric="correlation")),
-            "smallest_cluster": int(sizes.min()),
-            "largest_cluster": int(sizes.max()),
-        })
-
-    k_choice = pd.DataFrame(choice_rows)
-    display(k_choice.round(4))
-
-    chosen_k = int(k_choice.loc[k_choice["silhouette"].idxmax(), "k"])
-    print(f"chosen k = {chosen_k} (best silhouette in [{CONFIG['cluster_k_min']}, {CONFIG['cluster_k_max']}])")
-
-    cluster_ids = fcluster(linkage_matrix, chosen_k, criterion="maxclust")
-
-    mouse_reference = _nanmean_safe(
-        _row_zscore(balanced_mouse[rewiring_index]), axis=0
-    )
-    mouse_pattern_scale = float(np.ptp(mouse_reference))
-
-    def _name_difference_curve(mean_curve, x_unit, reference_curve, reference_scale):
-        """Name a cluster from the morphology of its own mean difference curve."""
-        amplitude = float(np.ptp(mean_curve))
-        thirds = np.array_split(np.arange(mean_curve.size), 3)
-        lobe_means = {
-            name: float(np.mean(mean_curve[part]))
-            for name, part in zip(("early", "mid", "late"), thirds)
-        }
-        strongest_lobe = max(lobe_means, key=lambda key: abs(lobe_means[key]))
-        strongest_value = lobe_means[strongest_lobe]
-
-        with np.errstate(invalid="ignore"):
-            reversal = float(np.corrcoef(mean_curve, reference_curve)[0, 1])
-        if np.isfinite(reversal) and reversal <= -0.5:
-            return "gradient reversal (human pattern opposes the mouse pattern)"
-
-        positive = max(lobe_means.values())
-        negative = min(lobe_means.values())
-        if amplitude > 0 and min(abs(positive), abs(negative)) > 0.15 * amplitude:
-            return "biphasic rewiring (gain in one third, loss in another)"
-
-        if amplitude <= 0 or amplitude <= 0.10 * max(reference_scale, 1e-9):
-            return "weak / flat difference"
-
-        direction = "gain" if strongest_value > 0 else "loss"
-        return f"{strongest_lobe}-PT human {direction}"
-
-    profile_rows = []
-    names_by_cluster = {}
-    for cluster in np.unique(cluster_ids):
-        member_rows = np.flatnonzero(cluster_ids == cluster)
-        mean_curve = _nanmean_safe(difference_curves[member_rows], axis=0)
-        cluster_name = _name_difference_curve(
-            mean_curve, grid_unit, mouse_reference, mouse_pattern_scale
-        )
-        names_by_cluster[int(cluster)] = cluster_name
-        profile_rows.append({
-            "cluster": int(cluster),
-            "cluster_name": cluster_name,
-            "n_genes": int(member_rows.size),
-            "mean_pc1": float(component_scores[member_rows, 0].mean()),
-            "mean_amplitude_log2_ratio": float(
-                gene_metrics.loc[gene_metrics["gene"].isin(rewiring_genes[member_rows]),
-                                 "amplitude_log2_ratio_human_over_mouse"].mean()),
-            "mean_shape_corr": float(
-                gene_metrics.loc[gene_metrics["gene"].isin(rewiring_genes[member_rows]),
-                                 "shape_corr"].mean()),
-            "mean_abs_shift": float(np.nanmean(np.abs(
-                gene_metrics.loc[gene_metrics["gene"].isin(rewiring_genes[member_rows]),
-                                 "best_shift_human_minus_mouse"]))),
-        })
-
-    # Two clusters can share a name when their mean curves have the same morphology; disambiguate so
-    # the table, the figure and the text stay referable to each other.
-    shared_names = pd.Series(list(names_by_cluster.values())).value_counts()
-    for cluster, cluster_name in list(names_by_cluster.items()):
-        if shared_names[cluster_name] > 1:
-            names_by_cluster[cluster] = f"{cluster_name} (cluster {cluster})"
-
-    complex_cluster_profiles = pd.DataFrame(profile_rows).sort_values("n_genes", ascending=False)
-    complex_cluster_profiles["cluster_name"] = [
-        names_by_cluster[int(cluster)] for cluster in complex_cluster_profiles["cluster"]
-    ]
-    display(complex_cluster_profiles.round(3))
-
-    _report("clusters (supplementary view)", len(complex_cluster_profiles),
-            why=f"largest {int(complex_cluster_profiles['n_genes'].max())} genes, "
-                f"smallest {int(complex_cluster_profiles['n_genes'].min())} - imbalanced, "
-                "which is one reason this is not a main result")
-
-    complex_rewiring_clusters = pd.DataFrame({
-        "gene": rewiring_genes,
-        "cluster": cluster_ids,
-        "cluster_name": [names_by_cluster[int(cluster)] for cluster in cluster_ids],
-        "difference_amplitude": np.nanmax(difference_curves, axis=1) - np.nanmin(difference_curves, axis=1),
-        "difference_mean": _nanmean_safe(difference_curves, axis=1),
-        "functional_pc1": component_scores[:, 0],
-        "functional_pc2": component_scores[:, 1] if n_components > 1 else np.nan,
-        "functional_pc3": component_scores[:, 2] if n_components > 2 else np.nan,
-    }).merge(
-        gene_metrics[["gene", "mouse_amplitude", "human_amplitude", "amplitude_log2_ratio_human_over_mouse",
-                      "shape_corr", "best_shift_human_minus_mouse", "robustness_score",
-                      "level_effect_human_minus_mouse"]],
-        on="gene", how="left",
-    )
-
-    _save_table(complex_rewiring_clusters, "complex_rewiring_clusters.csv")
-
-    # ----------------------------------------------------------------------------------
-    # Stability of the clustering under the specimen/slice variants.
-    # ----------------------------------------------------------------------------------
-
-    stability_rows = []
-    variant_curve_sets = []
-    for name in mouse_samples:
-        remaining = [specimen for specimen in mouse_samples if specimen != name]
-        variant_curve_sets.append((
-            f"leave out mouse specimen {name}",
-            specimen_balanced_curves({specimen: specimen_curves[specimen] for specimen in remaining}),
-            balanced_human,
-        ))
-    for name in human_samples:
-        remaining = [specimen for specimen in human_samples if specimen != name]
-        variant_curve_sets.append((
-            f"leave out human slice {name}",
-            balanced_mouse,
-            specimen_balanced_curves({specimen: specimen_curves[specimen] for specimen in remaining}),
-        ))
-
-    for variant_name, variant_mouse, variant_human_raw in variant_curve_sets:
-        # Same coordinate choice as the primary clustering: the variant's curves on the shared PT DPT,
-        # so the stability check varies the curves rather than the coordinate as well.
-        variant_difference = _complete_difference_curves(
-            _row_zscore(variant_human_raw[rewiring_index])
-            - _row_zscore(variant_mouse[rewiring_index]),
-            "variant complex-rewiring genes",
-        )
-        variant_distance = 1.0 - np.corrcoef(variant_difference)
-        variant_distance = np.clip(
-            np.where(np.isfinite(variant_distance), variant_distance, 1.0), 0.0, 2.0
-        )
-        np.fill_diagonal(variant_distance, 0.0)
-        variant_linkage = linkage(squareform(variant_distance, checks=False), method="average")
-        variant_ids = fcluster(variant_linkage, chosen_k, criterion="maxclust")
-
-        stability_rows.append({
-            "variant": variant_name,
-            "adjusted_rand_index_vs_primary": float(adjusted_rand_score(cluster_ids, variant_ids)),
-            "n_clusters_recovered": int(np.unique(variant_ids).size),
-        })
-
-    complex_cluster_stability = pd.DataFrame(stability_rows)
-    display(complex_cluster_stability.round(3))
-
-    if len(complex_cluster_stability):
-        print("  cluster stability, adjusted Rand index against the primary labels: "
-              f"min {complex_cluster_stability['adjusted_rand_index_vs_primary'].min():.3f}, "
-              f"max {complex_cluster_stability['adjusted_rand_index_vs_primary'].max():.3f} "
-              "- a wide spread is the second reason these clusters stay supplementary")
-    _save_table(complex_cluster_stability, "complex_rewiring_cluster_stability.csv")
-
-    # ----------------------------------------------------------------------------------
-    # Figure: cluster mean difference curves and member genes.
-    # ----------------------------------------------------------------------------------
-
-    figure, axes = plt.subplots(1, 2, figsize=(8.8, 3.5), width_ratios=[1.0, 1.25], layout="constrained")
-
-    for cluster in np.unique(cluster_ids):
-        member_rows = np.flatnonzero(cluster_ids == cluster)
-        mean_curve = _nanmean_safe(difference_curves[member_rows], axis=0)
-        axes[0].plot(grid_unit, mean_curve, lw=2.0,
-                     label=f"{names_by_cluster[int(cluster)]} (n={member_rows.size})")
-    axes[0].axhline(0, color="black", lw=0.8)
-    axes[0].set_xlabel("Registered PT position (unit): early -> late")
-    axes[0].set_ylabel("Mean difference of z-scored curves\nz_human - z_mouse")
-    axes[0].set_title("Cluster mean difference curves", loc="left")
-    axes[0].legend(fontsize=7)
-
-    ordered_rows = np.argsort(cluster_ids)
-    image = axes[1].imshow(
-        difference_curves[ordered_rows], aspect="auto", interpolation="nearest", cmap="bwr",
-        vmin=-3, vmax=3, extent=[0, 1, ordered_rows.size - 0.5, -0.5],
-    )
-    boundaries = np.cumsum(np.bincount(cluster_ids)[1:])[:-1]
-    for boundary in boundaries:
-        axes[1].axhline(boundary - 0.5, color="black", lw=0.7)
-    axes[1].set_xlabel("Registered PT position (unit)")
-    axes[1].set_ylabel("Genes, grouped by cluster")
-    axes[1].set_title("Difference curves of the clustered genes", loc="left")
-    figure.colorbar(image, ax=axes[1], label="z_human - z_mouse", shrink=0.85)
-
-    _panel_label(axes[0], "a")
-    _panel_label(axes[1], "b")
-    figure.suptitle("Residual complex-shape rewiring (supplementary)\n"
-                    "Each species is z-scored first, so values represent spatial disagreement only",
-                    fontsize=9.2)
-    _save_figure(figure, "complex_rewiring_clusters.png")
-    plt.show()
-
-
-# %% [markdown]
-# ## 8 - Which functional programs sit in which spatial phenotype
+# ## 4 - Which functional programs sit in which spatial phenotype
 #
 # **Why not mean pathway expression.** Averaging a pathway's member genes along PT discards exactly the
 # thing under study: two pathways with identical mean trajectories can have members that all sit in the
@@ -3806,7 +3013,6 @@ def _member_consistency(label, medians, config):
 
     shape = medians["shape_corr"]
     amplitude = medians["amplitude_log2"]
-    shift = medians["shift"]
 
     if label == "conserved zonation":
         consistent = shape >= config["pathway_consistency_min_median_shape_corr"]
@@ -3814,10 +3020,6 @@ def _member_consistency(label, medians, config):
         consistent = np.isfinite(amplitude) and amplitude <= 0
     elif label == "stronger zonation in human":
         consistent = np.isfinite(amplitude) and amplitude >= 0
-    elif label == "shifted earlier in human":
-        consistent = np.isfinite(shift) and shift <= 0
-    elif label == "shifted later in human":
-        consistent = np.isfinite(shift) and shift >= 0
     elif label == "gradient inversion":
         consistent = np.isfinite(shape) and shape <= 0
     elif label == "complex shape rewiring":
@@ -4021,7 +3223,7 @@ _report("significant pathway x phenotype associations",
 
 _save_table(significant_associations, "pathway_significant_associations.csv")
 
-# Bound unconditionally: section 9's strongest-findings panels read these whether or not this run
+# Bound unconditionally: section 4.2's strongest-findings panels read these whether or not this run
 # produced any significant association.
 heatmap_frame = pd.DataFrame()
 
@@ -4174,7 +3376,7 @@ def _enrichment_selfcheck():
     """
     labels = np.array(
         ["conserved zonation"] * 15
-        + ["shifted later in human"] * 5
+        + ["gradient inversion"] * 5
         + ["weak / uncertain zonation"] * 30
         + ["excluded"] * int(len(gene_names) - 50)
     )
@@ -4194,13 +3396,13 @@ def _enrichment_selfcheck():
     enriched = _pair("enriched_case", "conserved zonation")
     shortfall = _pair("shortfall_case", "conserved zonation")
 
-    # Derive which pathway holds every gene of the shifted phenotype from the construction itself,
+    # Derive which pathway holds every gene of the inverted phenotype from the construction itself,
     # instead of assuming it: the answer follows from the indices above.
-    shifted_rows = [row for row in
-                    (pathway_frame.iloc[0], pathway_frame.iloc[1])
-                    if set(np.flatnonzero(labels == "shifted later in human"))
-                    <= set(row["universe_members"])]
-    shifted = _pair(shifted_rows[0]["pathway"], "shifted later in human") if shifted_rows else None
+    inverted_rows = [row for row in
+                     (pathway_frame.iloc[0], pathway_frame.iloc[1])
+                     if set(np.flatnonzero(labels == "gradient inversion"))
+                     <= set(row["universe_members"])]
+    inverted = _pair(inverted_rows[0]["pathway"], "gradient inversion") if inverted_rows else None
 
     checks = [
         ("enriched pair: background size is the discovery-eligible universe",
@@ -4219,7 +3421,7 @@ def _enrichment_selfcheck():
         ("shortfall is not reported as enrichment (p ~ 1)",
          shortfall is None or float(shortfall["p_value"]) > 0.99),
         ("a pathway holding every member of a phenotype returns a small p",
-         shifted is not None and float(shifted["p_value"]) < 0.01),
+         inverted is not None and float(inverted["p_value"]) < 0.01),
         ("only phenotypes present in the background are tested",
          "excluded" not in set(table["spatial_phenotype"])),
     ]
@@ -4238,7 +3440,7 @@ print(f"All {len(enrichment_selfcheck)} synthetic enrichment self-checks passed.
 
 
 # %% [markdown]
-# ## 9 - Inspecting whole pathways along the coordinate
+# ### 4.2 - Inspecting whole pathways along the coordinate
 #
 # **Why a pathway-level heatmap.** Enrichment tells you that a pathway's genes are over-represented in a
 # phenotype; it does not show whether the pathway is internally coherent. Plotting its members as
@@ -4494,7 +3696,7 @@ else:
 
 
 # %% [markdown]
-# ## 10 - Conventional whole-PT signal versus continuous spatial signal
+# ## 5 - What the continuous analysis adds beyond the whole-PT comparison
 #
 # **The comparison this notebook exists to make.** A whole-PT comparison asks only about the vertical
 # offset of the two species' expression; the continuous analysis asks about amplitude, position and
@@ -4511,8 +3713,8 @@ else:
 # change is present it is shown alongside as a continuity check, not as the primary). Spatial signal =
 # `spatial_discovery_score`, which is built only from amplitude change, displacement and shape
 # divergence - never from level - and each term counts **only where its evidence is interpretable**:
-# amplitude difference needs a reproducibly patterned species, displacement needs the full phase
-# criteria, shape divergence needs both species patterned and reproducible. A gene with nothing
+# amplitude difference needs a reproducibly patterned species, displacement needs every displacement
+# criterion, shape divergence needs both species patterned and reproducible. A gene with nothing
 # interpretable scores exactly 0 instead of accumulating division-amplified ratios from flat curves,
 # boundary shifts and noisy correlations, so the weak/uncertain cloud sits at the origin rather than
 # dominating the continuous-only quadrant.
@@ -4520,7 +3722,7 @@ else:
 # One distinction to keep in mind when reading the quadrants: a gene can hold a non-zero score while
 # still being classified `weak / uncertain zonation` - that happens when one component *is*
 # interpretable (say a real amplitude difference) but the slice or specimen agreement needed for a
-# phase or species-specific class is not there. The class reflects that disagreement; the score only
+# species-specific class is not there. The class reflects that disagreement; the score only
 # reports which components are measurable.
 #
 # **How the quadrants are drawn - and why not by a median split.** The conventional axis is continuous
@@ -4528,7 +3730,7 @@ else:
 # 0 for every gene with no interpretable component (that is the point of the gate), so its median in this
 # cohort is 0 and a "score >= median" rule would call *every* gene high-spatial and leave two quadrants
 # empty. Strong spatial evidence is therefore treated as a **categorical** state - a non-weak phenotype
-# that kept its broad class in at least `spatial_strong_robustness` of the section-5 variants - and the
+# that kept its broad class in at least `spatial_strong_robustness` of the section-3.2 variants - and the
 # continuous score is used only to rank genes inside that group. The upper-left quadrant then answers the
 # question the section exists for: reproducible spatial remodelling despite a small whole-PT level
 # difference.
@@ -4944,357 +4146,13 @@ plt.show()
 
 
 # %% [markdown]
-# ## 11 - Spatially conserved functions
+# ## 6 - Tables, the run inventory and the saved analysis notes
 #
-# **Why this section exists.** Divergence is the more eye-catching result, but the more transferable
-# statement about mouse-to-human translation is often the opposite one: these are the proximal-tubule
-# functions whose spatial organisation is *preserved*. This section asks which pathways are enriched for
-# `conserved zonation` — patterned in both species, reproducible within both, strong shape agreement,
-# little displacement and no major amplitude change — and contrasts them with the pathways that are
-# enriched for any divergent phenotype.
-#
-# **What counts as evidence.** A pathway whose member genes are enriched for conserved zonation at
-# family-wide FDR < `enrichment_fdr`, reported with its member count, the member fraction holding the
-# class, and the median shape correlation of its members. The language matters here: an enriched pathway
-# is "enriched for genes classified as conserved zonation" unless its members are also consistent (see
-# section 8) - a few conserved genes inside a 82-member set does not make the set a conserved programme,
-# and the table carries both the fraction and the coherence status so the distinction is visible. The
-# contrast figure puts conserved enrichment against divergent enrichment on the same axes: a pathway in
-# the upper-left quadrant keeps its spatial programme; one in the lower-right has been remodelled.
-#
-# **Two views, because the strict class has little power.** A conserved zonation requires every
-# criterion at once, so only a small number of genes qualify and over-representation against that class
-# is a weak test. Loosening the class would trade one problem for another, so the same question is also
-# asked continuously: the genes patterned in both species are ranked by a conservation score (shape
-# agreement, amplitude similarity, positional agreement, each in SD units, equally weighted) and the
-# pathways are tested against that ranking. The binary table answers "which pathways are unusually rich
-# in genes that meet every criterion"; the continuous table answers "which pathways are unusually well
-# conserved on average". They can disagree, and when they do the continuous one is the powered view.
-#
-# **Limits.** Conservation here means conservation of the *spatial programme* in this cohort, not of
-# expression level (level is deliberately excluded from the conserved class) and not of function.
-#
-
-# %%
-# Purpose: pathways enriched for conserved zonation, contrasted with pathways enriched for divergence.
-
-DIVERGENT_PHENOTYPES = [
-    "weaker zonation in human",
-    "stronger zonation in human",
-    "mouse-zonated / human-flat",
-    "human-zonated / mouse-flat",
-    "shifted earlier in human",
-    "shifted later in human",
-    "gradient inversion",
-    "complex shape rewiring",
-]
-
-conserved_enrichment = (
-    pathway_enrichment[pathway_enrichment["spatial_phenotype"].eq("conserved zonation")]
-    .sort_values("fdr").reset_index(drop=True)
-)
-conserved_enrichment["median_member_shape_corr"] = [
-    pathway_member_stats.get(f"{row.library}: {row.pathway}", {}).get("median_member_shape_corr", np.nan)
-    for row in conserved_enrichment.itertuples()
-]
-conserved_enrichment["median_member_abs_amplitude_log2_ratio"] = [
-    pathway_member_stats.get(f"{row.library}: {row.pathway}", {}).get(
-        "median_member_amplitude_log2_ratio", np.nan)
-    for row in conserved_enrichment.itertuples()
-]
-conserved_enrichment["median_member_abs_shift"] = [
-    pathway_member_stats.get(f"{row.library}: {row.pathway}", {}).get("median_member_abs_shift", np.nan)
-    for row in conserved_enrichment.itertuples()
-]
-
-spatially_conserved_pathways = conserved_enrichment[
-    conserved_enrichment["fdr"] < CONFIG["enrichment_fdr"]
-][[
-    "library", "pathway", "n_pathway_members_in_universe", "observed", "expected",
-    "fold_enrichment", "p_value", "fdr", "member_fraction_in_phenotype", "member_consistency",
-    "member_median_shape_corr", "member_median_amplitude_log2",
-    "median_member_shape_corr", "median_member_abs_amplitude_log2_ratio", "median_member_abs_shift",
-    "leading_genes",
-]]
-
-display(spatially_conserved_pathways.head(20).round(4))
-_report("pathways enriched for conserved zonation", len(spatially_conserved_pathways), len(conserved_enrichment),
-        why=f"family-wide FDR < {CONFIG['enrichment_fdr']}")
-_save_table(spatially_conserved_pathways, "spatially_conserved_pathways.csv")
-
-divergent_enrichment = (
-    pathway_enrichment[pathway_enrichment["spatial_phenotype"].isin(DIVERGENT_PHENOTYPES)]
-    .sort_values("fdr")
-    .groupby(["library", "pathway"], as_index=False)
-    .first()
-    .reindex(columns=["library", "pathway", "spatial_phenotype", "fold_enrichment", "fdr",
-                      "n_pathway_members_in_universe", "leading_genes"])
-    .rename(columns={
-        "spatial_phenotype": "dominant_divergent_phenotype",
-        "fold_enrichment": "divergent_fold_enrichment",
-        "fdr": "divergent_fdr",
-    })
-)
-
-conserved_vs_divergent = (
-    spatially_conserved_pathways[["library", "pathway", "fold_enrichment", "fdr"]]
-    .rename(columns={"fold_enrichment": "conserved_fold_enrichment", "fdr": "conserved_fdr"})
-    .merge(divergent_enrichment, on=["library", "pathway"], how="outer")
-)
-
-conserved_vs_divergent["spatially_conserved"] = (
-    conserved_vs_divergent["conserved_fdr"] < CONFIG["enrichment_fdr"]
-)
-conserved_vs_divergent["spatially_divergent"] = (
-    conserved_vs_divergent["divergent_fdr"] < CONFIG["enrichment_fdr"]
-)
-conserved_vs_divergent["classification"] = np.select(
-    [
-        conserved_vs_divergent["spatially_conserved"] & ~conserved_vs_divergent["spatially_divergent"],
-        ~conserved_vs_divergent["spatially_conserved"] & conserved_vs_divergent["spatially_divergent"],
-        conserved_vs_divergent["spatially_conserved"] & conserved_vs_divergent["spatially_divergent"],
-    ],
-    ["spatially conserved", "spatially divergent", "mixed (each significant)"],
-    default="neither significant",
-)
-
-_save_table(conserved_vs_divergent, "conserved_vs_divergent_pathways.csv")
-print(conserved_vs_divergent["classification"].value_counts().to_string())
-
-# --------------------------------------------------------------------------------------
-# The powered view: a continuous conservation ranking, tested against the pathway sets.
-#
-# The binary class is deliberately strict, so few genes qualify and over-representation has almost no
-# power - which is what the empty/near-empty result above reflects. Rather than loosen the class, the
-# continuous framework is used: rank the genes that are patterned in both species by a conservation
-# score and test pathways against that ranking.
-# --------------------------------------------------------------------------------------
-
-conservation_components = pd.DataFrame({
-    "shape_agreement": gene_metrics["shape_corr"],
-    "amplitude_similarity": -gene_metrics["amplitude_log2_ratio_human_over_mouse"].abs(),
-    "positional_agreement": -np.abs(gene_metrics["centroid_shift_human_minus_mouse"]),
-}).loc[architecture_index]
-
-# Each component in SD units within the patterned set, then averaged with equal weight: a conservation
-# score in "standard deviations of conservation", not a probability.
-conservation_score = conservation_components.apply(
-    lambda column: (column - column.mean()) / column.std()
-).mean(axis=1)
-
-conservation_ranking = pd.DataFrame({
-    "gene": gene_metrics["gene"].to_numpy()[architecture_index],
-    "conservation_score": conservation_score.to_numpy(),
-}).dropna().sort_values("conservation_score", ascending=False).reset_index(drop=True)
-
-_report("genes in the strict conserved-zonation class",
-        int((gene_metrics["spatial_phenotype"] == "conserved zonation").sum()), len(gene_names),
-        why="the binary test above has little power at this size; the ranking below is the powered view")
-_report("genes ranked by the continuous conservation score", len(conservation_ranking),
-        architecture_index.size, why="both-species-patterned genes, ranked by shape, amplitude and position")
-
-conservation_gsea = gp.prerank(
-    rnk=conservation_ranking,
-    gene_sets=pathway_gene_sets,
-    min_size=CONFIG["gsea_min_size"],
-    max_size=CONFIG["gsea_max_size"],
-    permutation_num=CONFIG["gsea_permutations"],
-    seed=CONFIG["gsea_seed"],
-    verbose=False,
-)
-
-conservation_results = (
-    conservation_gsea.res2d.reset_index()
-    .rename(columns={"Term": "pathway_key", "NES": "conservation_gsea_nes",
-                     "NOM p-val": "conservation_gsea_p", "FDR q-val": "conservation_gsea_fdr",
-                     "Lead_genes": "conservation_leading_genes"})
-)
-conservation_results[["library", "pathway"]] = [
-    entry.split(": ", 1) if ": " in entry else (entry, entry)
-    for entry in conservation_results["pathway_key"]
-]
-conservation_results["conservation_gsea_nes"] = pd.to_numeric(
-    conservation_results["conservation_gsea_nes"], errors="coerce")
-conservation_results["conservation_gsea_fdr"] = pd.to_numeric(
-    conservation_results["conservation_gsea_fdr"], errors="coerce")
-
-# The conservation score only exists for the patterned genes, so member gene rows are mapped onto it
-# explicitly rather than indexed by their position in the full gene space.
-conservation_by_gene_row = pd.Series(conservation_score.to_numpy(), index=architecture_index)
-membership_members = {(row.library, row.pathway): row.member_list for row in membership.itertuples()}
-
-
-def _member_conservation(library, pathway):
-    """How many of a pathway's members are in the patterned set, and their median conservation."""
-    genes = membership_members.get((library, pathway), [])
-    member_rows = [gene_lookup_tested[str(gene).upper()] for gene in genes
-                   if str(gene).upper() in gene_lookup_tested]
-    ranked = [row_index for row_index in member_rows if row_index in conservation_by_gene_row.index]
-    if not ranked:
-        return 0, np.nan
-    return len(ranked), float(np.nanmedian(conservation_by_gene_row.reindex(ranked).to_numpy()))
-
-
-member_conservation_stats = [
-    _member_conservation(row.library, row.pathway) for row in conservation_results.itertuples()
-]
-
-conservation_results = conservation_results.assign(
-    n_members_ranked=[entry[0] for entry in member_conservation_stats],
-    median_member_conservation_score=[entry[1] for entry in member_conservation_stats],
-).sort_values("conservation_gsea_nes", ascending=False).reset_index(drop=True)
-
-spatially_conserved_pathways_continuous = conservation_results[[
-    "library", "pathway", "conservation_gsea_nes", "conservation_gsea_fdr",
-    "n_members_ranked", "median_member_conservation_score", "conservation_leading_genes",
-]]
-
-_save_table(spatially_conserved_pathways_continuous, "spatially_conserved_pathways_continuous.csv")
-
-_report("pathways relatively conserved (continuous NES > 0, FDR < enrichment_fdr)",
-        int(((conservation_results["conservation_gsea_nes"] > 0)
-             & (conservation_results["conservation_gsea_fdr"] < CONFIG["enrichment_fdr"])).sum()),
-        len(conservation_results))
-_report("pathways relatively divergent (continuous NES < 0, FDR < enrichment_fdr)",
-        int(((conservation_results["conservation_gsea_nes"] < 0)
-             & (conservation_results["conservation_gsea_fdr"] < CONFIG["enrichment_fdr"])).sum()),
-        len(conservation_results))
-
-display(spatially_conserved_pathways_continuous.head(15).round(4))
-
-# --------------------------------------------------------------------------------------
-# Figure: what is conserved, what is remodelled.
-# --------------------------------------------------------------------------------------
-
-figure, axes = plt.subplots(1, 2, figsize=(8.5, 3.75), width_ratios=[1.0, 1.08], layout="constrained")
-ax_ranking, ax_top = axes
-
-conservation_plot = conservation_results.dropna(
-    subset=["conservation_gsea_nes", "conservation_gsea_fdr"]
-).copy()
-conservation_plot["minus_log10_fdr"] = -np.log10(conservation_plot["conservation_gsea_fdr"])
-ax_ranking.scatter(conservation_plot["conservation_gsea_nes"], conservation_plot["minus_log10_fdr"],
-                   s=10, alpha=0.35, color="0.45", linewidths=0, rasterized=True)
-ax_ranking.axvline(0, color="0.35", lw=0.8)
-ax_ranking.axhline(-np.log10(CONFIG["enrichment_fdr"]), color=PHENOTYPE_COLORS["conserved zonation"],
-                   lw=1.0, ls="--")
-ax_ranking.set_xlabel("Continuous conservation GSEA NES")
-ax_ranking.set_ylabel("−log₁₀(family-wide FDR)")
-ax_ranking.set_title("All pathway sets tested on the conservation ranking", loc="left", fontweight="bold")
-ax_ranking.text(0.98, 0.04, f"No set crosses FDR = {CONFIG['enrichment_fdr']}",
-                transform=ax_ranking.transAxes, ha="right", va="bottom", fontsize=6.4, color="0.30")
-_panel_label(ax_ranking, "a")
-
-top_ranked = spatially_conserved_pathways_continuous.head(10).sort_values("conservation_gsea_nes")
-ranking_positions = np.arange(len(top_ranked))
-ax_top.barh(ranking_positions, top_ranked["conservation_gsea_nes"], color="#6BAE75", alpha=0.90)
-ax_top.axvline(0, color="0.35", lw=0.8)
-ax_top.set_yticks(ranking_positions)
-ax_top.set_yticklabels([textwrap.fill(str(row.pathway), 34) for row in top_ranked.itertuples()], fontsize=6.2)
-ax_top.set_xlabel("Conservation NES")
-ax_top.set_title("Top continuous conservation rankings", loc="left", fontweight="bold")
-for index, row in enumerate(top_ranked.itertuples()):
-    ax_top.text(row.conservation_gsea_nes, index, f"  FDR {row.conservation_gsea_fdr:.2g}",
-                va="center", fontsize=5.9)
-_panel_label(ax_top, "b")
-
-figure.suptitle(
-    "No pathway-level spatial conservation signal reaches family-wide FDR in this cohort\n"
-    "The strict conserved class contains few genes; continuous ranking is shown as the higher-powered sensitivity analysis, not evidence of absence",
-    fontsize=8.9,
-)
-_save_figure(figure, "conserved_vs_divergent_pathway_summary.png")
-plt.show()
-
-
-# %% [markdown]
-# ## 12 - Literature validation (deferred)
-#
-# **Status: deferred, by decision.** The purpose of this section is external validation, kept strictly
-# apart from discovery: score a *published* adaptive/failed-repair PT signature continuously along the
-# registered coordinate and ask whether its position is conserved, shifted, expanded or absent. That
-# requires a signature whose provenance can be stated exactly.
-#
-# **What is available today.** No published supplementary signature is stored anywhere in this
-# repository (checked: `docs/`, `analysis/`, `pseudospace/`, `configs/`, and the saved results trees).
-# What exists is the individual marker genes reported in the human/mouse adaptive-repair literature
-# (`VCAM1`, `DCDC2`, `HAVCR1`, `SPP1`, `PROM1`, `VIM`, `S100A6`, `ANXA4`) and the project's own
-# `celltyping/epithelial_stress_marker_profiles.csv` panel.
-#
-# **What this section is for, and what it is not.** The discovery notebook's job ends with the results
-# above; the validation that would turn them into a biological claim happens outside it. The concrete
-# target, once an independent anatomically-resolved dataset is available: do the member genes of the
-# strongest pathway candidates - branched-chain amino-acid degradation and fatty-acid metabolism among
-# the complex-rewired, and the PPAR and oxidative-phosphorylation subsets among the inverted - reproduce
-# their early-to-late human/mouse relationships there? That is a question about genes in external data,
-# not more statistics in this notebook, so no further enrichment modelling is added here.
-#
-# **The decision taken.** Rather than present a handful of marker genes as if it were a signature, the
-# markers are registered here as an explicit, auditable list and the scoring is deferred until a
-# published signature is available or the panel is reviewed. The cell below records the list and reports
-# which of the genes are even present in the tested universe - a check that must pass before any
-# signature score can mean anything, and one that is useful on its own.
-#
-# **Why it is kept separate.** Literature markers must not enter the identification of the phenotypes;
-# a gene's class here comes only from its own fitted curves and the section-5 sensitivity panel. When
-# this section is completed it will read the atlas, not the reverse.
-#
-
-# %%
-# Purpose: section 12 - the literature anchor list, recorded and audited, with scoring deferred.
-
-LITERATURE_MARKERS = {
-    "adaptive repair / failed repair (human and mouse PT)": [
-        "VCAM1", "DCDC2", "HAVCR1", "SPP1", "PROM1", "VIM", "S100A6", "ANXA4",
-    ],
-}
-
-EPITHELIAL_STRESS_PANEL_PATH = UPSTREAM_DIR / "celltyping" / "epithelial_stress_marker_profiles.csv"
-
-literature_rows = []
-for signature_name, markers in LITERATURE_MARKERS.items():
-    for gene in markers:
-        index = gene_lookup_tested.get(gene.upper())
-        literature_rows.append({
-            "signature": signature_name,
-            "gene_as_published": gene,
-            "present_in_tested_universe": index is not None,
-            "gene_in_object": "" if index is None else gene_names[index],
-            "detection_mouse": np.nan if index is None else float(detection_mouse_array[index]),
-            "detection_human": np.nan if index is None else float(detection_human_array[index]),
-            "mouse_amplitude": np.nan if index is None else float(gene_metrics["mouse_amplitude"].iloc[index]),
-            "human_amplitude": np.nan if index is None else float(gene_metrics["human_amplitude"].iloc[index]),
-            "spatial_phenotype": "" if index is None else str(phenotype_by_row[index]),
-            "robustness_score": np.nan if index is None else float(gene_metrics["robustness_score"].iloc[index]),
-        })
-
-literature_audit = pd.DataFrame(literature_rows)
-display(literature_audit.round(4))
-_save_table(literature_audit, "literature_marker_audit.csv")
-
-if EPITHELIAL_STRESS_PANEL_PATH.exists():
-    print(f"project stress-marker panel available for the deferred signature work: "
-          f"{_display_path(EPITHELIAL_STRESS_PANEL_PATH)}")
-else:
-    print("project stress-marker panel not found")
-
-_report("literature markers present in the tested universe",
-        int(literature_audit["present_in_tested_universe"].sum()), len(literature_audit),
-        why="a signature cannot be scored on genes the object does not carry")
-print("Section 12 scoring is deferred. No published supplementary signature is stored in this "
-      "repository, and the validation that matters next is external rather than statistical: the "
-      "member genes of the strongest pathway candidates (BCAA degradation, fatty-acid metabolism, "
-      "and the PPAR / OXPHOS subsets) checked against an independent anatomically-resolved dataset.")
-print("When a signature does become available it is scored along the primary coordinate and compared "
-      "with the phenotype assignments above - never used to create them.")
-
-
-# %% [markdown]
-# ## 13 - Tables, the run inventory, and the saved analysis notes
+# ### 6.1 - The atlas, the per-class shortlist and the run inventory
 #
 # **The atlas** (`tables/gene_spatial_rewiring_atlas.csv`) is the per-gene result: level effect, both
-# amplitudes and their ratio, standardised curve correlation on both coordinate choices, best
-# displacement with its improvement and residual, positional centroids and peaks, early-to-late
+# amplitudes and their ratio, the standardised curve correlation, the displacement with its improvement
+# and residual (a supporting measurement, not a class), positional centroids and peaks, early-to-late
 # gradients, half-max widths, within-species reproducibility, detection and abundance, the two exclusion
 # flags, the phenotype and its robustness score. Everything a reader needs to disagree with a
 # classification without refitting anything is here.
@@ -5317,17 +4175,15 @@ print("When a signature does become available it is scored along the primary coo
 
 atlas_columns = [
     "gene",
-    "level_effect_human_minus_mouse", f"level_effect_human_minus_mouse{ALT_SUFFIX}",
+    "level_effect_human_minus_mouse",
     "mouse_amplitude", "human_amplitude", "amplitude_difference_human_minus_mouse",
     "amplitude_log2_ratio_human_over_mouse",
-    f"amplitude_log2_ratio_human_over_mouse{ALT_SUFFIX}",
-    "shape_corr", f"shape_corr{ALT_SUFFIX}", "shape_spearman", "pattern_rms_z",
-    "post_shift_shape_corr", f"post_shift_shape_corr{ALT_SUFFIX}",
-    "best_shift_human_minus_mouse", f"best_shift_human_minus_mouse{ALT_SUFFIX}",
-    "shift_improvement", f"shift_improvement{ALT_SUFFIX}", "residual_rms_after_shift",
-    "shift_at_search_boundary",
+    "shape_corr", "shape_spearman", "pattern_rms_z",
+    "post_shift_shape_corr",
+    "best_shift_human_minus_mouse",
+    "shift_improvement", "residual_rms_after_shift",
+    "shift_at_search_boundary", "shift_usable",
     "mouse_position_centroid", "human_position_centroid", "centroid_shift_human_minus_mouse",
-    f"centroid_shift_human_minus_mouse{ALT_SUFFIX}",
     "mouse_peak_position", "human_peak_position", "peak_shift_human_minus_mouse",
     "mouse_early_to_late", "human_early_to_late", "gradient_change_human_minus_mouse",
     "mouse_halfmax_onset", "mouse_halfmax_width", "human_halfmax_onset", "human_halfmax_width",
@@ -5396,12 +4252,12 @@ computed. Read together with the notebook's own section markdown, which states t
 ## Inputs and cohort
 
 - Input object: `{_display_path(DPT_OUTPUT_PATH)}` (03's PT-specific DPT; `total_scanpy_dpt`).
-- Primary coordinate: `{CONFIG['primary_coordinate']}` (03's shared PT DPT). Every metric is also
-  computed on the alternate axis (`{ALT_SUFFIX}` columns), and section 5 re-derives the phenotypes
-  there; the landmark mapping is a sensitivity analysis (see section 2 for its ordering limits).
+- Coordinate: 03's shared PT DPT (`total_scanpy_dpt`), used as 03 oriented it. No cross-species
+  re-registration is applied, so a displacement is reported as a supporting measurement of the genes
+  carrying it (`shift_usable`) rather than as a phenotype class.
 - Mouse specimens: {', '.join(mouse_samples)}. Human slices: {', '.join(human_samples)} - **one donor**.
 - PT structures compared: {adata_pt.n_obs:,}. Shared pseudospace support: [{lo:.4f}, {hi:.4f}] on a
-  {grid.size}-point grid; registration and shifts are reported in unit coordinates over that support.
+  {grid.size}-point grid; displacements are reported in unit coordinates over that support.
 - Tested orthologs: {len(gene_names):,} (>= {CONFIG['min_detected_fraction_all']:.0%} detection overall
   and measured in both inputs); discovery-eligible: {int(discovery_eligible.sum()):,}.
 
@@ -5409,13 +4265,10 @@ computed. Read together with the notebook's own section markdown, which states t
 
 Per-specimen curves are fitted with the shared-smooth model at the pooled per-gene smoothing parameter
 and averaged with equal specimen weight; the pooled fit is 03/05's cached nested level/shape fit
-(`section4_gene_fit`). Cross-species position is registered by a monotone piecewise-linear mapping
-anchored on S1/S2/S3 landmark program centroids ({landmark_registration['n_landmarks']} landmarks used).
-Metrics are level, amplitude, standardised shape correlation, positional centroid/peak/early-to-late
-gradient/half-max window, and a bounded displacement search (interpreted only to 0.30 of PT, the
-interior limit; the search itself looks to {CONFIG['shift_search_limit']}
-of PT). Every metric is computed on the primary coordinate (03's shared PT DPT) and again on the
-alternate landmark-registered axis, whose columns carry ALT_SUFFIX.
+(`section4_gene_fit`). Metrics are level, amplitude, standardised shape correlation, positional
+centroid/peak/early-to-late gradient/half-max window, and a bounded displacement search (interpreted
+only to 0.30 of PT, the interior limit; the search itself looks to {CONFIG['shift_search_limit']} of
+PT). Every metric is computed on the single coordinate of record, 03's shared PT DPT.
 
 ## Caveats that constrain every number here
 
@@ -5423,11 +4276,12 @@ alternate landmark-registered axis, whose columns carry ALT_SUFFIX.
   cross-species contrast is reported or implied. Slice agreement is robustness, not replication.
 - Species is inseparable from sampling and from Harmony batch correction (`sample` is the batch key).
 - Both human slices are cortex; the `MED1` label does not make the tissue medullary.
-- Alignment depends on {landmark_registration['n_landmarks']} landmark programs; a gene is only called
-  shifted when the shift survives both coordinate choices with the same sign and improves agreement on
-  both. Registration error inside a segment is not corrected.
+- Displacement is read on 03's shared PT DPT without cross-species re-registration: it is evidence
+  that the two species' programmes differ in position, not an anatomical distance between aligned
+  axes. A displacement is reported only when the optimum is interior, the positional centroid agrees
+  and the shape agreement improves (`shift_usable`), and it never defines a phenotype class.
 - Phenotype classes are threshold conjunctions. The thresholds are in the notebook's `CONFIG` and the
-  distributions they act on are printed in section 4; the component metrics are in the atlas.
+  distributions they act on are printed in section 3; the component metrics are in the atlas.
 
 ## Thresholds actually used
 
@@ -5451,8 +4305,6 @@ alternate landmark-registered axis, whose columns carry ALT_SUFFIX.
   so the pooled gene fit is reused rather than recomputed; this notebook's own stages there are
   `spatial_rewiring_specimen_curves` (per-specimen fits) beside the inherited `section4_gene_fit`.
   `PSEUDOSPACE_STAGE_CACHE=0` forces a full rebuild.
-- Section 12 (literature validation) is deferred: no published supplementary signature is stored in
-  this repository; the marker audit is in `tables/literature_marker_audit.csv`.
 """
 
 (OUT_DIR / "analysis_notes.md").write_text(analysis_notes)
@@ -5460,7 +4312,7 @@ print(f"\nsaved {_display_path(OUT_DIR / 'analysis_notes.md')}")
 
 
 # %% [markdown]
-# ## 14 - Closing summary
+# ### 6.2 - Closing summary
 #
 # The cell below prints only what this run measured: how many orthologs entered, how many show
 # reproducible zonation in each species, how the classes came out, how many of those survive the
@@ -5489,11 +4341,9 @@ summary_lines.append(f"Tested orthologs: {len(gene_names):,} "
                      f"(of {adata_pt.n_vars:,} measured features on {adata_pt.n_obs:,} PT structures)")
 summary_lines.append(f"Discovery-eligible (no axis/technical flag, detected in both species, "
                      f"enough shared support): {_count(discovery_eligible):,}")
-summary_lines.append(f"Primary coordinate: {CONFIG['primary_coordinate']} (03's shared PT DPT)")
-summary_lines.append(f"Landmark registration is a sensitivity analysis: "
-                     f"{landmark_registration['n_landmarks']} landmark programmes used, "
-                     f"max mapping deviation from identity "
-                     f"{float(np.max(np.abs(registration_shift))):.3f} of PT")
+summary_lines.append("Coordinate: 03's shared PT DPT (`total_scanpy_dpt`), used as 03 oriented it")
+summary_lines.append("Displacement is a supporting measurement, not a class: "
+                     f"{_count(gene_metrics['shift_usable'])} genes meet every displacement criterion")
 summary_lines.append("")
 summary_lines.append("Reproducible zonation, by species "
                      f"(amplitude >= {CONFIG['amplitude_patterned']}, within-species r >= "
@@ -5533,16 +4383,6 @@ for label in PHENOTYPE_CLASSES:
     if len(block):
         summary_lines.append(f"  {label}: {len(block):,} pathways")
 summary_lines.append("")
-summary_lines.append("Most conserved programmes (enriched for conserved zonation):")
-for row in spatially_conserved_pathways.head(8).itertuples():
-    summary_lines.append(f"  {row.pathway} [{row.library}] fold={row.fold_enrichment:.2f} "
-                         f"FDR={row.fdr:.3g} members={row.n_pathway_members_in_universe}")
-summary_lines.append("")
-summary_lines.append("Most spatially divergent programmes (strongest divergent-phenotype enrichment):")
-for row in divergent_enrichment.sort_values("divergent_fdr").head(8).itertuples():
-    summary_lines.append(f"  {row.pathway} [{row.library}] -> {row.dominant_divergent_phenotype} "
-                         f"fold={row.divergent_fold_enrichment:.2f} FDR={row.divergent_fdr:.3g}")
-summary_lines.append("")
 summary_lines.append("Spatially significant, conventional-GSEA non-significant pathways:")
 summary_lines.append(f"  {len(spatially_only_pathways):,} of {len(best_per_pathway):,} spatially "
                      "significant pathways are not significant in the whole-PT level-effect GSEA")
@@ -5559,10 +4399,9 @@ summary_lines.append("  (these pathways can carry large absolute member level ef
 summary_lines.append("")
 summary_lines.append("Caveats: two mouse specimens and two human slices from ONE donor; no "
                      "population-level species inference is reported; species is confounded with "
-                     "sampling and batch correction; the primary coordinate is the shared PT DPT, "
-                     f"and landmark registration ({landmark_registration['n_landmarks']} programmes, "
-                     "with the ordering limits reported in section 2) only ever acts as a sensitivity "
-                     "analysis.")
+                     "sampling and batch correction; the coordinate is 03's shared PT DPT with no "
+                     "cross-species re-registration, and displacement is reported as a supporting "
+                     "measurement rather than as a phenotype class.")
 
 summary_text = "\n".join(summary_lines)
 print(summary_text)

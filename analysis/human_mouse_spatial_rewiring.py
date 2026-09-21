@@ -553,26 +553,43 @@ print(f"  grid: {grid.size} points; internal knots: {len(knots)}")
 
 
 # %% [markdown]
-# ### Quick check: DPT on the shared UMAP
+# ### Quick check: DPT on a PT-only UMAP
 #
-# This is the UMAP inherited from notebook 03, coloured by the shared PT DPT used throughout this
-# notebook. It is a visual check of the coordinate, not a re-embedding or a cross-species registration.
+# This visualisation reconstructs a UMAP from the same Harmony representation and 30-neighbour setting
+# used to construct 03's PT-specific DPT, then colours it by the shared PT DPT used throughout this
+# notebook. It is display-only: it does not replace the canonical DPT, cluster labels, or cross-species
+# alignment.
 #
 
 # %%
-# Purpose: visually inspect 03's shared PT DPT on its inherited UMAP.
+# Purpose: visually inspect 03's shared PT DPT on a plot-only PT neighbour graph.
 
-if "X_umap" in adata_pt.obsm:
+if "X_harmony" in adata_pt.obsm:
+    pt_umap = adata_pt.copy()
+    sc.pp.neighbors(
+        pt_umap,
+        use_rep="X_harmony",
+        n_neighbors=30,
+        key_added="pt_dpt_umap_neighbors",
+        random_state=0,
+    )
+    sc.tl.umap(
+        pt_umap,
+        neighbors_key="pt_dpt_umap_neighbors",
+        min_dist=0.3,
+        spread=1.0,
+        random_state=0,
+    )
     sc.pl.umap(
-        adata_pt,
+        pt_umap,
         color="total_scanpy_dpt",
         cmap="viridis",
         size=6,
         frameon=False,
-        title="Shared PT DPT (early → late)",
+        title="Shared PT DPT on the PT-only neighbour graph (early → late)",
     )
 else:
-    print("UMAP DPT check skipped: no inherited obsm['X_umap'].")
+    print("PT-only UMAP DPT check skipped: no obsm['X_harmony'].")
 
 
 # %% [markdown]

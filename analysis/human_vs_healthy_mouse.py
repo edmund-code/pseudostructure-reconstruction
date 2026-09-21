@@ -663,6 +663,16 @@ REVIEWED_CLUSTER_LABELS = {
     '9': 'SmoothMuscle', # SmoothMuscle +3.13
     '10': 'mTAL',        # mTAL +2.07 at full panel coverage; DE Slc12a1/Umod/Kcnj1/Cldn10
 }
+# The fingerprint this map was reviewed against. A Leiden ID means nothing on its own: change
+# the cohort, the feature space, the resolution or the seed and the SAME cluster count can come
+# back completely renumbered, so a coverage check on the IDs cannot catch it. The guard in the
+# clustering cell compares this against the run's CLUSTERING_FINGERPRINT and STOPS before the
+# labels are used. Set it to None to force a re-review; otherwise copy the printed fingerprint
+# here after reading the DE heatmap and the reference-gene dotplot.
+# It is None because the mouse structures stopped being size-filtered, which changed the cohort
+# and renumbered the clusters while this map stayed as it was.
+REVIEWED_CLUSTER_LABELS_FINGERPRINT = None
+
 ASSIGNMENT_INTERPRETATION = {
     '0': 'PT S1: S1 solute transport and proximal metabolic program (PT-S1 panel best, PT-S2 second).',
     '1': 'PT S2: proximal solute transport (Slc22a6, Slc13a3); the S1 call that preceded the v2 re-segmentation no longer matched.',
@@ -763,16 +773,25 @@ sc.pp.highly_variable_genes(
 feature_mask = adata_all.var['highly_variable'].to_numpy(dtype=bool)
 adata_all.var['selected_for_clustering'] = feature_mask
 # Cluster in the integrated representation without supplying any cell-type marker panel.
-# The neighbour graph, the Leiden partition and the cluster UMAP depend only on the pass-1 object
-# and these parameters, so they are cached; the DE table below is not (it is attached to the full
-# gene matrix, which is not worth writing to the cache).
+# The neighbour graph and the Leiden partition depend only on the pass-1 object and these
+# parameters, so they are cached; the DE table below is not (it is attached to the full gene
+# matrix, which is not worth writing to the cache).
 def _compute_cluster_object():
     obj = adata_all[:, feature_mask].copy()
     sc.pp.neighbors(obj, n_neighbors=N_NEIGHBORS, use_rep='X_harmony', random_state=RANDOM_STATE)
     sc.tl.leiden(obj, resolution=COARSE_RESOLUTION, key_added='leiden_coarse', flavor='igraph',
                  n_iterations=2, directed=False, random_state=RANDOM_STATE)
-    sc.tl.umap(obj, min_dist=HARMONY_UMAP_MIN_DIST, spread=HARMONY_UMAP_SPREAD,
-               random_state=RANDOM_STATE)
+    # No `sc.tl.umap` here, deliberately. `obj` inherits obsm['X_umap'] from the pass-1 object, so
+    # every cluster figure below is drawn on the SAME UMAP as the harmonisation figure. Calling it
+    # here produced a second, different layout that no other figure used: the neighbour graph above
+    # is built with N_NEIGHBORS (30) while the pass-1 UMAP used HARMONY_NEIGHBORS_N (25), and the
+    # clusters were then displayed on the UMAP those parameters happened to produce. The mouse-only
+    # notebook never recomputed it either.
+    #
+    # Consequence to keep in mind: in this object uns['neighbors'] / obsp are the clustering graph
+    # (k=30) while obsm['X_umap'] is the k=25 display embedding. Nothing downstream rebuilds a UMAP
+    # from this object, so the two cannot silently diverge -- do not add such a call without
+    # rebuilding X_umap from the same graph.
     return obj
 
 adata_cluster = cached_anndata(
@@ -812,6 +831,39 @@ CLUSTERING_FINGERPRINT = {
         ','.join(adata_cluster.obs['leiden_coarse'].astype(str)).encode()).hexdigest()[:12],
 }
 display(pd.Series(CLUSTERING_FINGERPRINT, name='value'))
+
+# REVIEWED_CLUSTER_LABELS is keyed by Leiden ID, and a Leiden ID is only stable for the exact
+# clustering it came from. A changed input matrix can return the same NUMBER of clusters with
+# every ID reassigned, so checking that the map covers the IDs is not enough -- the same trap
+# the mouse-only notebook guards against. Stop here, before the labels are applied, rather than
+# emitting a labelled dataset nobody reviewed.
+_label_ids = set(REVIEWED_CLUSTER_LABELS)
+_cluster_ids = set(adata_cluster.obs['leiden_coarse'].astype(str))
+if REVIEWED_CLUSTER_LABELS_FINGERPRINT is None:
+    raise ValueError(
+        'REVIEWED_CLUSTER_LABELS is not pinned to a clustering. Read '
+        'celltyping/coarse_cluster_de_heatmap.png and celltyping/cluster_reference_gene_dotplot.png, '
+        'correct each cluster ID from its differential expression, then set\n'
+        f'    REVIEWED_CLUSTER_LABELS_FINGERPRINT = {CLUSTERING_FINGERPRINT!r}\n'
+        f'This run: {CLUSTERING_FINGERPRINT}\n'
+        f'Cluster IDs present: {sorted(_cluster_ids, key=int)}'
+    )
+_fingerprint_diff = {key: (REVIEWED_CLUSTER_LABELS_FINGERPRINT.get(key), value)
+                     for key, value in CLUSTERING_FINGERPRINT.items()
+                     if REVIEWED_CLUSTER_LABELS_FINGERPRINT.get(key) != value}
+if _fingerprint_diff:
+    raise ValueError(
+        'This clustering does not match the one REVIEWED_CLUSTER_LABELS was written against. '
+        + '; '.join(f'{k}: {a} -> {b}' for k, (a, b) in sorted(_fingerprint_diff.items()))
+        + '. Re-read celltyping/coarse_cluster_de_heatmap.png and the reference-gene dotplot, '
+          'update the labels, and update REVIEWED_CLUSTER_LABELS_FINGERPRINT with them.'
+    )
+if _label_ids != _cluster_ids:
+    raise ValueError(
+        f'REVIEWED_CLUSTER_LABELS covers {sorted(_label_ids, key=int)} but the clustering has '
+        f'{sorted(_cluster_ids, key=int)}. Every cluster needs an entry and no entry may be stale.'
+    )
+print(f'REVIEWED_CLUSTER_LABELS pinned to clustering {CLUSTERING_FINGERPRINT["membership_sha1"]}')
 
 
 # %% [markdown]
@@ -1714,7 +1766,7 @@ plt.show()
 # with two different meanings.
 #
 # Two standing caveats: (1) the reviewed map is keyed by Leiden cluster ID and this notebook records
-# `CLUSTERING_FINGERPRINT` without pinning the map to it, so re-read `REVIEWED_CLUSTER_LABELS` after
+# `CLUSTERING_FINGERPRINT`, which the clustering cell now enforces, so re-read `REVIEWED_CLUSTER_LABELS` after
 # any change to the clustering inputs; (2) the marker programs are reference panels, not annotations,
 # and panels that lost genes to ortholog mapping (for example `ATL`, which keeps only `Clcnka`) cannot
 # separate the segments they name.
@@ -3855,7 +3907,7 @@ analysis_notes = f"""# Human versus healthy-mouse pseudospace
 - The two human slice curves are sensitivity views, not independent biological replicates.
 - Ambiguous and non-tubular structures are retained in pass 1 but excluded before pass-2 nephron Harmony; the glomerular cluster is excluded because it is not part of the tubular continuum.
 - Global DPT is inspected before PT is selected. `cross_species_nephron_global_dpt.h5ad` carries it as `total_scanpy_dpt`; in `cross_species_pt_dpt.h5ad` that column is the PT-specific coordinate and the global one is kept as `global_nephron_dpt`.
-- Reviewed labels are keyed by Leiden cluster ID and are not pinned to `CLUSTERING_FINGERPRINT` in this notebook; re-read `REVIEWED_CLUSTER_LABELS` after any change to the clustering inputs.
+- Reviewed labels are keyed by Leiden cluster ID and ARE pinned to `CLUSTERING_FINGERPRINT` via `REVIEWED_CLUSTER_LABELS_FINGERPRINT`; the run stops before applying them if the clustering changed.
 - Fine-program diagnostic figure (`global_nephron_dpt_by_fine_reference_program.png`): panel = mean lognormalised expression of the panel genes detected in >= 5% of that species' structures (>= 2 usable genes), z-scored within species, argmax with a 0.15 SD margin. It is a marker check, not a label source, and its counts are not reviewed segment counts; see global_dpt_fine_program_vs_reviewed_segment.csv, global_dpt_fine_program_eligibility.csv and global_dpt_fine_program_species_bias.csv.
 - Columns ending cellwise_uncalibrated are diagnostics and must not be interpreted as species tests.
 - Peak positions are coordinates on this notebook's own DPT construction (PT-specific, recomputed after global-DPT review and not comparable with the mouse-only workflow's global-nephron coordinate).

@@ -651,40 +651,55 @@ else:
 # These calls were reviewed from the current run's DE heatmap, reference-gene
 # dotplot/evidence panel, and sample composition. They are broad labels only.
 REVIEWED_CLUSTER_LABELS = {
-    '0': 'PT-S1',        # PT-S1 +2.67, next PT-S2 +1.38
-    '1': 'PT-S2',        # PT-S2 +2.39, next PT-S1 +0.94
-    '2': 'CNT_CD',       # OMCD +2.13 vs CNT +2.09 -- panels do not separate; family call
-    '3': 'CNT_CD',       # IMCD +2.61 vs CCD +1.97, but DE is Aqp2+Aqp3 (CCD) -- family call
-    '4': 'DCT1',         # DCT1 +2.42, next DCT2 +1.92; DE Slc12a3/Trpm6
-    '5': 'AL',           # cTAL +1.76 vs mTAL +1.46 and 921/955 of the cluster is mouse -- family call
-    '6': 'Glomerulus',   # Podocyte +3.14 with Vessel +2.87: mixed glomerular structure
-    '7': 'PT-S3',        # PT-S3 +2.73, next +0.06
-    '8': 'Unassigned',   # best panel only +0.65 -- no segment identity
-    '9': 'SmoothMuscle', # SmoothMuscle +3.13
-    '10': 'mTAL',        # mTAL +2.07 at full panel coverage; DE Slc12a1/Umod/Kcnj1/Cldn10
+    '0': 'PT-S1',        # Gpx3/Slc22a8/Slc5a2/Slc5a12/Slc6a19; reference hits PT-S1: GATM, SLC34A1, SLC5A12, SLC5A2
+    '1': 'PT-S2',        # Slc22a6/Slc13a3/Slc22a12/Lrp2/Fbp1; reference hits PT-S2: SLC13A3, SLC22A6
+    '2': 'CNT_CD',       # Hsd11b2/Rhcg/Calb1/Slc8a1 with Atp6v0d2/Rhbg: CNT and OMCD programs together, family call
+    '3': 'AL',           # Umod/Slc12a1/Casr/Ppp1r1a/Kng2/Wnk4: thick ascending limb; panel has no mTAL/cTAL split
+    '4': 'DCT',          # Slc12a3/Trpm7/Trpm6/Wnk1/Klhl3/Kcnj10: DCT; Pvalb present but the panel does not resolve DCT1/DCT2
+    '5': 'Glomerulus',   # Podxl/Synpo/Nphs2 with Mafb/Emcn/Eng/Epas1: renal corpuscle (podocyte + endothelium), not a tubule
+    '6': 'PT-S3',        # Slc22a7/Slc7a13/Slc6a18/Acsm3/Napsa/Pck1; reference hits PT-S3: ACSM3, SLC22A7, SLC6A18, SLC7A13
+    '7': 'Stroma',       # Tnc/Timp3/Spon1/Cxcl12/Igfbp5/Igfbp7/Anxa2: matrix-fibroblast program; no panel gene in the top 20
+    '8': 'CCD',          # Aqp2/Aqp3/Cdh16/Pax8/Mal2/Muc1: principal-cell collecting duct; no IMCD markers (Aqp4/Slc14a2/Wnt7b)
+    '9': 'AL',           # Slc12a1/Umod/Kcnj1/Ppp1r1a/Cldn10/Ckb: thick ascending limb; Clcnka present, no mTAL/cTAL split
+    '10': 'SmoothMuscle',  # Tagln/Myh11/Acta2/Tpm2/Cald1/Mcam/Notch3; reference hits SmoothMuscle: ACTA2, MYH11, TAGLN
 }
+
 # The fingerprint this map was reviewed against. A Leiden ID means nothing on its own: change
 # the cohort, the feature space, the resolution or the seed and the SAME cluster count can come
 # back completely renumbered, so a coverage check on the IDs cannot catch it. The guard in the
 # clustering cell compares this against the run's CLUSTERING_FINGERPRINT and STOPS before the
 # labels are used. Set it to None to force a re-review; otherwise copy the printed fingerprint
 # here after reading the DE heatmap and the reference-gene dotplot.
-# It is None because the mouse structures stopped being size-filtered, which changed the cohort
-# and renumbered the clusters while this map stayed as it was.
-REVIEWED_CLUSTER_LABELS_FINGERPRINT = None
+#
+# Reviewed against the run whose mouse structures stopped being size-filtered. The clusters are
+# labelled at the granularity THIS notebook's SEGMENT_REFERENCE_PANEL supports: it separates
+# PT-S1/S2/S3 and CNT/CCD/OMCD/IMCD but only has one DCT panel and one TAL panel, so those two
+# families are named rather than split. Two corrections to the previous map are worth reading:
+# the cluster previously called SmoothMuscle is the thick ascending limb (Slc12a1/Umod/Kcnj1) and
+# the one previously called Glomerulus is PT-S3 (Slc22a7/Slc7a13/Acsm3), which is what made
+# "Glomerulus" and "SmoothMuscle" implausibly large in coarse_cluster_summary.csv.
+REVIEWED_CLUSTER_LABELS_FINGERPRINT = {
+    'n_structures': 28232,
+    'n_reporting_genes': 2000,
+    'resolution': 0.7,
+    'n_neighbors': 30,
+    'random_state': 0,
+    'n_clusters': 11,
+    'membership_sha1': '888139405683',
+}
 
 ASSIGNMENT_INTERPRETATION = {
-    '0': 'PT S1: S1 solute transport and proximal metabolic program (PT-S1 panel best, PT-S2 second).',
-    '1': 'PT S2: proximal solute transport (Slc22a6, Slc13a3); the S1 call that preceded the v2 re-segmentation no longer matched.',
-    '2': 'Collecting duct: CNT and OMCD panels tie and the DE mixes Calb1/Hsd11b2/Slc8a1 (CNT) with Rhcg (OMCD), so the family is reported.',
-    '3': 'Collecting duct: the IMCD panel scores highest but the DE is Aqp2+Aqp3 (CCD-like), so the family is reported rather than a contested fine call.',
-    '4': 'DCT: distal convoluted tubule, DCT1 panel best (Slc12a3, Trpm6).',
-    '5': 'Ascending limb; 921 of 955 structures are mouse, so this is a mouse-driven cluster and gets the family rather than a thin/thick call.',
-    '6': 'Mixed glomerular structure: podocyte genes plus endothelial/perivascular signal (Vessel panel second).',
-    '7': 'PT S3: late proximal program (Slc22a7, Slc7a13); four of five PT-S3 panel genes are top DE.',
-    '8': 'No segment identity: the best panel reaches only +0.65 and the top DE is a stress/matrix program, so it stays unresolved.',
-    '9': 'Smooth-muscle/perivascular program (Acta2, Myh11, Tagln); non-nephron.',
-    '10': 'TAL, medullary: thick ascending limb, full panel coverage with Cldn10 (the medullary marker) in the DE.',
+    '0': 'PT S1: S1 solute transport (Slc5a2, Slc5a12, Slc6a19, Slc22a8) with proximal metabolic genes; PT-S1 is the only panel with hits.',
+    '1': 'PT S2: same locus as PT-S1 but Slc22a6/Slc13a3/Slc22a12 lead the DE; the two clusters split the proximal panel by S1 vs S2 rather than by species.',
+    '2': 'Collecting duct: CNT (Calb1, Slc8a1, Hsd11b2) and OMCD (Rhcg, Atp6v0d2, Atp6v0a4, Slc4a1) programs in one cluster, so the family is reported rather than a contested fine call.',
+    '3': 'Ascending limb: Umod with Slc12a1, Casr, Ppp1r1a and Kng2. Egf is also here, but the thick-limb genes lead. Reported as the family because the panel has no mTAL/cTAL split.',
+    '4': 'DCT: Slc12a3 with Trpm6/Trpm7, Wnk1, Klhl3 and Kcnj10. Pvalb is present, which would support a DCT1 call, but the panel has one DCT entry and no DCT1/DCT2 split.',
+    '5': 'Renal corpuscle: podocyte genes (Podxl, Synpo, Nphs2) together with endothelial/perivascular genes (Emcn, Eng, Epas1, Mafb), so the cluster is the glomerulus rather than podocytes alone. Non-tubule; removed before pass 2.',
+    '6': 'PT S3: late proximal program (Slc22a7, Slc7a13, Slc6a18, Acsm3, Napsa) with four of the PT-S3 panel genes among the top DE. This is the cluster the previous map called Glomerulus.',
+    '7': 'Stroma: a matrix/fibroblast program (Tnc, Timp3, Spon1, Cxcl12, Igfbp5, Igfbp7, Anxa2) with no reference-panel gene in the top 20. Called from the program rather than from a panel hit; this is the least certain call in the map. Non-tubule; removed before pass 2.',
+    '8': 'CCD: principal-cell collecting duct (Aqp2, Aqp3, Cdh16, Pax8, Mal2, Muc1). The IMCD markers (Aqp4, Slc14a2, Wnt7b) are absent and the OMCD program is in cluster 2, so the CCD call is supported.',
+    '9': 'Ascending limb: Slc12a1, Umod, Kcnj1, Ppp1r1a and the medullary-enriched Cldn10, with Clcnka also present. The largest cluster and the one the previous map called SmoothMuscle. Reported as the family for the same reason as cluster 3.',
+    '10': 'Smooth-muscle/perivascular program (Tagln, Myh11, Acta2, Tpm2, Mcam, Notch3); non-nephron, removed before pass 2.',
 }
 
 # Reference genes are visualization aids only. They are never used to cluster, score,

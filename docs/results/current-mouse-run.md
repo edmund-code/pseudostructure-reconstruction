@@ -7,6 +7,11 @@ Everything below is **description of what the outputs show**, with the numbers b
 claim. Where I flag a concern it is marked as such and separated from the observation. Nothing
 here is a re-analysis — it is a reading of the files in `results/mouse_only_v5/`.
 
+> **Superseded input.** The mouse segmentations were replaced by the upstream
+> `*_kept_tubules_labeled_fine.geojson` files, which moved the workflow to
+> `results/mouse_only_v6/`. Every number below still describes the `mouse_only_v5` run and has
+> not been reproduced against the new segmentation.
+
 ---
 
 ## 0. What produced these results

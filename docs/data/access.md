@@ -7,7 +7,8 @@ weights. Obtain access through the project maintainer, then create a data-root d
 Before starting a full run, verify:
 
 1. The four mouse H5AD matrices and pathway JSON libraries are present.
-2. The four mouse segmentation files are exactly the v4 GeoJSONs named in `data/catalog.csv`.
+2. The four mouse segmentation files are exactly the `*_kept_tubules_labeled_fine.geojson`
+   files named in `data/catalog.csv`.
 3. The requested result root is writable and outside the Git checkout when possible.
 4. The Harmony R packages are installed in the analysis environment.
 5. Segmentation slide paths and annotation paths are supplied through a private manifest derived

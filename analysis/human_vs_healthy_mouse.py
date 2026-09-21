@@ -93,7 +93,9 @@ for _directory in (RESULTS_DIR, CELLTYPING_DIR, HEATMAP_OUTPUT_DIR, CURVE_OUTPUT
 # pseudospace.stage_cache.cache_status(STAGE_CACHE_DIR) / purge_stage_cache(STAGE_CACHE_DIR).
 # NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the body of a cached cell so
 # the cached results cannot outlive the code that produced them.
-NOTEBOOK_LOGIC_VERSION = 1
+# 2: switched the mouse segmentations to *_kept_tubules_labeled_fine.geojson and exempted
+#    the mouse structures from the minimum-gene filter (human structures are unchanged).
+NOTEBOOK_LOGIC_VERSION = 2
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
 STAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -306,13 +308,20 @@ if _availability:
 # Purpose: audit QC retention before structures are filtered.
 # `shared_n_genes` is the number of detected genes in the mapped, shared human–mouse
 # ortholog matrix for each structure; it is not the number of genes in the native input.
-# A structure passes only when `shared_n_genes >= MIN_GENES_PER_TUBULE` (currently 100).
+# A human structure passes only when `shared_n_genes >= MIN_GENES_PER_TUBULE` (currently 100);
+# mouse structures are exempt and always pass.
 # Within each `(sample, region)` group, `fraction_removed = 1 - mean(passes_min_genes)`.
 # Equivalently: `(number before filtering - number passing) / number before filtering`.
 
 qc_before = adata_combined.obs.copy()
 qc_before['shared_n_genes'] = np.asarray((adata_combined.X > 0).sum(axis=1)).ravel()
-qc_before['passes_min_genes'] = qc_before['shared_n_genes'] >= MIN_GENES_PER_TUBULE
+# The mouse structures come from the QC'd *_kept_tubules_labeled_fine.geojson segmentations,
+# which already exclude low-support structures, so the minimum-gene threshold applies to the
+# human structures only. `passes_min_genes` means 'survives the filter'.
+qc_before['passes_min_genes'] = (
+    ~qc_before['sample'].astype(str).str.startswith('HUK').to_numpy()
+    | (qc_before['shared_n_genes'] >= MIN_GENES_PER_TUBULE).to_numpy()
+)
 qc_before['shared_total_counts'] = np.asarray(adata_combined.X.sum(axis=1)).ravel()
 qc_before.to_csv(DIAGNOSTIC_DIR / 'structure_qc_before_filter.csv')
 qc_retention = qc_before.groupby(['sample', 'region'], observed=True)['passes_min_genes'].agg(['size', 'sum', 'mean'])
@@ -320,7 +329,7 @@ qc_retention['fraction_removed'] = 1 - qc_retention['mean']
 qc_retention.to_csv(DIAGNOSTIC_DIR / 'qc_retention_by_sample.csv')
 # Start a structure-level audit. `sum` is the number retained because True counts as 1.
 tubule_filter_audit = pd.DataFrame([{
-    'filter_stage': 'shared-ortholog minimum-gene QC (>= 100 detected genes)',
+    'filter_stage': 'shared-ortholog minimum-gene QC (>= 100 detected genes; human samples only)',
     'filter_type': 'tubule filter',
     'n_input_tubules': int(len(qc_before)),
     'n_retained_tubules': int(qc_before['passes_min_genes'].sum()),
@@ -342,8 +351,14 @@ print('Centroid plots below locate structures; segmentation boundaries require s
 # %%
 # Purpose: apply structure QC, then low-support gene QC before Harmony HVG selection.
 print(f'Before structure filtering: {adata_combined.n_obs:,}')
-sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)
-print(f'After structure filtering:  {adata_combined.n_obs:,}')
+# Mouse structures come from the QC'd *_kept_tubules_labeled_fine.geojson segmentations, which
+# already exclude low-support structures, so the minimum-gene threshold applies to the human
+# structures only. Every mouse structure is kept.
+_is_mouse = ~adata_combined.obs['sample'].astype(str).str.startswith('HUK').to_numpy()
+_n_detected = np.asarray((adata_combined.X > 0).sum(axis=1)).ravel()
+adata_combined = adata_combined[_is_mouse | (_n_detected >= MIN_GENES_PER_TUBULE)].copy()
+print(f'After structure filtering:  {adata_combined.n_obs:,} '
+      f'(minimum-gene filter applied to the human structures only)')
 
 # The same measurement once the tubule filter has run, for the before/after plot below. Taken
 # here, before the gene filter drops columns, so it reflects the tubule filter alone.
@@ -435,13 +450,17 @@ OUTPUT_DIR = DIAGNOSTIC_DIR
 _before = qc_before[['sample', 'shared_n_genes']].copy()
 _before['sample'] = _before['sample'].astype(str)
 _before['total_counts'] = np.asarray(qc_before['shared_total_counts']).ravel()
-_before['passes_min_genes'] = _before['shared_n_genes'] >= MIN_GENES_PER_TUBULE
+# Mouse structures are exempt from the filter, so they always count as passing.
+_before['passes_min_genes'] = (
+    ~_before['sample'].astype(str).str.startswith('HUK').to_numpy()
+    | (_before['shared_n_genes'] >= MIN_GENES_PER_TUBULE).to_numpy()
+)
 _after = _qc_after
 _before.to_csv(OUTPUT_DIR / 'tubule_counts_before_filter.csv')
 _after.to_csv(OUTPUT_DIR / 'tubule_counts_after_filter.csv')
 _retention = _before.groupby('sample', observed=True)['passes_min_genes'].agg(['size', 'sum', 'mean'])
 _retention['fraction_removed'] = 1 - _retention['mean']
-print(f"Tubule filter (>= {MIN_GENES_PER_TUBULE} detected genes): "
+print(f"Structure filter (>= {MIN_GENES_PER_TUBULE} detected genes, human samples only): "
       f"{int(_before['passes_min_genes'].sum()):,}/{len(_before):,} structures pass, "
       f"{1 - _before['passes_min_genes'].mean():.2%} removed")
 print(_retention.to_string())
@@ -462,7 +481,7 @@ for column, (frame, state) in enumerate(((_before, 'before'), (_after, 'after'))
                              color=_colors[sample], label=f'{sample} (n={len(sub):,})')
     if state == 'before':
         axes[0, column].axvline(MIN_GENES_PER_TUBULE, color='crimson', ls='--', lw=1.6,
-                                label=f'threshold = {MIN_GENES_PER_TUBULE} genes')
+                                label=f'human threshold = {MIN_GENES_PER_TUBULE} genes')
     axes[0, column].set_yscale('log')
     axes[0, column].set_xlabel(_GENE_AXIS)
     axes[0, column].set_ylabel(f'{_NOUN}s (log scale)')
@@ -480,10 +499,12 @@ for column, (frame, state) in enumerate(((_before, 'before'), (_after, 'after'))
 
 # How much each sample lost, and what that did to its size distribution.
 _removed = (1 - _retention['mean'].reindex(_samples).to_numpy()) * 100
+# An all-zero bar height would collapse the axis to 0-0, which matplotlib rejects.
+_removed_top = max(float(np.max(_removed)) * 1.25, 1.0)
 axes[0, 2].bar(_samples, _removed, color=[_colors[sample] for sample in _samples])
 for index, value in enumerate(_removed):
     axes[0, 2].text(index, value, f'{value:.0f}%', ha='center', va='bottom', fontsize=9)
-axes[0, 2].set_ylim(0, max(_removed) * 1.25)
+axes[0, 2].set_ylim(0, _removed_top)
 axes[0, 2].set_ylabel(f'% of {_NOUN}s removed')
 axes[0, 2].set_title('Removed by the tubule filter, per sample')
 axes[0, 2].tick_params(axis='x', rotation=30)
@@ -504,8 +525,8 @@ axes[1, 2].set_xticklabels(_samples, rotation=30, ha='right')
 axes[1, 2].set_ylabel('log10(total counts + 1)')
 axes[1, 2].set_title('Size per sample, before (grey) vs after (blue)')
 
-fig.suptitle(f'{_NOUN.capitalize()} size around the tubule filter '
-             f'(>= {MIN_GENES_PER_TUBULE} detected genes)', fontsize=14)
+fig.suptitle(f'{_NOUN.capitalize()} size (human minimum {MIN_GENES_PER_TUBULE} detected genes; '
+             f'mouse structures exempt)', fontsize=14)
 fig.tight_layout(rect=(0, 0, 1, 0.96))
 fig.savefig(OUTPUT_DIR / 'tubule_count_distribution.png', dpi=200, bbox_inches='tight')
 plt.show()
@@ -1190,8 +1211,8 @@ else:
 # Purpose: inspect several original segmentation polygons from every Leiden cluster.
 # Representative structures are selected deterministically across samples so each rerun is comparable.
 SEGMENTATION_GEOJSON_BY_SAMPLE = {
-    'Ctrl1A2': DATA_ROOT / 'Ctrl_1A2_v4.geojson',
-    'Ctrl1A4': DATA_ROOT / 'Ctrl_1A4_v4.geojson',
+    'Ctrl1A2': DATA_ROOT / 'Ctrl1A2_kept_tubules_labeled_fine.geojson',
+    'Ctrl1A4': DATA_ROOT / 'Ctrl1A4_kept_tubules_labeled_fine.geojson',
     'HUK1_COR1': DATA_ROOT / 'HUK1_COR1_v2.geojson',
     'HUK1_MED1': DATA_ROOT / 'HUK1_MED1_v2.geojson',
 }

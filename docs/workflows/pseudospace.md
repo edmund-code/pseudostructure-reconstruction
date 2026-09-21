@@ -8,12 +8,12 @@ arguments take precedence. The repository's `data/` and `results/` directories a
 defaults for authorized local mounts.
 
 The data root must follow [data/README.md](../../data/README.md). The result root receives a
-`mouse_only_v5/` directory and is never committed.
+`mouse_only_v6/` directory and is never committed.
 
 ## Run sequence
 
 1. Regenerate tubule matrices with `analysis/notebooks/01_segmentation_to_gene_matrix.ipynb` only
-   when the private Visium and v4 segmentation inputs change.
+   when the private Visium and mouse segmentation inputs change.
 2. Create the pinned `kidney-pseudospace` environment from `environment.yml`, then run the
    mouse-only script or notebook from a clean kernel. The workflow requires R `harmony` 2.0.5;
    it deliberately refuses older user-level R installations.
@@ -27,7 +27,8 @@ The data root must follow [data/README.md](../../data/README.md). The result roo
 
 ## Scientific guardrails
 
-- Only `*_v4.geojson` mouse segmentations are valid; centroid verification is mandatory.
+- Only `*_kept_tubules_labeled_fine.geojson` mouse segmentations are valid; they are already
+  quality controlled upstream, and centroid verification is still mandatory.
 - The canonical coordinate is Scanpy DPT on the pass-2 Harmony embedding, rooted in PT and
   oriented by the early-to-late marker axis.
 - The cohort is 2 versus 2 biological specimens. Shape and pathway ranks are effect-size
@@ -94,7 +95,7 @@ parameters or the inputs (including the expression matrix) changes the key and r
 ```bash
 PSEUDOSPACE_STAGE_CACHE=0 python analysis/mouse_only_pseudospace.py   # force a clean rebuild
 python -c "from pseudospace.stage_cache import cache_status, purge_stage_cache as p; \
-           print(cache_status('results/mouse_only_v5/stage_cache')); print(p('results/mouse_only_v5/stage_cache'))"
+           print(cache_status('results/mouse_only_v6/stage_cache')); print(p('results/mouse_only_v6/stage_cache'))"
 ```
 
 `NOTEBOOK_LOGIC_VERSION` in each notebook's configuration cell is part of every key: bump it after

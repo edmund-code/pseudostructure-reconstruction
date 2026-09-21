@@ -9,12 +9,16 @@ The active analysis expects the following layout beneath the path supplied as `-
 tubule_by_gene/<sample>_tubule_by_gene_caleb.h5ad
 human_mouse_hcop_fifteen_column.txt.gz
 mouse_vs_human/pathway_gene_sets/<library>.json
-Ctrl_1A2_v4.geojson, Ctrl_1A4_v4.geojson, IR_2A2_v4.geojson, IR_2A4_v4.geojson
+Ctrl1A2_kept_tubules_labeled_fine.geojson, Ctrl1A4_kept_tubules_labeled_fine.geojson,
+IR2A2_kept_tubules_labeled_fine.geojson, IR2A4_kept_tubules_labeled_fine.geojson
 HUK1_COR1_v2.geojson, HUK1_MED1_v2.geojson
 ```
 
-Use only the `*_v4.geojson` mouse segmentations. The older processed segmentations are not
-index-compatible even when their feature indices appear valid.
+Use only the `*_kept_tubules_labeled_fine.geojson` mouse segmentations. These are already
+quality controlled upstream: each feature carries `kept_tubule`, `doublet_tier1_flag`,
+`coarse_class` and `segment_class`, and low-support structures have been removed. Notebook 1
+consumes their geometry only. The retired `*_v4.geojson` and older processed segmentations are
+not index-compatible even when their feature indices appear valid.
 
 Human segmentations are the `*_v2.geojson` re-segmentations. `obs['feature_index']` is a positional
 index into the exact GeoJSON file Part 1 enumerated, so never pair a segmentation with an H5AD built

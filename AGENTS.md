@@ -81,7 +81,7 @@ CI (`.github/workflows/ci.yml`) runs three jobs: `hygiene`, `pseudospace-synthet
 | `tools/` | `check_repository_hygiene.py` — the pre-commit gate. |
 | `legacy/` | Superseded notebooks, provenance only. Unsupported; never mix with current results. |
 
-Data flow: private Visium HD + v4 GeoJSON → `notebooks/01_segmentation_to_gene_matrix.ipynb` →
+Data flow: private Visium HD + mouse fine-classification GeoJSON → `notebooks/01_segmentation_to_gene_matrix.ipynb` →
 private tubule-by-gene H5AD → the mouse-only workflow → private Harmony/DPT outputs + curated
 tables under `docs/results/`.
 
@@ -130,8 +130,10 @@ tables under `docs/results/`.
     (pooled and specimen-balanced rankings together),
     and estimates the variance inflation from residual correlations given the fitted design. With two
     mice and one human donor the units of replication are specimens.
-  - Only `*_v4.geojson` mouse segmentations are valid; centroid verification is mandatory
-    (`analysis/`, `docs/workflows/pseudospace.md`).
+  - Only the `*_kept_tubules_labeled_fine.geojson` mouse segmentations are valid; they are
+    already quality controlled upstream, so the mouse workflows apply no tubule-level QC of
+    their own. Centroid verification is still mandatory (`analysis/`,
+    `docs/workflows/pseudospace.md`).
   - The coarse-label checkpoint requires explicit per-cluster confirmation, and the reference
     13-cluster fingerprint must be updated together with the labels. The workflow stops before DPT
     if it drifts — never bypass the guard.

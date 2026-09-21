@@ -127,7 +127,7 @@ DATA_DIR, RESULTS_ROOT = _workflow_roots(PROJECT_DIR)
 TUBULE_BY_GENE_DIR = DATA_DIR / 'tubule_by_gene'                          # input
 PATHWAY_LIBRARY_DIR = DATA_DIR / 'mouse_vs_human' / 'pathway_gene_sets'   # input (read-only)
 
-RESULTS_DIR = RESULTS_ROOT / 'mouse_only_v5'
+RESULTS_DIR = RESULTS_ROOT / 'mouse_only_v6'
 HARMONY_OUTPUT_PATH = RESULTS_DIR / 'all_mouse_tubules_harmony_pass1.h5ad'   # pass-1, all cells
 PASS2_HARMONY_OUTPUT_PATH = RESULTS_DIR / 'all_mouse_tubules_harmony.h5ad'   # pass-2, tubule-only
 DPT_OUTPUT_PATH = RESULTS_DIR / 'all_mouse_tubules_scanpy_dpt.h5ad'
@@ -140,7 +140,9 @@ HEATMAP_OUTPUT_DIR = RESULTS_DIR / 'heatmaps'
 # purge_stage_cache(...). NOTEBOOK_LOGIC_VERSION is part of every key: bump it after editing the
 # body of a cached cell so a stored payload cannot outlive the code that produced it.
 HARMONY_VERSION = '2.0.5'   # the pip/R harmony version this run is pinned to
-NOTEBOOK_LOGIC_VERSION = 1
+# 2: switched the mouse segmentations to *_kept_tubules_labeled_fine.geojson and removed the
+#    per-tubule gene-count filter (Section 1).
+NOTEBOOK_LOGIC_VERSION = 2
 STAGE_CACHE_ENABLED = os.environ.get('PSEUDOSPACE_STAGE_CACHE', '1').strip().lower() not in ('0', 'false', 'no', '')
 STAGE_CACHE_DIR = RESULTS_DIR / 'stage_cache'
 STAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -186,7 +188,11 @@ HARMONY_UMAP_SPREAD = 1.0
 # ---------------------------------------------------------------------------
 # Gene filter / clustering / DPT params
 # ---------------------------------------------------------------------------
-MIN_GENES_PER_TUBULE = 100            # tubule filter: minimum detected genes per structure
+# No per-tubule minimum-gene filter. The mouse structures come from the QC'd
+# *_kept_tubules_labeled_fine.geojson segmentations, which already excluded low-support
+# structures, so nothing is trimmed here. Set an int (the previous run used 100) to put the
+# threshold back; the size report in Section 1 follows the setting either way.
+MIN_GENES_PER_TUBULE = None
 MIN_GENE_TUBULE_FRACTION = 0.05
 MIN_GENE_TOTAL_COUNTS = 20
 NORMALIZE_TARGET_SUM = 1e4
@@ -1036,8 +1042,15 @@ _tubule_qc_before = pd.DataFrame({
     'condition': adata_combined.obs['condition'].astype(str).to_numpy(),
 }, index=adata_combined.obs_names)
 print(f'Before cell filtering: {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
-sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)
-print(f'After cell filtering:  {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
+# The mouse structures come from the QC'd *_kept_tubules_labeled_fine.geojson segmentations,
+# which already exclude low-support structures, so no per-tubule gene-count threshold is
+# applied here. Set MIN_GENES_PER_TUBULE to an int in the config cell to put the filter back.
+if MIN_GENES_PER_TUBULE is not None:
+    sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)
+    print(f'After cell filtering:  {adata_combined.n_obs} tubules x {adata_combined.n_vars} genes')
+else:
+    print(f'No tubule filter applied: {adata_combined.n_obs:,} tubules retained. The QC-controlled '
+          'segmentation already excludes low-support structures.')
 
 # The same measurement once the filter has run, for the before/after plot below. Taken here,
 # before the gene filter drops columns, so it reflects the tubule filter alone.
@@ -1083,16 +1096,24 @@ OUTPUT_DIR = CELLTYPING_DIR
 # than a cosmetic QC number. `_tubule_qc_before` is the pre-filter state captured in the cell
 # above; `_tubule_qc_after` is the same measurement once the filter has run.
 _before = _tubule_qc_before
-_before['passes_min_genes'] = _before['n_genes_by_counts'] >= MIN_GENES_PER_TUBULE
+# With the filter switched off this is trivially all-True, and the rest of the cell becomes a
+# descriptive size report instead of a before/after of a filter that never ran.
+_before['passes_min_genes'] = (
+    np.ones(len(_before), dtype=bool) if MIN_GENES_PER_TUBULE is None
+    else _before['n_genes_by_counts'] >= MIN_GENES_PER_TUBULE
+)
 _after = _tubule_qc_after
 _before.to_csv(OUTPUT_DIR / 'tubule_counts_before_filter.csv')
 _after.to_csv(OUTPUT_DIR / 'tubule_counts_after_filter.csv')
 _retention = _before.groupby('sample', observed=True)['passes_min_genes'].agg(['size', 'sum', 'mean'])
 _retention['fraction_removed'] = 1 - _retention['mean']
 _retention.to_csv(OUTPUT_DIR / 'tubule_retention_by_sample.csv')
-print(f"Tubule filter (>= {MIN_GENES_PER_TUBULE} detected genes): "
-      f"{int(_before['passes_min_genes'].sum()):,}/{len(_before):,} tubules pass, "
-      f"{1 - _before['passes_min_genes'].mean():.2%} removed")
+if MIN_GENES_PER_TUBULE is None:
+    print('No per-tubule gene-count filter: every structure is kept.')
+else:
+    print(f"Tubule filter (>= {MIN_GENES_PER_TUBULE} detected genes): "
+          f"{int(_before['passes_min_genes'].sum()):,}/{len(_before):,} tubules pass, "
+          f"{1 - _before['passes_min_genes'].mean():.2%} removed")
 print(_retention.to_string())
 
 _samples = sorted(_before['sample'].unique())
@@ -1109,7 +1130,7 @@ for column, (frame, state) in enumerate(((_before, 'before'), (_after, 'after'))
         sub = frame[frame['sample'] == sample]
         axes[0, column].hist(sub[_GENE_COLUMN], bins=100, histtype='step', lw=1.2,
                              color=_colors[sample], label=f'{sample} (n={len(sub):,})')
-    if state == 'before':
+    if state == 'before' and MIN_GENES_PER_TUBULE is not None:
         axes[0, column].axvline(MIN_GENES_PER_TUBULE, color='crimson', ls='--', lw=1.6,
                                 label=f'threshold = {MIN_GENES_PER_TUBULE} genes')
     axes[0, column].set_yscale('log')
@@ -1129,10 +1150,12 @@ for column, (frame, state) in enumerate(((_before, 'before'), (_after, 'after'))
 
 # How much each sample lost, and what that did to its size distribution.
 _removed = (1 - _retention['mean'].reindex(_samples).to_numpy()) * 100
+# An all-zero bar height would collapse the axis to 0-0, which matplotlib rejects.
+_removed_top = max(float(np.max(_removed)) * 1.25, 1.0)
 axes[0, 2].bar(_samples, _removed, color=[_colors[sample] for sample in _samples])
 for index, value in enumerate(_removed):
     axes[0, 2].text(index, value, f'{value:.0f}%', ha='center', va='bottom', fontsize=9)
-axes[0, 2].set_ylim(0, max(_removed) * 1.25)
+axes[0, 2].set_ylim(0, _removed_top)
 axes[0, 2].set_ylabel(f'% of {_NOUN}s removed')
 axes[0, 2].set_title('Removed by the tubule filter, per sample')
 axes[0, 2].tick_params(axis='x', rotation=30)
@@ -1153,8 +1176,9 @@ axes[1, 2].set_xticklabels(_samples, rotation=30, ha='right')
 axes[1, 2].set_ylabel('log10(total counts + 1)')
 axes[1, 2].set_title('Size per sample, before (grey) vs after (blue)')
 
-fig.suptitle(f'{_NOUN.capitalize()} size around the tubule filter '
-             f'(>= {MIN_GENES_PER_TUBULE} detected genes)', fontsize=14)
+_threshold_note = (f'>= {MIN_GENES_PER_TUBULE} detected genes' if MIN_GENES_PER_TUBULE is not None
+                   else 'no tubule filter')
+fig.suptitle(f'{_NOUN.capitalize()} size ({_threshold_note})', fontsize=14)
 fig.tight_layout(rect=(0, 0, 1, 0.96))
 fig.savefig(OUTPUT_DIR / 'tubule_count_distribution.png', dpi=200, bbox_inches='tight')
 plt.show()

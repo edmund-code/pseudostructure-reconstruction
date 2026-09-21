@@ -36,28 +36,27 @@ import pandas as pd
 # exist on disk. These are the actual raw files, matching notebook 1's NEW_SEGMENTATION_SAMPLE_MAP.
 #
 # These MUST be the same files notebook 1 Part 1 enumerated to assign obs['feature_index'] -- the
-# v4 segmentations. The older *_processed.geojson files are a different segmentation entirely
-# (e.g. Ctrl_1A2: 21,951 features vs v4's 13,630, and classes 'Tubules'/'Vessel' rather than
-# 'tubule_proximal'). Because they hold MORE features than v4, every v4 feature_index still
-# lands in range, so a wrong-file join passes the range/uniqueness checks below and silently
-# attaches correct labels to the wrong polygons. verify_centroids_match() is what actually
+# QC'd *_kept_tubules_labeled_fine.geojson segmentations. Pointing at any other mouse file (the
+# retired *_v4.geojson set, or the older *_processed.geojson set) attaches correct labels to the
+# wrong polygons: those files hold MORE features, so their indices all resolve, stay unique, and
+# pass the range/uniqueness checks below in silence. verify_centroids_match() is what actually
 # catches it.
 SAMPLE_TO_RAW_GEOJSON = {
-    'Ctrl1A2': 'Ctrl_1A2_v4.geojson',
-    'Ctrl1A4': 'Ctrl_1A4_v4.geojson',
-    'IR2A2': 'IR_2A2_v4.geojson',
-    'IR2A4': 'IR_2A4_v4.geojson',
+    'Ctrl1A2': 'Ctrl1A2_kept_tubules_labeled_fine.geojson',
+    'Ctrl1A4': 'Ctrl1A4_kept_tubules_labeled_fine.geojson',
+    'IR2A2': 'IR2A2_kept_tubules_labeled_fine.geojson',
+    'IR2A4': 'IR2A4_kept_tubules_labeled_fine.geojson',
 }
 
 DEFAULT_SAMPLES = list(SAMPLE_TO_RAW_GEOJSON.keys())
-# Defaults track the CURRENT run (results/mouse_only_v5/), which notebook 6 also assigns onto
+# Defaults track the CURRENT run (results/mouse_only_v6/), which notebook 6 also assigns onto
 # these names before calling main(). They previously pointed into a retired result location -- a
 # superseded location still holding Jul-2026 exports built from the old *_processed.geojson
 # segmentation. Leaving the defaults there meant a standalone run either failed on a missing
 # input or, worse, left stale wrong-polygon files sitting next to the real ones to be picked up
 # by hand. Pass --project-root and reassign these if you need a different run.
-HARMONY_RELATIVE_PATH = Path('results/mouse_only_v5/all_mouse_tubules_harmony_pass1.h5ad')
-OUTPUT_RELATIVE_DIR = Path('results/mouse_only_v5/qupath_geojson')
+HARMONY_RELATIVE_PATH = Path('results/mouse_only_v6/all_mouse_tubules_harmony_pass1.h5ad')
+OUTPUT_RELATIVE_DIR = Path('results/mouse_only_v6/qupath_geojson')
 
 # Keyed on the notebook's coarse vocabulary: COARSE_ORDER (PT, DTL, AL, DCT, CNT_CD) plus the
 # REMOVE_CLASSES that the pass-1 object still carries. 'AL' is the ascending limb (ATL/mTAL/cTAL/
@@ -129,10 +128,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument('--samples', nargs='+', default=DEFAULT_SAMPLES)
     parser.add_argument('--label-column', default='broad_tubule_marker_call')
     parser.add_argument('--data-root', type=Path,
-                        help='Directory containing the private v4 GeoJSON files (default: '
+                        help='Directory containing the private mouse segmentation GeoJSON '
+                             'files (default: '
                              '<project-root>/data).')
     parser.add_argument('--results-root', type=Path,
-                        help='Directory containing mouse_only_v5 outputs (default: '
+                        help='Directory containing mouse_only_v6 outputs (default: '
                              '<project-root>/results).')
     parser.add_argument('--dry-run', action='store_true',
                          help='Run identity-key inspection + join validation only; write no files.')
@@ -165,9 +165,9 @@ def verify_centroids_match(obs: pd.DataFrame, sample: str, data_root: Path,
     centroid of feature[feature_index] and comparing is therefore a direct test of the join: it
     agrees to sub-pixel precision on the right file and diverges wildly on any other.
 
-    This exists because the range/uniqueness checks cannot catch a wrong file. Every older
-    *_processed.geojson holds MORE features than its v4 counterpart, so v4 indices all resolve,
-    stay unique, and produce a clean-looking report while pointing at unrelated polygons.
+    This exists because the range/uniqueness checks cannot catch a wrong file. Every superseded
+    mouse segmentation holds MORE features than the current one, so its indices all resolve, stay
+    unique, and produce a clean-looking report while pointing at unrelated polygons.
     """
     from shapely.geometry import shape
 
@@ -304,8 +304,8 @@ def inspect_and_validate(obs: pd.DataFrame, samples: list[str], data_root: Path,
     if centroid_failure:
         print('\nFATAL: obs centroids do not match the segmentation being read, so '
               "obs['feature_index'] indexes a DIFFERENT file than the one loaded here. Point "
-              'SAMPLE_TO_RAW_GEOJSON at the segmentation notebook 1 Part 1 actually used (the '
-              '*_v4.geojson files) and re-run. Aborting before writing any output.')
+              'SAMPLE_TO_RAW_GEOJSON at the segmentation notebook 1 Part 1 actually used and '
+              're-run. Aborting before writing any output.')
         sys.exit(1)
 
     return n_features_by_sample
@@ -465,7 +465,7 @@ def main(argv=None):
     project_root: Path = args.project_root.resolve()
     data_root = (args.data_root or project_root / 'data').resolve()
     results_root = (args.results_root or project_root / 'results').resolve()
-    harmony_path = results_root / 'mouse_only_v5' / HARMONY_RELATIVE_PATH.name
+    harmony_path = results_root / 'mouse_only_v6' / HARMONY_RELATIVE_PATH.name
     if not harmony_path.exists():
         print(f'FATAL: input AnnData not found at {harmony_path}')
         sys.exit(1)
@@ -490,7 +490,7 @@ def main(argv=None):
         print('\n--dry-run: no files written.')
         return
 
-    output_dir = results_root / 'mouse_only_v5' / OUTPUT_RELATIVE_DIR.name
+    output_dir = results_root / 'mouse_only_v6' / OUTPUT_RELATIVE_DIR.name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print('\n' + '=' * 78)

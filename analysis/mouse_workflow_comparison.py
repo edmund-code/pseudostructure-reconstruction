@@ -52,7 +52,7 @@ PROJECT_DIR = _find_project_dir()
 DATA_ROOT = Path(os.environ.get("PSEUDOSPACE_DATA_ROOT", PROJECT_DIR / "data")).expanduser().resolve()
 RESULTS_ROOT = _results_root(PROJECT_DIR)
 
-MOUSE_ONLY_RUN = RESULTS_ROOT / "mouse_only_v5" / "all_mouse_tubules_harmony_pass1.h5ad"
+MOUSE_ONLY_RUN = RESULTS_ROOT / "mouse_only_v6" / "all_mouse_tubules_harmony_pass1.h5ad"
 CROSS_SPECIES_RUN = RESULTS_ROOT / "human_vs_healthy_mouse" / "cross_species_harmony_pass1.h5ad"
 OUTPUT_DIR = RESULTS_ROOT / "mouse_workflow_comparison"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -114,24 +114,21 @@ print(f"present in both runs             {len(shared_keys):,}"
 # %% [markdown]
 # ### 2b. Explaining any tubule-set difference
 #
-# Both workflows apply the **same** tubule filter at the **same** threshold --
-# `sc.pp.filter_cells(adata_combined, min_genes=100)`, written as a literal `100` in notebook 02 and
-# as `MIN_GENES_PER_TUBULE` in notebook 03. What differs is the **gene space each applies it to**:
-# notebook 03 builds its matrix in the shared human-mouse ortholog space (10,060 genes in the current
-# data), while notebook 02 uses the mouse gene space. The same tubule is therefore measured against a
-# smaller gene set in 03, and the cutoff sits exactly where sparse tubules pile up.
+# Neither workflow applies a per-tubule size filter to the healthy mouse controls any more. The
+# mouse structures come from the QC'd `*_kept_tubules_labeled_fine.geojson` segmentations, so
+# notebook 02 drops its minimum-gene threshold entirely (`MIN_GENES_PER_TUBULE = None`) and
+# notebook 03 applies `sc.pp.filter_cells(adata_combined, min_genes=MIN_GENES_PER_TUBULE)` to the
+# **human** structures only. Both runs therefore start from the same mouse structures.
 #
-# In the current data one tubule differs, `Ctrl1A4|5556`, with 102 counts over exactly 100 nonzero
-# mouse genes: `Atp5b` and `Cyp2j5` have no one-to-one ortholog, and four more are too rare to survive
-# the combined cohort's gene filters, leaving 94 shared genes -- just under the cutoff. Notebook 02
-# sees 100 and keeps the tubule; notebook 03 sees 94 and drops it.
+# What still differs is the **gene space each measures them in**: notebook 03 builds its matrix in
+# the shared human-mouse ortholog space (10,060 genes in the current data), while notebook 02 uses
+# the mouse gene space. That difference now surfaces in the low-support **gene** filter and in each
+# workflow's own QC and labelling, rather than as a tubule one run keeps and the other discards.
+# The cell below reports any difference it actually finds and attributes it to the step that
+# removed it; with the size filter gone, an empty result is the expected outcome.
 #
-# That direction favours notebook 03: a tubule with roughly one UMI per gene is a segmentation sliver
-# rather than tissue, so dropping it is the more defensible behaviour. Treat the two retained sets as
-# equivalent for everything meaningfully populated, and read the cell below before comparing counts
-# across runs. Note also that the threshold is a hard cliff with no margin -- 99 shared genes is
-# dropped, 100 is kept -- so the number of tubules lost will move sharply if the shared gene space or
-# the combined-cohort gene filters ever change.
+# Read the cell below before comparing counts across runs.
+#
 
 # %%
 # Identify the tubules only one workflow kept, and attribute each to the step that removed it.
@@ -170,9 +167,10 @@ else:
     delta = pd.DataFrame(rows)
     delta.to_csv(OUTPUT_DIR / "tubule_set_delta.csv", index=False)
     print(delta.to_string(index=False))
-    print("\nBoth workflows filter tubules with min_genes=100; notebook 02 applies it in the "
-          "mouse gene space and notebook 03 in the shared ortholog space, so a sparse tubule "
-          "can pass in one and fail in the other.")
+    print("\nNeither workflow applies a per-tubule size filter to the mouse structures: notebook "
+          "02 sets MIN_GENES_PER_TUBULE = None and notebook 03 applies it to the human "
+          "structures only. A difference here therefore comes from the gene space each "
+          "workflow measures the tubule in (mouse vs shared ortholog), not from the size filter.")
 
 # %% [markdown]
 # ## 3. Coarse label agreement

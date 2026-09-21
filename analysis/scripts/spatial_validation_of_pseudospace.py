@@ -8,7 +8,7 @@ STEP 1 GLOMERULUS/VESSEL LABELING IS MANUALLY CURATED IN QUPATH, NOT AUTOMATED.
 An automated statistical filter (score percentile + score-gap + celltype_primary thresholds) was
 tried first and rejected: visual inspection in QuPath repeatedly showed it excluding real
 glomeruli as "likely vessels," even after two rounds of loosening. The workflow is now:
-  1. `--dry-run` seeds one GeoJSON per sample (results/mouse_only_v5/spatial_validation/
+  1. `--dry-run` seeds one GeoJSON per sample (results/mouse_only_v6/spatial_validation/
      {sample}_glomerulus_vessel_manual_review.geojson), restricted to cells in the Glomerulus
      DE-cluster (broad_tubule_marker_call == 'Glomerulus') whose ORIGINAL per-cell classification
      (celltype_primary, from notebook 6) is 'Glomerulus' or 'Vessel' (cells whose celltype_primary
@@ -43,7 +43,7 @@ glomeruli as "likely vessels," even after two rounds of loosening. The workflow 
      pre-existing review files (no Harmony reload, no diff report) once you're done curating.
 
 Read-only on all inputs (h5ads, raw GeoJSON, sibling QuPath export script). Only writes under
-results/mouse_only_v5/spatial_validation/ -- and never overwrites an existing
+results/mouse_only_v6/spatial_validation/ -- and never overwrites an existing
 *_glomerulus_vessel_manual_review.geojson. Run with the `agproject` conda env
 with compatible shapely, scanpy, anndata, and scikit-learn versions.
 """
@@ -164,10 +164,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project-root', type=Path, default=qupath_export.DEFAULT_PROJECT_ROOT)
     parser.add_argument('--data-root', type=Path,
-                        help='Directory containing private v4 GeoJSON files (default: '
+                        help='Directory containing the private mouse segmentation GeoJSON '
+                             'files (default: '
                              '<project-root>/data).')
     parser.add_argument('--results-root', type=Path,
-                        help='Directory containing mouse_only_v5 outputs (default: '
+                        help='Directory containing mouse_only_v6 outputs (default: '
                              '<project-root>/results).')
     parser.add_argument('--samples', nargs='+', default=list(qupath_export.SAMPLE_TO_RAW_GEOJSON.keys()))
     parser.add_argument('--n-permutations', type=int, default=10_000)
@@ -1236,7 +1237,7 @@ def main(argv=None):
     project_root = args.project_root.resolve()
     data_root = (args.data_root or project_root / 'data').resolve()
     results_root = (args.results_root or project_root / 'results').resolve()
-    run_root = results_root / 'mouse_only_v5'
+    run_root = results_root / 'mouse_only_v6'
     output_dir = run_root / OUTPUT_DIRNAME
     output_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(args.random_seed)

@@ -10,6 +10,15 @@ defaults for authorized local mounts.
 The data root must follow [data/README.md](../../data/README.md). The result root receives a
 `mouse_only_v6/` directory and is never committed.
 
+The mouse Visium HD outputs are addressed separately, by `PSEUDOSPACE_VISIUM_ROOT`, pointing at the
+directory that contains the per-sample subdirectories (`Ctrl1A2/`, `Ctrl1A4/`, `IR2A2/`, `IR2A4/`).
+It is required only to (re)build the mouse tubule matrices; a human-only rebuild sets
+`PSEUDOSPACE_SEGMENTATION_SAMPLES='HUK1_COR1 HUK1_MED1'` instead. Notebook 1 accepts several
+layouts under that root (a Space Ranger `outs/binned_outputs/square_002um`, a directly nested
+`square_002um/`, or a flattened sample directory) and validates the resolved directory by its
+`s_002um_*` barcodes, so a coarser bin sitting in the same sample directory is rejected instead of
+being binned at the wrong resolution.
+
 ## Run sequence
 
 1. Regenerate tubule matrices with `analysis/notebooks/01_segmentation_to_gene_matrix.ipynb` only

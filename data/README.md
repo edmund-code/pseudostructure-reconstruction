@@ -20,6 +20,13 @@ quality controlled upstream: each feature carries `kept_tubule`, `doublet_tier1_
 consumes their geometry only. The retired `*_v4.geojson` and older processed segmentations are
 not index-compatible even when their feature indices appear valid.
 
+The mouse Visium HD outputs are not under this data root: they live in their own project
+directory, passed through `PSEUDOSPACE_VISIUM_ROOT`. That directory must contain one subdirectory
+per mouse sample (`Ctrl1A2`, `Ctrl1A4`, `IR2A2`, `IR2A4`), each holding the 2 um `square_002um`
+outputs -- directly, nested under `outs/binned_outputs/`, or at the sample root. Notebook 1 checks
+the barcode prefix (`s_002um_`) rather than trusting the path, because a sample directory can also
+carry a coarser 8/16 um bin.
+
 Human segmentations are the `*_v2.geojson` re-segmentations. `obs['feature_index']` is a positional
 index into the exact GeoJSON file Part 1 enumerated, so never pair a segmentation with an H5AD built
 from a different file — re-run notebook 1 after replacing one.

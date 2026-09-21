@@ -1,5 +1,5 @@
 {
- "ran_utc": "2026-09-18T17:24:08+00:00",
+ "ran_utc": "2026-09-21T19:37:24+00:00",
  "passed": true,
  "check_count": 6,
  "passed_count": 5,
@@ -22,17 +22,17 @@
   {
    "name": "working-copy revision",
    "status": "warn",
-   "detail": "working copies diverge from HEAD in source: 05_gam_human_vs_mouse.ipynb (29 cells), 06_human_mouse_spatial_rewiring.ipynb (50 cells) - do NOT regenerate these files without reconciling first"
+   "detail": "working copies diverge from HEAD in source: 01_segmentation_to_gene_matrix.ipynb (52 cells), 05_gam_human_vs_mouse.ipynb (29 cells) - do NOT regenerate these files without reconciling first"
   },
   {
    "name": "synthetic dry-run",
    "status": "pass",
-   "detail": "dry-run: 29/29 cells ok, 21 figures, 20 tables"
+   "detail": "dry-run: 30/30 cells ok, 21 figures, 20 tables"
   },
   {
    "name": "pytest",
    "status": "pass",
-   "detail": "95 passed, 6 warnings in 9.87s"
+   "detail": "95 passed, 6 warnings in 9.90s"
   }
  ]
 }

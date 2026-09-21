@@ -75,6 +75,23 @@ CATALOGUE = [
         "prediction": "output tokens per request -30%",
     },
     {
+        "id": "caveman-reply-style",
+        "title": "Caveman reply style: compressed output with technical substance intact",
+        "scope": "auto",
+        "setting": ("reply_style", "caveman-full"),
+        "why": "supersedes reply-style-compact before its verdict landed, so the reply-style variable "
+               "keeps exactly one owner. Same target - output + reasoning is the dominant billable term "
+               "- with a stricter rule set: drop articles, filler, hedging and pleasantries; keep code, "
+               "commands, paths, error strings and technical terms byte-exact; forbid tool-call "
+               "narration and decorative tables, which is where the milestone bursts came from. Sourced "
+               "from the caveman skill (global install, ~/.reasonix/skills/caveman). Honest caveat: the "
+               "upstream 65-75% figure is the author's own preliminary benchmark, since repudiated as "
+               "not rigorous, and it covers visible output only - never hidden reasoning tokens. "
+               "AGENTS.md stays uncompressed: it is cached, so its saving is ~free, and it is the "
+               "standing instruction file.",
+        "prediction": "output tokens per request -40%; no quality change",
+    },
+    {
         "id": "subagent-recon",
         "title": "Route wide reconnaissance through the explore/research subagents",
         "scope": "auto",
@@ -192,10 +209,12 @@ def main() -> int:
             print(f"  {key:24s} {value}")
         print(f"\napplied: {', '.join(champion['applied']) or 'none'}")
         print(f"retired: {', '.join(champion['rejected']) or 'none'}")
+        print(f"superseded: {', '.join(champion.get('superseded', [])) or 'none'}")
         return 0
 
     if args.command == "propose":
-        done = set(champion["applied"]) | set(champion["rejected"])
+        done = (set(champion["applied"]) | set(champion["rejected"])
+                | set(champion.get("superseded", [])))
         candidate = next((entry for entry in CATALOGUE if entry["id"] not in done), None)
         if candidate is None:
             print("every candidate in the catalogue has been tried; the loop has nothing left to "

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated_utc": "2026-09-17T18:32:06+00:00",
+ "updated_utc": "2026-09-21T19:35:21+00:00",
  "description": "The settings currently in force, with the measurement that justified each. Nothing here is a claim about quality - the gate suite is.",
  "baseline_settings": {
   "handback_gate": "ad-hoc",
@@ -13,17 +13,24 @@
  },
  "settings": {
   "handback_gate": "gates-green-required",
-  "rounds_per_work_order": "one-per-item",
-  "tool_output": "unbounded",
-  "reply_style": "narrative",
-  "recon": "in-context",
+  "rounds_per_work_order": "one-cycle-per-work-order",
+  "tool_output": "counts-and-windows-only",
+  "reply_style": "caveman-full",
+  "recon": "subagent-first",
   "model_routing": "single-model",
   "standing_instructions": "single-file"
  },
  "applied": [
-  "gate-before-handback"
+  "gate-before-handback",
+  "batch-rounds",
+  "quiet-tools",
+  "subagent-recon",
+  "caveman-reply-style"
  ],
  "rejected": [],
+ "superseded": [
+  "reply-style-compact"
+ ],
  "baseline_measurement": {
   "work_order": "human_mouse_spatial_rewiring build + two review rounds",
   "window": {

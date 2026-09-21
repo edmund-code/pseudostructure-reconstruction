@@ -5,8 +5,13 @@ auto_apply = [
   "gate-before-handback",   # run the gate suite before hand-back; hand back only when green
   "batch-rounds",           # one edit-pack-verify-commit cycle per work order
   "quiet-tools",            # counts, windows and verdicts; never full dumps
-  "reply-style-compact",    # short milestone replies; tables on request
+  "caveman-reply-style",    # compressed replies; supersedes reply-style-compact
   "subagent-recon",         # wide reconnaissance via subagents
+]
+# Superseded before its verdict landed: replaced by a stricter owner of the same variable, so it
+# retires from `applied` without being recorded as `rejected`, which would claim it failed.
+superseded = [
+  "reply-style-compact",    # replaced by caveman-reply-style
 ]
 # Proposed, never applied: these change standing instructions or the harness itself.
 requires_approval = [

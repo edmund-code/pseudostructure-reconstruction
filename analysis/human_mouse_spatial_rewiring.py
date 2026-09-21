@@ -553,6 +553,29 @@ print(f"  grid: {grid.size} points; internal knots: {len(knots)}")
 
 
 # %% [markdown]
+# ### Quick check: DPT on the shared UMAP
+#
+# This is the UMAP inherited from notebook 03, coloured by the shared PT DPT used throughout this
+# notebook. It is a visual check of the coordinate, not a re-embedding or a cross-species registration.
+#
+
+# %%
+# Purpose: visually inspect 03's shared PT DPT on its inherited UMAP.
+
+if "X_umap" in adata_pt.obsm:
+    sc.pl.umap(
+        adata_pt,
+        color="total_scanpy_dpt",
+        cmap="viridis",
+        size=6,
+        frameon=False,
+        title="Shared PT DPT (early → late)",
+    )
+else:
+    print("UMAP DPT check skipped: no inherited obsm['X_umap'].")
+
+
+# %% [markdown]
 # ## 0.3 - Tested orthologs, per-specimen detection and discovery flags
 #
 # The analysis universe is the one 03/05 use: one-to-one orthologs detected in at least 2% of PT

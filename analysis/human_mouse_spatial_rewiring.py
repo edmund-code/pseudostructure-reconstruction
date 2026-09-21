@@ -29,8 +29,6 @@
 #   (`sample` is the batch key). A cross-species difference in a fitted curve is a difference between
 #   these two mice and this one donor, processed this way.
 # * Both human slices are anatomically cortex; the `MED1` label does not make the tissue medullary.
-# * Genes that were used to build or orient the PT coordinate are flagged (`axis_basis_gene`) and are
-#   excluded from every unbiased discovery list, but they are retained for the QC and validation plots.
 # * Direction conventions, used everywhere below: **positive level effect = higher in human**;
 #   **positive shift = the human positional program occurs later along PT than the mouse program**;
 #   positive early-to-late gradient = expression increases from early to late PT.
@@ -166,8 +164,7 @@ CONFIG = {
     # in this cohort; no cross-species re-registration is applied to it.
 
     # --- gene universe -------------------------------------------------------------------
-    "min_detected_fraction_all": 0.02,     # as in 03/05: >= 2% of all PT structures
-    "min_detection_each_species": 0.05,    # a pathway member must be seen in both species
+    "min_detection_each_species": 0.05,    # required detection in each species' PT structures
     "min_pattern_grid_points": 40,         # grid points both species must support before any metric
 
     # --- zonation ------------------------------------------------------------------------
@@ -262,7 +259,6 @@ PHENOTYPE_COLORS = {
     "gradient inversion": "#C2185B",
     "complex shape rewiring": "#4D4D4D",
     "weak / uncertain zonation": "#BDBDBD",
-    "excluded": "#E8E8E8",
 }
 
 SPECIES_COLORS = {
@@ -285,24 +281,12 @@ DIRECTION_CONVENTIONS = {
 
 # The canonical PT marker panels 03 uses to build and orient the PT coordinate (its
 # NEPHRON_AXIS_MARKERS and PT fine panels, plus the S3 additions used for the mouse-only axis). They
-# are used here for two things only: the `axis_basis_gene` flag below, so that the basis of the
-# coordinate cannot also be presented as a finding about it, and the curve-layer QC panel (figure 1A).
+# are used only for the curve-layer QC panel (figure 1A).
 AXIS_BASIS_PANELS = {
     "S1": ["Slc5a2", "Slc5a12", "Gatm", "Lrp2", "Cubn", "Slc34a1"],
     "S2": ["Slc22a6", "Slc13a3", "Cyp2e1"],
     "S3": ["Slc22a7", "Cyp7b1", "Slc7a13", "Slc6a18", "Acsm3"],
 }
-
-# Every gene that contributed to building or orienting the PT coordinate.
-AXIS_BASIS_GENES = tuple(sorted({gene for panel in AXIS_BASIS_PANELS.values() for gene in panel}))
-
-# Obvious technical features: mitochondrial and cytoplasmic ribosomal protein genes.
-TECHNICAL_GENE_PATTERNS = (
-    r"^MT-",            # human mitochondrial
-    r"^MT(ND|CO|ATP|CYB|RNR)\d",   # mouse mitochondrial (Mt-Nd1 ...)
-    r"^RP[SL]\d+[A-Z]?$",          # cytoplasmic ribosomal proteins
-    r"^MRP[SL]\d+$",               # mitochondrial ribosomal proteins
-)
 
 
 def _display_path(path):
@@ -432,7 +416,6 @@ print("Coordinate:   ", "03's shared PT DPT (`total_scanpy_dpt`); no re-registra
 print("Direction conventions:")
 for _column, _meaning in DIRECTION_CONVENTIONS.items():
     print(f"  {_column}: {_meaning}")
-print("Axis-basis genes flagged:", len(AXIS_BASIS_GENES))
 
 
 # %% [markdown]
@@ -593,105 +576,70 @@ else:
 
 
 # %% [markdown]
-# ## 0.3 - Tested orthologs, per-specimen detection and discovery flags
+# ## 0.3 - Analyzable genes
 #
-# The analysis universe is the one 03/05 use: one-to-one orthologs detected in at least 2% of PT
-# structures and measured in **both** inputs. A gene the ortholog map created as an unfed column is a
-# structural zero, not a measured zero, so `measured_in_both_inputs` is required and reported here.
+# The analysis starts with every gene in the PT input object. A gene the ortholog map created as an
+# unfed column is a structural zero, not a measured zero, so `measured_in_both_inputs` is applied
+# first. Detection is then calculated within the retained PT structures, with specimens weighted
+# equally within each species.
 #
-# Two flags decide what may appear in an unbiased discovery list:
-#
-# * `axis_basis_gene` - the gene helped build or orient the PT coordinate (`AXIS_BASIS_GENES`). Keeping
-#   them would make the coordinate's own basis look like the strongest finding in it. They stay in the
-#   tables and flag every unbiased discovery list.
-# * `technical_gene` - mitochondrial and cytoplasmic/mitochondrial ribosomal protein genes.
-#
-# Neither flag removes a gene from the object: everything is reported with its flags so the exclusion
-# is auditable rather than silent.
+# **Analyzable genes** are measured in both inputs and detected in at least 5% of PT structures in
+# each species. No global detection filter or gene-type exclusion is applied.
 #
 
 # %%
-# Purpose: the tested ortholog universe, per-specimen detection / abundance, and the two flags.
+# Purpose: define the analyzable gene universe from measurement and specimen-balanced PT detection.
 
 if "measured_in_both_inputs" in adata_pt.var.columns:
     measured_in_both = adata_pt.var["measured_in_both_inputs"].to_numpy(dtype=bool)
-    measured_source = "var['measured_in_both_inputs'] written by 03"
+    measured_source = "var['measured_in_both_inputs'] from the cross-species input"
 else:
     measured_in_both = np.ones(adata_pt.n_vars, dtype=bool)
-    measured_source = "column absent - every retained gene assumed measured in both inputs"
+    measured_source = "column absent - every gene assumed measured in both inputs"
     print("WARNING: measured_in_both_inputs absent; an unfed column would be read as a measured zero.")
 
-Y_all = as_csr(adata_pt.layers["lognorm"])
-detected_all = np.asarray((Y_all > 0).sum(axis=0)).ravel()
-min_detected = int(np.ceil(CONFIG["min_detected_fraction_all"] * adata_pt.n_obs))
+gene_names_all = adata_pt.var_names.to_numpy().astype(str)
+Y_all = as_csr(adata_pt.layers["lognorm"]).astype(np.float64)
 
-tested = (detected_all >= min_detected) & measured_in_both
-tested_index = np.flatnonzero(tested)
-
-gene_names = adata_pt.var_names.to_numpy().astype(str)[tested]
-Y_genes = Y_all[:, tested_index].tocsr().astype(np.float64)
-
-_report(
-    "tested orthologs", len(gene_names), adata_pt.n_vars,
-    why=f"detection >= {CONFIG['min_detected_fraction_all']:.0%} of {adata_pt.n_obs:,} PT structures "
-        f"and measured in both inputs ({measured_source})",
-)
-_report(
-    "excluded for low detection", int((detected_all < min_detected).sum()),
-    why=f"detected in fewer than {CONFIG['min_detected_fraction_all']:.0%} of PT structures",
-)
-_report(
-    "excluded for measurement", int((~measured_in_both).sum()),
-    why="structural zeros created by the accepted ortholog map",
-)
-
-gene_lookup_tested = {str(gene).upper(): index for index, gene in enumerate(gene_names)}
+gene_names_measured = gene_names_all[measured_in_both]
+Y_measured = Y_all[:, measured_in_both].tocsr()
 
 # --------------------------------------------------------------------------------------
-# Per-specimen detection, mean abundance and bulk level, all on the tested universe.
+# Per-specimen detection, mean abundance and bulk level, all after the measurement filter.
 # --------------------------------------------------------------------------------------
 
 specimen_order = sorted(set(samples.tolist()))
 detection_by_specimen = np.vstack([
-    np.asarray((Y_genes[samples == specimen] > 0).mean(axis=0)).ravel() for specimen in specimen_order
+    np.asarray((Y_measured[samples == specimen] > 0).mean(axis=0)).ravel() for specimen in specimen_order
 ])
 abundance_by_specimen = np.vstack([
-    np.asarray(Y_genes[samples == specimen].mean(axis=0)).ravel() for specimen in specimen_order
+    np.asarray(Y_measured[samples == specimen].mean(axis=0)).ravel() for specimen in specimen_order
 ])
 
-per_specimen_detection = pd.DataFrame(detection_by_specimen, index=specimen_order, columns=gene_names)
-per_specimen_abundance = pd.DataFrame(abundance_by_specimen, index=specimen_order, columns=gene_names)
+per_specimen_detection = pd.DataFrame(detection_by_specimen, index=specimen_order, columns=gene_names_measured)
+per_specimen_abundance = pd.DataFrame(abundance_by_specimen, index=specimen_order, columns=gene_names_measured)
 
 detection_mouse = per_specimen_detection.loc[mouse_samples].mean(axis=0)
 detection_human = per_specimen_detection.loc[human_samples].mean(axis=0)
 abundance_mouse = per_specimen_abundance.loc[mouse_samples].mean(axis=0)
 abundance_human = per_specimen_abundance.loc[human_samples].mean(axis=0)
 
-# --------------------------------------------------------------------------------------
-# Flags.
-# --------------------------------------------------------------------------------------
-
-axis_basis_gene = np.array([gene in set(AXIS_BASIS_GENES) for gene in gene_names])
-technical_gene = np.array([
-    any(re.match(pattern, str(gene).upper()) for pattern in TECHNICAL_GENE_PATTERNS)
-    for gene in gene_names
-])
-
-detected_in_both_species = (
+detected_both = (
     (detection_mouse.to_numpy() >= CONFIG["min_detection_each_species"])
     & (detection_human.to_numpy() >= CONFIG["min_detection_each_species"])
 )
 
-_report("axis-basis genes in the universe", int(axis_basis_gene.sum()), len(gene_names),
-        why=f"of {len(AXIS_BASIS_GENES)} axis-basis genes")
-_report("technical genes in the universe", int(technical_gene.sum()), len(gene_names),
-        why="mitochondrial / ribosomal protein")
-_report("detected in both species", int((detected_in_both_species & ~axis_basis_gene & ~technical_gene).sum()),
-        len(gene_names), why=f"detection >= {CONFIG['min_detection_each_species']:.0%} per species, "
-                             "axis and technical genes excluded")
+gene_names = gene_names_measured[detected_both]
+Y_genes = Y_measured[:, detected_both].tocsr()
+gene_lookup = {str(gene).upper(): index for index, gene in enumerate(gene_names)}
 
-print(f"  axis-basis genes present in the universe: "
-      f"{[gene for gene in AXIS_BASIS_GENES if gene.upper() in gene_lookup_tested]}")
+_report("Input PT gene universe", len(gene_names_all))
+_report("Measured in both inputs", len(gene_names_measured), len(gene_names_all),
+        why=measured_source)
+_report("Excluded because not measured in both inputs", int((~measured_in_both).sum()))
+_report("Analyzable in both species", len(gene_names), len(gene_names_measured),
+        why=f"detected in >= {CONFIG['min_detection_each_species']:.0%} of PT structures in mouse and human")
+_report("Excluded because detection is below threshold in at least one species", int((~detected_both).sum()))
 
 
 # %% [markdown]
@@ -1117,9 +1065,6 @@ curve_table = pd.DataFrame({
     "detection_human": np.asarray(detection_human, dtype=float),
     "abundance_mouse": np.asarray(abundance_mouse, dtype=float),
     "abundance_human": np.asarray(abundance_human, dtype=float),
-    "detected_in_both_species": detected_in_both_species,
-    "axis_basis_gene": axis_basis_gene,
-    "technical_gene": technical_gene,
 })
 
 curve_table["amplitude_log2_ratio_balanced"] = np.where(
@@ -1232,14 +1177,14 @@ AXIS_BASIS_PANEL_ORDER = ["S1", "S2", "S3"]
 
 def _programme_curve(curves, members):
     """The programme's curve: mean of its members' within-species z-scored balanced curves."""
-    rows = [gene_lookup_tested[gene.upper()] for gene in members if gene.upper() in gene_lookup_tested]
+    rows = [gene_lookup[gene.upper()] for gene in members if gene.upper() in gene_lookup]
     if not rows:
         return np.full(curves.shape[1], np.nan)
     return _nanmean_safe(_row_zscore(curves[rows]), axis=0)
 
 
 programme_members = {
-    panel: [gene for gene in AXIS_BASIS_PANELS[panel] if gene.upper() in gene_lookup_tested]
+    panel: [gene for gene in AXIS_BASIS_PANELS[panel] if gene.upper() in gene_lookup]
     for panel in AXIS_BASIS_PANEL_ORDER
 }
 programme_curves = {
@@ -1252,7 +1197,7 @@ figure, axes = plt.subplots(1, 3, figsize=(7.25, 2.6), sharey=True, layout="cons
 
 for axis, panel in zip(axes, AXIS_BASIS_PANEL_ORDER):
     for gene in programme_members[panel]:
-        index = gene_lookup_tested[gene.upper()]
+        index = gene_lookup[gene.upper()]
         # Retain the member curves, but make the aggregate programme the visual evidence.
         axis.plot(grid_unit, _row_zscore(balanced_mouse[[index]])[0], color=SPECIES_COLORS["mouse"],
                   lw=0.65, alpha=0.20, zorder=1)
@@ -1539,15 +1484,12 @@ architecture_mask = (
     & gene_metrics["mouse_reproducibility"].ge(CONFIG["within_species_corr"])
     & gene_metrics["human_reproducibility"].ge(CONFIG["within_species_corr"])
     & gene_metrics["enough_shared_support"]
-    & gene_metrics["detected_in_both_species"]
-    & ~gene_metrics["axis_basis_gene"]
-    & ~gene_metrics["technical_gene"]
 )
 
 architecture_index = np.flatnonzero(architecture_mask.to_numpy())
 
 _report("genes reproducibly patterned in both species", architecture_index.size, len(gene_names),
-        why="the set the conservation question is asked about; axis, technical and non-comparable genes excluded")
+        why="the set the conservation question is asked about")
 
 if architecture_index.size < CONFIG["null_min_genes"]:
     print(f"Fewer than {CONFIG['null_min_genes']} genes qualify: the conservation test is skipped "
@@ -1692,7 +1634,7 @@ else:
 # re-derive a different partition without refitting anything.
 #
 # **Priority order** (first match wins, highest priority listed last in the code so it overwrites):
-# excluded (not measured in both species, technical, or axis-basis) -> insufficient shared support ->
+# insufficient shared support ->
 # mouse-zonated/human-flat -> human-zonated/mouse-flat -> gradient inversion -> conserved zonation ->
 # weaker/stronger zonation in human -> complex shape rewiring -> weak/uncertain.
 #
@@ -1746,12 +1688,7 @@ print("Absolute-value quantiles of the metric distributions (thresholds are read
 display(threshold_distributions.round(4))
 
 enough_support = gene_metrics["enough_shared_support"]
-discovery_eligible = (
-    enough_support
-    & gene_metrics["detected_in_both_species"]
-    & ~gene_metrics["technical_gene"]
-    & ~gene_metrics["axis_basis_gene"]
-)
+curve_comparable = enough_support
 
 threshold_selection = pd.DataFrame([
     {"criterion": "patterned in mouse (amplitude >= amplitude_patterned)",
@@ -1776,13 +1713,13 @@ threshold_selection = pd.DataFrame([
                      >= CONFIG["minimum_shift"]).sum())},
     {"criterion": "displacement improves agreement (improvement >= shift_improvement)",
      "n_genes": int((gene_metrics["shift_improvement"] >= CONFIG["shift_improvement"]).sum())},
-    {"criterion": "discovery-eligible (support + both species + no axis/technical flag)",
-     "n_genes": int(discovery_eligible.sum())},
+    {"criterion": "curve-comparable (enough shared support)",
+     "n_genes": int(curve_comparable.sum())},
 ])
 
 display(threshold_selection)
-_report("discovery-eligible genes", int(discovery_eligible.sum()), len(gene_metrics),
-        why="insufficient shared support, not detected in both species, technical or axis-basis")
+_report("curve-comparable genes", int(curve_comparable.sum()), len(gene_metrics),
+        why="enough shared support for a human-mouse curve comparison")
 
 
 # %%
@@ -1809,11 +1746,10 @@ BROAD_PHENOTYPE = {
     "gradient inversion": "inversion",
     "complex shape rewiring": "complex rewiring",
     "weak / uncertain zonation": "no spatial signal",
-    "excluded": "excluded",
 }
 
 
-def _phenotype_flags(metrics, config, include_axis_genes=False):
+def _phenotype_flags(metrics, config):
     """Every boolean the classification uses, so the classes can be rebuilt differently."""
     mouse_amplitude = metrics["mouse_amplitude"]
     human_amplitude = metrics["human_amplitude"]
@@ -1828,11 +1764,6 @@ def _phenotype_flags(metrics, config, include_axis_genes=False):
     no_slice_zonated_human = metrics[human_slice_columns].max(axis=1) < config["amplitude_patterned"]
 
     flags = {}
-    flags["excluded"] = (
-        ~metrics["detected_in_both_species"]
-        | metrics["technical_gene"]
-        | (metrics["axis_basis_gene"] & ~include_axis_genes)
-    )
     flags["enough_support"] = metrics["enough_shared_support"]
 
     flags["strong_mouse"] = mouse_amplitude >= config["amplitude_patterned"]
@@ -1973,7 +1904,6 @@ def _assign_phenotypes(flags):
         (flags["human_zonated_mouse_flat"], "human-zonated / mouse-flat"),
         (flags["mouse_zonated_human_flat"], "mouse-zonated / human-flat"),
         (~flags["enough_support"], "weak / uncertain zonation"),
-        (flags["excluded"], "excluded"),
     ]
 
     for mask, label in assignments:
@@ -2022,13 +1952,13 @@ phenotype_summary = pd.DataFrame([
         "median_discovery_score": float(np.nanmedian(
             gene_metrics.loc[gene_metrics["spatial_phenotype"] == label, "spatial_discovery_score"])),
     }
-    for label in PHENOTYPE_CLASSES + ["excluded"]
+    for label in PHENOTYPE_CLASSES
 ])
 
 display(phenotype_summary.round(4))
 _save_table(phenotype_summary, "gene_spatial_phenotype_summary.csv")
 
-print("Spatial phenotype counts (all tested orthologs):")
+print("Spatial phenotype counts (all analyzable genes):")
 print(gene_metrics["spatial_phenotype"].value_counts().to_string())
 
 
@@ -2051,7 +1981,6 @@ def _phenotype_selfcheck():
         shift_at_search_boundary=False, centroid_shift_human_minus_mouse=0.0,
         shape_corr=0.9, mouse_reproducibility=0.8, human_reproducibility=0.8,
         mouse_early_to_late=0.3, human_early_to_late=0.3,
-        detected_in_both_species=True, technical_gene=False, axis_basis_gene=False,
         enough_shared_support=True,
         **{f"amplitude__{sample}": 0.4 for sample in mouse_samples + human_samples},
     )
@@ -2117,9 +2046,6 @@ def _phenotype_selfcheck():
                  **{f"amplitude__{human_samples[0]}": 0.5,
                     f"amplitude__{human_samples[-1]}": 0.02}),
             "weak / uncertain zonation"),
-        "axis-basis gene": (gene(axis_basis_gene=True), "excluded"),
-        "technical gene": (gene(technical_gene=True), "excluded"),
-        "not measured in both inputs": (gene(detected_in_both_species=False), "excluded"),
         "too little shared support": (gene(enough_shared_support=False), "weak / uncertain zonation"),
     }
 
@@ -2130,8 +2056,7 @@ def _phenotype_selfcheck():
             continue
         frame[column] = frame[column].astype(float)
 
-    for flag in ("detected_in_both_species", "technical_gene", "axis_basis_gene",
-                 "enough_shared_support", "shift_at_search_boundary"):
+    for flag in ("enough_shared_support", "shift_at_search_boundary"):
         frame[flag] = frame[flag].astype(bool)
 
     flags = _phenotype_flags(frame, CONFIG)
@@ -2213,15 +2138,15 @@ print(f"All {len(phenotype_selfcheck)} synthetic phenotype self-checks passed.")
 # ### 3.2 - Robustness of the phenotypes across the analysis choices
 #
 # **Why.** A phenotype class is a conjunction of thresholds applied to curves that were themselves built
-# under choices (specimen balancing, the detection threshold). Reporting one partition and calling it the
+# under choices such as specimen balancing and classification thresholds. Reporting one partition and calling it the
 # result would hide that, so the whole classification is re-derived under each choice and the per-gene
 # agreement is kept.
 #
 # **The variants.** (1) pooled tubule-weighted curves instead of equal-weight specimen curves; (2) leave
 # out each mouse specimen (two variants); (3) leave out each human slice (two variants - *slice
 # sensitivity*, not replication); (4) amplitude thresholds scaled by 0.8 and 1.25; (5) the displacement
-# threshold scaled by 0.75 and 1.25; (6) detection threshold at 2% and 10%; (7) axis-basis genes allowed
-# into discovery. Twelve variants in total, beside the primary analysis.
+# threshold scaled by 0.75 and 1.25. Ten variants in total, beside the primary analysis. The
+# measurement and detection definition of the analyzable gene universe is fixed across variants.
 #
 # **How they are run.** All variants share one code path (`_assemble_metrics` + `_phenotype_flags` +
 # `_assign_phenotypes`), so a variant can only differ through its curves or its thresholds. The
@@ -2230,9 +2155,9 @@ print(f"All {len(phenotype_selfcheck)} synthetic phenotype self-checks passed.")
 #
 # **What the numbers mean, and what they do not.** `robustness_score` is the fraction of variants that
 # keep a gene's **broad** phenotype (conserved / amplitude-change / species-specific zonation / inversion
-# / complex rewiring / no spatial signal / excluded). It is a stability score, not a significance
-# measure. A gene that leaves the universe in a stricter-detection variant is counted as not retaining
-# its phenotype; that is deliberate, because "no longer measured" is a real change in what can be
+# / complex rewiring / no spatial signal). It is a stability score, not a significance
+# measure. The fixed analyzable universe is used in every variant, so a change reflects curve fitting
+# or classification thresholds rather than a changing gene filter.
 # claimed. Nothing here walks through every variant: the per-gene score is in the atlas, and the
 # fraction of each class that retains its broad class is reported once.
 #
@@ -2289,21 +2214,15 @@ def _sensitivity_variants():
         },
         "shift threshold -25%": {"minimum_shift": CONFIG["minimum_shift"] * 0.75},
         "shift threshold +25%": {"minimum_shift": CONFIG["minimum_shift"] * 1.25},
-        "detection threshold 2%": {"min_detection_each_species": 0.02},
-        "detection threshold 10%": {"min_detection_each_species": 0.10},
-        "axis-basis genes included": {},
     }
 
     for label, updates in threshold_variants.items():
         variant_config = dict(CONFIG)
         variant_config.update(updates)
-        is_axis_variant = label == "axis-basis genes included"
         variants[label] = {
             "mouse": balanced_mouse, "human": balanced_human,
-            "config": variant_config, "include_axis": is_axis_variant,
-            "note": ("axis-basis genes treated as ordinary discoverable genes - the reverse of the "
-                     "primary setting, so it shows what the exclusion is hiding"
-                     if is_axis_variant else "threshold / universe sensitivity"),
+            "config": variant_config,
+            "note": "threshold sensitivity",
         }
 
     return variants
@@ -2316,19 +2235,12 @@ variant_phenotypes = {}
 for variant_name, variant_spec in sensitivity_variants.items():
     variant_metrics = _assemble_metrics(variant_spec["mouse"], variant_spec["human"])
 
-    # The detection and support thresholds act on the universe, not on the curves.
-    variant_metrics["detected_in_both_species"] = (
-        (variant_metrics["detection_mouse"] >= variant_spec["config"]["min_detection_each_species"])
-        & (variant_metrics["detection_human"] >= variant_spec["config"]["min_detection_each_species"])
-    )
+    # Shared-support requirements act on each re-fitted curve pair.
     variant_metrics["enough_shared_support"] = (
         variant_metrics["n_shared_grid_points"] >= variant_spec["config"]["min_pattern_grid_points"]
     )
 
-    variant_flags = _phenotype_flags(
-        variant_metrics, variant_spec["config"],
-        include_axis_genes=variant_spec.get("include_axis", False),
-    )
+    variant_flags = _phenotype_flags(variant_metrics, variant_spec["config"])
     # The divergence score is gated by the flags, so it is computed after them.
     variant_metrics = variant_metrics.join(variant_flags)
     variant_metrics["spatial_discovery_score"] = _spatial_discovery_score(
@@ -2351,7 +2263,7 @@ for variant_name, variant_spec in sensitivity_variants.items():
         "note": variant_spec["note"],
         "same_fine_phenotype_share": float((variant_labels.to_numpy() == primary_labels).mean()),
         "same_broad_phenotype_share": float((variant_broad == primary_broad).mean()),
-        "n_discovery_eligible": int((~variant_flags["excluded"] & variant_flags["enough_support"]).sum()),
+        "n_curve_comparable": int(variant_flags["enough_support"].sum()),
         "n_conserved": int((variant_labels == "conserved zonation").sum()),
         "n_amplitude_change": int(variant_labels.isin(
             ["weaker zonation in human", "stronger zonation in human"]).sum()),
@@ -2396,17 +2308,17 @@ for variant_name, variant_labels in variant_phenotypes.items():
     robustness[f"broad__{variant_name}"] = variant_labels.map(BROAD_PHENOTYPE).to_numpy()
 
 broad_columns = [column for column in robustness if column.startswith("broad__")]
-robustness["n_variants_tested"] = robustness[broad_columns].notna().sum(axis=1)
+robustness["n_variants_assessed"] = robustness[broad_columns].notna().sum(axis=1)
 robustness["n_variants_same_broad_phenotype"] = (
     robustness[broad_columns].to_numpy() == robustness["broad_phenotype"].to_numpy()[:, None]
 ).sum(axis=1)
 robustness["robustness_score"] = (
     robustness["n_variants_same_broad_phenotype"]
-    / robustness["n_variants_tested"].replace(0, np.nan)
+    / robustness["n_variants_assessed"].replace(0, np.nan)
 )
 
 gene_metrics = gene_metrics.merge(
-    robustness[["gene", "n_variants_tested", "n_variants_same_broad_phenotype", "robustness_score"]],
+    robustness[["gene", "n_variants_assessed", "n_variants_same_broad_phenotype", "robustness_score"]],
     on="gene", how="left",
 )
 
@@ -2420,11 +2332,11 @@ display(
     .round(3)
 )
 
-discovery_genes = ~gene_metrics["axis_basis_gene"] & ~gene_metrics["technical_gene"]
+curve_comparable_genes = gene_metrics["enough_shared_support"]
 _report("genes unchanged in their broad class under every variant",
         int((gene_metrics["robustness_score"] == 1).sum()), len(gene_names))
-_report("discovery-eligible genes robust under >= 80% of variants",
-        int((gene_metrics["robustness_score"].ge(0.8) & discovery_genes).sum()), len(gene_names),
+_report("curve-comparable genes robust under >= 80% of variants",
+        int((gene_metrics["robustness_score"].ge(0.8) & curve_comparable_genes).sum()), len(gene_names),
         why="used to prioritise the genes shown in sections 3.3 and 4.2")
 
 
@@ -2514,9 +2426,7 @@ def _top_genes_for_class(label, n, prefer_robust=True):
     """
     block = gene_metrics[
         gene_metrics["spatial_phenotype"].eq(label)
-        & ~gene_metrics["axis_basis_gene"]
-        & ~gene_metrics["technical_gene"]
-        & gene_metrics["detected_in_both_species"]
+        & gene_metrics["enough_shared_support"]
     ]
 
     rule = CLASS_EVIDENCE.get(label)
@@ -2539,19 +2449,14 @@ def _top_genes_for_class(label, n, prefer_robust=True):
     return block.head(n)
 
 
-discovery_eligible = (
-    ~gene_metrics["axis_basis_gene"]
-    & ~gene_metrics["technical_gene"]
-    & gene_metrics["detected_in_both_species"]
-    & gene_metrics["enough_shared_support"]
-)
+curve_comparable = gene_metrics["enough_shared_support"]
 
 
 
 # %%
 # Purpose: figure 1B - the zonation conservation landscape.
 
-landscape = gene_metrics[discovery_eligible].dropna(
+landscape = gene_metrics[curve_comparable].dropna(
     subset=["mouse_amplitude", "human_amplitude", "shape_corr"]
 )
 
@@ -2599,7 +2504,7 @@ ax_main.set(xlim=(-0.02, limit), ylim=(-0.02, limit),
             ylabel="Human zonation amplitude (peak-to-trough lognorm)")
 ax_main.text(0.98, 0.04, "dotted: equal amplitude\ndashed: patterned threshold",
              transform=ax_main.transAxes, fontsize=6.4, ha="right", va="bottom", color="0.35")
-ax_main.set_title(f"Zonation landscape ({len(landscape):,} discovery-eligible orthologs)",
+ax_main.set_title(f"Zonation landscape ({len(landscape):,} curve-comparable genes)",
                   loc="left", fontweight="bold")
 _panel_label(ax_main, "b")
 
@@ -2650,7 +2555,7 @@ _save_table(landscape, "zonation_landscape_eligible_genes.csv")
 # %%
 # Purpose: figure 1C - displacement versus residual shape mismatch.
 
-displacement_frame = gene_metrics[discovery_eligible].dropna(
+displacement_frame = gene_metrics[curve_comparable].dropna(
     subset=["shape_corr", "post_shift_shape_corr", "best_shift_human_minus_mouse",
             "residual_rms_after_shift"]
 )
@@ -2927,13 +2832,13 @@ _save_table(heatmap_table, "shape_only_heatmap_gene_selection.csv")
 # **Why not mean pathway expression.** Averaging a pathway's member genes along PT discards exactly the
 # thing under study: two pathways with identical mean trajectories can have members that all sit in the
 # same territory or members split across opposing territories. So the test here is whether a pathway's
-# member genes are **over-represented in a spatial phenotype** (or in "excluded"), never whether the
+# member genes are **over-represented in a spatial phenotype**, never whether the
 # pathway's mean expression differs between species.
 #
-# **The test.** Hypergeometric over-representation against the discovery-eligible universe: `N` = tested
-# orthologs that could be assigned a phenotype, `K` = the pathway's members inside that universe,
-# `n` = genes holding the phenotype, `k` = pathway members holding it. Background is the tested
-# ortholog universe, and pathways are restricted to `[pathway_min_members, pathway_max_members]`
+# **The test.** Hypergeometric over-representation against the curve-comparable subset of the analyzable
+# gene universe: `N` = genes that could be compared as curves, `K` = the pathway's members inside that
+# universe, `n` = genes holding the phenotype, `k` = pathway members holding it. Background is the
+# curve-comparable gene universe, and pathways are restricted to `[pathway_min_members, pathway_max_members]`
 # members so that tiny curated sets and transcriptome-wide sets cannot dominate. BH correction is
 # applied across the **complete** tested pathway x phenotype family (reported), so the FDRs are not
 # per-phenotype claims.
@@ -3000,23 +2905,23 @@ else:
 
 membership["universe_members"] = membership["member_list"].map(
     lambda genes: sorted({
-        gene_lookup_tested[str(gene).upper()] for gene in genes
-        if str(gene).upper() in gene_lookup_tested
+        gene_lookup[str(gene).upper()] for gene in genes
+        if str(gene).upper() in gene_lookup
     })
 )
 membership["n_universe_members"] = membership["universe_members"].map(len)
 
 _report("pathways retained by 03", len(membership))
 _report(
-    "pathways inside the tested size range",
+    "pathways inside the eligible size range",
     int(membership["n_universe_members"].between(
         CONFIG["pathway_min_members"], CONFIG["pathway_max_members"]).sum()),
     len(membership),
-    why=f"{CONFIG['pathway_min_members']} <= members in the tested universe "
+    why=f"{CONFIG['pathway_min_members']} <= members in the curve-comparable universe "
         f"<= {CONFIG['pathway_max_members']}",
 )
 
-universe_index = np.flatnonzero(discovery_eligible.to_numpy())
+universe_index = np.flatnonzero(curve_comparable.to_numpy())
 universe_size = int(universe_index.size)
 universe_mask = np.zeros(len(gene_names), dtype=bool)
 universe_mask[universe_index] = True
@@ -3025,14 +2930,14 @@ phenotype_by_row = gene_metrics["spatial_phenotype"].to_numpy()
 discovery_score_by_row = np.nan_to_num(gene_metrics["spatial_discovery_score"].to_numpy())
 
 universe_phenotype_counts = pd.Series(phenotype_by_row[universe_index]).value_counts()
-print("Phenotype composition of the tested universe:")
+print("Phenotype composition of the curve-comparable universe:")
 display(universe_phenotype_counts.rename("n_genes").to_frame())
 
 # --------------------------------------------------------------------------------------
 # The over-representation tests.
 # --------------------------------------------------------------------------------------
 
-pathway_tested = membership[
+pathway_eligible = membership[
     membership["n_universe_members"].between(
         CONFIG["pathway_min_members"], CONFIG["pathway_max_members"])
 ].copy()
@@ -3076,8 +2981,8 @@ def _phenotype_enrichment(phenotype_labels, universe_members_index, pathway_fram
                           member_evidence=None):
     """Upper-tail hypergeometric over-representation of each phenotype among each pathway's members.
 
-    `phenotype_labels` is the per-gene phenotype array over every tested gene; `universe_members_index`
-    are the rows that form the background (the discovery-eligible genes); `pathway_frame` must carry
+    `phenotype_labels` is the per-gene phenotype array over every analyzable gene; `universe_members_index`
+    are the rows that form the background (the curve-comparable genes); `pathway_frame` must carry
     `universe_members` (row indices) plus `library`/`pathway`. `member_evidence` is an optional frame of
     per-gene evidence (`shape_corr`, `amplitude_log2`, `abs_shift`) used for the coherence columns:
     enrichment is a statement about member *membership*, coherence is a statement about member
@@ -3178,7 +3083,7 @@ member_evidence = pd.DataFrame({
 })
 
 enrichment_rows = _phenotype_enrichment(
-    phenotype_by_row, universe_index, pathway_tested, CONFIG, member_evidence=member_evidence
+    phenotype_by_row, universe_index, pathway_eligible, CONFIG, member_evidence=member_evidence
 )
 
 pathway_enrichment = pd.DataFrame(enrichment_rows)
@@ -3206,7 +3111,7 @@ pathway_enrichment = (
 
 _report(
     "tested pathway x phenotype pairs", len(pathway_enrichment),
-    int(len(pathway_tested) * len(PHENOTYPE_CLASSES)),
+    int(len(pathway_eligible) * len(PHENOTYPE_CLASSES)),
     why="BH was applied across this complete family",
 )
 _report(
@@ -3418,7 +3323,7 @@ def _enrichment_selfcheck():
         ["conserved zonation"] * 15
         + ["gradient inversion"] * 5
         + ["weak / uncertain zonation"] * 30
-        + ["excluded"] * int(len(gene_names) - 50)
+        + ["weak / uncertain zonation"] * int(len(gene_names) - 50)
     )
     background = np.arange(60)
     pathway_frame = pd.DataFrame({
@@ -3445,7 +3350,7 @@ def _enrichment_selfcheck():
     inverted = _pair(inverted_rows[0]["pathway"], "gradient inversion") if inverted_rows else None
 
     checks = [
-        ("enriched pair: background size is the discovery-eligible universe",
+        ("enriched pair: background size is the curve-comparable universe",
          enriched is not None and int(enriched["n_universe_with_phenotype"]) == 15),
         ("enriched pair: eligible members are counted inside the universe",
          enriched is not None and int(enriched["n_pathway_members_in_universe"]) == 20),
@@ -3463,7 +3368,7 @@ def _enrichment_selfcheck():
         ("a pathway holding every member of a phenotype returns a small p",
          inverted is not None and float(inverted["p_value"]) < 0.01),
         ("only phenotypes present in the background are tested",
-         "excluded" not in set(table["spatial_phenotype"])),
+         "not-a-phenotype" not in set(table["spatial_phenotype"])),
     ]
 
     return pd.DataFrame([{"check": name, "passed": bool(passed)} for name, passed in checks])
@@ -3549,8 +3454,8 @@ for theme, patterns in PATHWAY_THEMES.items():
     theme_selections[theme] = {
         "library": chosen["library"],
         "pathway": chosen["pathway"],
-        "members": [gene_lookup_tested[str(gene).upper()] for gene in chosen["member_list"]
-                    if str(gene).upper() in gene_lookup_tested],
+        "members": [gene_lookup[str(gene).upper()] for gene in chosen["member_list"]
+                    if str(gene).upper() in gene_lookup],
     }
 
     theme_rows.append({
@@ -3678,8 +3583,8 @@ else:
         if not len(match):
             continue
         members = [
-            gene_lookup_tested[str(gene).upper()] for gene in match.iloc[0]["member_list"]
-            if str(gene).upper() in gene_lookup_tested
+            gene_lookup[str(gene).upper()] for gene in match.iloc[0]["member_list"]
+            if str(gene).upper() in gene_lookup
         ]
         if len(members) < 2:
             continue
@@ -3827,12 +3732,12 @@ if WHOLE_PT_LOGFOLD_PATH.exists():
 else:
     print(f"{WHOLE_PT_LOGFOLD_PATH.name} not found - continuity check against 05 skipped")
 
-quadrant_frame = gene_metrics[discovery_eligible].dropna(
+quadrant_frame = gene_metrics[curve_comparable].dropna(
     subset=["level_effect_human_minus_mouse"]
 ).copy()
 quadrant_frame["conventional_abs"] = quadrant_frame["level_effect_human_minus_mouse"].abs()
 
-conventional_median = float(np.nanmedian(conventional_level[discovery_eligible]))
+conventional_median = float(np.nanmedian(conventional_level[curve_comparable]))
 
 # Strong spatial evidence is categorical, and deliberately so. The gated score is exactly 0 for every
 # gene with no interpretable component, which in this cohort is most genes - so its median is 0 and a
@@ -3841,7 +3746,6 @@ conventional_median = float(np.nanmedian(conventional_level[discovery_eligible])
 # the continuous score is then used only to rank genes inside that group.
 quadrant_frame["strong_spatial_evidence"] = (
     quadrant_frame["spatial_phenotype"].ne("weak / uncertain zonation")
-    & quadrant_frame["spatial_phenotype"].ne("excluded")
     & quadrant_frame["robustness_score"].ge(CONFIG["spatial_strong_robustness"])
 )
 
@@ -3954,7 +3858,7 @@ plt.show()
 
 pathway_member_stats = {}
 
-for row in pathway_tested.itertuples():
+for row in pathway_eligible.itertuples():
     members = np.asarray([index for index in row.universe_members if universe_mask[index]], dtype=int)
     if members.size == 0:
         continue
@@ -3985,12 +3889,12 @@ import gseapy as gp
 
 pathway_gene_sets = {
     f"{row.library}: {row.pathway}": [gene_names[index] for index in row.universe_members]
-    for row in pathway_tested.itertuples()
+    for row in pathway_eligible.itertuples()
     if len(row.universe_members) >= CONFIG["pathway_min_members"]
 }
 
 conventional_ranking = (
-    gene_metrics.loc[discovery_eligible, ["gene", "level_effect_human_minus_mouse"]]
+    gene_metrics.loc[curve_comparable, ["gene", "level_effect_human_minus_mouse"]]
     .dropna()
     .sort_values("level_effect_human_minus_mouse", ascending=False)
     .reset_index(drop=True)
@@ -4122,7 +4026,7 @@ spatially_only_pathways = best_per_pathway[
     "median_member_shape_corr", "leading_genes",
 ]]
 
-_report("pathways with a significant spatial enrichment", len(best_per_pathway), len(pathway_tested))
+_report("pathways with a significant spatial enrichment", len(best_per_pathway), len(pathway_eligible))
 _report("of those, not significant in the conventional whole-PT GSEA (spatially only)",
         len(spatially_only_pathways), len(best_per_pathway),
         why="the whole-PT level-effect GSEA finds no coherent direction for them")
@@ -4229,10 +4133,9 @@ atlas_columns = [
     "mouse_halfmax_onset", "mouse_halfmax_width", "human_halfmax_onset", "human_halfmax_width",
     "mouse_reproducibility", "human_reproducibility",
     "detection_mouse", "detection_human", "abundance_mouse", "abundance_human",
-    "n_shared_grid_points", "enough_shared_support", "detected_in_both_species",
-    "axis_basis_gene", "technical_gene",
+    "n_shared_grid_points", "enough_shared_support",
     "spatial_phenotype", "broad_phenotype", "spatial_discovery_score",
-    "n_variants_tested", "n_variants_same_broad_phenotype", "robustness_score",
+    "n_variants_assessed", "n_variants_same_broad_phenotype", "robustness_score",
 ]
 
 gene_spatial_rewiring_atlas = gene_metrics[atlas_columns].copy()
@@ -4298,8 +4201,9 @@ computed. Read together with the notebook's own section markdown, which states t
 - Mouse specimens: {', '.join(mouse_samples)}. Human slices: {', '.join(human_samples)} - **one donor**.
 - PT structures compared: {adata_pt.n_obs:,}. Shared pseudospace support: [{lo:.4f}, {hi:.4f}] on a
   {grid.size}-point grid; displacements are reported in unit coordinates over that support.
-- Tested orthologs: {len(gene_names):,} (>= {CONFIG['min_detected_fraction_all']:.0%} detection overall
-  and measured in both inputs); discovery-eligible: {int(discovery_eligible.sum()):,}.
+- Analyzable genes: {len(gene_names):,} (measured in both inputs and detected in at least
+  {CONFIG['min_detection_each_species']:.0%} of PT structures in each species); curve-comparable:
+  {int(curve_comparable.sum()):,}.
 
 ## Method, in one paragraph
 
@@ -4327,15 +4231,15 @@ PT). Every metric is computed on the single coordinate of record, 03's shared PT
 
 {chr(10).join(f'- `{key}` = {value}' for key, value in CONFIG.items() if not hasattr(value, '__len__'))}
 
-## Phenotype counts (all tested orthologs)
+## Phenotype counts (all analyzable genes)
 
-{chr(10).join(f'- {label}: {int((gene_metrics["spatial_phenotype"] == label).sum()):,}' for label in PHENOTYPE_CLASSES + ["excluded"])}
+{chr(10).join(f'- {label}: {int((gene_metrics["spatial_phenotype"] == label).sum()):,}' for label in PHENOTYPE_CLASSES)}
 
 ## Robustness
 
 - Genes whose broad class survived every variant: {int((gene_metrics['robustness_score'] == 1).sum()):,}.
-- Discovery-eligible genes robust in >= 80% of variants:
-  {int((gene_metrics['robustness_score'].ge(0.8) & discovery_genes).sum()):,}.
+- Curve-comparable genes robust in >= 80% of variants:
+  {int((gene_metrics['robustness_score'].ge(0.8) & curve_comparable_genes).sum()):,}.
 
 ## Files
 
@@ -4377,10 +4281,10 @@ def _count(mask):
 summary_lines = []
 summary_lines.append("=== Human vs healthy-mouse PT spatial rewiring: measured summary ===")
 summary_lines.append("")
-summary_lines.append(f"Tested orthologs: {len(gene_names):,} "
-                     f"(of {adata_pt.n_vars:,} measured features on {adata_pt.n_obs:,} PT structures)")
-summary_lines.append(f"Discovery-eligible (no axis/technical flag, detected in both species, "
-                     f"enough shared support): {_count(discovery_eligible):,}")
+summary_lines.append(f"Analyzable genes: {len(gene_names):,} "
+                     f"(of {adata_pt.n_vars:,} PT input features; measured in both inputs and detected in "
+                     f">= {CONFIG['min_detection_each_species']:.0%} of PT structures in each species)")
+summary_lines.append(f"Curve-comparable (enough shared support): {_count(curve_comparable):,}")
 summary_lines.append("Coordinate: 03's shared PT DPT (`total_scanpy_dpt`), used as 03 oriented it")
 summary_lines.append("Displacement is a supporting measurement, not a class: "
                      f"{_count(gene_metrics['shift_usable'])} genes meet every displacement criterion")
@@ -4391,20 +4295,19 @@ summary_lines.append("Reproducible zonation, by species "
 summary_lines.append(f"  mouse: {_count((gene_metrics['mouse_amplitude'] >= CONFIG['amplitude_patterned']) & (gene_metrics['mouse_reproducibility'] >= CONFIG['within_species_corr'])):,}")
 summary_lines.append(f"  human: {_count((gene_metrics['human_amplitude'] >= CONFIG['amplitude_patterned']) & (gene_metrics['human_reproducibility'] >= CONFIG['within_species_corr'])):,}")
 summary_lines.append("")
-summary_lines.append("Spatial phenotype counts (all tested orthologs / discovery-eligible):")
+summary_lines.append("Spatial phenotype counts (all analyzable genes / curve-comparable):")
 for label in PHENOTYPE_CLASSES:
     in_class = gene_metrics["spatial_phenotype"].eq(label)
     summary_lines.append(
-        f"  {label}: {_count(in_class):,} / {_count(in_class & discovery_eligible):,}"
+        f"  {label}: {_count(in_class):,} / {_count(in_class & curve_comparable):,}"
     )
-summary_lines.append(f"  excluded (axis, technical, not in both species): {_count(gene_metrics['spatial_phenotype'].eq('excluded')):,}")
 summary_lines.append("")
 summary_lines.append("Sensitivity panel:")
-summary_lines.append(f"  variants tested per gene: {int(gene_metrics['n_variants_tested'].max()):,}")
+summary_lines.append(f"  variants assessed per gene: {int(gene_metrics['n_variants_assessed'].max()):,}")
 summary_lines.append(f"  genes keeping the same broad phenotype in every variant: "
                      f"{_count(gene_metrics['robustness_score'] == 1):,}")
-summary_lines.append(f"  discovery-eligible genes robust in >= 80% of variants: "
-                     f"{_count(gene_metrics['robustness_score'].ge(0.8) & discovery_eligible):,}")
+summary_lines.append(f"  curve-comparable genes robust in >= 80% of variants: "
+                     f"{_count(gene_metrics['robustness_score'].ge(0.8) & curve_comparable):,}")
 summary_lines.append("")
 if len(architecture_null):
     for row in architecture_null.itertuples():
@@ -4417,7 +4320,7 @@ else:
     summary_lines.append("Conserved architecture: not assessed (too few both-species-patterned genes)")
 summary_lines.append("")
 summary_lines.append(f"Significant pathway x phenotype enrichments (FDR < {CONFIG['enrichment_fdr']}): "
-                     f"{len(best_per_pathway):,} pathways of {len(pathway_tested):,} tested")
+                     f"{len(best_per_pathway):,} pathways of {len(pathway_eligible):,} eligible")
 for label in PHENOTYPE_CLASSES:
     block = best_per_pathway[best_per_pathway["spatial_phenotype"].eq(label)]
     if len(block):

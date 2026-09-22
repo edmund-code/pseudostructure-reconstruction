@@ -24,7 +24,10 @@ subproject that produces its GeoJSON inputs.
   the human vs healthy-mouse PT spatial analysis: it runs on 03's shared PT DPT exactly as 03 oriented
   it (no cross-species re-registration), a displacement is reported as a supporting measurement rather
   than as a phenotype class, and the external validation of its leading pathway candidates belongs in a
-  separate analysis, not in it.
+  separate analysis, not in it. `analysis/pt_gam_clustering.py` (07: gene-level unsupervised
+  discovery of normal-positional modules and human-vs-mouse response modules — reads 03's PT object
+  and ortholog map, clusters the fitted GAM curves, and loads pathway annotations only after every
+  cluster assignment and cluster-number decision is frozen).
 - **Cohort**: 2 control mouse specimens, 2 AKI mouse specimens, and 2 human kidney slices. The two
   human slices are *named* cortex and medulla, but **both are in reality healthy human cortex** —
   do not treat the medulla-labelled slice as medullary tissue in any analysis or write-up.
@@ -55,6 +58,7 @@ python tools/check_notebook_stage_order.py analysis/notebooks/*.ipynb
 python analysis/mouse_only_pseudospace.py   --data-root <dir> --results-root <dir>
 python analysis/human_vs_healthy_mouse.py   --data-root <dir> --results-root <dir>
 python analysis/gam_human_vs_mouse.py       --data-root <dir> --results-root <dir>   # needs 03's outputs
+python analysis/pt_gam_clustering.py        --data-root <dir> --results-root <dir>   # needs 03's outputs
 # env-var equivalents: PSEUDOSPACE_DATA_ROOT, PSEUDOSPACE_RESULTS_ROOT
 
 # QuPath export / spatial validation
@@ -170,8 +174,9 @@ tables under `docs/results/`.
   `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py`,
   `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`,
   `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`,
-  `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`, and
-  `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`.
+  `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`,
+  `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`, and
+  `07_pt_gam_clustering.ipynb → analysis/pt_gam_clustering.py`.
   (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
@@ -185,6 +190,8 @@ tables under `docs/results/`.
     analysis/notebooks/05_gam_human_vs_mouse.ipynb
   jupytext --to py:percent --output analysis/human_mouse_spatial_rewiring.py \
     analysis/notebooks/06_human_mouse_spatial_rewiring.ipynb
+  jupytext --to py:percent --output analysis/pt_gam_clustering.py \
+    analysis/notebooks/07_pt_gam_clustering.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.

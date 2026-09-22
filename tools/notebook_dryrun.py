@@ -1,9 +1,14 @@
-"""Execute every code cell of notebook 06 against a synthetic dataset in a throwaway directory.
+"""Execute every code cell of a workflow notebook against a synthetic dataset in a throwaway directory.
 
 This is a test harness, not a notebook run: it builds a synthetic AnnData satisfying the notebook's data
 contract, points PSEUDOSPACE_DATA_ROOT / PSEUDOSPACE_RESULTS_ROOT at a temporary tree, and executes
 the notebook's own cell sources in order under the Agg backend. Nothing is written into the
 repository and no private data is touched. Real-data scale, values and figure quality are not tested.
+
+Notebook 06 is the default target; ``--notebook`` runs any other one. The synthetic tree carries the
+artifacts several notebooks read (the PT object, 05's gene-rewiring tables, and the ortholog map and
+pathway libraries 07 resolves membership through), so a notebook that needs none of them simply
+ignores the extras.
 
 Synthetic genes are built in regimes, so known groups land in known phenotype classes and the
 pathway enrichment comes out non-empty - that is what exercises the pathway figures, which empty
@@ -131,6 +136,37 @@ def build_tree(root: pathlib.Path):
         for library, pathway, members in pathway_rows
     ]).to_csv(upstream / "curves" / "pathway_membership_coverage.csv", index=False)
 
+    # --- 07's inputs: the accepted ortholog map and the pathway JSON libraries --------------------
+    # 07 resolves pathway membership through the ortholog map itself instead of reading a coverage
+    # table, so both artifacts have to exist. The sets are built from the regimes above, so 07's
+    # enrichment lands on known groups instead of on nothing.
+    pd.DataFrame({
+        "human_symbol": genes, "mouse_symbol": genes, "mapping_status": "synthetic_identity",
+    }).to_csv(upstream / "ortholog_map_used.csv", index=False)
+
+    gene_sets_dir = root / "data" / "mouse_vs_human" / "pathway_gene_sets"
+    gene_sets_dir.mkdir(parents=True, exist_ok=True)
+    early = [gene for gene, centre_value in zip(genes, centre) if centre_value < 0.35]
+    libraries = {
+        "Reactome_2022.json": {
+            "Early PT transport R-HSA-1": early[:30],
+            "Fatty acid metabolism R-HSA-901": group("complex")[:30],
+            "Oxidative phosphorylation R-HSA-902": group("shifted")[:30],
+        },
+        "MSigDB_Hallmark_2020.json": {
+            "Hypoxia": group("amplitude")[:30],
+            "TNF-alpha Signaling via NF-kB": group("conserved")[:30],
+        },
+        # 'Tiny set' is below the minimum member count, so it must be reported as excluded rather
+        # than scored: that is the path an under-sized library entry takes.
+        "KEGG_2019_Mouse.json": {
+            "Bile acid metabolism": group("mixed")[:30],
+            "Tiny set": ["Gene1"],
+        },
+    }
+    for filename, sets in libraries.items():
+        (gene_sets_dir / filename).write_text(json.dumps(sets))
+
     # --- 05's artifacts, read by the cross-check cells only -----------------------------
     grid = np.linspace(0.02, 1.0, 101)
     prior_mouse = rng.normal(size=(n_genes, grid.size)) * 0.3
@@ -196,11 +232,19 @@ def main():
             print("every code cell executed without error")
         figures = sorted((upstream / "spatial_rewiring/figures").glob("*.png"))
         tables = sorted((upstream / "spatial_rewiring/tables").glob("*.csv"))
+        # Every notebook's own outputs, so a --notebook run other than 06 also reports what it wrote.
+        # `stage_cache` payloads are compute artifacts, not results.
+        produced = sorted(
+            path.relative_to(root) for path in (root / "results").rglob("*")
+            if path.is_file() and path.suffix in (".csv", ".png") and "stage_cache" not in path.parts
+        )
         print(f"\ndry-run: {len(sources) - len(failures)}/{len(sources)} cells ok, "
               f"{len(figures)} figures, {len(tables)} tables")
         if not quiet:
             for path in figures + tables:
                 print(f"  {path.name}")
+            for path in produced:
+                print(f"  {path}")
         return 1 if failures else 0
 
 

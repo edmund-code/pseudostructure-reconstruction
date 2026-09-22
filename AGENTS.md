@@ -135,9 +135,14 @@ tables under `docs/results/`.
     and estimates the variance inflation from residual correlations given the fitted design. With two
     mice and one human donor the units of replication are specimens.
   - Only the `*_kept_tubules_labeled_fine.geojson` mouse segmentations are valid; they are
-    already quality controlled upstream, so the mouse workflows apply no tubule-level QC of
-    their own. Centroid verification is still mandatory (`analysis/`,
-    `docs/workflows/pseudospace.md`).
+    already quality controlled upstream, so the mouse workflows apply no tubule-level
+    **gene-count** QC of their own. They do apply one structure filter: a quantile floor on
+    `n_spots` (`MIN_SPOTS_PER_SPECIES_QUANTILE = 0.05` in notebook 03, `MIN_SPOTS_QUANTILE` in
+    notebook 02). The two species differ ~2.2x in supporting spots (median 261 mouse against 585
+    human), and the low-spot tail is what stops the global DPT ordering the nephron — measured,
+    a per-species p5 floor restores the monotone segment order at 95% retention, while an
+    absolute threshold unbalances the species and leaves the order inverted. Centroid
+    verification is still mandatory (`analysis/`, `docs/workflows/pseudospace.md`).
   - The coarse-label checkpoint requires explicit per-cluster confirmation, and the reference
     13-cluster fingerprint must be updated together with the labels. The workflow stops before DPT
     if it drifts — never bypass the guard.
@@ -175,8 +180,9 @@ tables under `docs/results/`.
   `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`,
   `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`,
   `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`,
-  `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`, and
-  `07_pt_gam_clustering.ipynb → analysis/pt_gam_clustering.py`.
+  `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`,
+  `07_pt_gam_clustering.ipynb → analysis/pt_gam_clustering.py`, and
+  `08_pt_cross_species_validation.ipynb → analysis/pt_cross_species_validation.py`.
   (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
@@ -192,6 +198,8 @@ tables under `docs/results/`.
     analysis/notebooks/06_human_mouse_spatial_rewiring.ipynb
   jupytext --to py:percent --output analysis/pt_gam_clustering.py \
     analysis/notebooks/07_pt_gam_clustering.ipynb
+  jupytext --to py:percent --output analysis/pt_cross_species_validation.py \
+    analysis/notebooks/08_pt_cross_species_validation.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.
@@ -202,3 +210,32 @@ tables under `docs/results/`.
 
 <!-- Leave a clean house: no stray scratch files, temp scripts, or vendored archives at the repo
      root. Anything that isn't project source belongs outside the workspace. -->
+
+You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+
+Before writing any code, stop at the first rung that holds:
+
+Does this need to be built at all? (YAGNI)
+Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't re-write it.
+Does the standard library already do this? Use it.
+Does a native platform feature cover it? Use it.
+Does an already-installed dependency solve it? Use it.
+Can this be one line? Make it one line.
+Only then: write the minimum code that works.
+The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
+
+Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
+
+Rules:
+
+No abstractions that weren't explicitly requested.
+No new dependency if it can be avoided.
+No boilerplate nobody asked for.
+Deletion over addition. Boring over clever. Fewest files possible.
+Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
+Question complex requests: "Do you actually need X, or does Y cover it?"
+Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
+Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a ponytail: comment naming the ceiling and upgrade path.
+Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+
+(Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)

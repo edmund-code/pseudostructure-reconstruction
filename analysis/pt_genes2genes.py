@@ -14,6 +14,7 @@
 import argparse
 import hashlib
 import json
+from importlib.metadata import version as package_version
 import os
 import sys
 from pathlib import Path
@@ -137,12 +138,13 @@ display(adata.obs.groupby(['comparison_species', 'sample'], observed=True).size(
 # %% [markdown]
 # ## 2. Species-specific PT pseudotimes and minimal validation
 #
-# Notebook 02 uses a different mouse structure set, so a direct row-for-row transfer is unsafe. Recompute PT-only DPT within each species from lognorm expression, without cross-species Harmony. The S1/S3 marker axis selects an early root and orients DPT. The gate below checks each of the four sections separately.
+# Notebook 02 uses a different mouse structure set, so a direct row-for-row transfer is unsafe. Compute PT-only DPT within each species from lognorm expression, without cross-species Harmony. The species-specific PT coordinates are cached by input artifact and parameters so repeated notebook runs reuse exactly the same times. The S1/S3 marker axis selects an early root and orients DPT. The gate below checks each of the four sections separately.
 #
 # The existing `orient_and_normalize` helper uses the oriented DPT p5 and p95 as the 0 and 1 anchors and clips the tails. This robust within-species scaling is recorded because endpoint occupancy affects G2G interpolation.
 
 # %%
 from pseudospace.trajectory import orient_and_normalize
+from pseudospace.stage_cache import cached_payload
 
 def marker_score(a, labels):
     present = [g for g in labels if g in a.var_names]
@@ -163,18 +165,32 @@ def species_pt(species):
     a.obs['S3_score'] = marker_score(a, MARKERS['S3'])
     axis = (a.obs.S3_score - a.obs.S1_score).to_numpy()
     a.obs['marker_axis'] = axis
-    # PCA is fitted within species; no joint embedding or cross-species coordinate enters DPT.
-    sc.pp.pca(a, n_comps=30, random_state=RNG)
-    sc.pp.neighbors(a, n_neighbors=30, use_rep='X_pca', random_state=RNG)
-    sc.tl.diffmap(a)
-    candidates = np.flatnonzero(axis <= np.quantile(axis, 0.05))
-    position = a.obsm['X_pca'][candidates]
-    root = candidates[np.linalg.norm(position - np.median(position, axis=0), axis=1).argmin()]
-    a.uns['iroot'] = int(root)
-    sc.tl.dpt(a)
-    a.obs['time'] = orient_and_normalize(a.obs.dpt_pseudotime.to_numpy(), axis, min_valid=10)
-    if not np.isfinite(a.obs.time).all() or a.obs.time.nunique() < 10:
-        raise ValueError(f'{species}: invalid or collapsed DPT pseudotime.')
+    def fit_time():
+        # PCA is fitted within species; no joint embedding or cross-species coordinate enters DPT.
+        sc.pp.pca(a, n_comps=30, random_state=RNG)
+        sc.pp.neighbors(a, n_neighbors=30, use_rep='X_pca', random_state=RNG)
+        sc.tl.diffmap(a)
+        candidates = np.flatnonzero(axis <= np.quantile(axis, 0.05))
+        position = a.obsm['X_pca'][candidates]
+        root = candidates[np.linalg.norm(position - np.median(position, axis=0), axis=1).argmin()]
+        a.uns['iroot'] = int(root)
+        sc.tl.dpt(a)
+        return {'time': orient_and_normalize(a.obs.dpt_pseudotime.to_numpy(), axis, min_valid=10),
+                'root': np.asarray(int(root))}
+
+    artifact = INPUT_PATH.stat()
+    payload = cached_payload(
+        f'pt_time_{species}', fit_time, root=OUTPUT_DIR / 'stage_cache',
+        params={'logic': NOTEBOOK_LOGIC_VERSION, 'n_pcs': 30, 'n_neighbors': 30,
+                'random_state': RNG, 'markers': MARKERS, 'scanpy': package_version('scanpy')},
+        inputs={'input_size': artifact.st_size, 'input_mtime_ns': artifact.st_mtime_ns,
+                'obs_names': a.obs_names.to_numpy(), 'genes': genes}, code=fit_time)
+    time = np.asarray(payload['time'], dtype=np.float64)
+    root = int(payload['root'])
+    if len(time) != a.n_obs or not 0 <= root < a.n_obs or not np.isfinite(time).all() or (time < 0).any() or (time > 1).any() or len(np.unique(time)) < 10:
+        raise ValueError(f'{species}: invalid or collapsed DPT pseudotime cache.')
+    a.obs['time'] = time
+    a.uns['iroot'] = root
     print(f'{species}: root {a.obs_names[root]}, DPT-marker Spearman {spearmanr(a.obs.time, axis).statistic:.3f}')
     return a
 

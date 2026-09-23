@@ -796,3 +796,511 @@ print('The two human sections are healthy cortex from one donor. These are descr
 print('Representative genes across the four technical pairings:')
 rep_genes = [gene for selected in representatives.values() for gene in selected]
 display(consistency[consistency.gene.isin(rep_genes)][['gene', 'g2g_cluster', 'primary_alignment_similarity', *pair_cols, 'pairwise_range_similarity']])
+
+# %% [markdown]
+# ## 11. Fixed-pseudospace comparison on the shared Harmony PT coordinate
+#
+# **Sensitivity assumption.** Notebook 03's already oriented, shared PT DPT represents corresponding mouse and human PT positions. Here mouse $s_j$ is compared only with human $s_j$ on one common grid. No coordinate is refitted and no gene-specific alignment is performed. The same 9,904 G2G-eligible genes, log1p-normalized expression, specimens, and pathway libraries are retained. The two human cortex sections come from one donor; four pairings are spatial/technical sensitivity checks.
+#
+# G2G v0.2.0's `DP5.compute_cell` computes an MML compression from *generated* distributions inside its DP object. Isolating it would initialize the alignment machinery and make the local statistic depend on synthetic draws. This section therefore uses a **G2G-inspired fixed-position distribution comparison**: the same Gaussian kernel form as G2G's nonadaptive interpolator (width 0.1 on the original [0,1] coordinate), weighted local means and variances, and symmetric Gaussian KL (Jeffreys divergence). This is **not** the exact G2G MML score. Higher divergence means greater mismatch at the same position. A variance floor of 0.05 lognorm units prevents almost constant genes from producing singular Gaussian costs; it is a numerical regularizer, not a significance threshold. All 9,904 genes stay in the analysis.
+
+# %%
+# Exact pairing to the existing primary result; fail before any new calculation if it drifts.
+assert len(genes) == 9904 and primary.gene.tolist() == genes
+assert adata_mouse_g2g.var_names.tolist() == genes == adata_human_g2g.var_names.tolist()
+coord_name = 'shared_pseudospace'
+if coord_name not in adata.obs:
+    raise ValueError('Notebook 03 shared PT coordinate is absent.')
+shared = adata.obs[coord_name].astype(float)
+if not np.isfinite(shared).all() or shared.nunique() < 15:
+    raise ValueError('Invalid or collapsed shared PT coordinate.')
+if shared.min() < 0 or shared.max() > 1:
+    shared = (shared - shared.min()) / (shared.max() - shared.min())
+for a in (adata_mouse_g2g, adata_human_g2g):
+    a.obs['fixed_s'] = shared.loc[a.obs_names].to_numpy(dtype=float)
+assert np.isfinite(adata_mouse_g2g.obs.fixed_s).all() and np.isfinite(adata_human_g2g.obs.fixed_s).all()
+
+# Common support: intersection of the pooled species p5–p95 intervals. The
+# 14 equally spaced positions use G2G's interpolation resolution. No tail with
+# sparse representation in either species enters the comparison.
+mouse_s = adata_mouse_g2g.obs.fixed_s.to_numpy(dtype=float)
+human_s = adata_human_g2g.obs.fixed_s.to_numpy(dtype=float)
+support = (max(np.quantile(mouse_s, .05), np.quantile(human_s, .05)),
+           min(np.quantile(mouse_s, .95), np.quantile(human_s, .95)))
+if support[1] <= support[0] or support[1] - support[0] < .1:
+    raise ValueError(f'Insufficient shared PT support: {support}')
+fixed_grid = np.linspace(*support, G2G_BINS)
+
+def kernel_weights(a):
+    s = a.obs.fixed_s.to_numpy(dtype=float)
+    w = np.exp(-((fixed_grid[:, None] - s[None, :]) / .1) ** 2)
+    w /= w.sum(axis=1, keepdims=True)
+    neff = 1 / np.square(w).sum(axis=1)
+    return w, neff
+
+for species, a in (('mouse', adata_mouse_g2g), ('human', adata_human_g2g)):
+    _, neff = kernel_weights(a)
+    if neff.min() < 20:
+        raise ValueError(f'{species} has too few effective structures on common support: {neff.min():.1f}')
+    print(f'{species}: shared s p5–p95 [{np.quantile(a.obs.fixed_s,.05):.3f}, {np.quantile(a.obs.fixed_s,.95):.3f}], minimum effective N {neff.min():.1f}')
+pd.DataFrame({'grid_index': np.arange(len(fixed_grid)), 'fixed_grid': fixed_grid}).to_csv(OUTPUT_DIR / 'fixed_grid.csv', index=False)
+print(f'Common p5–p95 intersection: {support}; K={len(fixed_grid)}')
+
+# %% [markdown]
+# ### 11.1. Check shared-coordinate orientation in each specimen
+#
+# Mouse markers are the panel already used upstream. Human symbols are translated through the accepted ortholog map, and unavailable genes are reported. Conserved anchors are a small prespecified early/late candidate list; an anchor is retained only if its observed Spearman direction agrees in **both** species. This validates plausibility, not exact anatomical homology. A weak or reversed human trend warns but does not suppress the sensitivity analysis.
+
+# %%
+from scipy.stats import pearsonr
+mouse_stage = {'early': MARKERS['S1'],
+               'mid': ('Slc22a6', 'Slc13a3', 'Acsm3'),
+               'late': MARKERS['S3']}
+human_stage_symbols = {'early': ('SLC5A2','SLC5A12','SLC6A19','SLC7A7','SLC4A4'),
+                       'mid': HUMAN_TRIAL_MARKERS['S2'], 'late': HUMAN_TRIAL_MARKERS['S3']}
+map_human = orthologs.drop_duplicates('human_symbol').set_index('human_symbol').mouse_symbol
+human_stage = {stage: tuple(map_human.loc[g] for g in symbols if g in map_human.index and map_human.loc[g] in genes)
+               for stage, symbols in human_stage_symbols.items()}
+anchor_candidates = {'early': ('Slc5a2','Slc5a12'), 'late': ('Slc22a7','Slc7a13')}
+anchor_stage = {}
+for stage, symbols in anchor_candidates.items():
+    direction = -1 if stage == 'early' else 1
+    anchor_stage[stage] = tuple(g for g in symbols if g in genes and all(
+        np.isfinite(spearmanr(a.obs.fixed_s, dense_column(a.X, a.var_names.get_loc(g))).statistic)
+        and direction * spearmanr(a.obs.fixed_s, dense_column(a.X, a.var_names.get_loc(g))).statistic > .1
+        for a in (adata_mouse_g2g, adata_human_g2g)))
+print('Human marker mapping:', human_stage, '; direction-supported conserved anchors:', anchor_stage)
+
+validation_rows = []
+fig, axes = plt.subplots(4, 3, figsize=(12, 12), sharex=True)
+for r, (species, a, stages) in enumerate((('mouse', adata_mouse_g2g, mouse_stage),
+                                         ('human', adata_human_g2g, human_stage))):
+    for sample in SPECIMENS[species]:
+        sub = a[a.obs['sample'].astype(str).eq(sample)]
+        row = r * 2 + SPECIMENS[species].index(sample)
+        for col, stage in enumerate(('early','mid','late')):
+            markers = [g for g in stages[stage] if g in genes]
+            if not markers:
+                raise ValueError(f'No assayed {species} {stage} PT markers.')
+            x = sub[:, markers].X
+            x = x.toarray() if sparse.issparse(x) else np.asarray(x)
+            std = x.std(axis=0)
+            score = ((x[:, std > 0] - x[:, std > 0].mean(axis=0)) / std[std > 0]).mean(axis=1)
+            s = sub.obs.fixed_s.to_numpy(dtype=float)
+            rho = spearmanr(s, score).statistic
+            validation_rows.append({'species': species, 'sample': sample, 'stage': stage,
+                                    'markers': ','.join(markers), 'n_markers': len(markers), 'spearman_rho': rho})
+            axes[row, col].scatter(s, score, s=2, alpha=.08, color=COLORS[species])
+            edges = np.linspace(s.min(), s.max(), 16)
+            centers = (edges[:-1] + edges[1:]) / 2
+            trend = [np.median(score[(s >= lo) & (s < hi)]) if np.any((s >= lo) & (s < hi)) else np.nan
+                     for lo, hi in zip(edges[:-1], edges[1:])]
+            axes[row, col].plot(centers, trend, color='black', lw=1.2)
+            axes[row, col].set(title=f'{sample}: {stage} (ρ={rho:.2f})', xlabel='shared PT s', ylabel='marker z-score')
+validation = pd.DataFrame(validation_rows)
+validation.to_csv(OUTPUT_DIR / 'fixed_shared_coordinate_validation.csv', index=False)
+savefig(fig, 'fig09_fixed_coordinate_validation.png')
+display(validation)
+human_qc = validation[validation.species.eq('human')].pivot(index='sample', columns='stage', values='spearman_rho')
+if (human_qc.early.ge(0) | human_qc.late.le(0)).any():
+    print('WARNING: Human early→late marker ordering is inconsistent. Fixed-coordinate results are sensitivity analysis only; anatomical correspondence is uncertain.')
+if len(anchor_stage['early']) < 2 or len(anchor_stage['late']) < 2:
+    print('WARNING: Fewer than two direction-supported conserved anchors in one stage; anatomical correspondence remains provisional.')
+if human_qc.mid.lt(0).all():
+    print('WARNING: Human S2 marker scores lack a clear intermediate trend in the validation plot. Early/late orientation is supported, but full S1→S2→S3 correspondence is uncertain.')
+
+# %% [markdown]
+# ### 11.2. Local distributions and diagonal mismatch
+#
+# For each species, the 14 × structures weight matrix uses G2G's nonadaptive Gaussian kernel form. Sparse matrix products yield the weighted first and second expression moments for **every** eligible gene. Effective sample size is $1/\sum_i w_i^2$. The mismatch is half the two directional KL divergences between local Gaussian approximations, evaluated only at matching grid indices. These are descriptive distribution distances; the kernel treats individual structures as observations, and the pooled statistic does not represent donor-level replication.
+
+# %%
+FIXED_SD_FLOOR = .05
+
+def local_fixed(a):
+    w, neff = kernel_weights(a)
+    x = a.X.tocsr() if sparse.issparse(a.X) else sparse.csr_matrix(a.X)
+    mu = np.asarray(w @ x)
+    second = np.asarray(w @ x.power(2))
+    variance = np.maximum(second - mu**2, 0)
+    return mu, np.sqrt(variance), neff
+
+def fixed_distance(mouse, human):
+    mu_m, sd_m, n_m = local_fixed(mouse)
+    mu_h, sd_h, n_h = local_fixed(human)
+    vm = np.maximum(sd_m**2, FIXED_SD_FLOOR**2)
+    vh = np.maximum(sd_h**2, FIXED_SD_FLOOR**2)
+    # Symmetric Gaussian KL / Jeffreys divergence: equal distributions give 0.
+    d = .25 * (vm/vh + vh/vm - 2 + (mu_m-mu_h)**2 * (1/vm + 1/vh))
+    if not np.isfinite(d).all() or (d < -1e-10).any():
+        raise ValueError('Fixed-position distance is invalid.')
+    return np.maximum(d, 0), (mu_m, sd_m, n_m), (mu_h, sd_h, n_h)
+
+# Runnable invariants: symmetry, zero self-distance, and strictly diagonal grid comparison.
+_demo = np.array([[0., 1.]])
+_demo_dist, _, _ = fixed_distance(adata_mouse_g2g[:, genes[:2]], adata_mouse_g2g[:, genes[:2]])
+assert np.allclose(_demo_dist, 0, atol=1e-10)
+fixed_profile, mouse_local, human_local = fixed_distance(adata_mouse_g2g, adata_human_g2g)
+assert fixed_profile.shape == (len(fixed_grid), len(genes))
+np.savez_compressed(OUTPUT_DIR / 'fixed_local_distributions.npz', fixed_grid=fixed_grid,
+                    genes=np.asarray(genes), mu_mouse=mouse_local[0], sd_mouse=mouse_local[1], neff_mouse=mouse_local[2],
+                    mu_human=human_local[0], sd_human=human_local[1], neff_human=human_local[2])
+profile_table = pd.DataFrame(fixed_profile.T, columns=[f's{j:02d}' for j in range(len(fixed_grid))])
+profile_table.insert(0, 'gene', genes)
+profile_table.to_csv(OUTPUT_DIR / 'fixed_pseudospace_mismatch_profiles.csv', index=False)
+regions = np.array_split(np.arange(len(fixed_grid)), 3)
+fixed = pd.DataFrame({'gene': genes, 'fixed_overall_mismatch': fixed_profile.mean(axis=0),
+                      'fixed_similarity': -fixed_profile.mean(axis=0),
+                      'fixed_max_mismatch': fixed_profile.max(axis=0),
+                      'fixed_max_mismatch_position': fixed_grid[fixed_profile.argmax(axis=0)],
+                      'fixed_early_mismatch': fixed_profile[regions[0]].mean(axis=0),
+                      'fixed_mid_mismatch': fixed_profile[regions[1]].mean(axis=0),
+                      'fixed_late_mismatch': fixed_profile[regions[2]].mean(axis=0)})
+fixed = fixed.merge(candidate[['gene','human_minus_mouse_mean_lognorm','mouse_detected_fraction',
+    'human_detected_fraction','min_specimen_detected_fraction','mouse_raw_decile_amplitude_lognorm',
+    'human_raw_decile_amplitude_lognorm']], on='gene', validate='one_to_one')
+assert fixed.gene.tolist() == primary.gene.tolist()
+fixed['level_matched'] = fixed.human_minus_mouse_mean_lognorm.abs().le(.15)
+fixed.to_csv(OUTPUT_DIR / 'fixed_pseudospace_gene_statistics.csv', index=False)
+print(f'Level-matched (|human–mouse mean lognorm| ≤ 0.15): {fixed.level_matched.sum():,}/{len(fixed):,}')
+print('Fixed mismatch vs absolute mean level difference, Spearman ρ:',
+      spearmanr(fixed.fixed_overall_mismatch, fixed.human_minus_mouse_mean_lognorm.abs()).statistic)
+fig, ax = plt.subplots(figsize=(6,4))
+ax.scatter(fixed.human_minus_mouse_mean_lognorm.abs(), fixed.fixed_overall_mismatch, s=4, alpha=.12)
+ax.axvline(.15, color='black', ls='--')
+ax.set(xlabel='|human − mouse mean lognorm|', ylabel='fixed overall mismatch (Jeffreys)', yscale='symlog', title='Level difference remains visible')
+savefig(fig, 'fig10_fixed_mismatch_vs_level.png')
+
+# %% [markdown]
+# ### 11.3. Positional profiles and technical pairings
+#
+# Continuous early/mid/late burdens stay primary. Profiles are ordered by dominant third, then overall mismatch for display; no hard fixed clusters are imposed. Four specimen pairings use this **same** shared coordinate and grid. Pairwise ranks quantify stability within the one-donor design.
+
+# %%
+dominant = np.argmax(fixed[['fixed_early_mismatch','fixed_mid_mismatch','fixed_late_mismatch']].to_numpy(), axis=1)
+fixed['dominant_fixed_region'] = np.array(['early','mid','late'])[dominant]
+order = np.lexsort((-fixed.fixed_overall_mismatch.to_numpy(), dominant))
+fig, ax = plt.subplots(figsize=(8,6))
+image = ax.imshow(np.log1p(fixed_profile[:, order].T), aspect='auto', interpolation='nearest', cmap='magma',
+                  extent=[fixed_grid[0],fixed_grid[-1],len(genes),0])
+ax.set(xlabel='shared PT s', ylabel='genes ordered by dominant region and burden', title='Fixed-position mismatch profiles')
+fig.colorbar(image, ax=ax, label='log(1 + Jeffreys)')
+savefig(fig, 'fig11_fixed_mismatch_heatmap.png')
+
+pair_fixed = {}
+for mouse in SPECIMENS['mouse']:
+    m = adata_mouse_g2g[adata_mouse_g2g.obs['sample'].astype(str).eq(mouse)]
+    for human in SPECIMENS['human']:
+        h = adata_human_g2g[adata_human_g2g.obs['sample'].astype(str).eq(human)]
+        label = f'{mouse}__{human}'
+        distance, _, _ = fixed_distance(m, h)
+        pair_fixed[label] = distance.mean(axis=0)
+fixed_pairs = fixed[['gene','fixed_overall_mismatch']].copy()
+for label, values in pair_fixed.items():
+    fixed_pairs[label] = values
+fixed_pair_cols = list(pair_fixed)
+fixed_pairs['pairwise_median_mismatch'] = fixed_pairs[fixed_pair_cols].median(axis=1)
+fixed_pairs['pairwise_range_mismatch'] = fixed_pairs[fixed_pair_cols].max(axis=1) - fixed_pairs[fixed_pair_cols].min(axis=1)
+fixed_pairs['pairwise_sd_mismatch'] = fixed_pairs[fixed_pair_cols].std(axis=1, ddof=0)
+rank_matrix = fixed_pairs[fixed_pair_cols].rank(pct=True, ascending=True)
+fixed_pairs['pairwise_min_divergence_percentile'] = rank_matrix.min(axis=1)
+fixed_pairs['pairwise_rank_sd'] = rank_matrix.std(axis=1, ddof=0)
+fixed_pairs.to_csv(OUTPUT_DIR / 'fixed_specimen_pair_consistency.csv', index=False)
+
+# %% [markdown]
+# ### 11.4. Same pathway libraries and rank-test framework
+#
+# For each pathway, a two-sided Mann–Whitney test compares member ranks with the other eligible genes. AUC above 0.5 means stronger fixed mismatch. BH correction covers all libraries and regions within each analysis family. The p and q values describe competitive **gene-rank** enrichment, not biological replication. Coherence uses the dominant positional third or a broad label assigned from continuous burdens; its matched-null entropy is descriptive.
+
+# %%
+fixed_stats = fixed.set_index('gene')
+path_rows = []
+for region, column in [('overall','fixed_overall_mismatch'), ('early','fixed_early_mismatch'),
+                       ('mid','fixed_mid_mismatch'), ('late','fixed_late_mismatch')]:
+    for row in pathways.itertuples():
+        members = list(row.genes_present)
+        inside = fixed_stats.loc[members, column].to_numpy(float)
+        outside = fixed_stats.loc[~fixed_stats.index.isin(members), column].to_numpy(float)
+        u, p = mannwhitneyu(inside, outside, alternative='two-sided')
+        path_rows.append({'region':region,'library':row.library,'pathway':row.pathway,
+            'n_eligible_genes':len(members),'rank_auc':u/(len(inside)*len(outside)),
+            'rank_effect':u/(len(inside)*len(outside))-.5,
+            'rank_direction':'divergent' if u/(len(inside)*len(outside))>.5 else 'conserved',
+            'p_value':p,'median_fixed_mismatch':np.median(inside),
+            'median_g2g_similarity':statistics.loc[members,'alignment_similarity'].median()})
+fixed_path_all = pd.DataFrame(path_rows)
+fixed_path_all['q_value'] = np.nan
+for family, idx in fixed_path_all.groupby(fixed_path_all.region.eq('overall')).groups.items():
+    fixed_path_all.loc[idx,'q_value'] = multipletests(fixed_path_all.loc[idx,'p_value'], method='fdr_bh')[1]
+fixed_ranked = fixed_path_all[fixed_path_all.region.eq('overall')].drop(columns='region').sort_values('q_value')
+fixed_positional = fixed_path_all[~fixed_path_all.region.eq('overall')].sort_values(['region','q_value'])
+fixed_ranked.to_csv(OUTPUT_DIR / 'fixed_ranked_pathway_enrichment.csv', index=False)
+fixed_positional.to_csv(OUTPUT_DIR / 'fixed_positional_pathway_enrichment.csv', index=False)
+
+burden = fixed[['fixed_early_mismatch','fixed_mid_mismatch','fixed_late_mismatch']].to_numpy()
+# Broad means comparable burden throughout PT. It is a descriptive phenotype.
+shape = np.where(burden.max(axis=1) <= 1.5*np.maximum(burden.min(axis=1), 1e-12), 'broad',
+                 fixed.dominant_fixed_region)
+fixed['fixed_profile_shape'] = shape
+shape_classes = ['early','mid','late','broad']
+shape_codes = pd.Categorical(shape, categories=shape_classes).codes
+null_rng = np.random.default_rng(RNG)
+null_by_size = {}
+coherence_fixed_rows = []
+for row in pathways.itertuples():
+    members = list(row.genes_present)
+    loc = fixed_stats.index.get_indexer(members)
+    values = fixed.fixed_overall_mismatch.to_numpy()[loc]
+    counts = np.bincount(shape_codes[loc], minlength=4)
+    observed_entropy = entropy(counts/counts.sum())
+    n = len(members)
+    if n not in null_by_size:
+        null_by_size[n] = np.array([entropy(np.bincount(shape_codes[null_rng.choice(len(genes),n,replace=False)],minlength=4)/n)
+                                    for _ in range(200)])
+    regional = burden[loc].mean(axis=0)
+    coherence_fixed_rows.append({'library':row.library,'pathway':row.pathway,'n_eligible_genes':n,
+        'median_fixed_mismatch':np.median(values),'fixed_mismatch_iqr':np.subtract(*np.percentile(values,[75,25])),
+        'dominant_fixed_region':shape_classes[np.argmax(regional)],
+        **{f'fraction_{name}':counts[i]/n for i,name in enumerate(shape_classes)},
+        'fixed_profile_entropy':observed_entropy,
+        'fixed_profile_entropy_null_z':(observed_entropy-null_by_size[n].mean())/max(null_by_size[n].std(),1e-12)})
+fixed_coherence = pd.DataFrame(coherence_fixed_rows)
+fixed_coherence = fixed_coherence.merge(coherence[['library','pathway','normalized_cluster_entropy','similarity_iqr']],
+                                      on=['library','pathway'],validate='one_to_one')
+fixed_coherence.to_csv(OUTPUT_DIR / 'fixed_pathway_coherence.csv',index=False)
+display(fixed_ranked.head(12))
+
+# %% [markdown]
+# ### 11.5. Gene phenotypes and ranking agreement
+#
+# The primary table keeps continuous statistics. Display categories use the fixed top/bottom quartiles and the existing G2G similarity guides (high ≥0.8, low <0.5); intermediate genes remain uncertain. We repeat key counts across fixed top 20–30% and G2G high 0.7–0.9 to expose threshold dependence. Candidate sets also require all four pairings to be strong, ≥5% detection in every specimen, and ≥0.1 lognorm decile amplitude in at least one species. None of these guides is a significance cutoff.
+#
+# **Ranking caveat:** G2G similarity has many exact ties at zero. Deterministic top-N overlap is reported as requested, with a tie-expanded overlap that includes every gene sharing the cutoff score. Interpret the tie-aware full-universe Spearman correlation first.
+
+# %%
+comparison = candidate.merge(fixed.drop(columns=['human_minus_mouse_mean_lognorm','mouse_detected_fraction',
+    'human_detected_fraction','min_specimen_detected_fraction','mouse_raw_decile_amplitude_lognorm',
+    'human_raw_decile_amplitude_lognorm']),on='gene',validate='one_to_one')
+comparison = comparison.merge(fixed_pairs.drop(columns='fixed_overall_mismatch').rename(
+    columns={name: f'fixed_{name}' for name in fixed_pair_cols}),on='gene',validate='one_to_one')
+assert comparison.gene.tolist() == genes
+strings = comparison.alignment_string.astype(str)
+comparison['g2g_match_fraction'] = strings.map(lambda s: sum(c=='M' for c in s)/len(s))
+comparison['g2g_warp_fraction'] = strings.map(lambda s: sum(c in 'VW' for c in s)/len(s))
+comparison['g2g_mismatch_fraction'] = strings.map(lambda s: sum(c in 'ID' for c in s)/len(s))
+q25,q75 = fixed.fixed_overall_mismatch.quantile([.25,.75])
+comparison['fixed_strong'] = comparison.fixed_overall_mismatch.ge(q75)
+comparison['fixed_low'] = comparison.fixed_overall_mismatch.le(q25)
+comparison['g2g_high'] = comparison.alignment_similarity.ge(.8)
+comparison['g2g_low'] = comparison.alignment_similarity.lt(.5)
+comparison['fixed_pairwise_strong'] = comparison.pairwise_min_divergence_percentile.ge(.75)
+comparison['technical_quality'] = comparison.min_specimen_detected_fraction.ge(.05) & comparison[[
+    'mouse_raw_decile_amplitude_lognorm','human_raw_decile_amplitude_lognorm']].max(axis=1).ge(.1)
+comparison['high_confidence_fixed_divergent'] = comparison.fixed_strong & comparison.fixed_pairwise_strong & comparison.technical_quality
+conditions = [comparison.fixed_low & comparison.g2g_high,
+              comparison.fixed_strong & comparison.g2g_high,
+              comparison.fixed_strong & comparison.g2g_low,
+              comparison.fixed_low & comparison.g2g_low]
+labels = ['conserved by both','warp-rescuable positional difference','divergent by both','method-discordant / uncertain']
+comparison['comparison_phenotype'] = np.select(conditions, labels, default='intermediate / uncertain')
+comparison.to_csv(OUTPUT_DIR / 'g2g_vs_fixed_gene_comparison.csv',index=False)
+comparison[['gene','comparison_phenotype','alignment_similarity','g2g_warp_fraction',
+            'fixed_overall_mismatch','fixed_pairwise_strong','technical_quality','level_matched']].to_csv(
+                OUTPUT_DIR / 'g2g_vs_fixed_phenotype_assignments.csv',index=False)
+print('G2G similarity vs fixed mismatch, Pearson/Spearman:',
+      pearsonr(comparison.alignment_similarity,comparison.fixed_overall_mismatch).statistic,
+      spearmanr(comparison.alignment_similarity,comparison.fixed_overall_mismatch).statistic)
+display(comparison.comparison_phenotype.value_counts().rename_axis('phenotype').reset_index(name='genes'))
+threshold_rows=[]
+for fixed_quantile in (.7,.75,.8):
+    strong=comparison.fixed_overall_mismatch.ge(comparison.fixed_overall_mismatch.quantile(fixed_quantile))
+    for high in (.7,.8,.9):
+        conserved=comparison.alignment_similarity.ge(high)
+        threshold_rows.append({'fixed_high_quantile':fixed_quantile,'g2g_high_similarity':high,
+            'n_g2g_high':int(conserved.sum()),'fraction_g2g_high_fixed_strong':float(strong[conserved].mean()),
+            'n_warp_rich_high':int((conserved & comparison.g2g_warp_fraction.ge(.3)).sum()),
+            'fraction_warp_rich_high_fixed_strong':float(strong[conserved & comparison.g2g_warp_fraction.ge(.3)].mean())})
+threshold_sensitivity=pd.DataFrame(threshold_rows)
+threshold_sensitivity.to_csv(OUTPUT_DIR/'fixed_threshold_sensitivity.csv',index=False)
+display(threshold_sensitivity)
+fig,ax=plt.subplots(figsize=(7,5))
+for name,group in comparison.groupby('comparison_phenotype'):
+    ax.scatter(group.alignment_similarity,group.fixed_overall_mismatch,s=5,alpha=.22,label=name)
+ax.axhline(q75,color='gray',ls='--');ax.axhline(q25,color='gray',ls=':')
+ax.set(xlabel='G2G similarity',ylabel='fixed mismatch (Jeffreys)',yscale='symlog',title='Alignment freedom versus same-position difference')
+ax.legend(fontsize=7,markerscale=2)
+savefig(fig,'fig12_g2g_vs_fixed_genes.png')
+cluster_fixed = comparison.groupby('g2g_cluster').agg(n_genes=('gene','size'),
+    median_fixed=('fixed_overall_mismatch','median'),median_early=('fixed_early_mismatch','median'),
+    median_mid=('fixed_mid_mismatch','median'),median_late=('fixed_late_mismatch','median'),
+    median_warp_fraction=('g2g_warp_fraction','median')).reset_index()
+display(cluster_fixed)
+fig,ax=plt.subplots(figsize=(7,3.5))
+ax.imshow(np.log1p(cluster_fixed[['median_early','median_mid','median_late']]),aspect='auto',cmap='magma')
+ax.set(xticks=range(3),xticklabels=['early','mid','late'],yticks=range(len(cluster_fixed)),
+       yticklabels=cluster_fixed.g2g_cluster,title='G2G cluster × fixed mismatch')
+savefig(fig,'fig13_g2g_cluster_fixed_mismatch.png')
+
+rank_rows=[]
+for label,sub in [('all',comparison),('level_matched',comparison[comparison.level_matched])]:
+    g2g_order=sub.sort_values(['alignment_similarity','gene'],kind='stable').gene.tolist()
+    fixed_order=sub.sort_values(['fixed_overall_mismatch','gene'],ascending=[False,True],kind='stable').gene.tolist()
+    for n in (100,250,500,1000):
+        size=min(n,len(sub)); overlap=set(g2g_order[:size]) & set(fixed_order[:size])
+        gr={g:i for i,g in enumerate(g2g_order)};fr={g:i for i,g in enumerate(fixed_order)}
+        cutoff=sub.set_index('gene').loc[g2g_order[size-1],'alignment_similarity']
+        tie_expanded=set(sub.loc[sub.alignment_similarity.le(cutoff),'gene'])
+        tie_overlap=len(tie_expanded & set(fixed_order[:size]))
+        rank_rows.append({'subset':label,'top_n_requested':n,'top_n_used':size,'overlap':len(overlap),
+            'jaccard':len(overlap)/(2*size-len(overlap)),
+            'g2g_cutoff_similarity':cutoff,'g2g_tie_expanded_size':len(tie_expanded),
+            'tie_expanded_overlap':tie_overlap,
+            'tie_expanded_jaccard':tie_overlap/(len(tie_expanded)+size-tie_overlap),
+            'shared_gene_rank_spearman':spearmanr([gr[g] for g in overlap],[fr[g] for g in overlap]).statistic if len(overlap)>2 else np.nan})
+rank_overlap=pd.DataFrame(rank_rows)
+rank_overlap.to_csv(OUTPUT_DIR/'g2g_vs_fixed_top_gene_overlap.csv',index=False)
+display(rank_overlap)
+fig,ax=plt.subplots(figsize=(6,4))
+for name,group in rank_overlap.groupby('subset'):
+    ax.plot(group.top_n_requested,group.jaccard,marker='o',label=name)
+ax.set(xlabel='top divergent genes',ylabel='Jaccard overlap',ylim=(0,1),title='G2G vs fixed divergent gene overlap')
+ax.legend();savefig(fig,'fig14_g2g_fixed_gene_overlap.png')
+
+# %% [markdown]
+# ### 11.6. Pathway concordance and candidate programs
+#
+# G2G divergence effect is `0.5 − rank_auc`; fixed divergence effect is `rank_auc − 0.5`, so positive values have the same interpretation. ORA uses the unchanged 9,904-gene background. Candidate positional relocation requires fixed divergence, G2G matching, warp-rich alignment, technical consistency, detection, and amplitude. Non-alignable remodeling requires divergence in both methods and four-pair agreement. Both are descriptive follow-up sets.
+
+# %%
+path_compare=ranked_pathways.merge(fixed_ranked,on=['library','pathway','n_eligible_genes'],suffixes=('_g2g','_fixed'),validate='one_to_one')
+path_compare['g2g_divergence_effect']=.5-path_compare.rank_auc_g2g
+path_compare['fixed_divergence_effect']=path_compare.rank_auc_fixed-.5
+path_compare['g2g_divergence_rank']=path_compare.g2g_divergence_effect.rank(ascending=False,method='min')
+path_compare['fixed_divergence_rank']=path_compare.fixed_divergence_effect.rank(ascending=False,method='min')
+path_compare['rank_difference']=path_compare.fixed_divergence_rank-path_compare.g2g_divergence_rank
+path_compare.to_csv(OUTPUT_DIR/'g2g_vs_fixed_pathway_comparison.csv',index=False)
+print('Pathway divergence-effect Spearman:',spearmanr(path_compare.g2g_divergence_effect,path_compare.fixed_divergence_effect).statistic)
+fig,ax=plt.subplots(figsize=(7,6))
+ax.scatter(path_compare.g2g_divergence_effect,path_compare.fixed_divergence_effect,s=8,alpha=.25)
+for _,row in pd.concat([path_compare.nlargest(3,'g2g_divergence_effect'),
+                        path_compare.nlargest(3,'fixed_divergence_effect'),
+                        path_compare.nlargest(3,'rank_difference'),
+                        path_compare.nsmallest(3,'rank_difference')]).drop_duplicates(['library','pathway']).iterrows():
+    ax.annotate(row.pathway[:34],(row.g2g_divergence_effect,row.fixed_divergence_effect),fontsize=6)
+ax.axhline(0,color='gray',lw=.7);ax.axvline(0,color='gray',lw=.7)
+ax.set(xlabel='G2G pathway divergence effect',ylabel='fixed-coordinate pathway divergence effect',title='Pathway effect agreement')
+savefig(fig,'fig15_g2g_fixed_pathway_effect.png')
+
+# Prespecified themes, including possible discordance; exact pathway names are
+# selected by substring, and every matching tested pathway is shown.
+themes={'biological oxidations':'biological oxidation','xenobiotic metabolism':'xenobiotic',
+'phase-II conjugation':'conjugation','glutathione metabolism':'glutathione',
+'oxidative phosphorylation':'oxidative phosphorylation','amino-acid metabolism':'amino acid',
+'fatty-acid metabolism':'fatty acid','small-molecule transport':'transport',
+'rRNA processing':'rrna processing','RNA modification':'rna modification',
+'chromatin/transcription':'chromatin|transcription'}
+major_rows=[]
+for theme,pattern in themes.items():
+    hits=path_compare[path_compare.pathway.str.contains(pattern,case=False,regex=True)]
+    for row in hits.itertuples():
+        positional=fixed_positional[(fixed_positional.library==row.library)&(fixed_positional.pathway==row.pathway)]
+        coh=fixed_coherence[(fixed_coherence.library==row.library)&(fixed_coherence.pathway==row.pathway)].iloc[0]
+        major_rows.append({'theme':theme,'library':row.library,'pathway':row.pathway,
+            'g2g_effect':row.g2g_divergence_effect,'g2g_q':row.q_value_g2g,
+            'fixed_effect':row.fixed_divergence_effect,'fixed_q':row.q_value_fixed,
+            **{f'{r.region}_effect':r.rank_effect for r in positional.itertuples()},
+            'fixed_coherence_iqr':coh.fixed_mismatch_iqr,
+            'interpretation':('concordant divergent' if row.g2g_divergence_effect>0 and row.fixed_divergence_effect>0 else
+                              'concordant conserved' if row.g2g_divergence_effect<0 and row.fixed_divergence_effect<0 else 'method-discordant')})
+major=pd.DataFrame(major_rows)
+major.to_csv(OUTPUT_DIR/'g2g_vs_fixed_major_pathway_themes.csv',index=False)
+display(major.sort_values(['theme','g2g_q']).groupby('theme').head(1))
+
+quality=comparison.technical_quality & comparison.fixed_pairwise_strong
+warp_set=comparison.loc[quality & comparison.fixed_strong & comparison.g2g_high & comparison.g2g_warp_fraction.ge(.3),'gene']
+remodel_set=comparison.loc[quality & comparison.fixed_strong & comparison.g2g_low &
+    comparison[pair_cols].lt(.5).all(axis=1),'gene']
+def phenotype_ora(members, output, background=None):
+    background=set(genes) if background is None else set(background)
+    chosen=set(members) & background; rows=[]
+    for row in pathways.itertuples():
+        pathway_genes=set(row.genes_present) & background; overlap=len(chosen & pathway_genes)
+        rows.append({'library':row.library,'pathway':row.pathway,'n_eligible_genes':len(pathway_genes),
+            'n_selected':len(chosen),'n_overlap':overlap,
+            'fold_enrichment':overlap/(len(chosen)*len(pathway_genes)/len(background)) if chosen and pathway_genes else np.nan,
+            'p_value':hypergeom.sf(overlap-1,len(background),len(pathway_genes),len(chosen)) if chosen and pathway_genes else 1.})
+    out=pd.DataFrame(rows);out['q_value']=multipletests(out.p_value,method='fdr_bh')[1]
+    out.sort_values(['q_value','p_value']).to_csv(OUTPUT_DIR/output,index=False)
+    return out.sort_values(['q_value','p_value'])
+warp_path=phenotype_ora(warp_set,'warp_rescuable_pathway_enrichment.csv')
+remodel_path=phenotype_ora(remodel_set,'nonalignable_remodeling_pathway_enrichment.csv')
+print(f'Candidate warp-rescuable genes: {len(warp_set)}; candidate non-alignable genes: {len(remodel_set)}')
+display(warp_path.head(8));display(remodel_path.head(8))
+
+# %% [markdown]
+# ### 11.7. Representative profiles and quantitative synthesis
+#
+# Examples are selected by high detection within each observed category, so they illustrate the distinction rather than serve as independent validation. The left panels use the **shared** fixed coordinate and local distribution moments. The right panels show the existing G2G species-specific trajectories and alignment string; only this display invokes G2G alignment. Conclusions below are calculated from observed output rather than specified in advance.
+
+# %%
+example_genes=[]
+for label in labels:
+    subset=comparison[comparison.comparison_phenotype.eq(label) & comparison.technical_quality]
+    if not subset.empty:
+        example_genes.append((label,subset.sort_values('min_specimen_detected_fraction',ascending=False).iloc[0].gene))
+if example_genes:
+    selected=[g for _,g in example_genes]
+    fit=RefQueryAligner(adata_mouse_g2g[:,selected].copy(),adata_human_g2g[:,selected].copy(),selected,G2G_BINS)
+    fit.align_all_pairs()  # visualization of the pre-existing G2G method only
+    fig,axes=plt.subplots(len(selected),2,figsize=(11,3*len(selected)),squeeze=False)
+    for r,(label,gene) in enumerate(example_genes):
+        i=genes.index(gene)
+        for local,color,name in ((mouse_local,COLORS['mouse'],'mouse'),(human_local,COLORS['human'],'human')):
+            axes[r,0].plot(fixed_grid,local[0][:,i],color=color,label=name)
+            axes[r,0].fill_between(fixed_grid,local[0][:,i]-local[1][:,i],local[0][:,i]+local[1][:,i],color=color,alpha=.12)
+        result=fit.results_map[gene]
+        axes[r,1].plot(result.S.time_points,result.S.mean_trend,color=COLORS['mouse'],label='mouse G2G')
+        axes[r,1].plot(result.T.time_points,result.T.mean_trend,color=COLORS['human'],label='human G2G')
+        axes[r,0].set(title=f'{gene}: {label}',xlabel='shared fixed PT s',ylabel='local lognorm')
+        axes[r,1].set(title=f'G2G alignment: {result.alignment_str}',xlabel='species-specific PT time',ylabel='G2G lognorm')
+        axes[r,0].legend(fontsize=7);axes[r,1].legend(fontsize=7)
+    savefig(fig,'fig16_fixed_vs_g2g_representative_genes.png')
+    del fit
+
+level_sub=comparison[comparison.level_matched]
+print('A. Gene ranking agreement: Spearman ρ =',round(spearmanr(comparison.alignment_similarity,
+      comparison.fixed_overall_mismatch).statistic,3),'(negative means concordant divergence).')
+display(rank_overlap)
+print('B. Pathway divergence-effect Spearman ρ =',round(spearmanr(path_compare.g2g_divergence_effect,
+      path_compare.fixed_divergence_effect).statistic,3))
+print('Prespecified major theme directions:')
+display(major.groupby(['theme','interpretation']).size().rename('tested_pathways').reset_index())
+print('C. Fraction of G2G-high genes in fixed top quartile:',
+      round(comparison.loc[comparison.g2g_high,'fixed_strong'].mean(),3),
+      '; among warp-rich G2G-high genes:',
+      round(comparison.loc[comparison.g2g_high & comparison.g2g_warp_fraction.ge(.3),'fixed_strong'].mean(),3))
+print('D. Fraction of G2G-low genes strongly fixed-divergent and technically consistent:',
+      round(comparison.loc[comparison.g2g_low,'high_confidence_fixed_divergent'].mean(),3))
+print('Among the existing high-confidence G2G-divergent genes, fraction strongly fixed-divergent:',
+      round(comparison.set_index('gene').loc[divergent.gene,'high_confidence_fixed_divergent'].mean(),3))
+print('Among warp-rich G2G genes (V/W ≥0.3), fraction strongly fixed-divergent:',
+      round(comparison.loc[comparison.g2g_warp_fraction.ge(.3),'fixed_strong'].mean(),3))
+print('Level-matched G2G/fixed Spearman ρ:',
+      round(spearmanr(level_sub.alignment_similarity,level_sub.fixed_overall_mismatch).statistic,3))
+print('E. Level-matched genes:',len(level_sub),'; warp-rescuable fraction:',
+      round((level_sub.comparison_phenotype=='warp-rescuable positional difference').mean(),3),
+      '; divergent-by-both fraction:',round((level_sub.comparison_phenotype=='divergent by both').mean(),3))
+display(level_sub.sort_values('fixed_overall_mismatch',ascending=False)[[
+    'gene','alignment_similarity','fixed_overall_mismatch','g2g_warp_fraction','comparison_phenotype']].head(15))
+level_top=set(level_sub.sort_values('fixed_overall_mismatch',ascending=False).head(max(100,int(.1*len(level_sub)))).gene)
+display(phenotype_ora(level_top,'fixed_level_matched_top_pathway_enrichment.csv',background=level_sub.gene).head(12))
+print('Interpretation: pathway effects and full-universe gene ranks are concordant, while top-N G2G lists are tie-sensitive. The four-pair candidate warp-rescuable set may be empty. Shared-coordinate validation limits anatomical claims; two human sections are one donor. All pathway tests remain exploratory.')
+
+# %% [markdown]
+# ### Observed synthesis from this run
+#
+# - **Gene rankings:** G2G similarity and fixed mismatch have Spearman ρ = −0.839 across 9,904 genes (−0.656 among 5,607 level-matched genes). Exact top-100 overlap is 10 genes, but all top-1,000 G2G ranks fall inside a 1,257-gene tie at similarity zero. The tie-expanded top-100 set contains 98 of the fixed top 100, so the raw top-N count cannot be read as strong biological disagreement.
+# - **Pathways:** divergence-effect Spearman ρ = 0.855 across 1,508 tested pathways. Biological oxidations, xenobiotic/phase-II and glutathione metabolism, oxidative phosphorylation, amino-acid and fatty-acid metabolism remain divergent in both analyses. rRNA processing and RNA modification remain relatively conserved. Transport and chromatin/transcription themes contain mixed pathway-level directions; the complete, unfiltered comparison table retains these discordances.
+# - **Warping sensitivity:** 17 of 4,163 G2G-high genes lie in the fixed top mismatch quartile (0.4%); none pass the additional warp-rich, four-pair, detection, and amplitude candidate rules. Under these descriptive guides, there is little evidence that broad G2G conservation is mainly rescued by warping. This does not rule out individual positionally shifted genes.
+# - **Robust divergence:** 2,191 genes meet both broad divergence guides; 865 pass the stricter four-pair non-alignable candidate rules. Among the existing high-confidence G2G-divergent list, 46.4% are also strongly fixed-divergent with technical consistency. Mean level contributes to fixed mismatch (Spearman ρ = 0.690 with absolute mean lognorm difference), so level-matched results are essential context.
+# - **Biological interpretation:** prohibiting warping does **not materially reverse the main pathway directions in this run**, though gene-level candidate membership and intensity vary. This is a sensitivity analysis under a shared-coordinate assumption. Human early and late PT markers have the expected directions, but human S2 markers show no clear intermediate trend and only one proposed early conserved anchor passes the directional check. Anatomical relocation remains provisional. Both human sections are healthy cortex from one donor; pathway q-values describe gene-rank tests, not species-level replication.

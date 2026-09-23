@@ -1,24 +1,20 @@
 # %% [markdown]
 # # Gene-level GAM curve clustering of the human vs healthy-mouse PT pseudospace
 #
-# Unsupervised, **gene-level** discovery of recurring continuous PT expression programs, from the GAM
-# curves notebook 03 already validated. Two catalogs are built, plus the map between them:
+# Unsupervised, **gene-level** discovery from notebook 03's specimen-balanced PT GAM curves.
+# The main analyses have distinct roles:
 #
-# ```
-# normal mouse PT organisation     mouse GAMs -> positional PCA -> positional modules
-# cross-species remodelling        human GAM - mouse GAM -> remove the mean species offset
-#                                  -> response PCA -> response modules
-# biological interpretation        positional module x response module -> pathway enrichment
-# ```
+# 1. **Mouse positional atlas:** mouse curves define normal positional P modules.
+# 2. **Cross-species positional states:** F and shared A archetypes show gain, loss, conservation,
+#    and reorganization of detectable positional pattern.
+# 3. **Primary joint remodeling taxonomy:** relative level shift, RMS amplitude log-ratio, and pure
+#    shape-remodeling QPCs jointly define J modules among genes patterned in both species.
+#    Flat-state genes remain gain, loss, or flat-both phenotypes without invented QPC values.
+# 4. **Sensitivity:** the earlier centered response-shape R modules are retained for comparison.
 #
-# The conceptual outputs are `gene -> normal mouse positional module` and
-# `gene -> human-vs-mouse response module`. Together they say what spatial PT program a gene normally
-# belongs to **and** how that program changes in human.
-#
-# This is deliberately the opposite direction of travel from a pathway-first analysis: here the
-# clusters are discovered first and pathway annotations are loaded only **after** every cluster
-# assignment and every cluster-number decision is frozen. No pathway is ever aggregated into an
-# expression curve, and pathway membership never influences which genes land in which module.
+# Level, amplitude, and shape are decomposed before they are combined. Pathway information never
+# selects the modules. J modules are descriptive combinations of normalized relative level,
+# positional-amplitude, and scale-free shape changes, not species-level significance calls.
 #
 # **Input.** This notebook consumes notebook 03's PT-only artifact (`cross_species_pt_dpt.h5ad`) and
 # its accepted ortholog map. It never re-does integration, cell typing, the diffusion map, DPT, the
@@ -773,12 +769,13 @@ print('Balanced = equal weight per specimen. It stops one section dominating on 
 # For every eligible gene, with `D_g(s) = H_g(s) - M_g(s)`:
 #
 # ```
-# level_shift_g = mean_s(D_g(s))          a global human-vs-mouse expression difference
+# level_shift_g = mean_s(D_g(s))          a normalized relative human-minus-mouse level shift
 # R_g(s)        = D_g(s) - level_shift_g  pseudospace-dependent remodelling
 # ```
 #
-# This separation is essential and is the reason the primary cross-species analysis in section 6
-# clusters `R_g(s)` and **never** the raw `D_g(s)`. A gene whose human and mouse curves differ by a
+# The centred response-shape sensitivity in section 6 clusters `R_g(s)` and
+# **never** the raw `D_g(s)`. The primary analysis in section 13 combines level, amplitude, and pure
+# shape after this decomposition. A gene whose human and mouse curves differ by a
 # constant offset has a large `level_shift` and no remodelling; clustering the raw difference would
 # sort genes by how big their offset is and call that a program.
 #
@@ -958,9 +955,9 @@ display(positional['catalog'][[
 
 
 # %% [markdown]
-# ## 6 - Analysis B: human-vs-mouse remodelling programs
+# ## 6 - Sensitivity: centred response-shape clustering (old R modules)
 #
-# This is the PRIMARY cross-species analysis.
+# This is the earlier response-shape analysis, retained as a sensitivity/comparison. Section 13 defines the primary joint remodeling taxonomy.
 #
 # > Which recurring spatial patterns describe how gene expression along PT is remodelled in human
 # > relative to healthy mouse?
@@ -1241,7 +1238,7 @@ display(representatives[['module', 'gene', 'member_to_centroid_correlation', 're
 
 
 # %% [markdown]
-# ## 7 - Relating the baseline programs to the remodelling programs
+# ## 7 - Sensitivity: mouse positional programs versus old R modules
 #
 # Every gene assigned in **both** analyses now carries a `positional_module` and a `response_module`.
 # The contingency table asks whether particular normal PT programs are disproportionately affected by
@@ -1310,7 +1307,7 @@ _save_figure(fig, 'fig07_positional_response_heatmap.png')
 
 
 # %% [markdown]
-# ## 8 - Pathway enrichment, AFTER the clusters are frozen
+# ## 8 - Pathway annotation of P and old R modules, after their assignments freeze
 #
 # Pathway annotations are loaded only now, after every cluster assignment and every cluster-number
 # decision is final. No pathway expression curve is built here and no pathway member's expression is
@@ -1482,7 +1479,7 @@ else:
 
 
 # %% [markdown]
-# ## 9 - Pathway heterogeneity across response modules
+# ## 9 - Sensitivity: pathway heterogeneity across old R modules
 #
 # A pathway is not a program. Its members can concentrate in one coherent response module, spread
 # across several, or occupy **opposing** modules - and opposing members are exactly the case an
@@ -1523,7 +1520,7 @@ print('Split and opposing pathways are the reason an aggregate pathway curve can
 
 
 # %% [markdown]
-# ## 10 - Sensitivity analyses
+# ## 10 - Sensitivity analyses of the old R modules
 #
 # Kept compact, and none of them displaces the primary analysis. Throughout, the two human sections are
 # treated as ONE donor: omitting a section is a **section**-sensitivity check, never independent
@@ -1766,7 +1763,7 @@ print('Small or unstable modules must not be over-interpreted; the retention and
 
 
 # %% [markdown]
-# ## 11 - Final module catalogs
+# ## 11 - Mouse positional atlas and old R sensitivity catalogs
 #
 # The catalogs are written now, after the stability analysis, so each response module can carry its
 # stability beside its description. Descriptors are read off the actual centroids; small or unstable
@@ -3589,6 +3586,466 @@ print(f'Section 12 wrote {len(_new_files)} tables into {_rel(OUTPUT_DIR)} and '
       'figure_index.csv covers every figure this run produced.')
 
 
+# %% [markdown]
+# ## 13 - Primary joint remodeling taxonomy
+#
+# Decompose first, then combine. `L` is the normalized relative human-minus-mouse level shift;
+# `A` is the log2 ratio of RMS positional variation; and `Q = Z_human - Z_mouse` is pure shape
+# remodeling after each patterned curve has been centered and scaled within its own species.
+# Only patterned->patterned genes have Q or QPCs. The F->A, A->F and F->F groups remain distinct
+# phenotypes, with no invented shape coordinates. Pathways are consulted only after J assignments.
+
+# %%
+# Purpose: 13.1 - level, RMS amplitude, pure Q curves, QPCs, and the across-gene feature matrix.
+JOINT_CONFIG = {
+    'amplitude_epsilon': 1e-6,
+    'q_variance_target': 0.90,
+    'q_max_components': 5,
+    'representatives_per_module': 3,
+    'reliability_floor': 0.80,
+}
+mouse_rms_amplitude = archetype_eligibility_table[
+    'mouse_rms_positional_variation'].to_numpy(dtype=float)
+human_rms_amplitude = archetype_eligibility_table[
+    'human_rms_positional_variation'].to_numpy(dtype=float)
+amplitude_log2_ratio = np.log2(
+    (human_rms_amplitude + JOINT_CONFIG['amplitude_epsilon'])
+    / (mouse_rms_amplitude + JOINT_CONFIG['amplitude_epsilon']))
+if not np.allclose(gene_level_shift, np.nanmean(human_curves - mouse_curves, axis=1)):
+    raise ValueError('Relative level shift no longer matches the mean fitted difference.')
+
+# Z_mouse and Z_human already contain only the 4,492 genes patterned in both species. PCA centers
+# Q across GENES; Q rows are never standardized, so their pure shape-change magnitude remains.
+Q_curves = Z_human - Z_mouse
+if Q_curves.shape[0] != int(archetype_eligible.sum()):
+    raise ValueError('Pure shape remodeling has a row for a flat-state gene or misses a patterned gene.')
+q_pca = PCA(n_components=min(JOINT_CONFIG['q_max_components'], *Q_curves.shape),
+            random_state=0).fit(Q_curves)
+q_cumulative = np.cumsum(q_pca.explained_variance_ratio_)
+q_n_pc = int(np.clip(np.searchsorted(q_cumulative, JOINT_CONFIG['q_variance_target']) + 1,
+                     3, q_pca.n_components_))
+q_columns = [f'QPC{i + 1}' for i in range(q_n_pc)]
+q_scores = q_pca.transform(Q_curves)[:, :q_n_pc]
+q_score_table = pd.DataFrame(q_scores, columns=q_columns)
+q_score_table.insert(0, 'gene', archetype_genes)
+q_score_table.to_csv(OUTPUT_DIR / 'pure_shape_remodeling_qpc_scores.csv', index=False)
+pd.DataFrame({'pseudospace': archetype_grid,
+              **{column: q_pca.components_[i] for i, column in enumerate(q_columns)}}).to_csv(
+    OUTPUT_DIR / 'pure_shape_remodeling_qpc_loadings.csv', index=False)
+
+joint_feature_columns = ['level_shift', 'amplitude_log2_ratio', *q_columns]
+joint_features_raw = pd.DataFrame({
+    'gene': archetype_genes,
+    'level_shift': gene_level_shift[archetype_eligible],
+    'amplitude_log2_ratio': amplitude_log2_ratio[archetype_eligible],
+    **{column: q_scores[:, i] for i, column in enumerate(q_columns)},
+})
+_joint_values = joint_features_raw[joint_feature_columns].to_numpy(dtype=float)
+_joint_feature_mean = _joint_values.mean(axis=0)
+_joint_feature_sd = _joint_values.std(axis=0, ddof=1)
+if not (np.isfinite(_joint_values).all() and np.all(_joint_feature_sd > 0)):
+    raise ValueError('The joint remodeling feature matrix has missing or constant features.')
+_joint_standardized = (_joint_values - _joint_feature_mean) / _joint_feature_sd
+joint_feature_matrix = joint_features_raw.copy()
+for i, name in enumerate(joint_feature_columns):
+    joint_feature_matrix[f'z_{name}'] = _joint_standardized[:, i]
+joint_feature_matrix.to_csv(OUTPUT_DIR / 'joint_remodeling_feature_matrix.csv', index=False)
+
+_validation_reliability_path = (RESULTS_ROOT / 'pt_cross_species_validation'
+                                / 'within_species_curve_reproducibility.csv')
+if _validation_reliability_path.exists():
+    reliability = pd.read_csv(_validation_reliability_path)[[
+        'gene', 'mouse_within_species_correlation', 'human_within_species_correlation',
+        'shape_eligible_both_species']]
+    if reliability['gene'].duplicated().any() or set(reliability['gene']) != set(gene_names):
+        raise ValueError('Notebook 08 reproducibility does not cover this unique gene universe.')
+    if not np.array_equal(reliability.set_index('gene').loc[gene_names,
+                           'shape_eligible_both_species'].to_numpy(dtype=bool),
+                          archetype_eligible):
+        raise ValueError('Notebook 08 reproducibility was computed for a different shape-eligible set.')
+    reliability = reliability.drop(columns='shape_eligible_both_species')
+    print(f'Within-species reliability joined from {_rel(_validation_reliability_path)}.')
+else:
+    reliability = pd.DataFrame({'gene': gene_names,
+                                'mouse_within_species_correlation': np.nan,
+                                'human_within_species_correlation': np.nan})
+    print('Notebook 08 reproducibility is not available; reliability columns remain NA.')
+print(f'Q PCA retains {q_n_pc} unscaled-shape PCs, explaining {q_cumulative[q_n_pc - 1]:.1%} '
+      f'of Q variation. Joint features are standardized ACROSS genes before clustering.')
+
+# %%
+# Purpose: 13.2 - Ward clustering on standardized [L, A, QPCs], then freeze J assignments.
+JOINT_CLUSTER_CONFIG = {**CLUSTER_CONFIG,
+                        'k_values': tuple(range(3, 9)),
+                        'min_module_size': 50}
+_joint_tree = linkage(_joint_standardized, method=JOINT_CLUSTER_CONFIG['ward_method'])
+joint_k_diagnostics = _k_diagnostics(_joint_tree, _joint_standardized, JOINT_CLUSTER_CONFIG)
+joint_k, joint_best_silhouette = _select_k(joint_k_diagnostics, JOINT_CLUSTER_CONFIG)
+_joint_raw_labels = fcluster(_joint_tree, joint_k, criterion='maxclust')
+_joint_order = sorted(set(_joint_raw_labels), key=lambda cluster: (
+    np.median(joint_features_raw.loc[_joint_raw_labels == cluster, 'level_shift']),
+    np.median(joint_features_raw.loc[_joint_raw_labels == cluster, 'amplitude_log2_ratio'])))
+_joint_name = {cluster: f'J{i + 1}' for i, cluster in enumerate(_joint_order)}
+joint_labels = np.asarray([_joint_name[cluster] for cluster in _joint_raw_labels], dtype=object)
+joint_modules = [f'J{i + 1}' for i in range(joint_k)]
+_format_k_diagnostics(joint_k_diagnostics, joint_k, joint_best_silhouette).to_csv(
+    DIAGNOSTIC_DIR / 'joint_remodeling_k_diagnostics.csv', index=False)
+
+joint_gene_catalog = gene_curve_metrics.merge(
+    gene_positional_state_transitions[[
+        'gene', 'mouse_positional_state', 'human_positional_state', 'state_transition',
+        'transition_class', 'mouse_archetype', 'human_archetype', 'shape_correlation']],
+    on='gene', how='left', validate='one_to_one')
+joint_gene_catalog['mouse_amplitude'] = mouse_rms_amplitude
+joint_gene_catalog['human_amplitude'] = human_rms_amplitude
+joint_gene_catalog['amplitude_log2_ratio'] = amplitude_log2_ratio
+joint_gene_catalog['joint_remodeling_module'] = pd.NA
+joint_gene_catalog.loc[archetype_eligible, 'joint_remodeling_module'] = joint_labels
+joint_gene_catalog['remodeling_phenotype'] = joint_gene_catalog[
+    'joint_remodeling_module'].fillna(joint_gene_catalog['transition_class'])
+joint_gene_catalog['mouse_positional_module'] = positional_labels.to_numpy()
+joint_gene_catalog['old_response_module'] = response_labels.to_numpy()
+for column in q_columns:
+    joint_gene_catalog[column] = np.nan
+    joint_gene_catalog.loc[archetype_eligible, column] = joint_features_raw[column].to_numpy()
+for column in ['QPC1', 'QPC2', 'QPC3']:
+    if column not in joint_gene_catalog:
+        joint_gene_catalog[column] = np.nan
+joint_gene_catalog = joint_gene_catalog.merge(reliability, on='gene', how='left',
+                                              validate='one_to_one')
+if not joint_gene_catalog['QPC1'].notna().equals(pd.Series(archetype_eligible)):
+    raise ValueError('QPC coordinates must be defined exactly for patterned->patterned genes.')
+if not joint_gene_catalog['gene'].eq(gene_names).all():
+    raise ValueError('The joint catalog lost the original gene order.')
+_catalog_lead = [
+    'gene', 'mouse_mean_expression', 'human_mean_expression', 'level_shift',
+    'mouse_amplitude', 'human_amplitude', 'amplitude_log2_ratio',
+    'mouse_peak_to_peak', 'human_peak_to_peak', 'mouse_positional_state',
+    'human_positional_state', 'state_transition', 'transition_class',
+    'mouse_archetype', 'human_archetype', 'shape_correlation',
+    'QPC1', 'QPC2', 'QPC3', 'joint_remodeling_module', 'remodeling_phenotype',
+    'mouse_positional_module', 'old_response_module',
+    'mouse_within_species_correlation', 'human_within_species_correlation',
+]
+joint_gene_catalog = joint_gene_catalog[_catalog_lead + [
+    name for name in joint_gene_catalog if name not in _catalog_lead]]
+joint_gene_catalog.to_csv(OUTPUT_DIR / 'joint_remodeling_gene_catalog.csv', index=False)
+
+_joint_map_pca = PCA(n_components=2, random_state=0).fit(_joint_standardized)
+_joint_map_scores = _joint_map_pca.transform(_joint_standardized)
+joint_remodeling_pca_scores = pd.DataFrame({
+    'gene': archetype_genes, 'joint_remodeling_module': joint_labels,
+    'joint_PC1': _joint_map_scores[:, 0], 'joint_PC2': _joint_map_scores[:, 1],
+    **{column: q_scores[:, i] for i, column in enumerate(q_columns)},
+})
+joint_remodeling_pca_scores.to_csv(
+    OUTPUT_DIR / 'joint_remodeling_pca_scores.csv', index=False)
+
+_joint_catalog_patterned = joint_gene_catalog.loc[archetype_eligible].reset_index(drop=True)
+_joint_distance = np.empty(len(archetype_genes))
+_joint_effect_norm = np.linalg.norm(_joint_standardized, axis=1)
+_joint_representative = np.zeros(len(archetype_genes), dtype=bool)
+joint_centroid_rows = []
+joint_module_rows = []
+for module in joint_modules:
+    members = joint_labels == module
+    positions = np.flatnonzero(members)
+    centroid = _joint_standardized[members].mean(axis=0)
+    _joint_distance[members] = np.linalg.norm(_joint_standardized[members] - centroid, axis=1)
+    one = _joint_catalog_patterned.iloc[positions]
+    mouse_reliability = one['mouse_within_species_correlation']
+    human_reliability = one['human_within_species_correlation']
+    reliable = (mouse_reliability.ge(JOINT_CONFIG['reliability_floor']).to_numpy()
+                & human_reliability.ge(JOINT_CONFIG['reliability_floor']).to_numpy())
+    n_reliability_measured = int((mouse_reliability.notna() & human_reliability.notna()).sum())
+    effect_ok = _joint_effect_norm[positions] >= np.quantile(_joint_effect_norm[positions], 0.25)
+    candidate = positions[reliable & effect_ok]
+    if candidate.size < JOINT_CONFIG['representatives_per_module']:
+        candidate = positions[effect_ok]
+    chosen = candidate[np.argsort(_joint_distance[candidate])][
+        :JOINT_CONFIG['representatives_per_module']]
+    _joint_representative[chosen] = True
+    state_distribution = one['state_transition'].value_counts()
+    mouse_archetype_distribution = one['mouse_archetype'].value_counts()
+    human_archetype_distribution = one['human_archetype'].value_counts()
+    positional_distribution = one['mouse_positional_module'].value_counts()
+    frac_reliable = (float(reliable.sum() / n_reliability_measured)
+                     if n_reliability_measured else np.nan)
+    median_z = np.median(_joint_standardized[members], axis=0)
+    descriptions = []
+    if abs(median_z[0]) >= 0.5:
+        descriptions.append('higher' if median_z[0] > 0 else 'lower')
+        descriptions[-1] += ' relative level'
+    if abs(median_z[1]) >= 0.5:
+        descriptions.append('stronger' if median_z[1] > 0 else 'weaker')
+        descriptions[-1] += ' positional amplitude'
+    for i, name in enumerate(q_columns, start=2):
+        if abs(median_z[i]) >= 0.5:
+            descriptions.append(f'{name} {"positive" if median_z[i] > 0 else "negative"}')
+    joint_module_rows.append({
+        'module': module, 'n_genes': len(one),
+        'median_level_shift': one['level_shift'].median(),
+        'median_amplitude_log2_ratio': one['amplitude_log2_ratio'].median(),
+        **{f'median_{column}': one[column].median() for column in q_columns},
+        'median_shape_correlation': one['shape_correlation'].median(),
+        'fraction_conserved_archetype': one['transition_class'].eq('conserved_pattern').mean(),
+        'fraction_reorganized_archetype': one['transition_class'].eq('pattern_reorganization').mean(),
+        'fraction_gain_of_pattern': 0.0, 'fraction_loss_of_pattern': 0.0,
+        'most_common_state_transition': state_distribution.index[0],
+        'state_transition_distribution': '; '.join(
+            f'{name}:{count}' for name, count in state_distribution.items()),
+        'mouse_archetype_distribution': '; '.join(
+            f'{name}:{count}' for name, count in mouse_archetype_distribution.items()),
+        'human_archetype_distribution': '; '.join(
+            f'{name}:{count}' for name, count in human_archetype_distribution.items()),
+        'mouse_positional_module_distribution': '; '.join(
+            f'{name}:{count}' for name, count in positional_distribution.items()),
+        'median_mouse_specimen_correlation': mouse_reliability.median(),
+        'median_human_section_correlation': human_reliability.median(),
+        'fraction_reliable_within_both': frac_reliable,
+        'reliability_status': ('unavailable' if not n_reliability_measured else
+                               'interpret with care' if frac_reliable < 0.5 else 'supported'),
+        'effect_description': ('provisional: ' if n_reliability_measured and frac_reliable < 0.5 else '')
+        + ('; '.join(descriptions) if descriptions else 'mixed moderate effects'),
+        'representative_genes': '; '.join(archetype_genes[chosen]),
+    })
+    joint_centroid_rows.append(pd.DataFrame({
+        'module': module, 'pseudospace': archetype_grid,
+        'mouse_balanced_centroid': mouse_curves[archetype_eligible][members]
+                                    [:, archetype_columns].mean(axis=0),
+        'human_balanced_centroid': human_curves[archetype_eligible][members]
+                                    [:, archetype_columns].mean(axis=0),
+        'pure_shape_remodeling_centroid': Q_curves[members].mean(axis=0),
+    }))
+joint_module_catalog = pd.DataFrame(joint_module_rows)
+joint_module_catalog.to_csv(OUTPUT_DIR / 'joint_remodeling_module_catalog.csv', index=False)
+joint_module_centroids = pd.concat(joint_centroid_rows, ignore_index=True)
+joint_module_centroids.to_csv(OUTPUT_DIR / 'joint_remodeling_module_centroids.csv', index=False)
+joint_module_assignments = pd.DataFrame({
+    'gene': archetype_genes, 'joint_remodeling_module': joint_labels,
+    'distance_to_joint_centroid': _joint_distance, 'joint_effect_norm': _joint_effect_norm,
+    'representative': _joint_representative,
+    'mouse_within_species_correlation': _joint_catalog_patterned[
+        'mouse_within_species_correlation'].to_numpy(),
+    'human_within_species_correlation': _joint_catalog_patterned[
+        'human_within_species_correlation'].to_numpy(),
+})
+joint_module_assignments.to_csv(
+    OUTPUT_DIR / 'joint_remodeling_module_assignments.csv', index=False)
+print(f'Primary joint taxonomy: {joint_k} J modules over {len(archetype_genes):,} genes patterned '
+      f'in both species. k was chosen from Ward diagnostics without pathway information.')
+if joint_module_catalog['reliability_status'].eq('interpret with care').any():
+    print('Modules with <50% of genes reproducible at correlation >=0.80 in both species are '
+          'provisional; their pathway and shape descriptions should not be interpreted strongly.')
+display(joint_module_catalog[[
+    'module', 'n_genes', 'median_level_shift', 'median_amplitude_log2_ratio',
+    'median_shape_correlation', 'fraction_conserved_archetype',
+    'fraction_reorganized_archetype', 'median_mouse_specimen_correlation',
+    'median_human_section_correlation', 'reliability_status', 'effect_description',
+]].round(3))
+
+# %%
+# Purpose: 13.3 - loading curves, continuous joint map, module heatmap, and representative fits.
+fig, axes = plt.subplots(1, 2, figsize=(12, 3.7))
+for i, name in enumerate(q_columns):
+    axes[0].plot(archetype_grid, q_pca.components_[i], label=name)
+axes[0].axhline(0, color='black', lw=0.5)
+axes[0].set_xlabel('shared PT DPT')
+axes[0].set_ylabel('Q loading')
+axes[0].set_title('Dominant pure shape-remodeling modes')
+axes[0].legend(frameon=False, fontsize=7)
+axes[1].plot(range(1, len(q_cumulative) + 1), q_cumulative, marker='o')
+axes[1].axhline(JOINT_CONFIG['q_variance_target'], color='gray', ls='--')
+axes[1].axvline(q_n_pc, color='black', ls=':')
+axes[1].set_ylim(0, 1.02)
+axes[1].set_xlabel('Q principal components')
+axes[1].set_ylabel('cumulative Q variance explained')
+_save_figure(fig, 'fig18_pure_shape_remodeling_qpc_loadings.png')
+
+fig, axes = plt.subplots(2, 3, figsize=(15, 9), sharex=True, sharey=True)
+_map_x, _map_y = _joint_map_scores.T
+_categorical = [
+    (joint_labels, 'J module'),
+    (_joint_catalog_patterned['mouse_positional_module'].to_numpy(), 'mouse P module'),
+    (_joint_catalog_patterned['transition_class'].to_numpy(), 'state transition class'),
+]
+for axis, (labels, title) in zip([axes[0, 0], axes[1, 1], axes[1, 2]], _categorical):
+    for category in sorted(set(labels)):
+        take = labels == category
+        axis.scatter(_map_x[take], _map_y[take], s=5, alpha=0.35, label=category)
+    axis.set_title(title)
+    axis.legend(frameon=False, fontsize=6, markerscale=2)
+for axis, (values, title) in zip(
+        [axes[0, 1], axes[0, 2], axes[1, 0]],
+        [(joint_features_raw['level_shift'], 'relative level shift'),
+         (joint_features_raw['amplitude_log2_ratio'], 'amplitude log2 ratio'),
+         (joint_features_raw['QPC1'], 'QPC1')]):
+    image = axis.scatter(_map_x, _map_y, c=values, s=5, alpha=0.5, cmap='coolwarm')
+    axis.set_title(title)
+    fig.colorbar(image, ax=axis, shrink=0.7)
+for axis in axes[-1]:
+    axis.set_xlabel('joint PC1')
+for axis in axes[:, 0]:
+    axis.set_ylabel('joint PC2')
+fig.suptitle('Figure 19 - continuous level + amplitude + shape remodeling space', fontsize=12)
+_save_figure(fig, 'fig19_joint_remodeling_map.png')
+
+_heat_names = ['median_level_shift', 'median_amplitude_log2_ratio',
+               *[f'median_{name}' for name in q_columns[:3]],
+               'median_shape_correlation', 'fraction_conserved_archetype',
+               'fraction_reorganized_archetype']
+_heat_raw = joint_module_catalog.set_index('module')[_heat_names]
+_heat_sd = _heat_raw.std(axis=0, ddof=0).replace(0, 1)
+_heat_z = (_heat_raw - _heat_raw.mean(axis=0)) / _heat_sd
+fig, axis = plt.subplots(figsize=(1.5 * len(_heat_names) + 2, 0.6 * joint_k + 2.5))
+image = axis.imshow(_heat_z, cmap='RdBu_r', vmin=-2, vmax=2, aspect='auto')
+axis.set_xticks(range(len(_heat_names)), _heat_names, rotation=45, ha='right', fontsize=8)
+axis.set_yticks(range(joint_k), joint_modules)
+axis.set_title('Joint module medians (each column standardized across modules)')
+fig.colorbar(image, ax=axis, label='module-median z-score', shrink=0.8)
+_save_figure(fig, 'fig20_joint_remodeling_module_heatmap.png')
+
+fig, axes = plt.subplots(joint_k, 2, figsize=(12, 2.5 * joint_k), squeeze=False)
+for i, module in enumerate(joint_modules):
+    curves = joint_module_centroids[joint_module_centroids['module'].eq(module)]
+    row = joint_module_catalog.set_index('module').loc[module]
+    axes[i, 0].plot(curves['pseudospace'], curves['mouse_balanced_centroid'],
+                    color=SPECIES_COLORS['mouse'], label='mouse')
+    axes[i, 0].plot(curves['pseudospace'], curves['human_balanced_centroid'],
+                    color=SPECIES_COLORS['human'], label='human')
+    axes[i, 0].set_title(f'{module}: relative level {row.median_level_shift:.2f}; '
+                         f'amplitude log2 ratio {row.median_amplitude_log2_ratio:.2f}', fontsize=9)
+    axes[i, 1].plot(curves['pseudospace'], curves['pure_shape_remodeling_centroid'],
+                    color='#B07AA1')
+    axes[i, 1].axhline(0, color='black', lw=0.5)
+    axes[i, 1].set_title(f'{module}: pure Q centroid', fontsize=9)
+    axes[i, 0].set_ylabel('fitted lognorm')
+    axes[i, 1].set_ylabel('Q z difference')
+for axis in axes[-1]:
+    axis.set_xlabel('shared PT DPT')
+axes[0, 0].legend(frameon=False, fontsize=7)
+fig.suptitle('Figure 21 - balanced species centroids and pure shape remodeling', fontsize=12)
+_save_figure(fig, 'fig21_joint_remodeling_module_centroids.png')
+
+fig, axes = plt.subplots(joint_k, 2, figsize=(12, 2.8 * joint_k), squeeze=False)
+for i, module in enumerate(joint_modules):
+    positions = np.flatnonzero((joint_labels == module) & _joint_representative)
+    for j, position in enumerate(positions):
+        colour = MODULE_CMAP(j)
+        row = _joint_catalog_patterned.iloc[position]
+        axes[i, 0].plot(archetype_grid, mouse_curves[archetype_eligible][position,
+                            archetype_columns], color=colour, ls='-', lw=1.3,
+                        label=f'{row.gene} mouse')
+        axes[i, 0].plot(archetype_grid, human_curves[archetype_eligible][position,
+                            archetype_columns], color=colour, ls='--', lw=1.3,
+                        label=f'{row.gene} human')
+        axes[i, 1].plot(archetype_grid, Q_curves[position], color=colour, lw=1.3,
+                        label=(f'{row.gene}: L={row.level_shift:.2f}, '
+                               f'A={row.amplitude_log2_ratio:.2f}, '
+                               f'QPC1={row.QPC1:.2f}, {row.state_transition}'))
+    axes[i, 0].set_title(f'{module}: balanced fitted curves')
+    axes[i, 1].set_title(f'{module}: pure shape changes')
+    for axis in axes[i]:
+        axis.legend(frameon=False, fontsize=6)
+        axis.set_xlabel('shared PT DPT')
+fig.suptitle('Figure 22 - representative genes: centroid proximity, effect and reliability',
+             fontsize=12)
+_save_figure(fig, 'fig22_joint_remodeling_representative_genes.png')
+
+# %%
+# Purpose: 13.4 - P and R comparisons, flat-state summaries, and pathways after J is frozen.
+_joint_positional_counts = pd.crosstab(
+    pd.Series(_joint_catalog_patterned['mouse_positional_module'], name='positional_module'),
+    pd.Series(joint_labels, name='joint_remodeling_module'))
+_joint_positional_expected = np.outer(
+    _joint_positional_counts.sum(axis=1), _joint_positional_counts.sum(axis=0)) / _joint_positional_counts.to_numpy().sum()
+joint_vs_mouse_positional = pd.DataFrame({
+    'positional_module': np.repeat(_joint_positional_counts.index.to_numpy(), joint_k),
+    'joint_remodeling_module': np.tile(_joint_positional_counts.columns.to_numpy(),
+                                     len(_joint_positional_counts)),
+    'n_genes': _joint_positional_counts.to_numpy().ravel(),
+    'expected': _joint_positional_expected.ravel(),
+})
+joint_vs_mouse_positional['observed_over_expected'] = (
+    joint_vs_mouse_positional['n_genes'] / joint_vs_mouse_positional['expected'])
+joint_vs_mouse_positional.to_csv(
+    OUTPUT_DIR / 'joint_vs_mouse_positional_modules.csv', index=False)
+
+_old_labels = _joint_catalog_patterned['old_response_module'].to_numpy()
+_old_counts = pd.crosstab(pd.Series(joint_labels, name='joint_remodeling_module'),
+                          pd.Series(_old_labels, name='old_response_module'))
+_old_row_totals = _old_counts.sum(axis=1)
+joint_vs_old_response = _old_counts.stack().rename('n_genes').reset_index()
+joint_vs_old_response['row_fraction'] = (
+    joint_vs_old_response['n_genes']
+    / joint_vs_old_response['joint_remodeling_module'].map(_old_row_totals))
+_old_assigned = _old_labels != 'unassigned'
+joint_old_ari = (adjusted_rand_score(joint_labels[_old_assigned], _old_labels[_old_assigned])
+                 if _old_assigned.sum() > 1 else np.nan)
+joint_vs_old_response['adjusted_rand_index_assigned_genes'] = joint_old_ari
+joint_vs_old_response.to_csv(OUTPUT_DIR / 'joint_vs_old_response_modules.csv', index=False)
+_old_centroids = response['centroids']
+_old_centroids = _old_centroids[_old_centroids['centroid'].eq('standardized_centroid')]
+_joint_old_centroid_rows = []
+for module in joint_modules:
+    q_centroid = Q_curves[joint_labels == module].mean(axis=0)
+    for old_module, group in _old_centroids.groupby('module'):
+        old_on_shared_grid = np.interp(archetype_grid, group['pseudospace'], group['value'])
+        _joint_old_centroid_rows.append({
+            'joint_remodeling_module': module, 'old_response_module': old_module,
+            'q_vs_old_response_centroid_spearman': safe_spearman(q_centroid, old_on_shared_grid),
+        })
+pd.DataFrame(_joint_old_centroid_rows).to_csv(
+    DIAGNOSTIC_DIR / 'joint_vs_old_response_centroids.csv', index=False)
+print(f'Secondary R comparison: ARI {joint_old_ari:.3f} over {_old_assigned.sum():,} genes '
+      'assigned an old response module. Q and old response centroids describe different quantities.')
+
+flat_state_summary_rows = []
+for phenotype in ('flat_both', 'gain_of_pattern', 'loss_of_pattern'):
+    one = joint_gene_catalog[joint_gene_catalog['remodeling_phenotype'].eq(phenotype)]
+    patterned_archetype = (one['human_archetype'] if phenotype == 'gain_of_pattern' else
+                           one['mouse_archetype'] if phenotype == 'loss_of_pattern' else
+                           pd.Series(dtype=object))
+    flat_state_summary_rows.append({
+        'remodeling_phenotype': phenotype, 'n_genes': len(one),
+        'median_relative_level_shift': one['level_shift'].median(),
+        'median_mouse_rms_amplitude': one['mouse_amplitude'].median(),
+        'median_human_rms_amplitude': one['human_amplitude'].median(),
+        'median_amplitude_log2_ratio': one['amplitude_log2_ratio'].median(),
+        'patterned_species_archetype_distribution': '; '.join(
+            f'{name}:{count}' for name, count in patterned_archetype.value_counts().items()),
+        'mouse_positional_module_distribution': '; '.join(
+            f'{name}:{count}' for name, count in one['mouse_positional_module'].value_counts().items()),
+    })
+flat_state_summary = pd.DataFrame(flat_state_summary_rows)
+flat_state_summary.to_csv(OUTPUT_DIR / 'joint_remodeling_flat_state_summary.csv', index=False)
+display(flat_state_summary.round(3))
+
+_j_sets = {module: archetype_genes[joint_labels == module].tolist()
+           for module in joint_modules}
+_j_enrichment = enrich_modules(_j_sets, pathway_gene_sets, background=archetype_genes)
+_j_enrichment['background_type'] = 'patterned_both_joint_eligible'
+_j_enrichment['background_size'] = len(archetype_genes)
+_j_enrichment['correction_family'] = 'all_J_modules'
+_state_global = state_transition_enrichment[
+    state_transition_enrichment['module'].str.contains('F->A|A[0-9]+->F|A[0-9]+->A[0-9]+',
+                                                        regex=True)].copy()
+_state_global['correction_family'] = 'all_full_state_transitions'
+_state_conditional = conditional_state_enrichment.copy()
+_state_conditional['correction_family'] = ('same_mouse_starting_state:'
+                                            + _state_conditional['background_state'].astype(str))
+joint_remodeling_pathway_enrichment = pd.concat(
+    [_j_enrichment, _state_global, _state_conditional], ignore_index=True)
+joint_remodeling_pathway_enrichment = joint_remodeling_pathway_enrichment.rename(
+    columns={'module': 'remodeling_group'})
+joint_remodeling_pathway_enrichment.to_csv(
+    OUTPUT_DIR / 'joint_remodeling_pathway_enrichment.csv', index=False)
+print(f'Pathway annotations for {joint_k} J modules use the {len(archetype_genes):,} genes eligible '
+      'for joint discovery. Gain/loss tests use the full universe or the same mouse starting state '
+      'as labeled; BH correction is within each background family. No pathway result selected k.')
+print('The main remodeling taxonomy is J modules plus gain, loss and flat-both phenotypes. '
+      'Level shifts are normalized relative differences, and the human sections are one donor.')
+
 # %%
 # Purpose: close with what was written, and what must not be read into it.
 written = sorted(path.name for path in OUTPUT_DIR.iterdir() if path.is_file())
@@ -3598,15 +4055,15 @@ for name in written:
 print()
 print(f'PT structures: {adata_pt.n_obs:,}; eligible genes: {gene_names.size:,}; '
       f'positional modules: {positional["k"]} (k diagnostics in {_rel(DIAGNOSTIC_DIR)}); '
-      f'response modules: {response["k"]}.')
+      f'joint remodeling modules: {joint_k}; old response modules: {response["k"]}.')
 print()
 print('Reading rules for these numbers:')
 print('  - the coordinate and the PT subset are upstream (notebook 03). Nothing here re-derives')
 print('    Harmony, the diffusion map, DPT, the PT trajectory or the ortholog map.')
 print('  - genes absent from either input feature list never enter a fit or an enrichment background')
 print('    (measured_in_both_inputs): a structural zero is not a measurement.')
-print('  - the primary cross-species analysis clusters the CENTRED human-minus-mouse response. A large')
-print('    global level shift is reported in the metrics table, not turned into a response module.')
+print('  - the primary cross-species taxonomy is J modules from level, amplitude and pure shape. The old R')
+print('    modules remain a centered-response sensitivity, not the main taxonomy.')
 print('  - the inference unit is the specimen: two mouse specimens versus two sections of ONE human')
 print('    donor, so these are descriptive summaries, not species-level tests.')
 print('  - pathway annotations were loaded only after the clustering was final, and never revise it.')

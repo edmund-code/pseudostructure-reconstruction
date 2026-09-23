@@ -1304,3 +1304,137 @@ print('Interpretation: pathway effects and full-universe gene ranks are concorda
 # - **Warping sensitivity:** 17 of 4,163 G2G-high genes lie in the fixed top mismatch quartile (0.4%); none pass the additional warp-rich, four-pair, detection, and amplitude candidate rules. Under these descriptive guides, there is little evidence that broad G2G conservation is mainly rescued by warping. This does not rule out individual positionally shifted genes.
 # - **Robust divergence:** 2,191 genes meet both broad divergence guides; 865 pass the stricter four-pair non-alignable candidate rules. Among the existing high-confidence G2G-divergent list, 46.4% are also strongly fixed-divergent with technical consistency. Mean level contributes to fixed mismatch (Spearman ρ = 0.690 with absolute mean lognorm difference), so level-matched results are essential context.
 # - **Biological interpretation:** prohibiting warping does **not materially reverse the main pathway directions in this run**, though gene-level candidate membership and intensity vary. This is a sensitivity analysis under a shared-coordinate assumption. Human early and late PT markers have the expected directions, but human S2 markers show no clear intermediate trend and only one proposed early conserved anchor passes the directional check. Anatomical relocation remains provisional. Both human sections are healthy cortex from one donor; pathway q-values describe gene-rank tests, not species-level replication.
+
+# %% [markdown]
+# ## 12. Prioritizing trajectory-specific biology beyond bulk PT differences
+#
+# Run notebook 10 after notebook 09, then run this section. Notebook 10 uses the same eligible genes and pathway membership; this section reads its saved results **only after** all notebook-09 G2G and fixed-coordinate analyses. It does not refit, filter, or re-rank genes before discovery.
+#
+# "Strong" here means the top 10% of the tested pathway **effect ranks** within each method. Bulk uses the absolute signed pathway rank effect; trajectory uses the positive fixed-coordinate mismatch rank effect. The four labels (`bulk_supported`, `trajectory_specific`, `both`, `weak_in_both`) are mutually exclusive descriptive rank bins, not claims of absence or presence of a population-level species effect. The table also retains both methods' competitive q-values. Ranking outside bulk's top decile is a downstream priority view, not a new test family.
+#
+# The follow-up shortlist uses notebook 10's existing continuous-only candidate screen: top-decile fixed-coordinate signal, weak bulk and three-bin ranks/effects, adequate member detection, four-pair technical support, and size-matched low profile entropy. Notebook 09's existing G2G-cluster and fixed-profile coherence calculations are reported alongside member genes. A low profile-entropy null z indicates more shared mismatch location than size-matched random sets. G2G alignment and fixed-coordinate mismatch remain distinct measurements. The two human sections are healthy cortex from **one donor**; pathway tests are exploratory competitive gene-rank tests, not donor-level inference. These are candidates for biological follow-up, not validated mechanisms.
+
+# %%
+BULK_OUTPUT = RESULTS_ROOT / 'pt_continuous_vs_conventional'
+needed = ('pathway_method_comparison.csv', 'continuous_only_pathway_candidates.csv',
+          'gene_method_rank_comparison.csv')
+missing = [name for name in needed if not (BULK_OUTPUT / name).exists()]
+if missing:
+    print(f'Run notebook 10, then rerun section 12; missing: {missing}')
+else:
+    keys = ['library', 'pathway', 'n_eligible_genes']
+    bulk_path = pd.read_csv(BULK_OUTPUT / needed[0])
+    bulk_candidates = pd.read_csv(BULK_OUTPUT / needed[1])
+    bulk_genes = pd.read_csv(BULK_OUTPUT / needed[2])
+    if bulk_path.duplicated(keys).any() or bulk_candidates.duplicated(keys).any():
+        raise ValueError('Notebook 10 pathway keys must be unique.')
+    if set(map(tuple, bulk_path[keys].to_numpy())) != set(map(tuple, path_compare[keys].to_numpy())):
+        raise ValueError('Notebook 09/10 pathway universes differ; rerun notebook 10.')
+    if bulk_genes.gene.isna().any() or bulk_genes.gene.duplicated().any() or set(bulk_genes.gene) != set(genes):
+        raise ValueError('Notebook 09/10 eligible gene universes differ; rerun notebook 10.')
+    bulk_fields = keys + ['bulk_rank_effect', 'bulk_abs_rank_effect', 'bulk_q_value',
+                          'bulk_rank', 'bulk_ordinal', 'continuous_rank_effect',
+                          'continuous_q_value', 'continuous_rank', 'continuous_ordinal',
+                          'segment_rank', 'fixed_profile_entropy_null_z',
+                          'fraction_technically_robust', 'fraction_adequately_detected']
+    trajectory_bulk = path_compare.merge(bulk_path[bulk_fields], on=keys, validate='one_to_one')
+    if not (np.allclose(trajectory_bulk.fixed_divergence_effect, trajectory_bulk.continuous_rank_effect) and
+            np.allclose(trajectory_bulk.q_value_fixed, trajectory_bulk.continuous_q_value)):
+        raise ValueError('Notebook 10 contains stale fixed-coordinate pathway results; rerun it.')
+    top_n = max(1, round(len(trajectory_bulk) * .10))
+    bulk_strong = trajectory_bulk.bulk_ordinal.le(top_n)
+    trajectory_strong = trajectory_bulk.continuous_ordinal.le(top_n)
+    trajectory_bulk['bulk_context'] = np.select(
+        [bulk_strong & trajectory_strong, bulk_strong, trajectory_strong],
+        ['both', 'bulk_supported', 'trajectory_specific'], default='weak_in_both')
+    assert bulk_strong.sum() == trajectory_strong.sum() == top_n
+    trajectory_bulk.to_csv(OUTPUT_DIR / 'g2g_bulk_pathway_context.csv', index=False)
+    outside_bulk = trajectory_bulk.loc[~bulk_strong].sort_values(
+        ['fixed_divergence_effect', 'library', 'pathway'], ascending=[False, True, True]).copy()
+    outside_bulk.insert(0, 'trajectory_rank_without_bulk', np.arange(1, len(outside_bulk) + 1))
+    outside_bulk.to_csv(OUTPUT_DIR / 'g2g_pathways_ranked_outside_bulk_top_decile.csv', index=False)
+    display(trajectory_bulk.bulk_context.value_counts().rename_axis('bulk_context').reset_index(name='pathways'))
+    display(outside_bulk[['trajectory_rank_without_bulk', 'library', 'pathway',
+                          'fixed_divergence_effect', 'q_value_fixed', 'bulk_rank',
+                          'bulk_abs_rank_effect', 'bulk_q_value', 'bulk_context']].head(15))
+
+    follow_up = outside_bulk.merge(bulk_candidates[keys], on=keys, how='inner', validate='one_to_one')
+    if not follow_up.bulk_context.eq('trajectory_specific').all():
+        raise ValueError('Notebook 10 candidate screen disagrees with the rank categories; rerun notebook 10.')
+    follow_up = follow_up.head(3).merge(
+        fixed_coherence[['library', 'pathway', 'fixed_profile_entropy_null_z',
+                         'fixed_mismatch_iqr', 'dominant_fixed_region']],
+        on=['library', 'pathway'], suffixes=('', '_09'), validate='one_to_one').merge(
+        coherence[['library', 'pathway', 'normalized_cluster_entropy',
+                   'entropy_below_null_fraction']], on=['library', 'pathway'], validate='one_to_one')
+    if not np.allclose(follow_up.fixed_profile_entropy_null_z,
+                       follow_up.fixed_profile_entropy_null_z_09):
+        raise ValueError('Notebook 10 contains stale pathway coherence; rerun it.')
+    follow_up = follow_up.drop(columns='fixed_profile_entropy_null_z_09')
+    follow_up.to_csv(OUTPUT_DIR / 'g2g_trajectory_specific_follow_up.csv', index=False)
+    display(follow_up[['library', 'pathway', 'continuous_rank', 'bulk_rank', 'segment_rank',
+                       'q_value_fixed', 'bulk_q_value', 'fixed_profile_entropy_null_z',
+                       'entropy_below_null_fraction', 'fraction_technically_robust',
+                       'fraction_adequately_detected']])
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    palette = {'both': '#6A3D9A', 'bulk_supported': '#D55E00',
+               'trajectory_specific': '#0072B2', 'weak_in_both': '#999999'}
+    for label, group in trajectory_bulk.groupby('bulk_context'):
+        ax.scatter(group.bulk_rank, group.continuous_rank, s=12, alpha=.55,
+                   color=palette[label], label=f'{label} ({len(group)})')
+    ax.axvline(top_n, color='black', lw=.7, ls='--')
+    ax.axhline(top_n, color='black', lw=.7, ls='--')
+    for row in follow_up.itertuples():
+        ax.annotate(row.pathway[:30], (row.bulk_rank, row.continuous_rank), fontsize=7)
+    ax.set(xscale='log', yscale='log', xlabel='bulk pathway rank (absolute signed effect)',
+           ylabel='fixed-coordinate divergence rank',
+           title='PT pathway ranks: bulk versus trajectory')
+    ax.invert_xaxis(); ax.invert_yaxis()
+    ax.legend(fontsize=7)
+    savefig(fig, 'fig17_bulk_vs_trajectory_pathway_ranks.png')
+
+    if follow_up.empty:
+        print('No pathway passed notebook 10 candidate screen; no biological shortlist assigned.')
+    else:
+        member_lookup = pathways.set_index(['library', 'pathway']).genes_present
+        evidence = comparison.merge(bulk_genes[['gene', 'bulk_effect', 'bulk_abs_effect']],
+                                    on='gene', validate='one_to_one').set_index('gene')
+        member_rows = []
+        for row in follow_up.itertuples():
+            members = list(member_lookup.loc[(row.library, row.pathway)])
+            if set(members) - set(evidence.index):
+                raise ValueError(f'Missing member gene evidence for {row.pathway}.')
+            detail = evidence.loc[members, ['bulk_effect', 'bulk_abs_effect',
+                'alignment_similarity', 'g2g_warp_fraction', 'fixed_overall_mismatch',
+                'fixed_early_mismatch', 'fixed_mid_mismatch', 'fixed_late_mismatch',
+                'pairwise_min_divergence_percentile', 'min_specimen_detected_fraction']].reset_index()
+            detail.insert(0, 'pathway', row.pathway)
+            detail.insert(0, 'library', row.library)
+            member_rows.append(detail)
+        member_detail = pd.concat(member_rows, ignore_index=True)
+        member_detail.to_csv(OUTPUT_DIR / 'g2g_trajectory_specific_member_evidence.csv', index=False)
+        display(member_detail.sort_values('fixed_overall_mismatch', ascending=False).groupby(
+            ['library', 'pathway'], sort=False).head(5))
+        gene_to_index = {gene: i for i, gene in enumerate(genes)}
+        fig, axes = plt.subplots(len(follow_up), 3, figsize=(12, 3 * len(follow_up)), squeeze=False)
+        for r, row in enumerate(follow_up.itertuples()):
+            detail = member_detail.loc[(member_detail.library.eq(row.library) &
+                                        member_detail.pathway.eq(row.pathway) &
+                                        member_detail.min_specimen_detected_fraction.ge(.05))]
+            detail = detail.sort_values('fixed_overall_mismatch', ascending=False).head(3)
+            for c, gene_row in enumerate(detail.itertuples()):
+                i = gene_to_index[gene_row.gene]
+                axes[r, c].plot(fixed_grid, mouse_local[0][:, i], color=COLORS['mouse'], label='mouse')
+                axes[r, c].plot(fixed_grid, human_local[0][:, i], color=COLORS['human'], label='human')
+                axes[r, c].set(title=(f'{gene_row.gene}: bulk {gene_row.bulk_effect:+.2f}, '
+                                      f'fixed {gene_row.fixed_overall_mismatch:.2f}, '
+                                      f'G2G {gene_row.alignment_similarity:.2f}'),
+                               xlabel='shared PT s', ylabel='local lognorm')
+            for c in range(len(detail), 3):
+                axes[r, c].set_visible(False)
+            axes[r, 0].annotate(row.pathway[:55], (0, 1), xycoords='axes fraction',
+                                xytext=(0, 13), textcoords='offset points', fontsize=8)
+        axes[0, 0].legend(fontsize=7)
+        savefig(fig, 'fig18_trajectory_specific_pathway_member_curves.png')
+        print('Shortlist is descriptive; inspect full member evidence and curves before biological interpretation.')

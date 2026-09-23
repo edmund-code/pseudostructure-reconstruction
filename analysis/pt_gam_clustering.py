@@ -1823,10 +1823,10 @@ print('A small or unstable module is reported as such instead of being over-inte
 
 
 # %% [markdown]
-# ## 12 - Shared positional archetypes and cross-species program switching
+# ## 12 - Cross-species positional states and shared archetypes
 #
-# > Mouse and human PT may share a small repertoire of conserved positional-expression shapes, while
-# > individual genes switch which positional program they occupy between species.
+# > Mouse and human PT may share positional-expression shapes, while individual genes can gain,
+# > lose, conserve, or reorganize their positional pattern between species.
 #
 # Why this section exists, and why it is a different question from sections 5, 6 or 10C:
 #
@@ -1838,13 +1838,13 @@ print('A small or unstable module is reported as such instead of being over-inte
 # * the current centred difference-curve response clusters (section 6) are strongly associated with
 #   the original mouse positional programs (section 7's positional x response table), so their
 #   interpretation may really be about which positional program a gene occupies in each species;
-# * therefore test the hypothesis **directly**: do the same curve archetypes exist in both species,
-#   and do individual genes switch between them?
+# * therefore ask both whether the same curve archetypes exist in both species and whether individual
+#   genes gain, lose, conserve or reorganize their positional pattern.
 #
-# The unit of analysis is the **within-species standardised fitted curve**. Each species' curve is
-# centred and scaled on its own, so a gene's mean level and its amplitude are removed and only its
-# positional shape survives. Nothing here subtracts human from mouse: the only question is whether a
-# gene's shape is conserved or changes.
+# The unit of analysis is the gene's mouse and human positional state. Curves with enough amplitude
+# are standardised within species for shape assignment; a flat curve remains F and is never scaled.
+# Genes patterned in both species support direct shape comparison. Genes patterned in only one species
+# remain as potential gains or losses of positional organization.
 #
 # Three conventions carry through the whole section:
 #
@@ -1852,7 +1852,7 @@ print('A small or unstable module is reported as such instead of being over-inte
 #   clusterings that then have to be matched;
 # * no pathway information enters until the archetypes, the transition matrix and the assignments are
 #   frozen (12.10), exactly as sections 8 and 9 are kept downstream of the clustering;
-# * every "switched" or "conserved" statement is **descriptive**. It is not a species-level test: the
+# * every positional-state statement is **descriptive**. It is not a species-level test: the
 #   human side is two sections of ONE donor, so the inference unit is the specimen and the comparison
 #   is 2-vs-1-donor.
 
@@ -1905,8 +1905,8 @@ def _genuine_shape_eligibility(mouse_block, human_block, grid, floor, min_finite
 
     The SAME absolute amplitude floor section 5 applies before standardising is applied here twice,
     once per species. A nearly flat curve divided by its own tiny spread turns numerical noise into an
-    apparently strong shape, so a gene that is essentially flat in either species is excluded rather
-    than standardised. Returns ``(eligible, columns, mouse_ok, human_ok)``.
+    apparently strong shape, so it is retained as F in the state analysis but excluded from direct
+    shape standardisation. Returns ``(eligible, columns, mouse_ok, human_ok)``.
     """
     mouse_block = np.asarray(mouse_block, dtype=float)
     human_block = np.asarray(human_block, dtype=float)
@@ -1966,8 +1966,9 @@ def _shared_archetype_solution(mouse_block, human_block, grid, feature_names, fl
             f'only {int(eligible.sum())} genes carry shape above amplitude {floor} in both species; '
             f'{int(min_genes)} are needed before a shared archetype space can be learned')
 
-    mouse_standardized = _standardize_species(mouse_block, columns)[eligible]
-    human_standardized = _standardize_species(human_block, columns)[eligible]
+    # Select before scaling: no flat curve is ever passed to zscore_rows.
+    mouse_standardized = _standardize_species(mouse_block[eligible], columns)
+    human_standardized = _standardize_species(human_block[eligible], columns)
     standardized = np.vstack([mouse_standardized, human_standardized])
     genes = feature_names[eligible]
     row_ids = np.concatenate([np.asarray([f'mouse:{gene}' for gene in genes], dtype=object),
@@ -2021,32 +2022,65 @@ archetype_eligibility_table = pd.DataFrame({
     'gene': np.asarray(gene_names),
     'mouse_peak_to_peak': gene_mouse_amplitude,
     'human_peak_to_peak': gene_human_amplitude,
+    'mouse_rms_positional_variation': np.sqrt(np.nanmean(
+        (mouse_curves - np.nanmean(mouse_curves, axis=1, keepdims=True)) ** 2, axis=1)),
+    'human_rms_positional_variation': np.sqrt(np.nanmean(
+        (human_curves - np.nanmean(human_curves, axis=1, keepdims=True)) ** 2, axis=1)),
     'eligible_mouse': shared['mouse_ok'],
     'eligible_human': shared['human_ok'],
     'eligible_both_species': archetype_eligible,
 })
-archetype_eligibility_table['exclusion_reason'] = np.where(
-    archetype_eligible, 'eligible: real shape in both species',
-    np.where(
-        ~np.asarray(shared['mouse_ok']) & ~np.asarray(shared['human_ok']),
-        'excluded: essentially flat in both species',
-        np.where(np.asarray(shared['mouse_ok']),
-                 'excluded: essentially flat in human only',
-                 'excluded: essentially flat in mouse only')))
+archetype_eligibility_table['mouse_positional_state'] = np.where(
+    gene_mouse_amplitude >= ARCHETYPE_FLOOR, 'patterned', 'flat')
+archetype_eligibility_table['human_positional_state'] = np.where(
+    gene_human_amplitude >= ARCHETYPE_FLOOR, 'patterned', 'flat')
+archetype_eligibility_table['positional_state_transition'] = (
+    archetype_eligibility_table['mouse_positional_state'] + '->'
+    + archetype_eligibility_table['human_positional_state'])
+if not np.array_equal(archetype_eligible, (
+        archetype_eligibility_table['positional_state_transition'] == 'patterned->patterned'
+        ).to_numpy()):
+    raise ValueError('A patterned curve lacks the common finite support needed for the shared PCA.')
+
+positional_state_counts = archetype_eligibility_table[
+    'positional_state_transition'].value_counts().reindex([
+        'flat->flat', 'flat->patterned', 'patterned->flat', 'patterned->patterned'], fill_value=0)
+positional_state_summary = pd.DataFrame({
+    'positional_state_transition': positional_state_counts.index,
+    'n_genes': positional_state_counts.to_numpy(),
+    'fraction_all': positional_state_counts.to_numpy() / gene_names.size,
+})
+positional_state_summary.to_csv(OUTPUT_DIR / 'positional_state_transition_summary.csv', index=False)
 
 print(f'Genes in the eligible universe: {gene_names.size:,}')
 print(f'  carrying shape above the floor in mouse: {int(shared["mouse_ok"].sum()):,}')
 print(f'  carrying shape above the floor in human: {int(shared["human_ok"].sum()):,}')
-print(f'  carrying shape above the floor in BOTH (enters section 12): '
+print(f'  carrying shape above the floor in BOTH (enters direct shape comparison): '
       f'{int(archetype_eligible.sum()):,}')
-print(f'  excluded as essentially flat in exactly ONE species (the other was fine): '
-      f'{int((np.asarray(shared["mouse_ok"]) ^ np.asarray(shared["human_ok"])).sum()):,}')
-print(f'  excluded as essentially flat in BOTH species: '
-      f'{int((~np.asarray(shared["mouse_ok"]) & ~np.asarray(shared["human_ok"])).sum()):,}')
+display(positional_state_summary)
+print('Genes patterned in one species remain in the positional-state analysis as potential gains '
+      'or losses of organization; only patterned->patterned supports direct shape comparison.')
 print(f'Shared support the shape space is defined on: {int(archetype_columns.sum())} of {grid.size} '
       'grid points.')
-print(f'The floor is {ARCHETYPE_FLOOR} peak-to-peak per species - section 5\'s positional floor, so a '
-      'gene excluded here is excluded for the same amplitude reason it would be there.')
+print(f'The floor is {ARCHETYPE_FLOOR} peak-to-peak per species. Flat means insufficient positional '
+      'amplitude for shape assignment under this threshold, not zero biological regulation.')
+
+fig, axis = plt.subplots(figsize=(6.2, 5.5))
+quadrant_colours = {
+    'flat->flat': '#9A9A9A', 'flat->patterned': '#59A14F',
+    'patterned->flat': '#E15759', 'patterned->patterned': '#4C9BD3',
+}
+for label, colour in quadrant_colours.items():
+    members = archetype_eligibility_table['positional_state_transition'].eq(label).to_numpy()
+    axis.scatter(gene_mouse_amplitude[members], gene_human_amplitude[members], s=8,
+                 alpha=0.35, color=colour, label=f'{label}: {int(members.sum()):,}')
+axis.axvline(ARCHETYPE_FLOOR, color='black', ls='--', lw=1)
+axis.axhline(ARCHETYPE_FLOOR, color='black', ls='--', lw=1)
+axis.set_xlabel('mouse peak-to-peak amplitude')
+axis.set_ylabel('human peak-to-peak amplitude')
+axis.set_title('Positional amplitude states across all eligible genes')
+axis.legend(frameon=False, fontsize=8)
+_save_figure(fig, 'fig10a_positional_state_amplitude_quadrants.png')
 
 
 # %%
@@ -2316,10 +2350,84 @@ _save_figure(fig, 'fig12b_shared_archetype_centroids.png')
 
 
 # %%
-# Purpose: 12.5 - every eligible gene gets a mouse archetype AND a human archetype.
+# Purpose: 12.5 - full-universe positional states; patterned-only assignments remain available.
 positional_by_gene = dict(zip(gene_names, positional_labels.to_numpy()))
 response_by_gene = dict(zip(gene_names, response_labels.to_numpy()))
 human_independent_by_gene = dict(zip(gene_names, human_labels.to_numpy()))
+
+# The PCA and centroids above were fitted only on patterned->patterned genes. Project a curve
+# patterned in just one species into that frozen model; its flat partner stays F and is never scaled.
+primary_raw_scores = shared_pca.transform(shared_standardized)[:, :shared_n_pc]
+primary_whitening_spread = primary_raw_scores.std(axis=0, ddof=1)
+primary_whitening_spread = np.where(primary_whitening_spread > 0, primary_whitening_spread, 1.0)
+if not np.allclose(primary_raw_scores / primary_whitening_spread, shared_scores, atol=1e-8):
+    raise ValueError('The primary PCA projection does not reproduce its training scores.')
+archetype_centroid_scores = pd.DataFrame(shared_scores).groupby(shared_labels).mean().reindex(
+    shared_archetypes).to_numpy()
+
+
+def _nearest_archetype(scores, centroid_scores):
+    distance = ((scores[:, None, :] - centroid_scores[None, :, :]) ** 2).sum(axis=2)
+    return np.asarray(shared_archetypes, dtype=object)[np.argmin(distance, axis=1)]
+
+
+def _project_patterned(curves):
+    standardized = _standardize_species(curves, archetype_columns)
+    scores = shared_pca.transform(standardized)[:, :shared_n_pc]
+    if CLUSTER_CONFIG['pc_whiten']:
+        scores = scores / primary_whitening_spread
+    return _nearest_archetype(scores, archetype_centroid_scores)
+
+
+mouse_patterned = gene_mouse_amplitude >= ARCHETYPE_FLOOR
+human_patterned = gene_human_amplitude >= ARCHETYPE_FLOOR
+mouse_state = np.full(gene_names.size, 'F', dtype=object)
+human_state = np.full(gene_names.size, 'F', dtype=object)
+mouse_state[archetype_eligible] = archetype_mouse_label
+human_state[archetype_eligible] = archetype_human_label
+mouse_only = mouse_patterned & ~human_patterned
+human_only = human_patterned & ~mouse_patterned
+if mouse_only.any():
+    mouse_state[mouse_only] = _project_patterned(mouse_curves[mouse_only])
+if human_only.any():
+    human_state[human_only] = _project_patterned(human_curves[human_only])
+if not (np.all(mouse_state[mouse_patterned] != 'F')
+        and np.all(human_state[human_patterned] != 'F')):
+    raise ValueError('A patterned gene has no archetype assignment.')
+transition_class = np.select([
+    ~mouse_patterned & ~human_patterned,
+    ~mouse_patterned & human_patterned,
+    mouse_patterned & ~human_patterned,
+    mouse_state == human_state,
+], ['flat_both', 'gain_of_pattern', 'loss_of_pattern', 'conserved_pattern'],
+    default='pattern_reorganization')
+state_transition = np.asarray(
+    [f'{mouse}->{human}' for mouse, human in zip(mouse_state, human_state)], dtype=object)
+
+gene_positional_state_transitions = shared_archetype_gene_metrics.merge(
+    gene_curve_metrics[['gene', 'amplitude_change', 'response_peak_to_peak', 'response_rms',
+                        'level_shift']], on='gene', how='left')
+gene_positional_state_transitions['mouse_amplitude'] = gene_mouse_amplitude
+gene_positional_state_transitions['human_amplitude'] = gene_human_amplitude
+gene_positional_state_transitions['amplitude_ratio_human_mouse'] = np.divide(
+    gene_human_amplitude, gene_mouse_amplitude,
+    out=np.full(gene_names.size, np.nan), where=gene_mouse_amplitude > 0)
+gene_positional_state_transitions['mouse_state'] = mouse_state
+gene_positional_state_transitions['human_state'] = human_state
+gene_positional_state_transitions['mouse_archetype'] = np.where(
+    mouse_patterned, mouse_state, pd.NA)
+gene_positional_state_transitions['human_archetype'] = np.where(
+    human_patterned, human_state, pd.NA)
+gene_positional_state_transitions['transition_class'] = transition_class
+gene_positional_state_transitions['state_transition'] = state_transition
+gene_positional_state_transitions['response_module'] = response_labels.to_numpy()
+gene_positional_state_transitions['positional_module'] = positional_labels.to_numpy()
+gene_positional_state_transitions['human_independent_module'] = human_labels.to_numpy()
+if not gene_positional_state_transitions['shape_correlation'].notna().equals(
+        pd.Series(archetype_eligible)):
+    raise ValueError('Direct shape correlation must exist only for patterned->patterned genes.')
+gene_positional_state_transitions.to_csv(
+    OUTPUT_DIR / 'gene_positional_state_transitions.csv', index=False)
 
 archetype_assignments = pd.DataFrame({
     'gene': archetype_genes,
@@ -2356,26 +2464,26 @@ archetype_assignments.to_csv(OUTPUT_DIR / 'shared_archetype_assignments.csv', in
 
 n_conserved = int((archetype_assignments['archetype_status'] == 'conserved').sum())
 n_switched = int((archetype_assignments['archetype_status'] == 'switched').sum())
-print(f'Genes carrying both a mouse and a human archetype: {len(archetype_assignments):,}')
-print(f'  conserved archetype (mouse_archetype == human_archetype): {n_conserved:,} '
-      f'({n_conserved / len(archetype_assignments):.1%})')
-print(f'  switched archetype (mouse_archetype != human_archetype): {n_switched:,} '
-      f'({n_switched / len(archetype_assignments):.1%})')
+print(f'Secondary patterned-only archetype comparison: {len(archetype_assignments):,} genes')
+print(f'  same archetype within this patterned-only subset: {n_conserved:,}')
+print(f'  different archetype within this patterned-only subset: {n_switched:,}')
 print('Conserved and switched are DESCRIPTIVE labels on two cluster assignments. They carry no '
       'p-value, no species-level inference, and the human side is two sections of one donor.')
 
 
 # %% [markdown]
-# ### 12.6 - the program-transition matrix
+# ### 12.6 - the full positional-state transition matrix
 
 # %%
-# Purpose: 12.6 - mouse archetype -> human archetype transitions: counts, row fractions, O/E and
-# standardised residuals.
+# Purpose: 12.6 - F plus shared archetypes across the full eligible gene universe.
+state_order = ['F', *shared_archetypes]
 transition_counts = pd.crosstab(
-    pd.Series(archetype_mouse_label, name='mouse_archetype'),
-    pd.Series(archetype_human_label, name='human_archetype'),
-).reindex(index=shared_archetypes, columns=shared_archetypes, fill_value=0)
+    pd.Series(mouse_state, name='mouse_state'),
+    pd.Series(human_state, name='human_state'),
+).reindex(index=state_order, columns=state_order, fill_value=0)
 transition_total = float(transition_counts.to_numpy().sum())
+if int(transition_total) != gene_names.size:
+    raise ValueError('The state transition matrix does not cover the full eligible gene universe.')
 transition_expected = np.outer(
     transition_counts.sum(axis=1).to_numpy(dtype=float),
     transition_counts.sum(axis=0).to_numpy(dtype=float),
@@ -2386,9 +2494,10 @@ transition_row_fractions = (
                transition_counts.sum(axis=1).to_numpy(dtype=float)[:, None], np.nan))
 
 transition_rows = pd.DataFrame({
-    'mouse_archetype': np.repeat(transition_counts.index.to_numpy(), transition_counts.shape[1]),
-    'human_archetype': np.tile(transition_counts.columns.to_numpy(), transition_counts.shape[0]),
+    'mouse_state': np.repeat(transition_counts.index.to_numpy(), transition_counts.shape[1]),
+    'human_state': np.tile(transition_counts.columns.to_numpy(), transition_counts.shape[0]),
     'n_genes': transition_counts.to_numpy().ravel(),
+    'fraction_all': transition_counts.to_numpy().ravel() / transition_total,
     'row_fraction': transition_row_fractions.ravel(),
     'expected': transition_expected.ravel(),
 })
@@ -2397,23 +2506,56 @@ transition_rows['observed_over_expected'] = (
 transition_rows['standardized_residual'] = (
     (transition_rows['n_genes'] - transition_rows['expected'])
     / np.sqrt(transition_rows['expected'].replace(0.0, np.nan)))
-transition_rows['conserved'] = transition_rows['mouse_archetype'].eq(
-    transition_rows['human_archetype'])
-transition_rows.to_csv(OUTPUT_DIR / 'mouse_human_archetype_transitions.csv', index=False)
+transition_rows['transition_class'] = np.select([
+    transition_rows['mouse_state'].eq('F') & transition_rows['human_state'].eq('F'),
+    transition_rows['mouse_state'].eq('F'),
+    transition_rows['human_state'].eq('F'),
+    transition_rows['mouse_state'].eq(transition_rows['human_state']),
+], ['flat_both', 'gain_of_pattern', 'loss_of_pattern', 'conserved_pattern'],
+    default='pattern_reorganization')
+transition_counts.to_csv(OUTPUT_DIR / 'positional_state_transition_matrix.csv')
+transition_rows.to_csv(OUTPUT_DIR / 'positional_state_transition_metrics.csv', index=False)
 
-transition_diagonal = transition_rows[transition_rows['conserved']]
-_off_diagonal = transition_rows[~transition_rows['conserved']].sort_values(
+# Preserve the previous patterned-only matrix under its original name as a secondary view, with
+# its own patterned-only denominator for fractions and expected counts.
+archetype_only_counts = transition_counts.loc[shared_archetypes, shared_archetypes]
+_archetype_only_total = float(archetype_only_counts.to_numpy().sum())
+archetype_only_rows = transition_rows[
+    transition_rows['mouse_state'].ne('F') & transition_rows['human_state'].ne('F')].copy()
+archetype_only_rows['fraction_all'] = archetype_only_rows['n_genes'] / _archetype_only_total
+_archetype_only_row_totals = archetype_only_counts.sum(axis=1)
+_archetype_only_row_denominator = archetype_only_rows['mouse_state'].map(
+    _archetype_only_row_totals).replace(0, np.nan)
+archetype_only_rows['row_fraction'] = (
+    archetype_only_rows['n_genes'] / _archetype_only_row_denominator)
+_archetype_only_expected = np.outer(
+    archetype_only_counts.sum(axis=1).to_numpy(dtype=float),
+    archetype_only_counts.sum(axis=0).to_numpy(dtype=float)) / _archetype_only_total
+archetype_only_rows['expected'] = _archetype_only_expected.ravel()
+archetype_only_rows['observed_over_expected'] = (
+    archetype_only_rows['n_genes'] / archetype_only_rows['expected'].replace(0.0, np.nan))
+archetype_only_rows['standardized_residual'] = (
+    (archetype_only_rows['n_genes'] - archetype_only_rows['expected'])
+    / np.sqrt(archetype_only_rows['expected'].replace(0.0, np.nan)))
+archetype_only_rows = archetype_only_rows.rename(columns={
+    'mouse_state': 'mouse_archetype', 'human_state': 'human_archetype'})
+archetype_only_rows['conserved'] = archetype_only_rows['mouse_archetype'].eq(
+    archetype_only_rows['human_archetype'])
+archetype_only_rows.to_csv(OUTPUT_DIR / 'mouse_human_archetype_transitions.csv', index=False)
+
+transition_diagonal = transition_rows[transition_rows['mouse_state'].eq(
+    transition_rows['human_state'])]
+_off_diagonal = transition_rows[transition_rows['mouse_state'].ne(
+    transition_rows['human_state'])].sort_values(
     'n_genes', ascending=False)
-print(f'Transition matrix: {transition_counts.shape[0]} mouse archetypes x '
-      f'{transition_counts.shape[1]} human archetypes over {int(transition_total):,} genes.')
-print(f'  conserved (diagonal) genes: {int(transition_diagonal["n_genes"].sum()):,} '
-      f'({int(transition_diagonal["n_genes"].sum()) / transition_total:.1%}); '
-      f'diagonal O/E median {transition_diagonal["observed_over_expected"].median():.2f} '
-      f'(range {transition_diagonal["observed_over_expected"].min():.2f}-'
-      f'{transition_diagonal["observed_over_expected"].max():.2f})')
-print('Most common off-diagonal transitions (the switching programs):')
+print(f'Primary transition matrix: {transition_counts.shape[0]} mouse states x '
+      f'{transition_counts.shape[1]} human states over {int(transition_total):,} genes.')
+display(gene_positional_state_transitions['transition_class'].value_counts().reindex([
+    'flat_both', 'gain_of_pattern', 'loss_of_pattern', 'conserved_pattern',
+    'pattern_reorganization'], fill_value=0).rename_axis('transition_class').reset_index(name='n_genes'))
+print('Most common changes in positional state:')
 display(_off_diagonal.head(8)[[
-    'mouse_archetype', 'human_archetype', 'n_genes', 'row_fraction', 'expected',
+    'mouse_state', 'human_state', 'n_genes', 'fraction_all', 'row_fraction', 'expected',
     'observed_over_expected', 'standardized_residual',
 ]].round(3))
 print('O/E compares each cell with the count its row and column margins alone would predict, so a '
@@ -2424,11 +2566,11 @@ print('O/E compares each cell with the count its row and column margins alone wo
 # %%
 # Purpose: figure 13 - the mouse -> human transition heatmap, on both the raw-count and the O/E scale.
 transition_ratio = transition_rows.pivot(
-    index='mouse_archetype', columns='human_archetype', values='observed_over_expected').reindex(
-    index=shared_archetypes, columns=shared_archetypes)
+    index='mouse_state', columns='human_state', values='observed_over_expected').reindex(
+    index=state_order, columns=state_order)
 transition_fraction = transition_rows.pivot(
-    index='mouse_archetype', columns='human_archetype', values='row_fraction').reindex(
-    index=shared_archetypes, columns=shared_archetypes)
+    index='mouse_state', columns='human_state', values='row_fraction').reindex(
+    index=state_order, columns=state_order)
 _transition_counts_values = transition_counts.to_numpy(dtype=float)
 _transition_ratio_values = transition_ratio.to_numpy(dtype=float)
 _transition_fraction_values = transition_fraction.to_numpy(dtype=float)
@@ -2461,11 +2603,11 @@ for axis in axes:
     axis.set_xticklabels(transition_counts.columns, rotation=45, ha='right')
     axis.set_yticks(range(transition_counts.shape[0]))
     axis.set_yticklabels(transition_counts.index)
-    axis.set_xlabel('human archetype')
-    axis.set_ylabel('mouse archetype')
-fig.suptitle('Figure 13 - which positional programs are conserved, and which transitions are enriched',
+    axis.set_xlabel('human positional state')
+    axis.set_ylabel('mouse positional state')
+fig.suptitle('Figure 13 - full positional-state transitions, including gain and loss',
              fontsize=12)
-_save_figure(fig, 'fig13_archetype_transition_heatmap.png')
+_save_figure(fig, 'fig13_positional_state_transition_heatmap.png')
 
 
 # %% [markdown]
@@ -2630,6 +2772,37 @@ print('A low ARI alone is NOT the finding - two clusterings of the same curves c
 
 # %%
 # Purpose: 12.9 - re-read every response module in archetype-transition terms.
+_state_class_order = ['flat_both', 'gain_of_pattern', 'loss_of_pattern',
+                      'conserved_pattern', 'pattern_reorganization']
+response_state_rows = []
+for module in sorted(set(response_labels.to_numpy()),
+                     key=lambda name: (name == 'unassigned',
+                                       int(name[1:]) if name[1:].isdigit() else 0)):
+    members = gene_positional_state_transitions[
+        gene_positional_state_transitions['response_module'].eq(module)]
+    class_counts = members['transition_class'].value_counts()
+    state_counts = members['state_transition'].value_counts()
+    response_state_rows.append({
+        'response_module': module,
+        'n_genes': len(members),
+        **{f'fraction_{name}': class_counts.get(name, 0) / len(members)
+           for name in _state_class_order},
+        'dominant_transition_class': class_counts.index[0],
+        'dominant_state_transition': state_counts.index[0],
+        'state_transition_distribution': '; '.join(
+            f'{state}:{count}' for state, count in state_counts.items()),
+    })
+response_module_positional_state_summary = pd.DataFrame(response_state_rows)
+response_module_positional_state_summary.to_csv(
+    OUTPUT_DIR / 'response_module_positional_state_summary.csv', index=False)
+response_module_state_transition_counts = pd.crosstab(
+    gene_positional_state_transitions['response_module'],
+    gene_positional_state_transitions['state_transition'])
+response_module_state_transition_counts.to_csv(
+    OUTPUT_DIR / 'response_module_state_transitions.csv')
+display(response_module_positional_state_summary.drop(
+    columns='state_transition_distribution').round(3))
+
 response_module_archetype_rows = []
 for module in response_catalog_stats['module']:
     members = response_module_eligible == module
@@ -2672,13 +2845,29 @@ _dominant_transition_modules = response_module_archetype_summary[
     response_module_archetype_summary['fraction_most_common_transition'] >= 0.5]
 print(f'Response modules whose members mostly share ONE positional transition (>= 50%): '
       f'{len(_dominant_transition_modules)} of {len(response_module_archetype_summary)}')
-print('Where that fraction is high, the module is better described as a positional-program switch than '
-      'as a generic difference-curve phenotype. Where it is low, the module mixes several programs and '
-      'should not be given a single positional interpretation.')
+print('The table above covers all genes. The archetype-only table is a secondary view of genes '
+      'patterned in both species; it cannot quantify gain or loss of organization.')
 
 
 # %%
-# Purpose: figure 14 - response module x archetype transition, as a within-module fraction.
+# Purpose: figure 14 - response-module composition across all five positional transition classes.
+_response_class_fraction = response_module_positional_state_summary.set_index('response_module')[[
+    f'fraction_{name}' for name in _state_class_order]]
+fig, axis = plt.subplots(figsize=(10, 4.7))
+left = np.zeros(len(_response_class_fraction))
+for name, colour in zip(_state_class_order,
+                        ['#9A9A9A', '#59A14F', '#E15759', '#4C9BD3', '#B07AA1']):
+    values = _response_class_fraction[f'fraction_{name}'].to_numpy()
+    axis.barh(_response_class_fraction.index, values, left=left, label=name, color=colour)
+    left += values
+axis.set_xlim(0, 1)
+axis.set_xlabel('fraction of response module genes')
+axis.set_ylabel('response module')
+axis.legend(frameon=False, fontsize=8, bbox_to_anchor=(1.02, 1), loc='upper left')
+axis.set_title('Response modules: gain, loss, conservation, and pattern reorganization')
+_save_figure(fig, 'fig14_response_module_positional_states.png')
+
+# Retain the patterned-only detailed transition plot as a secondary view.
 _transition_categories = [f'{mouse}->{human}' for mouse in shared_archetypes
                           for human in shared_archetypes]
 response_transition_counts = pd.crosstab(
@@ -2719,21 +2908,58 @@ axis.set_yticklabels(response_transition_counts.index)
 axis.set_xlabel('mouse archetype -> human archetype (* = conserved transition)')
 axis.set_ylabel('existing response module (section 6)')
 fig.colorbar(_image, ax=axis, label='fraction of the module', shrink=0.7)
-axis.set_title('Figure 14 - do the existing response modules correspond to positional-program '
+axis.set_title('Patterned-only: do response modules correspond to archetype '
                'transitions?\ncolumns below 5% in every module are omitted; cell text = fraction',
                fontsize=11)
-_save_figure(fig, 'fig14_response_module_transitions.png')
+_save_figure(fig, 'fig14b_patterned_only_response_module_transitions.png')
 
 
 # %% [markdown]
 # ### 12.10 - pathway enrichment of the transitions
 #
-# The archetypes and the transition matrix are frozen by now, so this is the first place pathway
-# information is allowed in. No pathway expression is aggregated: every test is an over-representation
-# test of a gene set defined by a transition or by conservation, against the genes that could actually
-# have been assigned an archetype.
+# States, archetypes and the transition matrix are frozen before pathway information is read. The
+# primary background is every eligible gene. Conditional gain/loss tests use the genes with the same
+# mouse starting state, so they ask what differs within that starting state. All tests are exploratory.
 
 # %%
+# Purpose: 12.10 - primary full-universe transition enrichment and conditional gain/loss tests.
+state_transition_sets = {
+    label: members['gene'].tolist()
+    for label, members in gene_positional_state_transitions.groupby('state_transition')
+    if len(members) >= ARCHETYPE_CONFIG['pathway_min_transition_genes']
+}
+state_transition_enrichment = enrich_modules(
+    state_transition_sets, pathway_gene_sets, background=gene_names)
+state_transition_enrichment['background_type'] = 'all_eligible_genes'
+state_transition_enrichment['background_size'] = gene_names.size
+state_transition_enrichment.to_csv(
+    OUTPUT_DIR / 'positional_state_transition_enrichment.csv', index=False)
+
+conditional_enrichment_frames = []
+for starting_state in state_order:
+    starting_genes = gene_positional_state_transitions.loc[
+        gene_positional_state_transitions['mouse_state'].eq(starting_state), 'gene'].tolist()
+    conditional_sets = {
+        label: genes for label, genes in state_transition_sets.items()
+        if label.startswith(f'{starting_state}->')
+        and (label.endswith('->F') or starting_state == 'F' and label != 'F->F')
+    }
+    if conditional_sets:
+        conditional = enrich_modules(
+            conditional_sets, pathway_gene_sets, background=starting_genes)
+        conditional['background_type'] = 'same_mouse_starting_state'
+        conditional['background_state'] = starting_state
+        conditional['background_size'] = len(starting_genes)
+        conditional_enrichment_frames.append(conditional)
+conditional_state_enrichment = (pd.concat(conditional_enrichment_frames, ignore_index=True)
+                                if conditional_enrichment_frames else pd.DataFrame())
+conditional_state_enrichment.to_csv(
+    OUTPUT_DIR / 'positional_state_conditional_enrichment.csv', index=False)
+print(f'Primary pathway tests: {len(state_transition_sets)} state-transition sets against '
+      f'{gene_names.size:,} eligible genes. Conditional tests use each mouse starting-state universe.')
+print('BH correction is within each tested background family; these set-level results are exploratory.')
+
+# Preserve the earlier patterned-only conservation and switching enrichment as a secondary view.
 # Purpose: 12.10 - the transition and conservation gene sets, with their sizes and skip reasons.
 transition_sets = {}
 transition_set_meta = []
@@ -2776,8 +3002,7 @@ archetype_background = archetype_genes
 print(f'Transition and conservation sets defined: {len(transition_set_meta)}; tested: '
       f'{len(transition_sets)}; skipped below the size minimum: '
       f'{int((~transition_set_meta["tested"]).sum())}')
-print(f'Enrichment universe: the {archetype_background.size:,} genes eligible for the shared-archetype '
-      'analysis - not every expressed gene.')
+print(f'Secondary patterned-only enrichment universe: {archetype_background.size:,} genes.')
 
 # Both branches bind `transition_enrichment`, so a run in which nothing is testable still produces the
 # table with the schema below rather than a later NameError.
@@ -2840,10 +3065,9 @@ print('Correction is BH across this whole family of transition x pathway pairs, 
 # %% [markdown]
 # ### 12.11 - pathway coherence versus switching
 #
-# A pathway is not a program. Its members can sit in one positional archetype, spread across several,
-# or make one dominant transition. Raw entropy cannot be read on its own - a 20-gene pathway looks
-# concentrated whether or not it is - so every pathway statistic is compared with an empirical null of
-# random gene sets matched for size AND for approximate mouse amplitude.
+# A pathway is not a program. First report the full distribution of gain, loss, conservation and
+# reorganization. The existing patterned-only archetype entropy analysis then compares its shape
+# metrics with an empirical null matched for set size and approximate mouse amplitude.
 
 # %%
 # Purpose: 12.11 - archetype entropy, transition entropy, conserved fraction and direct curve
@@ -2856,6 +3080,34 @@ def _normalized_entropy(counts, n_categories):
     proportions = counts[counts > 0] / total
     return float(-(proportions * np.log(proportions)).sum() / np.log(n_categories))
 
+
+# The primary pathway composition uses every eligible gene, including flat and single-species genes.
+_gene_state_index = gene_positional_state_transitions.set_index('gene')
+pathway_state_rows = []
+for pathway_name, pathway_members in pathway_gene_sets.items():
+    members = _gene_state_index.loc[_gene_state_index.index.intersection(pathway_members)]
+    if len(members) < ARCHETYPE_CONFIG['coherence_min_pathway_genes']:
+        continue
+    class_counts = members['transition_class'].value_counts()
+    transition_counts_for_pathway = members['state_transition'].value_counts()
+    pathway_state_rows.append({
+        'pathway': pathway_name,
+        'eligible_gene_count': len(members),
+        **{f'fraction_{name}': class_counts.get(name, 0) / len(members)
+           for name in _state_class_order},
+        'dominant_transition_class': class_counts.index[0],
+        'dominant_state_transition': transition_counts_for_pathway.index[0],
+        'state_transition_entropy': _normalized_entropy(
+            transition_counts_for_pathway.to_numpy(), len(state_order) ** 2),
+        'state_transition_distribution': '; '.join(
+            f'{state}:{count}' for state, count in transition_counts_for_pathway.items()),
+    })
+pathway_positional_state_summary = pd.DataFrame(pathway_state_rows)
+pathway_positional_state_summary.to_csv(
+    OUTPUT_DIR / 'pathway_positional_state_summary.csv', index=False)
+display(pathway_positional_state_summary.sort_values(
+    'eligible_gene_count', ascending=False).head(12).drop(
+        columns='state_transition_distribution').round(3))
 
 _archetype_index = {archetype: position for position, archetype in enumerate(shared_archetypes)}
 _n_archetypes = len(shared_archetypes)
@@ -2979,7 +3231,25 @@ else:
 
 
 # %%
-# Purpose: figure 15 - pathway coherence: concentration against the matched null, and the extremes.
+# Purpose: figure 15 - full-universe pathway state composition, followed by patterned-only coherence.
+if not pathway_positional_state_summary.empty:
+    _pathway_show = pathway_positional_state_summary.sort_values(
+        ['eligible_gene_count'], ascending=False).head(15).iloc[::-1]
+    fig, axis = plt.subplots(figsize=(10.5, 0.44 * len(_pathway_show) + 2))
+    left = np.zeros(len(_pathway_show))
+    for name, colour in zip(_state_class_order,
+                            ['#9A9A9A', '#59A14F', '#E15759', '#4C9BD3', '#B07AA1']):
+        values = _pathway_show[f'fraction_{name}'].to_numpy()
+        axis.barh([name.split(': ')[-1][:38] for name in _pathway_show['pathway']],
+                  values, left=left, color=colour, label=name)
+        left += values
+    axis.set_xlim(0, 1)
+    axis.set_xlabel('fraction of eligible pathway genes')
+    axis.legend(frameon=False, fontsize=7, bbox_to_anchor=(1.02, 1), loc='upper left')
+    axis.set_title('Pathway positional-state outcomes (no pathway expression aggregation)')
+    _save_figure(fig, 'fig15a_pathway_positional_state_summary.png')
+
+# The existing pathway coherence figure remains a patterned-only secondary analysis.
 if pathway_archetype_coherence.empty:
     print('Figure 15 skipped: no pathway reached the eligible-gene minimum.')
 else:
@@ -3020,209 +3290,91 @@ else:
 # %% [markdown]
 # ### 12.12 - threshold sensitivity
 #
-# The current response analysis contains many genes with small response amplitudes, so the question is
-# whether the archetypes and the transitions survive a stricter amplitude floor. Only the cheap part is
-# repeated - eligibility, the joint PCA and the single clustering. No downstream enrichment is rerun at
-# every rung, and every rung keeps one fixed definition of what a transition is by matching solutions on
-# centroid SHAPE rather than on the arbitrary cluster names.
+# The F boundary is a chosen amplitude floor, not a significance test. Reclassify all genes at 1x,
+# 2x and 4x that floor while holding the primary archetype model fixed. Patterned curves retain their
+# primary assignments where eligible; no PCA or archetype centroids are relearned.
 
 # %%
-# Purpose: 12.12 - repeat the shared-archetype solution at 1x, 2x and 4x the amplitude floor.
+# Purpose: 12.12 - reclassify positional amplitude states at stricter floors without reclustering.
+# Archetype labels were learned once at the primary floor. Any curve that remains patterned keeps
+# its primary assignment; a curve falling below a stricter floor becomes F.
 sensitivity_rows = []
-sensitivity_persistence_rows = []
-_primary_tracked_transitions = {}
-for row in transition_rows.sort_values('n_genes', ascending=False).head(
-        ARCHETYPE_CONFIG['representative_transitions']).itertuples():
-    _primary_tracked_transitions[f'{row.mouse_archetype}->{row.human_archetype}'] = (
-        (archetype_mouse_label == row.mouse_archetype)
-        & (archetype_human_label == row.human_archetype))
-
 for multiplier in ARCHETYPE_CONFIG['amplitude_floor_ladder']:
-    floor = ARCHETYPE_CONFIG['amplitude_floor'] * float(multiplier)
-    row = {
-        'amplitude_floor_multiplier': float(multiplier),
-        'amplitude_floor': float(floor),
-        'status': 'evaluated',
-        'n_eligible_genes': np.nan,
-        'n_archetypes': np.nan,
-        'selected_k_best_silhouette': np.nan,
-        'smallest_archetype': np.nan,
-        'largest_archetype_fraction': np.nan,
-        'median_shape_correlation': np.nan,
-        'fraction_conserved': np.nan,
-        'dominant_transition': '',
-        'fraction_in_dominant_transition': np.nan,
-        'median_best_centroid_spearman_vs_primary': np.nan,
-        'median_fraction_primary_transitions_reproduced': np.nan,
-    }
-    try:
-        threshold_solution = _shared_archetype_solution(
-            mouse_curves, human_curves, grid, gene_names, floor, ARCHETYPE_CONFIG['min_genes'])
-    except ValueError as error:
-        row['status'] = f'not evaluable: {error}'
-        sensitivity_rows.append(row)
-        continue
-
-    # Match this rung's archetypes to the primary ones on centroid SHAPE. Comparing labels would be
-    # meaningless: each run names its own clusters A1..Ak by centroid peak position.
-    _rung_common = archetype_columns & threshold_solution['columns']
-    if int(_rung_common.sum()) < 3:
-        _rung_common = archetype_columns
-    _primary_subset = _rung_common[archetype_columns]
-    _rung_subset = _rung_common[threshold_solution['columns']]
-    _matching = pd.DataFrame([
-        {'primary_archetype': primary_archetype, 'rung_archetype': rung_archetype,
-         'centroid_spearman': safe_spearman(
-             shared['centroid_combined'][primary_archetype][_primary_subset],
-             threshold_solution['centroid_combined'][rung_archetype][_rung_subset])}
-        for primary_archetype in shared_archetypes
-        for rung_archetype in threshold_solution['archetypes']
-    ])
-    _best_match = (_matching.sort_values('centroid_spearman', ascending=False)
-                   .groupby('primary_archetype', observed=True).head(1))
-    _rung_to_primary = dict(zip(_best_match['rung_archetype'], _best_match['primary_archetype']))
-    row['median_best_centroid_spearman_vs_primary'] = float(_best_match['centroid_spearman'].median())
-
-    _rung_position = {gene: position
-                      for position, gene in enumerate(threshold_solution['genes'])}
-    _mapped_mouse = np.asarray(
-        [_rung_to_primary.get(value, '?') for value in threshold_solution['mouse_archetype']],
-        dtype=object)
-    _mapped_human = np.asarray(
-        [_rung_to_primary.get(value, '?') for value in threshold_solution['human_archetype']],
-        dtype=object)
-    _reproduced_fractions = []
-    for label, members in _primary_tracked_transitions.items():
-        mouse_name, human_name = label.split('->')
-        positions = np.asarray([_rung_position[gene] for gene in archetype_genes[members]
-                                if gene in _rung_position], dtype=int)
-        if positions.size == 0:
-            sensitivity_persistence_rows.append({
-                'amplitude_floor': float(floor), 'transition': label, 'n_genes_available': 0,
-                'fraction_reproducing': np.nan})
-            continue
-        reproduced = ((_mapped_mouse[positions] == mouse_name)
-                      & (_mapped_human[positions] == human_name))
-        fraction_reproduced = float(reproduced.mean())
-        _reproduced_fractions.append(fraction_reproduced)
-        sensitivity_persistence_rows.append({
-            'amplitude_floor': float(floor), 'transition': label,
-            'n_genes_available': int(positions.size),
-            'fraction_reproducing': fraction_reproduced})
-
-    _rung_sizes = pd.Series(threshold_solution['mouse_archetype']).value_counts()
-    _rung_transitions = pd.Series(np.asarray(
-        [f'{mouse}->{human}' for mouse, human in zip(
-            threshold_solution['mouse_archetype'], threshold_solution['human_archetype'])],
-        dtype=object)).value_counts()
-    row.update({
-        'n_eligible_genes': int(threshold_solution['eligible'].sum()),
-        'n_archetypes': len(threshold_solution['archetypes']),
-        'selected_k_best_silhouette': float(threshold_solution['best_silhouette']),
-        'smallest_archetype': int(_rung_sizes.min()),
-        'largest_archetype_fraction': float(_rung_sizes.max() / _rung_sizes.sum()),
-        'median_shape_correlation': float(np.nanmedian(_row_block_pearson(
-            threshold_solution['mouse_standardized'], threshold_solution['human_standardized'],
-            ARCHETYPE_CONFIG['numerical_epsilon']))),
-        'fraction_conserved': float(np.mean(
-            np.asarray(threshold_solution['mouse_archetype'])
-            == np.asarray(threshold_solution['human_archetype']))),
-        # Expressed in the PRIMARY archetype names wherever this rung's archetype matched one, so the
-        # column is comparable with the primary transition table instead of silently mixing two
-        # clusterings' private labels. An unmatched rung archetype keeps its own name, marked.
-        'dominant_transition': '->'.join(
-            _rung_to_primary.get(name, f'{name}(unmatched)')
-            for name in _rung_transitions.index[0].split('->')),
-        'fraction_in_dominant_transition': float(
-            _rung_transitions.iloc[0] / _rung_transitions.sum()),
-        'median_fraction_primary_transitions_reproduced': (
-            float(np.nanmedian(_reproduced_fractions)) if _reproduced_fractions else np.nan),
-    })
+    floor = ARCHETYPE_FLOOR * float(multiplier)
+    mouse_at_floor = gene_mouse_amplitude >= floor
+    human_at_floor = gene_human_amplitude >= floor
+    states_at_floor = np.select([
+        ~mouse_at_floor & ~human_at_floor,
+        ~mouse_at_floor & human_at_floor,
+        mouse_at_floor & ~human_at_floor,
+    ], ['flat->flat', 'flat->patterned', 'patterned->flat'],
+        default='patterned->patterned')
+    counts = pd.Series(states_at_floor).value_counts().reindex([
+        'flat->flat', 'flat->patterned', 'patterned->flat', 'patterned->patterned'], fill_value=0)
+    row = {'amplitude_floor_multiplier': float(multiplier), 'amplitude_floor': float(floor),
+           'n_eligible_genes': gene_names.size}
+    for label, count in counts.items():
+        key = label.replace('->', '_to_')
+        row[f'n_{key}'] = int(count)
+        row[f'fraction_{key}'] = float(count / gene_names.size)
     sensitivity_rows.append(row)
-
-shared_archetype_threshold_sensitivity = pd.DataFrame(sensitivity_rows)
-shared_archetype_threshold_sensitivity.to_csv(
-    OUTPUT_DIR / 'shared_archetype_threshold_sensitivity.csv', index=False)
-shared_archetype_threshold_persistence = pd.DataFrame(sensitivity_persistence_rows)
-shared_archetype_threshold_persistence.to_csv(
-    DIAGNOSTIC_DIR / 'shared_archetype_threshold_transition_persistence.csv', index=False)
-
-display(shared_archetype_threshold_sensitivity[[
-    'amplitude_floor', 'status', 'n_eligible_genes', 'n_archetypes', 'smallest_archetype',
-    'largest_archetype_fraction', 'median_shape_correlation', 'fraction_conserved',
-    'dominant_transition', 'fraction_in_dominant_transition',
-    'median_best_centroid_spearman_vs_primary',
-    'median_fraction_primary_transitions_reproduced',
-]].round(3))
-display(shared_archetype_threshold_persistence.round(3))
-print('The 1x rung is the primary analysis re-derived, so it must reproduce itself exactly (centroid '
-      'agreement 1.0 and every tracked transition at 1.0) - it is here as a self-consistency check. '
-      'A rung that cannot be evaluated is reported as such rather than dropped: too few genes above the '
-      'floor is itself the answer to the sensitivity question.')
+positional_state_threshold_sensitivity = pd.DataFrame(sensitivity_rows)
+positional_state_threshold_sensitivity.to_csv(
+    OUTPUT_DIR / 'positional_state_threshold_sensitivity.csv', index=False)
+display(positional_state_threshold_sensitivity.round(3))
+print('Thresholds reclassify the full eligible universe. Archetypes remain the primary model and are '
+      'retained only while a curve remains patterned; F never enters PCA or centroid estimation.')
 
 
 # %% [markdown]
-# ### 12.13 - specimen-pair consistency of the switching
+# ### 12.13 - specimen-pair consistency of positional states
 #
 # This is technical and specimen-level robustness only. The two human sections are sections of ONE
 # donor: pairs are not biological replicates, and nothing here is a species-level test. Each mouse
-# specimen x human section pair is standardised on its own and **projected into the primary shared
-# PCA**, then assigned to the nearest primary archetype centroid, so there is one fixed archetype
-# definition throughout and no reclustering per pair.
+# specimen x human section pair is classified with the same amplitude floor. Only patterned
+# curves are standardised and projected into the primary shared PCA; flat curves remain F.
 
 # %%
-# Purpose: 12.13 - project every specimen pair into the primary archetype model and score consistency.
-primary_raw_scores = shared_pca.transform(shared['standardized'])[:, :shared_n_pc]
-primary_whitening_spread = primary_raw_scores.std(axis=0, ddof=1)
-if not np.allclose(primary_raw_scores / primary_whitening_spread, shared_scores, atol=1e-8):
-    raise ValueError('The whitening recovered from the primary PCA does not reproduce the primary '
-                     'scores, so projecting into them would silently use a different space.')
-archetype_centroid_scores = pd.DataFrame(
-    shared_scores,
-    columns=[f'pc{index + 1}_score' for index in range(shared_n_pc)],
-).groupby(shared_labels).mean().reindex(shared_archetypes).to_numpy()
+# Purpose: 12.13 - project each specimen's patterned curves into the frozen primary model.
+def _project_to_primary(curves):
+    values = np.asarray(curves, dtype=float)
+    amplitude = _peak_to_peak(values)
+    patterned = ((amplitude >= ARCHETYPE_FLOOR)
+                 & np.isfinite(values[:, archetype_columns]).all(axis=1))
+    labels = np.full(values.shape[0], 'F', dtype=object)
+    standardized = np.full((values.shape[0], int(archetype_columns.sum())), np.nan)
+    if patterned.any():
+        standardized[patterned] = _standardize_species(values[patterned], archetype_columns)
+        scores = shared_pca.transform(standardized[patterned])[:, :shared_n_pc]
+        if CLUSTER_CONFIG['pc_whiten']:
+            scores = scores / primary_whitening_spread
+        labels[patterned] = _nearest_archetype(scores, archetype_centroid_scores)
+    return labels, standardized
 
 
-def _project_to_primary(curves, columns, pca, whitening, n_pc):
-    """One specimen's curves -> standardised, then projected into the primary shared PC space.
-
-    A single specimen's curve is undefined outside its own pseudospace support. Those columns are set
-    to the row's own centred mean (0) rather than dropped, because dropping them would move the row
-    into a different feature space than the PCA the archetypes were learned in.
-    """
-    standardized = zscore_rows(np.asarray(curves, dtype=float)[:, columns])
-    standardized = np.where(np.isfinite(standardized), standardized, 0.0)
-    return standardized, pca.transform(standardized)[:, :n_pc] / whitening
-
-
-def _nearest_archetype(scores, centroid_scores):
-    distance = ((scores[:, None, :] - centroid_scores[None, :, :]) ** 2).sum(axis=2)
-    return np.asarray(shared_archetypes, dtype=object)[np.argmin(distance, axis=1)]
-
+specimen_labels = {}
+specimen_standardized = {}
+for specimen_name in [*mouse_specimens, *human_specimens]:
+    specimen_labels[specimen_name], specimen_standardized[specimen_name] = _project_to_primary(
+        specimen_curves[specimen_name])
 
 specimen_pair_reproduction = {}
 specimen_pair_correlations = {}
 for mouse_name in mouse_specimens:
-    mouse_pair_standardized, mouse_pair_scores = _project_to_primary(
-        specimen_curves[mouse_name], archetype_columns, shared_pca, primary_whitening_spread,
-        shared_n_pc)
-    mouse_pair_labels = _nearest_archetype(mouse_pair_scores, archetype_centroid_scores)
     for human_name in human_specimens:
-        human_pair_standardized, human_pair_scores = _project_to_primary(
-            specimen_curves[human_name], archetype_columns, shared_pca, primary_whitening_spread,
-            shared_n_pc)
-        human_pair_labels = _nearest_archetype(human_pair_scores, archetype_centroid_scores)
-        reproduced_mouse = mouse_pair_labels[archetype_eligible] == archetype_mouse_label
-        reproduced_human = human_pair_labels[archetype_eligible] == archetype_human_label
         pair_name = f'{mouse_name}|{human_name}'
+        pair_mouse = specimen_labels[mouse_name]
+        pair_human = specimen_labels[human_name]
         specimen_pair_reproduction[pair_name] = {
-            'mouse': reproduced_mouse,
-            'human': reproduced_human,
-            'transition': reproduced_mouse & reproduced_human,
+            'mouse': pair_mouse == mouse_state,
+            'human': pair_human == human_state,
+            'transition': (pair_mouse == mouse_state) & (pair_human == human_state),
         }
-        specimen_pair_correlations[pair_name] = _row_block_pearson(
-            mouse_pair_standardized[archetype_eligible], human_pair_standardized[archetype_eligible],
+        pair_correlation = _row_block_pearson(
+            specimen_standardized[mouse_name], specimen_standardized[human_name],
             ARCHETYPE_CONFIG['numerical_epsilon'])
+        pair_correlation[(pair_mouse == 'F') | (pair_human == 'F')] = np.nan
+        specimen_pair_correlations[pair_name] = pair_correlation
 
 specimen_pair_names = sorted(specimen_pair_reproduction)
 _pair_mouse = np.asarray([specimen_pair_reproduction[name]['mouse'] for name in specimen_pair_names],
@@ -3233,86 +3385,74 @@ _pair_transition = np.asarray(
     [specimen_pair_reproduction[name]['transition'] for name in specimen_pair_names], dtype=float)
 _pair_correlation = np.asarray([specimen_pair_correlations[name] for name in specimen_pair_names],
                                dtype=float)
+_pair_correlation_count = np.isfinite(_pair_correlation).sum(axis=0)
+_pair_correlation_median = np.full(gene_names.size, np.nan)
+_has_pair_correlation = _pair_correlation_count > 0
+_pair_correlation_median[_has_pair_correlation] = np.nanmedian(
+    _pair_correlation[:, _has_pair_correlation], axis=0)
 
 specimen_consistency = pd.DataFrame({
-    'gene': archetype_genes,
-    'mouse_archetype': archetype_mouse_label,
-    'human_archetype': archetype_human_label,
-    'transition': archetype_transition_labels,
-    'archetype_status': archetype_assignments['archetype_status'].to_numpy(),
+    'gene': gene_names,
+    'mouse_state': mouse_state,
+    'human_state': human_state,
+    'state_transition': state_transition,
+    'transition_class': transition_class,
     'n_specimen_pairs': len(specimen_pair_names),
-    'fraction_specimen_pairs_reproducing_mouse_archetype': np.nanmean(_pair_mouse, axis=0),
-    'fraction_specimen_pairs_reproducing_human_archetype': np.nanmean(_pair_human, axis=0),
-    'fraction_specimen_pairs_reproducing_transition': np.nanmean(_pair_transition, axis=0),
-    'median_specimen_pair_shape_correlation': np.nanmedian(_pair_correlation, axis=0),
-    'primary_shape_correlation': archetype_shape_correlation,
+    'fraction_specimen_pairs_reproducing_mouse_state': np.mean(_pair_mouse, axis=0),
+    'fraction_specimen_pairs_reproducing_human_state': np.mean(_pair_human, axis=0),
+    'fraction_specimen_pairs_reproducing_transition': np.mean(_pair_transition, axis=0),
+    'median_specimen_pair_shape_correlation': _pair_correlation_median,
+    'primary_shape_correlation': gene_positional_state_transitions['shape_correlation'].to_numpy(),
 })
 specimen_consistency.to_csv(
-    OUTPUT_DIR / 'shared_archetype_specimen_consistency.csv', index=False)
-transition_consistency = specimen_consistency.groupby('transition', observed=True).agg(
+    OUTPUT_DIR / 'positional_state_specimen_consistency.csv', index=False)
+transition_consistency = specimen_consistency.groupby('state_transition', observed=True).agg(
     n_genes=('gene', 'size'),
-    median_fraction_reproducing_mouse_archetype=(
-        'fraction_specimen_pairs_reproducing_mouse_archetype', 'median'),
-    median_fraction_reproducing_human_archetype=(
-        'fraction_specimen_pairs_reproducing_human_archetype', 'median'),
     median_fraction_reproducing_transition=(
         'fraction_specimen_pairs_reproducing_transition', 'median'),
     median_specimen_pair_shape_correlation=('median_specimen_pair_shape_correlation', 'median'),
-    median_primary_shape_correlation=('primary_shape_correlation', 'median'),
 ).reset_index().sort_values('n_genes', ascending=False)
 transition_consistency.to_csv(
-    OUTPUT_DIR / 'shared_archetype_specimen_consistency_by_transition.csv', index=False)
+    OUTPUT_DIR / 'positional_state_specimen_consistency_by_transition.csv', index=False)
 
 print(f'Specimen pairs evaluated: {len(specimen_pair_names)} '
       f'({len(mouse_specimens)} mouse specimens x {len(human_specimens)} human sections): '
       f'{", ".join(specimen_pair_names)}')
-print(f'  median fraction of pairs reproducing the primary MOUSE archetype: '
-      f'{np.nanmedian(specimen_consistency["fraction_specimen_pairs_reproducing_mouse_archetype"]):.3f}')
-print(f'  median fraction of pairs reproducing the primary HUMAN archetype: '
-      f'{np.nanmedian(specimen_consistency["fraction_specimen_pairs_reproducing_human_archetype"]):.3f}')
-print(f'  median fraction of pairs reproducing the primary TRANSITION: '
-      f'{np.nanmedian(specimen_consistency["fraction_specimen_pairs_reproducing_transition"]):.3f}')
-print(f'  median pair-level mouse-vs-human shape correlation: '
-      f'{np.nanmedian(specimen_consistency["median_specimen_pair_shape_correlation"]):.3f} '
-      f'(the specimen-balanced value is '
-      f'{np.nanmedian(archetype_shape_correlation):.3f})')
+print(f'  median fraction reproducing the primary STATE TRANSITION: '
+      f'{specimen_consistency["fraction_specimen_pairs_reproducing_transition"].median():.3f}')
 display(transition_consistency.head(10).round(3))
-print('A transition whose consistency is near chance is a boundary effect of the specimen-balanced '
-      'curves, not a biological finding, and 12.17 downgrades it accordingly. The two human sections '
-      'remain ONE donor: these pairs are technical robustness, never biological replication.')
+print('The human sections belong to ONE donor. Pair agreement is a technical robustness check, not '
+      'biological replication or a formal species-level test.')
 
 
 # %%
-# Purpose: figure 16 - compact threshold and specimen-pair consistency summary.
-_sensitivity_evaluated = shared_archetype_threshold_sensitivity[
-    shared_archetype_threshold_sensitivity['status'].eq('evaluated')]
+# Purpose: figure 16 - state-threshold sensitivity and specimen-pair consistency.
 fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
-
-axes[0].bar(_sensitivity_evaluated['amplitude_floor'].astype(str),
-            _sensitivity_evaluated['n_eligible_genes'], color='#6B7A8F', label='eligible genes')
-_twin = axes[0].twinx()
-_twin.plot(_sensitivity_evaluated['amplitude_floor'].astype(str),
-           _sensitivity_evaluated['n_archetypes'], color='#D55E00', marker='o', ms=5,
-           label='archetypes')
-_twin.set_ylabel('shared archetypes', color='#D55E00')
-_twin.tick_params(axis='y', colors='#D55E00')
+_threshold_labels = positional_state_threshold_sensitivity['amplitude_floor'].astype(str)
+_bottom = np.zeros(len(_threshold_labels))
+for label, colour in zip(['flat_to_flat', 'flat_to_patterned', 'patterned_to_flat',
+                          'patterned_to_patterned'],
+                         ['#9A9A9A', '#59A14F', '#E15759', '#4C9BD3']):
+    values = positional_state_threshold_sensitivity[f'fraction_{label}'].to_numpy()
+    axes[0].bar(_threshold_labels, values, bottom=_bottom, color=colour,
+                label=label.replace('_to_', '->'))
+    _bottom += values
+axes[0].set_ylim(0, 1)
 axes[0].set_xlabel('amplitude floor per species')
-axes[0].set_ylabel('genes eligible in both species')
-axes[0].set_title('Do the archetypes persist?')
+axes[0].set_ylabel('fraction of all eligible genes')
+axes[0].set_title('Threshold-dependent state composition')
+axes[0].legend(frameon=False, fontsize=7)
 
-axes[1].plot(_sensitivity_evaluated['amplitude_floor'].astype(str),
-             _sensitivity_evaluated['median_best_centroid_spearman_vs_primary'], marker='o', ms=5,
-             color='#4C9BD3', label='centroid agreement with primary')
-axes[1].plot(_sensitivity_evaluated['amplitude_floor'].astype(str),
-             _sensitivity_evaluated['median_fraction_primary_transitions_reproduced'], marker='s',
-             ms=5, color='#E15759', label='primary transitions reproduced')
-axes[1].plot(_sensitivity_evaluated['amplitude_floor'].astype(str),
-             _sensitivity_evaluated['fraction_conserved'], marker='^', ms=5, color='#59A14F',
-             label='fraction conserved')
-axes[1].set_ylim(-0.02, 1.05)
+for label, colour in [('flat_to_patterned', '#59A14F'),
+                      ('patterned_to_flat', '#E15759'),
+                      ('patterned_to_patterned', '#4C9BD3')]:
+    axes[1].plot(_threshold_labels,
+                 positional_state_threshold_sensitivity[f'fraction_{label}'],
+                 marker='o', label=label.replace('_to_', '->'), color=colour)
+axes[1].set_ylim(0, 1)
 axes[1].set_xlabel('amplitude floor per species')
-axes[1].set_ylabel('agreement with the primary solution')
-axes[1].set_title('Do the transitions persist?')
+axes[1].set_ylabel('fraction of all eligible genes')
+axes[1].set_title('Gain/loss sensitivity')
 axes[1].legend(frameon=False, fontsize=7)
 
 _transition_consistency_shown = transition_consistency[
@@ -3321,25 +3461,26 @@ if _transition_consistency_shown.empty:
     _transition_consistency_shown = transition_consistency.head(10).copy()
 _transition_consistency_shown = _transition_consistency_shown.sort_values(
     'median_fraction_reproducing_transition', ascending=False).head(14)
-axes[2].barh(_transition_consistency_shown['transition'][::-1],
+axes[2].barh(_transition_consistency_shown['state_transition'][::-1],
              _transition_consistency_shown['median_fraction_reproducing_transition'][::-1],
              color='#59A14F')
 axes[2].set_xlim(0, 1.05)
 axes[2].set_xlabel('median fraction of specimen pairs reproducing the transition')
 axes[2].set_title('Specimen-pair consistency')
 axes[2].tick_params(axis='y', labelsize=7)
-fig.suptitle('Figure 16 - sensitivity to the amplitude floor and to the specimen pairing', fontsize=12)
-_save_figure(fig, 'fig16_archetype_sensitivity_and_specimen_consistency.png')
+fig.suptitle('Figure 16 - positional-state sensitivity and specimen-pair consistency', fontsize=12)
+_save_figure(fig, 'fig16_positional_state_sensitivity_and_specimen_consistency.png')
 
 
 # %% [markdown]
 # ### 12.14 - representative genes for the transitions the data actually produced
 
 # %%
-# Purpose: 12.14 - a few high-interest transitions, with the standardised curves and the original fits.
+# Purpose: 12.14 - representative gain, loss and patterned-shape transitions.
 top_transitions = transition_rows[
-    transition_rows['n_genes'] >= ARCHETYPE_CONFIG['pathway_min_transition_genes']].sort_values(
-    'n_genes', ascending=False).head(ARCHETYPE_CONFIG['representative_transitions'])
+    (transition_rows['n_genes'] >= ARCHETYPE_CONFIG['pathway_min_transition_genes'])
+    & transition_rows['transition_class'].ne('flat_both')].sort_values(
+        'n_genes', ascending=False).head(ARCHETYPE_CONFIG['representative_transitions'])
 if top_transitions.empty:
     print('No transition reaches the minimum size, so no representative-gene figure was written.')
 else:
@@ -3347,47 +3488,41 @@ else:
                              figsize=(11.5, 2.7 * len(top_transitions)), squeeze=False,
                              sharex=True)
     for row_index, transition_row in enumerate(top_transitions.itertuples()):
-        label = f'{transition_row.mouse_archetype}->{transition_row.human_archetype}'
-        members = ((archetype_mouse_label == transition_row.mouse_archetype)
-                   & (archetype_human_label == transition_row.human_archetype))
-        positions = np.flatnonzero(members)
-        # Representative of a TRANSITION means it carries real amplitude in both species, not merely
-        # that it sits near a centroid boundary.
-        rank = np.minimum(gene_mouse_amplitude[archetype_eligible][positions],
-                          gene_human_amplitude[archetype_eligible][positions])
+        label = f'{transition_row.mouse_state}->{transition_row.human_state}'
+        positions = np.flatnonzero(state_transition == label)
+        rank = np.maximum(gene_mouse_amplitude[positions], gene_human_amplitude[positions])
         chosen = positions[np.argsort(-rank)][
             :ARCHETYPE_CONFIG['representative_genes_per_transition']]
         for position in chosen:
-            axes[row_index][0].plot(archetype_grid, Z_mouse[position], lw=1.5,
-                                    color=SPECIES_COLORS['mouse'], alpha=0.85)
-            axes[row_index][0].plot(archetype_grid, Z_human[position], lw=1.5, ls='--',
-                                    color=SPECIES_COLORS['human'], alpha=0.85)
-            # The original curves span the whole grid while `archetype_grid` is the shared-column
-            # subset, so the same column mask has to be applied before they share an x axis.
-            axes[row_index][1].plot(
-                archetype_grid, mouse_curves[archetype_eligible][position][archetype_columns],
-                lw=1.4, color=SPECIES_COLORS['mouse'], alpha=0.85)
-            axes[row_index][1].plot(
-                archetype_grid, human_curves[archetype_eligible][position][archetype_columns],
-                lw=1.4, ls='--', color=SPECIES_COLORS['human'], alpha=0.85)
+            for species_name, values, patterned, linestyle in (
+                    ('mouse', mouse_curves, mouse_patterned, '-'),
+                    ('human', human_curves, human_patterned, '--')):
+                # F has no standardised shape. Only the patterned side appears in the left panel.
+                if patterned[position]:
+                    z_curve = _standardize_species(values[position:position + 1],
+                                                   archetype_columns)[0]
+                    axes[row_index][0].plot(archetype_grid, z_curve, lw=1.5,
+                                            color=SPECIES_COLORS[species_name], ls=linestyle,
+                                            alpha=0.85)
+                axes[row_index][1].plot(
+                    archetype_grid, values[position, archetype_columns], lw=1.4,
+                    color=SPECIES_COLORS[species_name], ls=linestyle, alpha=0.85)
         axes[row_index][0].annotate(
-            '; '.join(archetype_genes[chosen]), xy=(0.01, 0.02), xycoords='axes fraction',
+            '; '.join(gene_names[chosen]), xy=(0.01, 0.02), xycoords='axes fraction',
             fontsize=6, style='italic')
         axes[row_index][0].axhline(0, color='k', lw=0.5)
         axes[row_index][1].axhline(0, color='k', lw=0.5)
         axes[row_index][0].set_ylabel(f'{label}\nz-score', fontsize=8)
         axes[row_index][1].set_ylabel('fitted lognorm', fontsize=8)
         axes[row_index][0].set_title(
-            f'{label}: {transition_row.mouse_archetype} mouse -> {transition_row.human_archetype} '
-            f'human, n={int(transition_row.n_genes)} (standardised)', fontsize=8)
+            f'{label}: n={int(transition_row.n_genes)}; F curves have no z-score', fontsize=8)
         axes[row_index][1].set_title('Original unstandardised fits for the same genes', fontsize=8)
     for axis in axes[-1]:
         axis.set_xlabel('shared PT DPT')
     axes[0][0].plot([], [], color=SPECIES_COLORS['mouse'], label='mouse')
     axes[0][0].plot([], [], color=SPECIES_COLORS['human'], ls='--', label='human')
     axes[0][0].legend(frameon=False, fontsize=7)
-    fig.suptitle('Figure 17 - representative genes per transition: standardised shapes, and the '
-                 'original fits behind them', fontsize=12)
+    fig.suptitle('Figure 17 - representative full-state transitions and fitted curves', fontsize=12)
     _save_figure(fig, 'fig17_representative_transition_genes.png')
 
 
@@ -3397,112 +3532,42 @@ else:
 # Written from the objects this notebook computed. Nothing here restates a number it did not print.
 
 # %%
-# Purpose: 12.17 - the new section's conclusion, derived from the executed outputs.
-print('Section 12 - shared positional archetypes and cross-species program switching')
+# Purpose: 12.17 - summarize the full positional-state landscape from computed outputs.
+print('Section 12 - mouse to human positional states')
 print()
-
-print(f'1. Shared positional archetypes. {len(shared_archetypes)} archetypes '
-      f'({", ".join(shared_archetypes)}) were learned jointly from '
-      f'{shared_standardized.shape[0]:,} within-species standardised curves '
-      f'({archetype_genes.size:,} genes x 2 species) on {shared_standardized.shape[1]} shared grid '
-      f'points. {int(_represented_both.sum())} of them are occupied by both species. Median '
-      f'agreement between the mouse-only and human-only centroid of an archetype: '
-      f'{archetype_catalog["centroid_spearman_mouse_vs_human"].median():.3f}.')
-
-print(f'2. Same archetype in both species. {n_conserved:,} of {len(archetype_assignments):,} genes '
-      f'({n_conserved / len(archetype_assignments):.1%}) keep the same archetype; {n_switched:,} '
-      f'({n_switched / len(archetype_assignments):.1%}) switch. The median direct mouse-vs-human '
-      f'shape correlation is {np.nanmedian(archetype_shape_correlation):.3f} overall, '
-      f'{archetype_catalog["median_shape_correlation_conserved"].median():.3f} for genes that stay '
-      f'and {archetype_catalog["median_shape_correlation_switched_out"].median():.3f} for genes that '
-      'leave their mouse archetype.')
-
-_top_transition_rows = transition_rows.sort_values('n_genes', ascending=False).head(3)
-print('3. Most common mouse -> human transitions. ' + '; '.join(
-    f'{row.mouse_archetype}->{row.human_archetype} '
-    f'({int(row.n_genes)} genes, {row.row_fraction:.1%} of the row, O/E '
-    f'{row.observed_over_expected:.2f})' for row in _top_transition_rows.itertuples()) + '.')
-print('   By enrichment rather than by size: ' + '; '.join(
-    f'{row.mouse_archetype}->{row.human_archetype} (O/E {row.observed_over_expected:.2f}, '
-    f'{int(row.n_genes)} genes)' for row in _off_diagonal.sort_values(
-        'observed_over_expected', ascending=False).head(3).itertuples()) + '.')
-
-if response_module_archetype_summary.empty:
-    print('4. Response modules: no response module carried an eligible gene.')
-else:
-    print(f'4. Response modules as positional-program transitions. '
-          f'{len(_dominant_transition_modules)} of {len(response_module_archetype_summary)} response '
-          f'modules have >= 50% of their members in ONE transition, and the median module puts '
-          f'{response_module_archetype_summary["fraction_most_common_transition"].median():.1%} of '
-          f'its genes in its most common transition. The most concentrated: ' + '; '.join(
-              f'{row.response_module} -> {row.most_common_transition} '
-              f'({row.fraction_most_common_transition:.1%})'
-              for row in response_module_archetype_summary.sort_values(
-                  'fraction_most_common_transition', ascending=False).head(3).itertuples()) + '.')
-
-if transition_enrichment_significant.empty:
-    print('5. Pathways by conserved versus switching programs: no transition x pathway pair reached '
-          'BH q < 0.05, so this section identifies no pathway-specific program transition.')
-else:
-    _conserved_only = transition_enrichment_significant[
-        transition_enrichment_significant['set_type'].eq('conserved within archetype')]
-    _switching_only = transition_enrichment_significant[
-        ~transition_enrichment_significant['set_type'].eq('conserved within archetype')]
-    print(f'5. Pathways by conserved versus switching programs. At BH q < 0.05 there are '
-          f'{len(_conserved_only)} conserved-set and {len(_switching_only)} switching/transition '
-          f'results. Strongest conserved: ' + ('; '.join(
-              f'{row.pathway} in {row.transition_set} (q={row.p_value_adjusted:.1e}, '
-              f'O/E={row.observed_over_expected:.1f})' for row in _conserved_only.sort_values(
-                  'p_value_adjusted').head(3).itertuples()) or 'none') + '. Strongest switching: ' +
-          ('; '.join(f'{row.pathway} in {row.transition_set} (q={row.p_value_adjusted:.1e}, '
-                     f'O/E={row.observed_over_expected:.1f})' for row in _switching_only.sort_values(
-                         'p_value_adjusted').head(3).itertuples()) or 'none') + '.')
-
-if pathway_archetype_coherence.empty:
-    print('6. Pathway heterogeneity: no pathway had enough eligible genes to assess.')
-else:
-    _heterogeneous = pathway_archetype_coherence.sort_values(
-        'z_transition_entropy', ascending=False).head(3)
-    print(f'6. Pathways whose genes are internally heterogeneous. Highest transition entropy against '
-          f'the size- and amplitude-matched null: ' + '; '.join(
-              f'{row.pathway.split(": ")[-1]} (z={row.z_transition_entropy:.2f}, '
-              f'fraction conserved {row.fraction_conserved:.2f}, n={row.eligible_gene_count})'
-              for row in _heterogeneous.itertuples()) +
-          '. These pathways span several positional programs at once, so an aggregate pathway curve '
-          'would average opposing shapes and can look modest while the members are not.')
-
-_strictest_evaluated = _sensitivity_evaluated.sort_values('amplitude_floor').tail(1)
-print(f'7. Robustness. Median specimen-pair reproduction of a primary transition is '
-      f'{np.nanmedian(specimen_consistency["fraction_specimen_pairs_reproducing_transition"]):.3f} '
-      f'(mouse archetype '
-      f'{np.nanmedian(specimen_consistency["fraction_specimen_pairs_reproducing_mouse_archetype"]):.3f}, '
-      f'human archetype '
-      f'{np.nanmedian(specimen_consistency["fraction_specimen_pairs_reproducing_human_archetype"]):.3f}). '
-      + (f'At the strictest evaluable floor ({_strictest_evaluated["amplitude_floor"].iloc[0]}) '
-         f'{int(_strictest_evaluated["n_archetypes"].iloc[0])} archetypes remain over '
-         f'{int(_strictest_evaluated["n_eligible_genes"].iloc[0]):,} genes, centroid agreement with '
-         f'the primary solution is '
-         f'{_strictest_evaluated["median_best_centroid_spearman_vs_primary"].iloc[0]:.3f} and the '
-         f'fraction conserved is '
-         f'{_strictest_evaluated["fraction_conserved"].iloc[0]:.1%}.'
-         if len(_sensitivity_evaluated) and np.isfinite(
-             _strictest_evaluated["median_best_centroid_spearman_vs_primary"].iloc[0])
-         else 'No stricter floor could be evaluated.'))
-
+_class_counts = gene_positional_state_transitions['transition_class'].value_counts()
+for label, description in (
+        ('flat_both', 'Flat under the chosen amplitude floor in both species'),
+        ('gain_of_pattern', 'Potential gain of positional organization in human'),
+        ('loss_of_pattern', 'Potential loss of positional organization in human'),
+        ('conserved_pattern', 'Same broad patterned archetype in both species'),
+        ('pattern_reorganization', 'Different patterned archetypes between species')):
+    count = int(_class_counts.get(label, 0))
+    print(f'  {description}: {count:,} / {gene_names.size:,} ({count / gene_names.size:.1%})')
 print()
-print('Reading rules specific to section 12:')
-print('  - the analysis is within-species POSITIONAL SHAPE. It never compares a human level with a')
-print('    mouse level and never subtracts one species from the other, so a level shift or an')
-print('    amplitude change cannot masquerade as a shape change here.')
-print('  - the archetypes were learned jointly from both species and were frozen before any pathway')
-print('    was read; the number of archetypes was never chosen on enrichment.')
-print('  - "conserved" and "switched" are descriptive labels on two cluster assignments, not a test of')
-print('    a species effect. The human side is two sections of ONE donor, so the inference unit is the')
-print('    specimen and the comparison is 2-vs-1-donor.')
-print('  - a shared archetype with poorly conserved membership is a distinct finding, not a failed')
-print('    analysis: it separates "the shape is available in both species" from "the same genes use it".')
-print('  - the two human sections are never described as biological replicates, in this section or')
-print('    anywhere else.')
+print(f'{len(shared_archetypes)} shared archetypes ({", ".join(shared_archetypes)}) were learned '
+      f'from {archetype_genes.size:,} genes patterned in both species. Only those genes support direct '
+      'standardized shape correlation. Genes patterned in only one species remain in the full matrix '
+      'as potential gains or losses of organization.')
+print('The F state means insufficient positional amplitude for shape assignment at the chosen floor; '
+      'it does not mean zero expression or biologically absent regulation.')
+
+_top_transition_rows = transition_rows.sort_values('n_genes', ascending=False).head(5)
+print('Most common state transitions: ' + '; '.join(
+    f'{row.mouse_state}->{row.human_state} ({int(row.n_genes)} genes, '
+    f'{row.fraction_all:.1%} of all eligible genes)'
+    for row in _top_transition_rows.itertuples()) + '.')
+print(f'Response-module composition is in response_module_positional_state_summary.csv; '
+      f'pathway state composition is in pathway_positional_state_summary.csv.')
+print(f'Global transition enrichment tested {len(state_transition_sets)} large state transitions '
+      f'against all {gene_names.size:,} eligible genes. Conditional gain/loss tests use the same '
+      'mouse starting state as their background; pathway analyses are exploratory.')
+print('Threshold sensitivity at the primary and stricter floors:')
+display(positional_state_threshold_sensitivity.round(3))
+print(f'Median specimen-pair reproduction of a primary full-state transition: '
+      f'{specimen_consistency["fraction_specimen_pairs_reproducing_transition"].median():.3f}. '
+      'The two human sections belong to one donor, and these results are descriptive, not formal '
+      'species-level significance tests.')
 
 pd.DataFrame([{'figure': name} for name in figure_index]).to_csv(
     DIAGNOSTIC_DIR / 'figure_index.csv', index=False)
@@ -3511,12 +3576,17 @@ _new_files = sorted(name for name in (
     'shared_archetype_assignments.csv', 'shared_archetype_catalog.csv',
     'mouse_human_archetype_transitions.csv', 'archetype_transition_enrichment.csv',
     'response_module_archetype_summary.csv', 'pathway_archetype_coherence.csv',
-    'shared_archetype_threshold_sensitivity.csv', 'shared_archetype_specimen_consistency.csv',
-    'shared_archetype_specimen_consistency_by_transition.csv'))
+    'gene_positional_state_transitions.csv', 'positional_state_transition_summary.csv',
+    'positional_state_transition_matrix.csv', 'positional_state_transition_metrics.csv',
+    'response_module_positional_state_summary.csv',
+    'response_module_state_transitions.csv', 'pathway_positional_state_summary.csv',
+    'positional_state_transition_enrichment.csv', 'positional_state_conditional_enrichment.csv',
+    'positional_state_threshold_sensitivity.csv', 'positional_state_specimen_consistency.csv',
+    'positional_state_specimen_consistency_by_transition.csv'))
 print()
 print(f'Section 12 wrote {len(_new_files)} tables into {_rel(OUTPUT_DIR)} and '
       f'{len([name for name in figure_index if name.startswith(("fig1", "fig12"))])} figures; '
-      'figure_index.csv was rewritten so the index covers every figure the notebook produced.')
+      'figure_index.csv covers every figure this run produced.')
 
 
 # %%

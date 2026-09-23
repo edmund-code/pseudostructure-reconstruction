@@ -1,16 +1,16 @@
 # %% [markdown]
-# # Extent-aware human–mouse PT pseudospace: fixed-center prototype
+# # Extent-aware human–mouse tubular-nephron pseudospace: fixed-center prototype
 #
-# **Question.** Does a segmented tubule behave more like a point or an observation that averages a finite stretch of the proximal-tubule axis? This is an exploratory diagnostic, not a replacement for the reviewed DPT workflow.
+# **Question.** Does treating each segmented tubule as an observation spanning finite pseudospace improve reconstruction along the saved **global tubular-nephron** axis? This is an exploratory diagnostic, not a replacement for notebook 03's reviewed DPT workflow.
 #
-# Inputs are notebook 03's shared PT `lognorm` matrix and PT-specific DPT, pass-1 annotations, and the exact source GeoJSON polygons for two control mice and two human sections. The section named `HUK1_MED1` is healthy **cortex** from the same donor as `HUK1_COR1`. The new backbone is learned jointly from genes measured in both species, independently of DPT; all input artifacts are read-only. Results go to `results/pt_extent_aware_human_mouse/`.
+# Inputs are notebook 03's saved **global nephron** `lognorm` matrix and DPT, pass-1 glomerular annotations, and exact source GeoJSON polygons for two control mice and two human sections. `HUK1_MED1` is healthy **cortex** from the same donor as `HUK1_COR1`. The new backbone uses genes measured in both species and does not take DPT as its coordinate. Outputs go to `results/nephron_extent_aware_human_mouse/`.
 #
-# **Predeclared comparison.** Nine PT genes are excluded from new coordinate and width construction. Published early/late markers orient the backbone only. For each held-out gene, one specimen predicts the other specimen of the same species; a separate cross-species transfer check is descriptive. Segment labels and glomerular distance are diagnostics. The reviewed labels and historical DPT had upstream access to expression, so they are not fully external validation. The two human sections are one donor, not two biological replicates.
+# **Scope and limits.** The saved continuum contains PT, ascending limb, DCT, and CNT/collecting-duct structures. **No descending thin limb is represented**, so this is the full *saved tubular cohort*, not a complete continuous anatomical nephron. The collecting duct also has a different developmental origin, and AL/DCT order in global DPT is imperfect. We therefore audit graph connectivity and do not assume a single smooth physical tube. Eleven positional candidate genes spanning the available families are excluded from the new coordinate and width construction. Orientation markers choose direction only. Held-out prediction is within species; human sections are one donor. Reviewed labels and DPT used upstream expression and are contextual diagnostics rather than independent truth.
 
 # %% [markdown]
 # ## 1. Inputs and baseline
 #
-# Notebook 03's complete PT object contains both species on its shared PT DPT. Pass-1 provides `feature_index` for exact joins to each sample's source GeoJSON and glomerular centroids for distance. Missing or ambiguous joins stop the run. Distances are computed within specimen and never compared in absolute pixels across specimens.
+# Notebook 03's `cross_species_nephron_global_dpt.h5ad` contains all saved tubular families in both species. Pass-1 provides glomerular centroids, and the saved `feature_index` joins each observation to its source polygon. Missing or ambiguous joins stop the run. Distances are computed within specimen; their absolute pixel values are not compared across slides.
 
 # %%
 import argparse
@@ -41,15 +41,37 @@ SAMPLES = tuple(sample for pair in SPECIES_SAMPLES.values() for sample in pair)
 GEOJSON_FILES = {**{s: f'{s}_kept_tubules_labeled_fine.geojson' for s in SPECIES_SAMPLES['mouse']},
                  **{s: f'{s}_v2.geojson' for s in SPECIES_SAMPLES['human']}}
 SPECIES_COLORS = {'mouse': '#0072B2', 'human': '#D55E00'}
-SEGMENTS = ('PT-S1', 'PT-S2', 'PT-S3')
+# Ordered families represented in the saved global DPT; DTL is absent.
+SEGMENTS = ('PT', 'AL', 'DCT', 'CNT_CD')
+COARSE_COLORS = {'PT': '#4C9BD3', 'AL': '#F58518',
+                 'DCT': '#D81B60', 'CNT_CD': '#76B7B2'}
+# Notebook 03's tubular reference programs, plotted as context and excluded from fitting.
+NEPHRON_MARKERS = {
+    'PT-S1': ['Lrp2', 'Cubn', 'Slc34a1', 'Slc5a2', 'Slc5a12', 'Gatm'],
+    'PT-S2': ['Slc22a6', 'Slc13a3', 'Cyp2e1'],
+    'PT-S3': ['Slc22a7', 'Slc7a13', 'Cyp7b1', 'Slc6a18', 'Acsm3'],
+    'DTL': ['Aqp1', 'Slc14a2', 'Corin', 'Fst'],
+    'ATL': ['Clcnka', 'Sptssb', 'Akr1b3'],
+    'TAL': ['Slc12a1', 'Umod', 'Kcnj1', 'Cldn16'],
+    'DCT': ['Slc12a3', 'Pvalb', 'Trpm6', 'Egf'],
+    'CNT': ['Calb1', 'Hsd11b2', 'Slc8a1'],
+    'CCD': ['Aqp2', 'Aqp3', 'Fxyd4'],
+    'OMCD': ['Atp6v0d2', 'Rhcg', 'Foxi1'],
+    'IMCD': ['Aqp4', 'Slc14a2', 'Wnt7b'],
+}
+NEPHRON_COLORS = {name: plt.get_cmap('tab20')(i % 20)
+                  for i, name in enumerate(NEPHRON_MARKERS)}
 ORIENT_EARLY = ('Slc5a2', 'Slc5a12', 'Gatm')
-ORIENT_LATE = ('Slc7a13', 'Slc22a7', 'Cyp7b1')
-# Prior biological candidates, not selected from the present DPT or model results.
-HELD_OUT = ('Aqp1', 'Miox', 'Pck1', 'Slc22a8', 'Acsm2', 'Slc5a8', 'Aldob', 'Fabp1', 'Hnf4a')
-# Notebook 03's reviewed PT label panel; exclude it from the new backbone and curve training.
-LABEL_PANEL = ('Lrp2', 'Cubn', 'Slc34a1', 'Slc5a2', 'Slc5a12', 'Gatm',
-               'Slc22a6', 'Slc13a3', 'Cyp2e1', 'Slc22a7', 'Slc7a13',
-               'Cyp7b1', 'Slc6a18', 'Acsm3')
+ORIENT_LATE = ('Calb1', 'Hsd11b2', 'Slc8a1', 'Aqp2', 'Aqp3')
+# Prespecified candidate programs; held out from this notebook's coordinate and fits.
+HELDOUT_GROUPS = {
+    'PT': ('Miox', 'Pck1', 'Acsm2'),
+    'AL': ('Nccrp1', 'Ppp1r1a'),
+    'DCT': ('Wnk4', 'Kcnj10', 'Fxyd2'),
+    'CNT_CD': ('Scnn1g', 'Scnn1b', 'Atp6v1b1'),
+}
+HELD_OUT = tuple(gene for genes in HELDOUT_GROUPS.values() for gene in genes)
+LABEL_PANEL = tuple(sorted({gene for genes in NEPHRON_MARKERS.values() for gene in genes}))
 N_BACKBONE_GENES = 300
 N_CURVE_GENES = 48
 PRIMARY_C = 0.02
@@ -79,55 +101,61 @@ args, _ = parser.parse_known_args()
 data_root = Path(args.data_root or os.environ.get('PSEUDOSPACE_DATA_ROOT') or root / 'data').expanduser().resolve()
 results_root = Path(args.results_root or os.environ.get('PSEUDOSPACE_RESULTS_ROOT') or root / 'results').expanduser().resolve()
 upstream = results_root / 'human_vs_healthy_mouse'
-out = results_root / 'pt_extent_aware_human_mouse'
-pt_path = upstream / 'cross_species_pt_dpt.h5ad'
+out = results_root / 'nephron_extent_aware_human_mouse'
+nephron_path = upstream / 'cross_species_nephron_global_dpt.h5ad'
 pass1_path = upstream / 'cross_species_harmony_pass1.h5ad'
-for path in (pt_path, pass1_path, *(data_root / GEOJSON_FILES[s] for s in SAMPLES)):
+for path in (nephron_path, pass1_path, *(data_root / GEOJSON_FILES[s] for s in SAMPLES)):
     if not path.is_file():
         raise FileNotFoundError(f'Required upstream input missing: {path}')
 out.mkdir(parents=True, exist_ok=True)
 
-pt = ad.read_h5ad(pt_path)
-if pt.n_obs == 0 or 'lognorm' not in pt.layers:
-    raise ValueError('Saved shared PT artifact has no structures or lognorm layer.')
+nephron = ad.read_h5ad(nephron_path)
+if nephron.n_obs == 0 or 'lognorm' not in nephron.layers:
+    raise ValueError('Saved global-nephron artifact has no structures or lognorm layer.')
 for species, samples in SPECIES_SAMPLES.items():
-    mask = pt.obs['sample'].astype(str).isin(samples)
-    if not mask.any() or not pt.obs.loc[mask, 'comparison_species'].astype(str).eq(species).all():
-        raise ValueError(f'{species} sample/species mismatch in saved PT object.')
-if not pt.obs['sample'].astype(str).isin(SAMPLES).all():
-    raise ValueError('Unexpected PT specimen in saved object.')
-if not pt.obs.loc[pt.obs['comparison_species'].astype(str).eq('human'), 'region'].astype(str).eq('cortex').all():
-    raise ValueError('Human PT sections are expected to be healthy cortex, including HUK1_MED1.')
-required = {'sample', 'segment_class', 'total_scanpy_dpt', 'x_centroid', 'y_centroid'}
-missing = required - set(pt.obs)
+    mask = nephron.obs['sample'].astype(str).isin(samples)
+    if not mask.any() or not nephron.obs.loc[mask, 'comparison_species'].astype(str).eq(species).all():
+        raise ValueError(f'{species} sample/species mismatch in saved global-nephron object.')
+if not nephron.obs['sample'].astype(str).isin(SAMPLES).all():
+    raise ValueError('Unexpected specimen in saved global-nephron object.')
+if not nephron.obs.loc[nephron.obs['comparison_species'].astype(str).eq('human'), 'region'].astype(str).eq('cortex').all():
+    raise ValueError('Human sections are expected to be healthy cortex, including HUK1_MED1.')
+required = {'sample', 'segment_class', 'coarse_class', 'feature_index',
+            'total_scanpy_dpt', 'x_centroid', 'y_centroid'}
+missing = required - set(nephron.obs)
 if missing:
-    raise KeyError(f'PT object missing columns: {sorted(missing)}')
-if 'measured_in_both_inputs' not in pt.var:
+    raise KeyError(f'Global-nephron object missing columns: {sorted(missing)}')
+if 'measured_in_both_inputs' not in nephron.var:
     raise KeyError('Shared-gene availability audit missing; structural zeros cannot be excluded.')
 pass1 = ad.read_h5ad(pass1_path, backed='r')
 pass1_obs = pass1.obs.copy()
 pass1.file.close()
-if not pt.obs_names.isin(pass1_obs.index).all():
-    raise ValueError('Some PT observation IDs are missing from pass-1.')
-joined = pass1_obs.reindex(pt.obs_names)
-if joined['feature_index'].isna().any() or not joined['sample'].astype(str).eq(pt.obs['sample'].astype(str)).all():
-    raise ValueError('Feature index or sample mismatch between PT and pass-1 objects.')
+if not nephron.obs_names.isin(pass1_obs.index).all():
+    raise ValueError('Some nephron observation IDs are missing from pass-1.')
+joined = pass1_obs.reindex(nephron.obs_names)
+if joined['feature_index'].isna().any() or not joined['sample'].astype(str).eq(nephron.obs['sample'].astype(str)).all():
+    raise ValueError('Feature index or sample mismatch between global-nephron and pass-1 objects.')
 
 # Distance is never used to construct a coordinate, width, or smoothing parameter.
-distance = pd.Series(index=pt.obs_names, dtype=float)
+distance = pd.Series(index=nephron.obs_names, dtype=float)
 for sample in SAMPLES:
     glom = pass1_obs.loc[(pass1_obs['sample'].astype(str) == sample) &
                          (pass1_obs['coarse_class'].astype(str) == 'Glomerulus')]
     if len(glom) < 3:
         raise ValueError(f'{sample}: fewer than three saved glomeruli.')
-    rows = pt.obs['sample'].astype(str).eq(sample)
+    rows = nephron.obs['sample'].astype(str).eq(sample)
     tree = cKDTree(glom[['x_centroid', 'y_centroid']].to_numpy(dtype=float))
-    distance.loc[rows] = tree.query(pt.obs.loc[rows, ['x_centroid', 'y_centroid']].to_numpy(dtype=float))[0]
-pt.obs['distance_to_nearest_glomerulus_px'] = distance.to_numpy()
-print(f'Input: {pt.n_obs:,} shared human–mouse PT tubules, {pt.n_vars:,} mapped genes; samples:')
-display(pt.obs.groupby(['comparison_species', 'sample'], observed=True).size().rename('tubules').to_frame())
+    distance.loc[rows] = tree.query(nephron.obs.loc[rows, ['x_centroid', 'y_centroid']].to_numpy(dtype=float))[0]
+nephron.obs['distance_to_nearest_glomerulus_px'] = distance.to_numpy()
+print(f'Input: {nephron.n_obs:,} saved human–mouse nephron tubules, {nephron.n_vars:,} mapped genes; samples:')
+display(nephron.obs.groupby(['comparison_species', 'sample'], observed=True).size().rename('tubules').to_frame())
 print('Both human sections are healthy cortex from one donor.')
-print('Measured in both inputs:', int(pt.var['measured_in_both_inputs'].sum()))
+print('Measured in both inputs:', int(nephron.var['measured_in_both_inputs'].sum()))
+display(pd.crosstab(nephron.obs['comparison_species'], nephron.obs['coarse_class']))
+missing_families = sorted(set(('PT', 'DTL', 'AL', 'DCT', 'CNT_CD')) - set(nephron.obs['coarse_class'].astype(str)))
+print('Tubular families absent from saved global DPT:', missing_families)
+if set(nephron.obs['coarse_class'].astype(str)) != set(SEGMENTS):
+    raise ValueError('Unexpected saved tubular families; review the cohort before fitting.')
 
 # %% [markdown]
 # ## 2. Polygon morphology and an extent prior
@@ -152,7 +180,7 @@ def polygon_metrics(geom, area_um2):
 
 records = []
 for sample in SAMPLES:
-    target = joined.loc[pt.obs['sample'].astype(str).eq(sample), 'feature_index'].astype(int)
+    target = joined.loc[nephron.obs['sample'].astype(str).eq(sample), 'feature_index'].astype(int)
     lookup = dict(zip(target.to_numpy(), target.index))
     with (data_root / GEOJSON_FILES[sample]).open() as handle:
         features = json.load(handle)['features']
@@ -167,32 +195,32 @@ for sample in SAMPLES:
         metrics = polygon_metrics(shape(feature['geometry']), float(area_values[0])) if len(area_values) == 1 else None
         if metrics is not None:
             records.append({'obs_name': name, **metrics})
-morph = pd.DataFrame.from_records(records).set_index('obs_name').reindex(pt.obs_names)
+morph = pd.DataFrame.from_records(records).set_index('obs_name').reindex(nephron.obs_names)
 valid = morph['major_um'].notna().to_numpy()
-print(f'Polygon measurements: {valid.sum():,}/{len(valid):,} matched PT structures.')
+print(f'Polygon measurements: {valid.sum():,}/{len(valid):,} matched nephron structures.')
 if valid.mean() < 0.95:
-    raise ValueError('Too many PT polygons lack valid calibrated geometry; inspect the join.')
+    raise ValueError('Too many nephron polygons lack valid calibrated geometry; inspect the join.')
 if not valid.all():
-    pt = pt[valid].copy()
-    morph = morph.loc[pt.obs_names].copy()
-pt.obs = pt.obs.join(morph)
-pt.obs['length_group'] = (pt.obs.groupby('sample', observed=True)['major_um']
+    nephron = nephron[valid].copy()
+    morph = morph.loc[nephron.obs_names].copy()
+nephron.obs = nephron.obs.join(morph)
+nephron.obs['length_group'] = (nephron.obs.groupby('sample', observed=True)['major_um']
                           .transform(lambda x: pd.qcut(x.rank(method='first'), 3,
                                                        labels=['short', 'medium', 'long'])).astype(str))
 # Specimen median 1, conservative range [0.5, 1.5]; no micron-to-pseudotime conversion.
-length_ratio = (pt.obs['major_um'] / pt.obs.groupby('sample', observed=True)['major_um'].transform('median')).to_numpy()
-pt.obs['relative_extent'] = np.clip(length_ratio, 0.5, 1.5)
+length_ratio = (nephron.obs['major_um'] / nephron.obs.groupby('sample', observed=True)['major_um'].transform('median')).to_numpy()
+nephron.obs['relative_extent'] = np.clip(length_ratio, 0.5, 1.5)
 print('Direct skeleton/path length: unavailable. Width uses rotated-box major axis as a prior.')
-display(pt.obs[['area_um2', 'major_um', 'minor_um', 'perimeter_um', 'aspect_ratio',
+display(nephron.obs[['area_um2', 'major_um', 'minor_um', 'perimeter_um', 'aspect_ratio',
                 'bbox_width_um', 'bbox_height_um']].describe(percentiles=[.1, .5, .9]).T.round(2))
 cols = ['area_um2', 'major_um', 'minor_um', 'perimeter_um', 'aspect_ratio']
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 for col in cols:
-    axes[0].hist(np.log1p(pt.obs[col]), bins=35, alpha=.4, label=col, density=True)
+    axes[0].hist(np.log1p(nephron.obs[col]), bins=35, alpha=.4, label=col, density=True)
 axes[0].legend(fontsize=7)
 axes[0].set_title('Log morphology distributions')
 axes[0].set_xlabel('log(1 + measurement)')
-cor = pt.obs[cols].corr(method='spearman')
+cor = nephron.obs[cols].corr(method='spearman')
 im = axes[1].imshow(cor, vmin=-1, vmax=1, cmap='coolwarm')
 axes[1].set_xticks(range(len(cols)), cols, rotation=55, ha='right')
 axes[1].set_yticks(range(len(cols)), cols)
@@ -202,32 +230,32 @@ fig.tight_layout(); plt.show()
 # Baseline DPT diagnostics, before building the new coordinate.
 fig, axes = plt.subplots(2, 3, figsize=(13, 7), sharex='col')
 for row, species in enumerate(SPECIES_SAMPLES):
-    sub = pt.obs['comparison_species'].astype(str).eq(species)
+    sub = nephron.obs['comparison_species'].astype(str).eq(species)
     for seg in SEGMENTS:
-        m = sub & pt.obs['segment_class'].astype(str).eq(seg)
-        axes[row, 0].hist(pt.obs.loc[m, 'total_scanpy_dpt'], bins=35, density=True, alpha=.45, label=seg)
+        m = sub & nephron.obs['coarse_class'].astype(str).eq(seg)
+        axes[row, 0].hist(nephron.obs.loc[m, 'total_scanpy_dpt'], bins=35, density=True, alpha=.45, label=seg)
     axes[row, 0].legend(fontsize=8)
-    axes[row, 1].scatter(pt.obs.loc[sub, 'total_scanpy_dpt'],
-                         pt.obs.loc[sub, 'distance_to_nearest_glomerulus_px'], s=2, alpha=.17)
-    axes[row, 2].scatter(pt.obs.loc[sub, 'total_scanpy_dpt'], pt.obs.loc[sub, 'major_um'], s=2, alpha=.17)
+    axes[row, 1].scatter(nephron.obs.loc[sub, 'total_scanpy_dpt'],
+                         nephron.obs.loc[sub, 'distance_to_nearest_glomerulus_px'], s=2, alpha=.17)
+    axes[row, 2].scatter(nephron.obs.loc[sub, 'total_scanpy_dpt'], nephron.obs.loc[sub, 'major_um'], s=2, alpha=.17)
     axes[row, 0].set_ylabel(species.title())
-for ax, title in zip(axes[0], ('DPT by reviewed segment', 'DPT vs glomerulus distance', 'DPT vs 2D long axis')):
+for ax, title in zip(axes[0], ('Global DPT by reviewed family', 'DPT vs glomerulus distance', 'DPT vs 2D long axis')):
     ax.set_title(title)
-for ax in axes[1]: ax.set_xlabel('Existing shared PT DPT')
+for ax in axes[1]: ax.set_xlabel('Existing global-nephron DPT')
 fig.tight_layout(); plt.show()
-display(pd.crosstab([pt.obs['comparison_species'], pt.obs['length_group']],
-                    pt.obs['segment_class'], normalize='index').round(3))
+display(pd.crosstab([nephron.obs['comparison_species'], nephron.obs['length_group']],
+                    nephron.obs['coarse_class'], normalize='index').round(3))
 
 # %% [markdown]
 # ## Notebook 03 marker dot plots and reference heatmaps
 #
-# Notebook 03's cluster-review dot plot and DE heatmap are shown as **upstream context**: they helped assign the saved labels and cannot validate this new method. The new PT dot plots use that notebook's S1/S2/S3 marker panel, split by species and by morphology-length group. These same markers are excluded from backbone-gene selection.
+# Notebook 03's cluster-review dot plot, DE heatmap, and global-nephron marker heatmaps are **upstream context**: they helped review labels and cannot validate this new method. New dot plots use the same tubular reference programs, split by species and coarse family or morphology length. A program with poor measured-gene coverage is a weak visual check, not a negative biological result.
 
 # %%
 for filename in ('celltyping/cluster_reference_gene_dotplot.png',
                  'celltyping/coarse_cluster_de_heatmap.png',
-                 'curves/paired_top_gene_heatmap_lognorm.png',
-                 'curves/paired_top_gene_heatmap_shape.png'):
+                 'celltyping/mouse_global_dpt_fine_marker_heatmap.png',
+                 'celltyping/human_global_dpt_fine_marker_heatmap.png'):
     figure = upstream / filename
     if figure.is_file():
         display(Markdown(f'**Notebook 03 reference:** `{filename}`'))
@@ -235,32 +263,41 @@ for filename in ('celltyping/cluster_reference_gene_dotplot.png',
     else:
         print('Notebook 03 reference figure unavailable:', figure)
 
-PT_MARKERS = {'PT-S1': ['Slc5a2', 'Slc5a12', 'Gatm'],
-              'PT-S2': ['Slc22a6', 'Slc13a3', 'Cyp2e1'],
-              'PT-S3': ['Slc22a7', 'Cyp7b1']}
-PT_COLORS = {'PT-S1': '#4C9BD3', 'PT-S2': '#5B8E55', 'PT-S3': '#D6B48A'}
+# The accepted map can contain structural-zero columns. Show only genes measured in
+# every input; report per-program coverage before interpreting any absent program.
+marker_coverage = pd.DataFrame([
+    {'program': group, 'requested': len(genes),
+     'measured_in_both': sum(g in nephron.var_names and bool(nephron.var.loc[g, 'measured_in_both_inputs'])
+                             for g in genes)}
+    for group, genes in NEPHRON_MARKERS.items()
+])
+display(marker_coverage)
+MARKERS_USED = {group: [g for g in genes if g in nephron.var_names and
+                         bool(nephron.var.loc[g, 'measured_in_both_inputs'])]
+                for group, genes in NEPHRON_MARKERS.items()}
+MARKERS_USED = {group: genes for group, genes in MARKERS_USED.items() if genes}
 for suffix, labels in {
-    'species_segment': [f'{sp} {seg}' for sp in SPECIES_SAMPLES for seg in SEGMENTS],
+    'species_family': [f'{sp} {family}' for sp in SPECIES_SAMPLES for family in SEGMENTS],
     'species_length': [f'{sp} {length}' for sp in SPECIES_SAMPLES for length in ('short', 'medium', 'long')],
 }.items():
-    second = pt.obs['segment_class'] if suffix == 'species_segment' else pt.obs['length_group']
-    pt.obs[suffix] = pd.Categorical(pt.obs['comparison_species'].astype(str) + ' ' + second.astype(str),
+    second = nephron.obs['coarse_class'] if suffix == 'species_family' else nephron.obs['length_group']
+    nephron.obs[suffix] = pd.Categorical(nephron.obs['comparison_species'].astype(str) + ' ' + second.astype(str),
                                     categories=labels, ordered=True)
-    dot = sc.pl.dotplot(pt, PT_MARKERS, groupby=suffix, layer='lognorm',
+    dot = sc.pl.dotplot(nephron, MARKERS_USED, groupby=suffix, layer='lognorm',
                          standard_scale='var', show=False, return_fig=True)
-    dot.savefig(out / f'pt_marker_dotplot_{suffix}.png')
+    dot.savefig(out / f'nephron_marker_dotplot_{suffix}.png')
     dot.show()
 
 # %% [markdown]
-# ## 3. Joint molecular backbone
+# ## 3. Joint global-nephron molecular backbone
 #
-# We select genes measured in **both** inputs by average within-species variance, excluding reserved validation and published PT annotation/orientation genes. Each gene is standardized within species before joint PCA so species-level abundance offsets do not dominate the graph; this is a transparent alignment assumption and can hide genuine species shifts. A symmetric kNN graph and shortest path from an early-marker root yield one shared point coordinate. DPT, segment labels, glomerular distance, and morphology do not enter it.
+# We select genes measured in **both** inputs by average within-species variance, excluding validation, orientation, and notebook 03's tubular marker panel. Each gene is standardized within species before joint PCA; this can hide real species-level shifts. A symmetric kNN graph and shortest path from an early PT-marker root yield one point coordinate. DPT, reviewed labels, distance to glomerulus, and morphology do not enter it. The cross-species edge fraction and segment plot reveal whether this graph is a defensible one-dimensional proxy across the available families.
 
 # %%
 excluded = set(HELD_OUT) | set(LABEL_PANEL) | set(ORIENT_EARLY) | set(ORIENT_LATE)
-available = pt.var['measured_in_both_inputs'].to_numpy(dtype=bool)
-all_expr = pt.layers['lognorm'].tocsr()
-species_array = pt.obs['comparison_species'].astype(str).to_numpy()
+available = nephron.var['measured_in_both_inputs'].to_numpy(dtype=bool)
+all_expr = nephron.layers['lognorm'].tocsr()
+species_array = nephron.obs['comparison_species'].astype(str).to_numpy()
 within_variance = []
 within_fraction = []
 for species in SPECIES_SAMPLES:
@@ -270,23 +307,29 @@ for species in SPECIES_SAMPLES:
     within_fraction.append(np.asarray((matrix > 0).mean(axis=0)).ravel())
 variance = np.mean(within_variance, axis=0)
 fraction = np.min(within_fraction, axis=0)
-search = np.array([i for i, gene in enumerate(pt.var_names)
+search = np.array([i for i, gene in enumerate(nephron.var_names)
                    if available[i] and gene not in excluded and fraction[i] >= .10 and variance[i] > 0])
 if len(search) < N_BACKBONE_GENES:
     raise ValueError(f'Only {len(search)} eligible backbone genes; need {N_BACKBONE_GENES}.')
 ranked = search[np.argsort(variance[search])[::-1]]
-backbone_genes = pt.var_names[ranked[:N_BACKBONE_GENES]].tolist()
+backbone_genes = nephron.var_names[ranked[:N_BACKBONE_GENES]].tolist()
 curve_genes = backbone_genes[:N_CURVE_GENES]
-heldout_genes = [g for g in HELD_OUT if g in pt.var_names and bool(pt.var.loc[g, 'measured_in_both_inputs'])]
-if len(heldout_genes) < 5:
-    raise ValueError(f'Only {len(heldout_genes)} reserved genes are measured.')
+heldout_genes = [g for g in HELD_OUT if g in nephron.var_names and bool(nephron.var.loc[g, 'measured_in_both_inputs'])]
+for family, genes in HELDOUT_GROUPS.items():
+    if not any(g in heldout_genes for g in genes):
+        raise ValueError(f'No measured held-out {family} candidate genes.')
+missing_orientation = [g for g in ORIENT_EARLY + ORIENT_LATE
+                       if g not in nephron.var_names or not bool(nephron.var.loc[g, 'measured_in_both_inputs'])]
+if missing_orientation:
+    raise ValueError(f'Orientation genes unavailable in both inputs: {missing_orientation}')
 print(f'Construction: {len(backbone_genes)} backbone genes, {len(curve_genes)} curve genes; '
       f'validation only: {heldout_genes}')
+print('Held-out candidates by family:', HELDOUT_GROUPS)
 print('Orientation only:', ORIENT_EARLY, ORIENT_LATE)
 
 
 def expression(genes):
-    return all_expr[:, pt.var_names.get_indexer(genes)].toarray().astype(float)
+    return all_expr[:, nephron.var_names.get_indexer(genes)].toarray().astype(float)
 
 
 def orientation_score():
@@ -327,23 +370,23 @@ def make_backbone(n_genes=300, neighbors=30):
         raise ValueError(f'kNN graph has {component_count} components at k={neighbors}; inspect topology.')
     path = csgraph.dijkstra(graph, directed=False, indices=int(root_index))
     if not np.isfinite(path).all():
-        raise ValueError('Backbone contains unreachable PT structures.')
+        raise ValueError('Backbone contains unreachable nephron structures.')
     coordinate = (path - path.min()) / (path.max() - path.min())
     if spearmanr(coordinate, orient).statistic < 0:
         coordinate = 1 - coordinate
     return coordinate, pcs, cross_fraction
 
 backbone, pcs, cross_edge_fraction = make_backbone()
-pt.obs['backbone_position'] = backbone
+nephron.obs['backbone_position'] = backbone
 print('Backbone vs existing DPT: Spearman rho =',
-      round(spearmanr(backbone, pt.obs['total_scanpy_dpt']).statistic, 3))
+      round(spearmanr(backbone, nephron.obs['total_scanpy_dpt']).statistic, 3))
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 for species in SPECIES_SAMPLES:
     m = species_array == species
-    axes[0].scatter(pt.obs['total_scanpy_dpt'].to_numpy()[m], backbone[m], s=2, alpha=.15,
+    axes[0].scatter(nephron.obs['total_scanpy_dpt'].to_numpy()[m], backbone[m], s=2, alpha=.15,
                     color=SPECIES_COLORS[species], label=species)
 axes[0].legend(markerscale=4)
-axes[0].set(xlabel='Existing shared PT DPT', ylabel='Joint backbone')
+axes[0].set(xlabel='Existing global-nephron DPT', ylabel='Joint backbone')
 axes[1].scatter(pcs[:, 0], pcs[:, 1], c=backbone, s=2, cmap='viridis')
 axes[1].set(xlabel='PC1', ylabel='PC2', title='Graph geodesic on 12 PCs')
 fig.tight_layout(); plt.show()
@@ -397,20 +440,20 @@ def fit_curve(design, y, lam=LAMBDA):
 
 
 def widths(metric='major_um', c=PRIMARY_C, mode='morphology'):
-    values = pt.obs[metric].to_numpy(dtype=float)
-    medians = pt.obs.groupby('sample', observed=True)[metric].transform('median').to_numpy(dtype=float)
+    values = nephron.obs[metric].to_numpy(dtype=float)
+    medians = nephron.obs.groupby('sample', observed=True)[metric].transform('median').to_numpy(dtype=float)
     relative = np.clip(values / medians, .5, 1.5)
     if mode == 'equal':
         relative[:] = 1.0
     elif mode == 'permuted':
         # Preserve each specimen's width distribution, break tubule-width correspondence.
         for sample in SAMPLES:
-            idx = np.flatnonzero(pt.obs['sample'].astype(str).to_numpy() == sample)
+            idx = np.flatnonzero(nephron.obs['sample'].astype(str).to_numpy() == sample)
             relative[idx] = relative[np.random.default_rng(SEED).permutation(idx)]
     return c * relative
 
 bases = {}
-point_basis, _ = observation_basis(backbone, np.zeros(pt.n_obs))
+point_basis, _ = observation_basis(backbone, np.zeros(nephron.n_obs))
 bases['point'] = point_basis
 for c in (0.01, 0.02, 0.04):
     bases[f'extent_c{c:g}'], _ = observation_basis(backbone, widths(c=c))
@@ -420,31 +463,32 @@ assert np.allclose(bases['point'].sum(axis=1), 1)
 assert np.allclose(bases['extent_c0.02'].sum(axis=1), 1, atol=1e-6)
 assert np.allclose(observation_basis(backbone, widths(c=0))[0], bases['point'])
 _, expected_position = observation_basis(backbone, widths())
-pt.obs['extent_mean_position'] = expected_position
-pt.obs['extent_sigma'] = widths()
+nephron.obs['extent_mean_position'] = expected_position
+nephron.obs['extent_sigma'] = widths()
 
-# Notebook 03's same marker-gradient panel, now shown both on its shared PT DPT and
-# on the new distribution's mean coordinate. Each species is plotted separately;
-# the label strip is contextual, not independent evidence.
+# Notebook 03's global fine-marker panel, on global DPT and the new kernel mean.
+# Species have their own occupancy; labelled-family strips are contextual rather than
+# independent ground truth. DTL markers are displayed, but no saved DTL structure exists.
 marker_panel = {group: [{'label': gene, 'candidates': [gene]} for gene in genes]
-                for group, genes in PT_MARKERS.items()}
+                for group, genes in MARKERS_USED.items()}
 for position in ('total_scanpy_dpt', 'extent_mean_position'):
     for species in SPECIES_SAMPLES:
         plot_marker_heatmap(
-            pt, marker_panel, list(PT_MARKERS), PT_COLORS,
+            nephron, marker_panel, list(MARKERS_USED), NEPHRON_COLORS,
             pseudotime_col=position, cluster_col=None,
             mask=species_array == species,
-            title=f'{species.title()} PT markers on {position}',
-            output_name=f'{species}_{position}_marker_heatmap.png',
-            strip_col='segment_class', strip_order=list(SEGMENTS), strip_colors=PT_COLORS,
+            title=f'{species.title()} nephron programs on {position}',
+            output_name=f'{species}_{position}_nephron_marker_heatmap.png',
+            strip_col='coarse_class', strip_order=list(SEGMENTS), strip_colors=COARSE_COLORS,
+            figsize=(18, 14),
             n_bins=120, output_dir=out, project_dir=root,
         )
 fig, ax = plt.subplots(figsize=(9, 3.5))
 for group in ('short', 'medium', 'long'):
-    idx = np.flatnonzero((pt.obs['length_group'].eq(group) &
-                         pt.obs['comparison_species'].astype(str).eq('mouse')).to_numpy())
+    idx = np.flatnonzero((nephron.obs['length_group'].eq(group) &
+                         nephron.obs['comparison_species'].astype(str).eq('mouse')).to_numpy())
     selected = idx[np.argmin(abs(backbone[idx] - .5))]
-    sigma = pt.obs['extent_sigma'].iloc[selected]
+    sigma = nephron.obs['extent_sigma'].iloc[selected]
     density = np.exp(-.5 * ((GRID - backbone[selected]) / sigma)**2)
     ax.plot(GRID, density / np.trapz(density, GRID), label=f'{group}: σ={sigma:.3f}')
 ax.set(xlabel='Joint backbone position', ylabel='Truncated density',
@@ -477,8 +521,8 @@ axes[0, 0].legend(); axes[1, 0].set_xlabel('Backbone position'); axes[1, 1].set_
 fig.tight_layout(); plt.show()
 
 # Notebook 03's paired-heatmap convention: common expression scale preserves level,
-# and within-curve z-score isolates shape. Genes are the predeclared top 24
-# construction-variance genes, not selected by human–mouse divergence or DPT.
+# and within-curve z-score isolates shape. Genes are the top 24 within-species
+# variance construction genes, not selected by species difference or DPT.
 heat_genes = curve_genes[:24]
 heat_grid = GRID[(GRID >= common_low) & (GRID <= common_high)]
 heat_basis = spline.transform(heat_grid[:, None])
@@ -511,8 +555,8 @@ j = int(np.argmax(np.ptp(B_grid @ extent_coef, axis=0)))
 gene = curve_genes[j]
 gradient = np.abs(np.gradient(B_grid @ extent_coef[:, j], GRID))
 steep = GRID[np.argmax(gradient)]
-long_idx = np.flatnonzero((pt.obs['length_group'].eq('long') &
-                               pt.obs['comparison_species'].astype(str).eq('mouse')).to_numpy())
+long_idx = np.flatnonzero((nephron.obs['length_group'].eq('long') &
+                               nephron.obs['comparison_species'].astype(str).eq('mouse')).to_numpy())
 examples = long_idx[np.argsort(abs(backbone[long_idx] - steep))[:8]]
 fig, ax = plt.subplots(figsize=(8, 4))
 ax.scatter(backbone[mouse], Y_curve[mouse, j], s=2, alpha=.08, color='0.5')
@@ -531,7 +575,7 @@ for species in SPECIES_SAMPLES:
     m = species_array == species
     point_pred[m] = bases['point'][m] @ curve_coefficients[species]['point']
 resid = np.mean((Y_curve - point_pred)**2, axis=1)
-display(pt.obs.assign(point_residual_mse=resid).groupby(['comparison_species', 'length_group'], observed=True)['point_residual_mse']
+display(nephron.obs.assign(point_residual_mse=resid).groupby(['comparison_species', 'length_group'], observed=True)['point_residual_mse']
         .agg(['count', 'median', 'mean']).round(3))
 print('Residuals are aggregate-expression deviations, not within-tubule heterogeneity.')
 
@@ -541,16 +585,16 @@ print('Residuals are aggregate-expression deviations, not within-tubule heteroge
 # Leave one specimen out **within each species**. For each prespecified validation gene, fit on the other specimen/section of that species and predict the held-out one; the gene never entered new coordinate, orientation, or width. Error is normalized by its training standard deviation. Human section-to-section agreement is within one donor. A separate mouse→human and human→mouse transfer check asks whether raw expression curves transport across species; species-level abundance differences can dominate that check. DPT is historical and had upstream access to held-out genes.
 
 # %%
-dpt = pt.obs['total_scanpy_dpt'].to_numpy(dtype=float)
+dpt = nephron.obs['total_scanpy_dpt'].to_numpy(dtype=float)
 if not np.isfinite(dpt).all():
-    raise ValueError('Saved PT DPT has non-finite values.')
-dpt_basis, _ = observation_basis(dpt, np.zeros(pt.n_obs))
+    raise ValueError('Saved global-nephron DPT has non-finite values.')
+dpt_basis, _ = observation_basis(dpt, np.zeros(nephron.n_obs))
 Y_valid = expression(heldout_genes)
-sample_array = pt.obs['sample'].astype(str).to_numpy()
-groups = pt.obs['length_group'].to_numpy()
+sample_array = nephron.obs['sample'].astype(str).to_numpy()
+groups = nephron.obs['length_group'].to_numpy()
 base_designs = {
     'DPT': (dpt_basis, LAMBDA),
-    'backbone_linear': (np.column_stack([np.ones(pt.n_obs), backbone]), 0.0),
+    'backbone_linear': (np.column_stack([np.ones(nephron.n_obs), backbone]), 0.0),
     'point_continuous': (bases['point'], LAMBDA),
     'point_strong_smoothing': (bases['point'], 10 * LAMBDA),
     'extent_morphology': (bases['extent_c0.02'], LAMBDA),
@@ -626,11 +670,12 @@ pair = pair.pivot(index=['species', 'heldout_specimen', 'gene', 'length_group'],
 pair['extent_minus_point'] = pair['extent_morphology'] - pair['point_continuous']
 display(pair.groupby(['species', 'length_group'])['extent_minus_point'].agg(['mean', 'median']).round(4))
 
-# Segment ordering is a label diagnostic, not a wholly independent test, because upstream
-# cluster review used expression. Nearest-glomerulus distance is withheld from construction.
+# Coarse-family ordering is a contextual diagnostic, not independent truth: upstream
+# cluster review used expression, and the saved path omits DTL. Nearest-glomerulus
+# distance is withheld from construction but need not be monotone outside PT.
 coordinates = {'DPT': dpt, 'backbone_linear': backbone,
                'point_continuous': backbone, 'extent_morphology': expected_position}
-segment_rank = pt.obs['segment_class'].astype(str).map(dict(zip(SEGMENTS, (0, 1, 2)))).to_numpy(dtype=float)
+segment_rank = nephron.obs['coarse_class'].astype(str).map(dict(zip(SEGMENTS, range(len(SEGMENTS))))).to_numpy(dtype=float)
 metrics = []
 for method, coord in coordinates.items():
     for sample in SAMPLES:
@@ -638,16 +683,28 @@ for method, coord in coordinates.items():
         metrics.append({'method': method, 'species': species_array[m][0], 'sample': sample,
                         'segment_order_rho': spearmanr(coord[m], segment_rank[m]).statistic,
                         'glomerulus_distance_rho': spearmanr(coord[m],
-                            pt.obs['distance_to_nearest_glomerulus_px'].to_numpy()[m]).statistic})
+                            nephron.obs['distance_to_nearest_glomerulus_px'].to_numpy()[m]).statistic})
 biology = pd.DataFrame(metrics)
 display(biology.round(3))
+family_medians = (pd.DataFrame({
+    'species': species_array,
+    'family': nephron.obs['coarse_class'].astype(str).to_numpy(),
+    'DPT': dpt,
+    'joint_backbone': backbone,
+    'extent_mean': expected_position,
+}).groupby(['species', 'family'])[['DPT', 'joint_backbone', 'extent_mean']]
+  .median().reindex(pd.MultiIndex.from_product([SPECIES_SAMPLES, SEGMENTS],
+                                               names=['species', 'family'])))
+display(family_medians.round(3))
+family_medians.to_csv(out / 'family_position_medians.csv')
+print('Family medians are an ordering audit, not evidence of anatomical continuity; DTL is absent.')
 fig, axes = plt.subplots(2, len(coordinates), figsize=(14, 7), sharey=True)
 for row, species in enumerate(SPECIES_SAMPLES):
     m = species_array == species
     for ax, (method, coord) in zip(axes[row], coordinates.items()):
-        ax.boxplot([coord[m & pt.obs['segment_class'].astype(str).eq(seg).to_numpy()]
+        ax.boxplot([coord[m & nephron.obs['coarse_class'].astype(str).eq(seg).to_numpy()]
                     for seg in SEGMENTS], showfliers=False)
-        ax.set_xticks(range(1, 4), ['S1', 'S2', 'S3'])
+        ax.set_xticks(range(1, len(SEGMENTS) + 1), SEGMENTS)
         ax.set(title=f'{species}: {method}', ylabel='Position on [0,1]')
 fig.tight_layout(); plt.show()
 fig, axes = plt.subplots(2, 2, figsize=(10, 7))
@@ -655,7 +712,7 @@ for row, species in enumerate(SPECIES_SAMPLES):
     m = species_array == species
     for ax, method in zip(axes[row], ('DPT', 'extent_morphology')):
         ax.scatter(coordinates[method][m],
-                   pt.obs['distance_to_nearest_glomerulus_px'].to_numpy()[m], s=2, alpha=.15)
+                   nephron.obs['distance_to_nearest_glomerulus_px'].to_numpy()[m], s=2, alpha=.15)
         ax.set(xlabel=f'{species}: {method}', ylabel='Nearest glomerulus (px)')
 fig.tight_layout(); plt.show()
 
@@ -707,8 +764,8 @@ for c in (0.0, 0.01, 0.02, 0.04):
     design, _ = observation_basis(backbone, widths(c=c))
     sensitivity_designs[f'c={c:g}'] = (design, LAMBDA)
 for metric in ('area_um2', 'perimeter_um'):
-    proxy = np.sqrt(pt.obs[metric].to_numpy()) if metric == 'area_um2' else pt.obs[metric].to_numpy()
-    pt.obs[f'_proxy_{metric}'] = proxy
+    proxy = np.sqrt(nephron.obs[metric].to_numpy()) if metric == 'area_um2' else nephron.obs[metric].to_numpy()
+    nephron.obs[f'_proxy_{metric}'] = proxy
     design, _ = observation_basis(backbone, widths(metric=f'_proxy_{metric}'))
     sensitivity_designs[f'proxy={metric}'] = (design, LAMBDA)
 for n_genes, neighbors in ((150, 30), (300, 15)):
@@ -723,7 +780,7 @@ display(sensitivity[sensitivity['length_group'].eq('all')]
 # %% [markdown]
 # ## 11. Comparison summary and saved intermediate artifacts
 #
-# A coordinate-only row uses a linear held-out gene predictor; continuous rows use identical spline complexity. Segment and physical-distance associations come from position (for extent, the truncated-kernel mean), so fixed centers change them only near boundaries. Primary prediction scores use the same shared training support for every model; full-range scores and the excluded fraction are saved for audit. Separate columns avoid an aggregate winner score.
+# A coordinate-only row uses a linear held-out gene predictor; continuous rows use identical spline complexity. Coarse-family ordering and physical-distance associations come from position (for extent, the truncated-kernel mean), so fixed centers change them only near boundaries. Primary prediction scores use shared training support across models; full-range scores and the excluded fraction are saved for audit. No aggregate winner score is constructed.
 
 # %%
 summary = (cv.groupby(['species', 'method', 'length_group'])['normalized_mse'].mean().unstack()
@@ -736,7 +793,7 @@ summary = summary.reindex(pd.MultiIndex.from_product(
 summary = summary.drop(columns=['medium'])
 display(summary.round(3))
 
-positions = pt.obs[['comparison_species', 'sample', 'region', 'segment_class', 'total_scanpy_dpt', 'backbone_position',
+positions = nephron.obs[['comparison_species', 'sample', 'region', 'coarse_class', 'segment_class', 'total_scanpy_dpt', 'backbone_position',
                     'extent_mean_position', 'extent_sigma', 'relative_extent',
                     'length_group', 'major_um', 'minor_um', 'area_um2', 'perimeter_um',
                     'aspect_ratio', 'distance_to_nearest_glomerulus_px']].copy()
@@ -753,21 +810,23 @@ np.savez_compressed(out / 'construction_gene_curves.npz', grid=GRID,
                        for species, fits in curve_coefficients.items()
                        for method, coefficient in fits.items()})
 (out / 'run_manifest.json').write_text(json.dumps({
-    'pt_input': str(pt_path), 'pass1_input': str(pass1_path),
-    'n_tubules': pt.n_obs, 'n_mapped_genes': pt.n_vars,
+    'nephron_input': str(nephron_path), 'pass1_input': str(pass1_path),
+    'n_tubules': nephron.n_obs, 'n_mapped_genes': nephron.n_vars,
     'species_samples': SPECIES_SAMPLES, 'geometry_sources': GEOJSON_FILES,
+    'available_families': SEGMENTS, 'absent_family': 'DTL',
+    'heldout_groups': HELDOUT_GROUPS,
     'backbone_genes': backbone_genes, 'curve_genes': curve_genes,
     'heldout_genes': heldout_genes, 'orientation_only_genes': list(ORIENT_EARLY + ORIENT_LATE),
     'primary_c': PRIMARY_C, 'seed': SEED,
     'cross_species_knn_edge_fraction': cross_edge_fraction,
-    'note': 'Exploratory; DPT and reviewed labels had upstream access to expression.'
+    'note': 'Exploratory global tubular-nephron axis; DTL absent; DPT and labels used upstream expression.'
 }, indent=2))
 print('Saved exploratory artifacts to', out)
 
 # %% [markdown]
 # ## 12. Interpretation
 #
-# Read each species row and the paired short/long errors before making a claim. The following answers use the primary within-species held-out comparisons. Human sections share one donor; DPT and reviewed labels retain the upstream expression-dependence caveat.
+# Read each species row and paired short/long errors before making a claim. Scores use within-species held-out specimens on common training support. The saved path skips DTL and may branch; neither a graph geodesic nor global DPT proves continuous anatomical position. Human sections share one donor, and reviewed labels plus DPT retain upstream expression-dependence caveats.
 
 # %%
 def average_error(species, method, group='all'):
@@ -784,13 +843,14 @@ for species in SPECIES_SAMPLES:
     permuted = average_error(species, 'extent_permuted')
     short_delta = average_error(species, 'extent_morphology', 'short') - average_error(species, 'point_continuous', 'short')
     long_delta = average_error(species, 'extent_morphology', 'long') - average_error(species, 'point_continuous', 'long')
-    curve_rho = repro.set_index(['species', 'method'])
+    curve_rho = repro.set_index(['species', 'method']).sort_index()
     point_rho = float(curve_rho.loc[(species, 'point_continuous'), 'median_curve_rho'])
     extent_rho = float(curve_rho.loc[(species, 'extent_morphology'), 'median_curve_rho'])
     relative_gain = (point - extent) / point
-    b = biology.set_index(['species', 'method'])
+    b = biology.set_index(['species', 'method']).sort_index()
     point_order = float(b.loc[(species, 'point_continuous'), 'segment_order_rho'].mean())
     dpt_order = float(b.loc[(species, 'DPT'), 'segment_order_rho'].mean())
+    median_order = ' → '.join(family_medians.loc[species, 'joint_backbone'].sort_values().index)
     supported = (relative_gain > .01 and long_delta < short_delta and
                  (min(equal, permuted) - extent) / point > .01 and extent_rho >= point_rho - .05)
     species_support.append(supported)
@@ -800,17 +860,19 @@ for species in SPECIES_SAMPLES:
         f'long minus point {long_delta:+.4f}, short minus point {short_delta:+.4f}. '
         f'Equal-width {equal:.3f}, shuffled-width {permuted:.3f}. '
         f'Within-species curve rho extent {extent_rho:.3f}, point {point_rho:.3f}. '
-        f'Segment-order rho backbone {point_order:.3f}, DPT {dpt_order:.3f}. '
+        f'Coarse-family order rho backbone {point_order:.3f}, DPT {dpt_order:.3f}. '
+        f'Backbone family-median order: {median_order}. '
         f'The 1% descriptive width-specific screen is {"met" if supported else "not met"}.')
 display(Markdown(
     '\n\n'.join(interpretation) + '\n\n' +
-    '**Interpretation.** The paired heatmaps and marker plots show whether fitted curves follow '
-    'expected PT programs. Marker panels and reviewed labels are contextual because they informed '
-    'upstream annotation. Similar point and extent curves, or similar equal/permuted-width errors, '
-    'leave physical width non-identifiable. Human section agreement is not donor replication. '
-    f'Only {cross_edge_fraction:.1%} of joint kNN edges link species; shared-axis alignment remains provisional. '
-    'Cross-species transfer on raw lognorm expression also measures abundance shifts, so it cannot '
-    'by itself select a coordinate. ' +
+    '**Interpretation.** Fine-marker plots can reveal misplaced or mixed tubular programs, but '
+    'reviewed labels and marker panels informed upstream annotation. DTL is absent and the '
+    'collecting duct is not a serial extension of one PT tubule. The family-median order '
+    'reversals and sparse cross-species graph links leave a single physical axis unvalidated. '
+    'Similar point and extent curves or width-control errors leave physical width '
+    'non-identifiable. Human section agreement is not donor replication. '
+    f'{cross_edge_fraction:.1%} of joint kNN edges link species; alignment must be inspected. '
+    'Cross-species transfer on raw lognorm expression also measures abundance shifts. ' +
     ('Both species pass the descriptive screen; external donors and direct length measurements are needed before a joint model.'
      if all(species_support) else
      'The combined evidence does not justify a full joint center/width model yet.')

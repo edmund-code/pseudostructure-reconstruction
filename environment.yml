@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python=3.11
   - pip
-  - numpy
+  - numpy<2
   - pandas
   - pyarrow
   - scipy
@@ -26,4 +26,6 @@ dependencies:
   - nbformat
   - pytest
   - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
       - shapely>=2
+      - genes2genes @ git+https://github.com/Teichlab/Genes2Genes.git@42ba945d370a864464a2d3cc7174aa0ee451e600

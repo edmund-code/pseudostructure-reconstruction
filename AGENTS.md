@@ -59,6 +59,7 @@ python analysis/mouse_only_pseudospace.py   --data-root <dir> --results-root <di
 python analysis/human_vs_healthy_mouse.py   --data-root <dir> --results-root <dir>
 python analysis/gam_human_vs_mouse.py       --data-root <dir> --results-root <dir>   # needs 03's outputs
 python analysis/pt_gam_clustering.py        --data-root <dir> --results-root <dir>   # needs 03's outputs
+python analysis/pt_genes2genes.py           --data-root <dir> --results-root <dir>   # needs 03's outputs; 07 atlas optional
 # env-var equivalents: PSEUDOSPACE_DATA_ROOT, PSEUDOSPACE_RESULTS_ROOT
 
 # QuPath export / spatial validation
@@ -182,7 +183,8 @@ tables under `docs/results/`.
   `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`,
   `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`,
   `07_pt_gam_clustering.ipynb → analysis/pt_gam_clustering.py`, and
-  `08_pt_cross_species_validation.ipynb → analysis/pt_cross_species_validation.py`.
+  `08_pt_cross_species_validation.ipynb → analysis/pt_cross_species_validation.py`, and
+  `09_pt_genes2genes.ipynb → analysis/pt_genes2genes.py`.
   (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
@@ -200,6 +202,8 @@ tables under `docs/results/`.
     analysis/notebooks/07_pt_gam_clustering.ipynb
   jupytext --to py:percent --output analysis/pt_cross_species_validation.py \
     analysis/notebooks/08_pt_cross_species_validation.ipynb
+  jupytext --to py:percent --output analysis/pt_genes2genes.py \
+    analysis/notebooks/09_pt_genes2genes.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.

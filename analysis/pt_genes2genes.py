@@ -55,6 +55,7 @@ for required in (INPUT_PATH, MAP_PATH):
     if not required.exists():
         raise FileNotFoundError(f'Missing {required}; run notebook 03 first.')
 NOTEBOOK_LOGIC_VERSION = '09-g2g-v1'
+HUMAN_MARKER_TRIAL_VERSION = '09-human-marker-trial-v1'
 G2G_BINS = 14  # explicit API argument; 14 is the tutorial's demonstrated interpolation resolution
 G2G_CHUNK_GENES = 128  # memory ceiling: G2G densifies each input matrix; raise only after profiling RAM
 RNG = 0
@@ -89,6 +90,9 @@ SPECIMENS = {'mouse': ('Ctrl1A2', 'Ctrl1A4'), 'human': ('HUK1_COR1', 'HUK1_MED1'
 COLORS = {'mouse': '#0072B2', 'human': '#D55E00'}
 MARKERS = {'S1': ('Slc5a2', 'Slc5a12', 'Gatm', 'Lrp2', 'Cubn', 'Slc34a1'),
            'S3': ('Slc22a7', 'Cyp7b1', 'Slc7a13', 'Slc6a18', 'Acsm3')}
+HUMAN_TRIAL_MARKERS = {'S1': ('SLC5A2', 'SLC5A12'),
+                       'S2': ('SLC22A6', 'SLC13A3', 'ACSM3'),
+                       'S3': ('SLC22A7', 'SLC7A13', 'AGXT', 'DCXR')}
 
 def savefig(fig, name):
     fig.tight_layout()
@@ -222,6 +226,107 @@ savefig(fig, 'fig01_species_pt_orientation.png')
 display(qc.round(3))
 if ((qc.rho_marker_axis <= 0) | (qc.rho_S1 >= 0) | (qc.rho_S3 <= 0)).any():
     raise RuntimeError('S1 -> S3 orientation failed in at least one specimen/section; G2G is not biologically interpretable.')
+
+# %% [markdown]
+# ### Human-only marker trial (separate DPT diagnostic)
+#
+# The proposed human S1/S2/S3 symbols are mapped through the accepted ortholog table to the shared gene names. S1 and S3 choose the trial root and orientation exactly as in the existing DPT; S2 is checked for an intermediate peak. A missing marker is recorded rather than silently substituted. This trial writes new QC files and a figure, while the original human coordinate and all downstream G2G alignments remain unchanged.
+
+# %%
+human_trial_coverage = []
+human_trial_genes = {}
+eligible_genes = set(genes)
+for stage, symbols in HUMAN_TRIAL_MARKERS.items():
+    present = []
+    for symbol in symbols:
+        matches = orthologs.loc[orthologs.human_symbol.eq(symbol), 'mouse_symbol']
+        if len(matches) != 1:
+            raise ValueError(f'{symbol}: expected one accepted human-to-mouse ortholog, found {len(matches)}')
+        shared_gene = str(matches.iloc[0])
+        available = shared_gene in eligible_genes
+        human_trial_coverage.append({'stage': stage, 'human_symbol': symbol,
+                                     'shared_gene': shared_gene, 'in_pt_gene_set': available})
+        if available:
+            present.append(shared_gene)
+    if len(present) < 2:
+        raise ValueError(f'Human {stage} trial has fewer than two available markers: {present}')
+    human_trial_genes[stage] = present
+human_trial_coverage = pd.DataFrame(human_trial_coverage)
+human_trial_coverage.to_csv(OUTPUT_DIR / 'g2g_human_marker_trial_coverage.csv', index=False)
+display(human_trial_coverage)
+
+human_trial = adata_human.copy()
+if not human_trial.obs_names.equals(adata_human.obs_names):
+    raise ValueError('Human trial and baseline PT structures differ or are out of order.')
+for stage, names in human_trial_genes.items():
+    human_trial.obs[f'{stage}_trial_score'] = marker_score(human_trial, names)
+trial_axis = (human_trial.obs.S3_trial_score - human_trial.obs.S1_trial_score).to_numpy()
+human_trial.obs['trial_marker_axis'] = trial_axis
+
+def fit_human_marker_trial():
+    sc.pp.pca(human_trial, n_comps=30, random_state=RNG)
+    sc.pp.neighbors(human_trial, n_neighbors=30, use_rep='X_pca', random_state=RNG)
+    sc.tl.diffmap(human_trial)
+    candidates = np.flatnonzero(trial_axis <= np.quantile(trial_axis, 0.05))
+    position = human_trial.obsm['X_pca'][candidates]
+    root = candidates[np.linalg.norm(position - np.median(position, axis=0), axis=1).argmin()]
+    human_trial.uns['iroot'] = int(root)
+    sc.tl.dpt(human_trial)
+    return {'time': orient_and_normalize(human_trial.obs.dpt_pseudotime.to_numpy(), trial_axis, min_valid=10),
+            'root': np.asarray(int(root))}
+
+artifact = INPUT_PATH.stat()
+trial_payload = cached_payload(
+    'pt_time_human_marker_trial', fit_human_marker_trial, root=OUTPUT_DIR / 'stage_cache',
+    params={'logic': HUMAN_MARKER_TRIAL_VERSION, 'n_pcs': 30, 'n_neighbors': 30,
+            'random_state': RNG, 'markers': human_trial_genes, 'scanpy': package_version('scanpy')},
+    inputs={'input_size': artifact.st_size, 'input_mtime_ns': artifact.st_mtime_ns,
+            'obs_names': human_trial.obs_names.to_numpy(), 'genes': genes}, code=HUMAN_MARKER_TRIAL_VERSION)
+trial_time = np.asarray(trial_payload['time'], dtype=np.float64)
+trial_root = int(trial_payload['root'])
+if (len(trial_time) != human_trial.n_obs or not 0 <= trial_root < human_trial.n_obs
+        or not np.isfinite(trial_time).all() or (trial_time < 0).any() or (trial_time > 1).any()
+        or len(np.unique(trial_time)) < 10):
+    raise ValueError('Human marker trial produced invalid or collapsed DPT pseudotime.')
+human_trial.obs['time'] = trial_time
+human_trial.uns['iroot'] = trial_root
+
+trial_qc = []
+for sample, group in human_trial.obs.groupby('sample', observed=True):
+    old = adata_human.obs.loc[group.index]
+    bins = pd.cut(group.time, bins=np.linspace(0, 1, 11), labels=False, include_lowest=True)
+    s2_by_bin = group.groupby(bins, observed=True).S2_trial_score.mean()
+    trial_qc.append({'sample': str(sample), 'n_structures': len(group),
+                     'baseline_root': str(adata_human.obs_names[adata_human.uns['iroot']]),
+                     'trial_root': str(human_trial.obs_names[trial_root]),
+                     'rho_baseline_axis_baseline_time': spearmanr(old.time, old.marker_axis).statistic,
+                     'rho_trial_axis_baseline_time': spearmanr(old.time, group.trial_marker_axis).statistic,
+                     'rho_trial_axis_trial_time': spearmanr(group.time, group.trial_marker_axis).statistic,
+                     'rho_trial_S1': spearmanr(group.time, group.S1_trial_score).statistic,
+                     'rho_trial_S2': spearmanr(group.time, group.S2_trial_score).statistic,
+                     'rho_trial_S3': spearmanr(group.time, group.S3_trial_score).statistic,
+                     'S2_peak_decile': int(s2_by_bin.idxmax()) + 1,
+                     'rho_baseline_vs_trial_time': spearmanr(old.time, group.time).statistic})
+trial_qc = pd.DataFrame(trial_qc)
+trial_qc.to_csv(OUTPUT_DIR / 'g2g_human_marker_trial_qc.csv', index=False)
+display(trial_qc.round(3))
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+for sample, group in human_trial.obs.groupby('sample', observed=True):
+    axes[0].scatter(adata_human.obs.loc[group.index, 'time'], group.time, s=2, alpha=.1, label=str(sample))
+    for stage, color in (('S1', '#0072B2'), ('S2', '#E69F00'), ('S3', '#D55E00')):
+        bins = pd.cut(group.time, bins=np.linspace(0, 1, 11), labels=False, include_lowest=True)
+        means = group.groupby(bins, observed=True)[f'{stage}_trial_score'].mean()
+        axes[1].plot((means.index.to_numpy(dtype=float) + .5) / 10, means.to_numpy(),
+                     color=color, linestyle='-' if str(sample) == SPECIMENS['human'][0] else '--',
+                     label=f'{sample} {stage}')
+axes[0].plot([0, 1], [0, 1], color='black', linestyle='--', linewidth=.8)
+axes[0].set(xlabel='existing human PT time', ylabel='trial human PT time', title='Coordinate agreement')
+axes[1].set(xlabel='trial human PT time', ylabel='mean z-scored marker signal', title='S1 / S2 / S3 progression')
+for ax in axes:
+    ax.legend(fontsize=7)
+savefig(fig, 'fig01b_human_marker_trial.png')
+print('Human marker trial is diagnostic only; downstream G2G still uses the existing human PT time.')
 
 # %% [markdown]
 # ## 3. Prepare G2G objects

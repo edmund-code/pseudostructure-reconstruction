@@ -184,7 +184,7 @@ def species_pt(species):
         params={'logic': NOTEBOOK_LOGIC_VERSION, 'n_pcs': 30, 'n_neighbors': 30,
                 'random_state': RNG, 'markers': MARKERS, 'scanpy': package_version('scanpy')},
         inputs={'input_size': artifact.st_size, 'input_mtime_ns': artifact.st_mtime_ns,
-                'obs_names': a.obs_names.to_numpy(), 'genes': genes}, code=fit_time)
+                'obs_names': a.obs_names.to_numpy(), 'genes': genes}, code=NOTEBOOK_LOGIC_VERSION)
     time = np.asarray(payload['time'], dtype=np.float64)
     root = int(payload['root'])
     if len(time) != a.n_obs or not 0 <= root < a.n_obs or not np.isfinite(time).all() or (time < 0).any() or (time > 1).any() or len(np.unique(time)) < 10:

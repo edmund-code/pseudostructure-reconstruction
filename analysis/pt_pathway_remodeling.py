@@ -150,6 +150,8 @@ display(covariates[['mean_expression', 'detection', 'detection_mouse', 'detectio
 # The full model gives $\delta_g(s)=\hat\mu_{H,g}(s)-\hat\mu_{M,g}(s)$. Its local standard error uses a **heteroskedasticity-robust HC3 sandwich**, because balancing weights are not inverse-variance weights. It still treats structures as independent and does not account for donor replication, spatial correlation, or uncertainty in the established coordinate. $Z=\delta/SE$ is a working signal-to-noise measure, not a calibrated local biological test.
 #
 # [Weighted regression assumptions](https://www.statsmodels.org/stable/examples/notebooks/generated/wls.html).
+#
+# The full-model residuals are saved with the trajectory export for the correlation check below. They are **raw observed minus fitted expression**, including the fitted specimen effects. `residuals` has structures as rows and genes as columns; the saved `structures`, `specimen`, and `genes` arrays identify those axes. Only the primary fit retains this large matrix. After updating, restart the kernel and run all cells so the updated helper and residuals are loaded.
 
 # %%
 from pseudospace.pathway_remodeling import fit_nested_trajectories
@@ -159,7 +161,7 @@ import pseudospace.levelshape as levelshape
 import pseudospace.stats_gam as stats_gam
 
 basis_df = 6
-NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v2'  # Bump when a cached calculation changes.
+NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v3'  # Bump when a cached calculation changes.
 grid = np.linspace(lo, hi, 61)
 # Require local data from every specimen, not only overlapping range endpoints.
 local_counts = pd.DataFrame({name: [np.sum((specimen == name) & (abs(position - s) <= .08 * (hi - lo)))
@@ -170,8 +172,8 @@ if local_counts.min().min() < 15:
 cache_code = digest([NOTEBOOK_LOGIC_VERSION, Path(remodeling.__file__), Path(levelshape.__file__), Path(stats_gam.__file__)])
 fit_inputs = {'Y': digest(Y), 'position': position, 'human': human, 'specimen': specimen, 'genes': genes}
 fit = cached_payload('nested_gene_models',
-    lambda: fit_nested_trajectories(Y, position, human, specimen, grid, basis_df=basis_df),
-    root=output / 'stage_cache', params={'basis_df': basis_df, 'grid': grid},
+    lambda: fit_nested_trajectories(Y, position, human, specimen, grid, basis_df=basis_df, return_residuals=True),
+    root=output / 'stage_cache', params={'basis_df': basis_df, 'grid': grid, 'return_residuals': True},
     inputs=fit_inputs, code=cache_code)
 gene_stats = covariates.copy()
 for name in ('T_level', 'T_spatial', 'T_total'):
@@ -179,7 +181,8 @@ for name in ('T_level', 'T_spatial', 'T_total'):
 gene_stats['mean_human_minus_mouse'] = fit['delta'].mean(axis=1)
 gene_stats['spatial_rms'] = fit['delta'].std(axis=1)
 gene_stats.to_csv(output / 'gene_statistics.csv')
-np.savez_compressed(output / 'gene_trajectories.npz', genes=np.array(genes), **fit)
+np.savez_compressed(output / 'gene_trajectories.npz', genes=np.array(genes),
+    structures=adata.obs_names.to_numpy(dtype=str), specimen=np.asarray(specimen, str), **fit)
 display(gene_stats.sort_values('T_spatial', ascending=False).head(10))
 
 # %% [markdown]
@@ -265,6 +268,95 @@ print(f'{len(candidate_ids)} exploratory candidates.')
 print('Plot selection:', 'discovery candidates' if candidate_ids else 'ranked illustrations; none passed the cutoff')
 
 # %% [markdown]
+# ### 6a · Correlation-aware competitive enrichment
+#
+# **Does a pathway's rank-sum evidence survive accounting for its genes moving together?** We keep the same $T_{\mathrm{spatial}}$, AUC, matched null, and matched q-values. This section adds a second significance calculation, then annotates the existing candidates.
+#
+# > **Remove the modeled signal before estimating correlation**
+# >
+# > Use residuals from the **full model**: $r_g=y_g-\widehat y_g$. Baseline position, species, species-by-position, and specimen effects have already been fitted. Within each specimen, calculate the mean Pearson correlation across distinct pathway-gene pairs. Fisher-transform those specimen means, average them **equally**, and transform back:
+# >
+# > $\bar\rho_P=\tanh\{J^{-1}\sum_j\operatorname{atanh}(\rho_{P,j})\}$, then $\rho_P^*=\max(0,\bar\rho_P)$.
+#
+# There is no pooled-structure correlation and no random gene or structure cap. The helper computes the exact mean pair correlation using normalized residual-column sums, without building a large pairwise matrix. Constant residual columns have undefined Pearson correlation and are excluded **only from correlation estimation**; the original pathway membership and AUC stay intact. The exported per-specimen audit records variable-gene counts and pair coverage. The available-pair estimate is applied to the original pathway size, an approximation to inspect when coverage is low. If a specimen has fewer than two variable members or four structures, the pathway is marked **correlation unavailable**, never assigned zero correlation silently.
+
+# %%
+from pseudospace.pathway_remodeling import residual_pathway_correlations, correlation_adjusted_rank_tests
+
+residual_correlations = cached_frame('spatial_residual_correlations',
+    lambda: residual_pathway_correlations(fit['residuals'], specimen, genes, gene_sets),
+    root=output / 'stage_cache', inputs={'residuals': digest(fit['residuals']),
+        'specimen': specimen, 'genes': genes, 'sets': gene_sets}, code=cache_code)
+residual_correlations.to_csv(output / 'pathway_residual_correlations_by_specimen.csv', index=False)
+display(residual_correlations.groupby('specimen').agg(
+    pathways=('pathway_id', 'size'), estimable=('rho_specimen', 'count'),
+    median_rho=('rho_specimen', 'median'), min_pair_coverage=('pair_fraction', 'min')))
+
+# %% [markdown]
+# #### Same rank sum, correlation-adjusted variance
+#
+# For $m$ pathway genes and $n=G-m$ background genes, keep $U=mn\,AUC$. Use the CAMERA rank variance:
+#
+# $$V_\rho=\frac{\arcsin(1)mn+\arcsin(1/2)mn(n-1)+\arcsin(\rho/2)m(m-1)n(n-1)+\arcsin((1+\rho)/2)m(m-1)n}{2\pi}.$$
+#
+# At $\rho=0$, this reduces to $mn(G+1)/12$. Following [limma's rank-test implementation](https://github.com/bioc/limma/blob/RELEASE_3_22/R/rankSumTestWithCorrelation.R), multiply this variance by the tie factor $1-\sum_k(t_k^3-t_k)/(G^3-G)$ and use the upper-tail continuity correction:
+#
+# $$Z_{\mathrm{corr}}=\frac{U-mn/2-0.5}{\sqrt{V_\rho\,\mathrm{tie\ factor}}},\qquad p_{\mathrm{corr}}=1-\Phi(Z_{\mathrm{corr}}).$$
+#
+# BH correction spans **all tested spatial pathways across all three libraries**, not just the candidates. Missing correlation estimates retain a conservative p=1 slot in that family but are displayed as unavailable; entirely tied rankings give p=1. The existing matched q-values retain their original three-statistic family.
+#
+# > **Two complementary checks**
+# >
+# > Matched q-values address measurability; correlation q-values account approximately for within-pathway dependence. This is a **CAMERA-style adaptation to unsigned F statistics**, with specimen-balanced residual correlation estimates and a normal tail. It is not a direct `camera()`/`cameraPR()` analysis, a joint correction for both biases, or donor-level inference. Residual correlation is a working approximation to dependence among these F statistics. The one-human-donor and spatial-dependence limitations remain.
+#
+# We retain the existing candidates. Label them **Correlation-supported** when $q_{\rm corr}\le0.05$, **Correlation-sensitive** when it exceeds 0.05, and **Correlation unavailable** when estimation fails. A correlation-sensitive pathway can still have a large, biologically coherent effect; its genes offer fewer independent pieces of evidence.
+
+# %%
+correlation_tests = correlation_adjusted_rank_tests(gene_stats.T_spatial, gene_sets, residual_correlations)
+# Enforce the central contract: changing significance must not change the pathway score.
+auc_check = spatial.set_index('pathway_id').auc.reindex(correlation_tests.pathway_id)
+assert np.allclose(auc_check, correlation_tests.auc, rtol=0, atol=1e-12)
+correlation_columns = ['pathway_id', 'rho_residual', 'rho_used', 'p_corr', 'q_corr',
+                       'variance_inflation', 'min_pair_fraction', 'n_specimens_estimable']
+spatial = spatial.merge(correlation_tests[correlation_columns], on='pathway_id', validate='one_to_one')
+spatial['correlation_support'] = np.select(
+    [spatial.q_corr.isna(), spatial.q_corr.le(.05)],
+    ['Correlation unavailable', 'Correlation-supported'], default='Correlation-sensitive')
+correlation_tests.to_csv(output / 'pathway_spatial_correlation_tests.csv', index=False)
+spatial.to_csv(output / 'pathway_spatial_evidence.csv', index=False)
+# Membership of candidate_ids is still determined only by matched q and positive AUC effect.
+correlation_candidates = spatial[spatial.pathway_id.isin(candidate_ids)]
+display(correlation_candidates.groupby('correlation_support').size().rename('existing_candidates'))
+display(correlation_candidates[['pathway', 'auc', 'q_empirical', 'rho_residual',
+                                'q_corr', 'correlation_support', 'min_pair_fraction']].head(15))
+
+# %% [markdown]
+# #### Diagnostic: matched evidence versus correlation-adjusted evidence
+#
+# Every dot is a tested spatial pathway. The dashed lines mark q=0.05; color shows the nonnegative residual correlation used in the variance calculation. The diagonal is an agreement guide, not a null expectation: these are different tests and BH families. Points right of the vertical cutoff with positive AUC effect remain candidates even when below the horizontal cutoff. Unavailable correlation estimates are counted separately. This plot diagnoses sensitivity to the working correlation correction; it does not establish population-level calibration.
+
+# %%
+import matplotlib.pyplot as plt
+
+finite_correlation = spatial.dropna(subset=['q_corr'])
+fig, ax = plt.subplots(figsize=(6.5, 5.5), layout='constrained')
+points = ax.scatter(-np.log10(finite_correlation.q_empirical.clip(lower=1e-300)),
+                    -np.log10(finite_correlation.q_corr.clip(lower=1e-300)),
+                    c=finite_correlation.rho_used, cmap='viridis', vmin=0, s=18, alpha=.8)
+cutoff = -np.log10(.05)
+ax.axvline(cutoff, color='0.4', ls='--', lw=.8)
+ax.axhline(cutoff, color='0.4', ls='--', lw=.8)
+limit = max(*ax.get_xlim(), *ax.get_ylim(), cutoff + .2)
+ax.plot([0, limit], [0, limit], color='0.7', lw=.8)
+ax.set(xlim=(0, limit), ylim=(0, limit), xlabel='−log10(matched empirical q)',
+       ylabel='−log10(correlation-adjusted q)', title='Spatial pathway evidence: two complementary checks')
+fig.colorbar(points, ax=ax, label='Residual correlation used (negative values floored at 0)')
+fig.savefig(output / 'pathway_correlation_diagnostic.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+print('Correlation estimates unavailable:', int(spatial.q_corr.isna().sum()))
+
+# %% [markdown]
 # ## 7 · Complementary preranked GSEA and leading edges
 #
 # Use the **same numerical rankings and same pathway members** as the AUC screen. GSEA asks whether a subset concentrates near the top of the ranking; it need not agree with a pathway-wide AUC shift.
@@ -345,8 +437,6 @@ display(phenotypes.head(10))
 # Peak position is the maximum of D on the supported grid. The affected width is the total grid fraction at or above half the positive peak, converted to coordinate units; it can include separated regions. A broad affected fraction describes a diffuse effect. Early/mid/late shares divide the supported interval into thirds **after discovery**; these are positional descriptions, not anatomical segment labels. Sign changes in S ignore a ±0.1 deadband to avoid counting tiny wiggles.
 
 # %%
-import matplotlib.pyplot as plt
-
 plt.rcParams.update({'axes.spines.top': False, 'axes.spines.right': False, 'font.size': 10})
 fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True, layout='constrained')
 for pathway in illustration_ids:
@@ -501,7 +591,7 @@ for pathway in illustration_ids[:3]:
 from pseudospace.pathway_remodeling import collapse_programs
 
 programs = collapse_programs(candidate_ids, gene_sets, leading_edges, local_curves, distance_cut=.45)
-programs = programs.merge(spatial[['pathway_id', 'effect', 'q_empirical']], on='pathway_id', how='left')
+programs = programs.merge(spatial[['pathway_id', 'effect', 'q_empirical', 'q_corr', 'correlation_support']], on='pathway_id', how='left')
 representatives = programs.sort_values(['q_empirical', 'effect'], ascending=[True, False]).drop_duplicates('program')
 programs['representative'] = programs.pathway_id.isin(representatives.pathway_id)
 programs.to_csv(output / 'pathway_program_membership.csv', index=False)
@@ -607,13 +697,15 @@ print(g2g_status)
 # %% [markdown]
 # ## 14 · Final evidence table and reproducibility record
 #
-# The final table retains **all original pathway statistics** and adds program membership, bulk comparison, spatial descriptions, and stability. It is ready for biological review, not a list of validated mechanisms.
+# The final table retains **all original pathway statistics** and adds program membership, bulk comparison, spatial descriptions, stability, and correlation-adjusted spatial evidence. It is ready for biological review, not a list of validated mechanisms.
 #
 # > **Before writing a biological conclusion**
 # >
 # > Check coverage and null resolution; inspect absolute gene directions and fitted curves; consider specimen and basis sensitivity; keep correlation and one-human-donor limitations beside the result. Neither a small pathway q-value nor a stable section-level pattern is population-level human inference.
 #
 # The table preserves both continuous-only candidates and pathways for which continuous analysis adds detail to a bulk-accessible difference. Program grouping and driver selection happen after discovery.
+#
+# Correlation support annotates the primary spatial screen only. The original matched-null candidate rule, bulk comparison, program representatives, and stability definition remain unchanged; `q_corr` is not an extra discovery or retention filter.
 
 # %%
 final_table = comparison.merge(programs[['pathway_id', 'program', 'representative']], on='pathway_id', how='left')
@@ -623,6 +715,8 @@ final_table = final_table.merge(coverage[['pathway_id', 'library', 'pathway', 'n
 for role in ('broad_supporter', 'leading_edge', 'spatial_driver'):
     role_genes = member_evidence[member_evidence[role]].groupby('pathway_id').gene.agg(';'.join)
     final_table[role + '_genes'] = final_table.pathway_id.map(role_genes).fillna('')
+final_table = final_table.merge(spatial[correlation_columns + ['correlation_support']],
+    on='pathway_id', how='left', validate='one_to_one')
 final_table['caveat'] = 'Exploratory gene-set evidence; two mouse specimens, two cortex sections from one human donor.'
 final_table.to_csv(output / 'pathway_evidence_atlas.csv', index=False)
 manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint': cache_code,
@@ -634,6 +728,9 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
     'libraries': {name: digest(library_dir / f'{name}.json') for name in libraries},
     'packages': {name: version(name) for name in ['numpy', 'scipy', 'pandas', 'anndata', 'patsy', 'statsmodels', 'gseapy']},
     'g2g_status': g2g_status, 'n_candidates': len(candidate_ids),
+    'correlation_test': 'spatial CAMERA-style rank variance; equal-specimen Fisher mean; normal tail',
+    'correlation_bh_family': 'all tested spatial pathways across libraries',
+    'correlation_candidate_counts': correlation_candidates.correlation_support.value_counts().to_dict(),
     'caveat': final_table.caveat.iloc[0]}
 (output / 'run_manifest.json').write_text(json.dumps(manifest, indent=2))
 display(final_table[final_table.pathway_id.isin(candidate_ids)].sort_values('q_empirical_T_spatial').head(20))

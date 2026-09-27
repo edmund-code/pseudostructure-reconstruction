@@ -8,14 +8,15 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from scipy.stats import mannwhitneyu, rankdata
+from scipy.stats import mannwhitneyu, norm, rankdata
 from statsmodels.stats.multitest import multipletests
 
 from .levelshape import build_ls_designs
 from .stats_gam import gam_internal_knots, make_gam_design
 
 
-def fit_nested_trajectories(expression, position, human, specimen, grid, *, basis_df=6):
+def fit_nested_trajectories(expression, position, human, specimen, grid, *, basis_df=6,
+                            return_residuals=False):
     """Fixed-basis Gaussian regression-spline GAMs with balanced specimen weights.
 
     The same within-species sum-to-zero specimen intercept contrasts enter all
@@ -23,6 +24,8 @@ def fit_nested_trajectories(expression, position, human, specimen, grid, *, basi
     species. No penalty is used: fixed low basis dimension regularizes the fit
     and preserves exact nesting. Return partial-F *ranking* statistics and HC3
     structural uncertainty for the full-model human-minus-mouse contrast.
+    Optionally retain raw full-model residuals (structures x genes); all existing
+    statistics are identical whether or not residuals are retained.
     """
     y = sparse.csr_matrix(expression, dtype=float)
     s, c = np.asarray(position, float), np.asarray(human, float)
@@ -71,12 +74,16 @@ def fit_nested_trajectories(expression, position, human, specimen, grid, *, basi
     g = y.shape[1]
     result = {key: np.empty(g) for key in ('T_level', 'T_spatial', 'T_total')}
     result.update({key: np.empty((g, len(grid))) for key in ('mouse', 'human', 'delta', 'se', 'z')})
+    if return_residuals:
+        result['residuals'] = np.empty((n, g))
     # Ponytail: 256-gene blocks bound dense residual memory; tune only after profiling.
     for start in range(0, g, 256):
         block = slice(start, min(start + 256, g))
         values = y[:, block].toarray()
         betas = [solver @ values for solver in solvers]
         residuals = [values - x @ beta for x, beta in zip(designs, betas)]
+        if return_residuals:
+            result['residuals'][:, block] = residuals[2]
         sse = [np.sum(weights[:, None] * residual ** 2, axis=0) for residual in residuals]
         for key, reduced, full in (('T_level', 0, 1), ('T_spatial', 1, 2), ('T_total', 0, 2)):
             added = designs[full].shape[1] - designs[reduced].shape[1]
@@ -190,6 +197,105 @@ def matched_pathway_tests(statistics, gene_sets, strata, *, n_null=9999, seed=12
                          'fixed_member_fraction': fixed_members / n, 'n_null': n_null})
     frame = pd.DataFrame(rows)
     frame['q_empirical'] = multipletests(frame.p_empirical, method='fdr_bh')[1]
+    return frame
+
+
+def residual_pathway_correlations(residuals, specimen, genes, gene_sets):
+    """Mean off-diagonal Pearson correlation separately in every specimen.
+
+    Constant residual columns have undefined correlation: exclude them from the
+    correlation estimate and expose the number of usable pairs. Fewer than two
+    variable members (or fewer than four structures) gives an unavailable rho.
+    No pooling, sampling, gene cap, or structure cap is used.
+    """
+    residuals, specimen = np.asarray(residuals, float), np.asarray(specimen, str)
+    genes = pd.Index(genes)
+    if (residuals.shape != (len(specimen), len(genes)) or not genes.is_unique or
+            not np.isfinite(residuals).all() or not len(specimen)):
+        raise ValueError('Need finite residuals aligned to unique genes and specimens.')
+    members = {p: genes.get_indexer(sorted(set(names))) for p, names in gene_sets.items()}
+    if any((idx < 0).any() or len(idx) < 2 for idx in members.values()):
+        raise ValueError('Every correlation set needs at least two known genes.')
+    rows = []
+    for name in np.unique(specimen):
+        block = residuals[specimen == name].copy()
+        block -= block.mean(axis=0)
+        lengths = np.linalg.norm(block, axis=0)
+        variable = lengths > 1e-12 * np.sqrt(len(block))
+        block /= np.where(variable, lengths, 1.)
+        for pathway, idx in members.items():
+            usable = idx[variable[idx]]
+            k, m = len(usable), len(idx)
+            rho = np.nan
+            if k >= 2 and len(block) >= 4:
+                # Sum of pairwise dot products without allocating an m x m matrix.
+                summed = block[:, usable].sum(axis=1)
+                rho = float(np.clip((summed @ summed - k) / (k * (k - 1)), -1., 1.))
+            rows.append({'pathway_id': pathway, 'specimen': name, 'n_structures': len(block),
+                         'n_genes': m, 'n_variable_genes': k,
+                         'pair_fraction': k * (k - 1) / (m * (m - 1)),
+                         'rho_specimen': rho})
+    return pd.DataFrame(rows)
+
+
+def correlation_adjusted_rank_tests(statistics, gene_sets, specimen_correlations):
+    """CAMERA-style upper-tail rank test; keep the original scores and AUCs.
+
+    Fisher-average specimen mean correlations with equal weights, then floor at
+    zero. Use the arcsine variance, multiplicative tie correction and continuity
+    correction in limma's rankSumTestWithCorrelation (normal/df=Inf limit).
+    This is an exploratory adaptation for unsigned F rankings, not cameraPR.
+    BH covers every supplied pathway; unavailable tests reserve a p=1 slot but
+    remain NA in the reported p/q columns rather than pretending rho is zero.
+    """
+    values = statistics.to_numpy(float)
+    if not statistics.index.is_unique or not np.isfinite(values).all() or len(values) < 3:
+        raise ValueError('Need finite statistics indexed by unique genes.')
+    if specimen_correlations.duplicated(['pathway_id', 'specimen']).any():
+        raise ValueError('Duplicate pathway/specimen correlations.')
+    expected_specimens = set(specimen_correlations.specimen)
+    if not expected_specimens:
+        raise ValueError('No specimen correlations supplied.')
+    ranks = rankdata(values)
+    total = len(values)
+    ties = np.unique(values, return_counts=True)[1].astype(float)
+    tie_factor = 1 - np.sum(ties ** 3 - ties) / (total ** 3 - total)
+    rows = []
+    for pathway, members in gene_sets.items():
+        idx = statistics.index.get_indexer(sorted(set(members)))
+        m, n = len(idx), total - len(idx)
+        if (idx < 0).any() or m < 2 or n < 1:
+            raise ValueError(f'{pathway}: invalid rank-test membership.')
+        audit = specimen_correlations[specimen_correlations.pathway_id.eq(pathway)]
+        if set(audit.specimen) != expected_specimens or not audit.n_genes.eq(m).all():
+            raise ValueError(f'{pathway}: residual audit does not match membership/specimens.')
+        rho_values = audit.rho_specimen.to_numpy(float)
+        if np.isinf(rho_values).any() or (np.abs(rho_values[np.isfinite(rho_values)]) > 1).any():
+            raise ValueError('Residual correlations must be in [-1, 1] or unavailable.')
+        available = np.isfinite(rho_values).all()
+        rho = (float(np.tanh(np.arctanh(np.clip(rho_values, -1 + 1e-12, 1 - 1e-12)).mean()))
+               if available else np.nan)
+        rho_used = max(0., rho) if available else np.nan
+        u = float(ranks[idx].sum() - m * (m + 1) / 2)
+        independent_variance = m * n * (total + 1) / 12 * tie_factor
+        variance = ((np.arcsin(1.) * m * n + np.arcsin(.5) * m * n * (n - 1)
+                     + np.arcsin(rho_used / 2) * m * (m - 1) * n * (n - 1)
+                     + np.arcsin((1 + rho_used) / 2) * m * (m - 1) * n)
+                    / (2 * np.pi) * tie_factor)
+        z = (u - m * n / 2 - .5) / np.sqrt(variance) if variance > 0 else np.nan
+        p = float(norm.sf(z)) if np.isfinite(z) else (1. if available and tie_factor == 0 else np.nan)
+        rows.append({'pathway_id': pathway, 'n_genes': m, 'U': u, 'auc': u / (m * n),
+                     'rho_residual': rho, 'rho_used': rho_used,
+                     'n_specimens': len(audit), 'n_specimens_estimable': int(np.isfinite(rho_values).sum()),
+                     'min_variable_genes': int(audit.n_variable_genes.min()),
+                     'min_pair_fraction': float(audit.pair_fraction.min()),
+                     'tie_factor': tie_factor, 'variance_U_independent': independent_variance,
+                     'variance_U_corr': variance,
+                     'variance_inflation': variance / independent_variance if independent_variance > 0 else np.nan,
+                     'z_corr': z, 'p_corr': p})
+    frame = pd.DataFrame(rows)
+    frame['q_corr'] = multipletests(frame.p_corr.fillna(1.), method='fdr_bh')[1]
+    frame.loc[frame.p_corr.isna(), 'q_corr'] = np.nan
     return frame
 
 

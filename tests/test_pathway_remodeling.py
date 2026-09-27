@@ -7,6 +7,7 @@ pytest.importorskip('scipy')
 pytest.importorskip('patsy')
 pytest.importorskip('statsmodels')
 from scipy.stats import mannwhitneyu
+from scipy import sparse
 from statsmodels.regression.linear_model import WLS
 
 from pseudospace.pathway_remodeling import (
@@ -14,6 +15,44 @@ from pseudospace.pathway_remodeling import (
     local_pathway_curves, spatial_descriptions, collapse_programs, gene_covariates,
 )
 from pseudospace.levelshape import build_ls_designs
+from pseudospace.pathway_inputs import rebuild_pt_expression
+
+
+def test_rebuild_full_ortholog_panel_keeps_saved_coordinate_and_fixed_denominator(tmp_path):
+    ad = pytest.importorskip('anndata')
+    orthologs = pd.DataFrame({'mouse_symbol': list('abcde'), 'human_symbol': list('ABCDE'),
+                             'mapping_status': ['hcop_reciprocal_best'] * 5})
+    source_paths = {}
+    for sample, names, values in (
+            ('M', ['a', 'b', 'c', 'e', 'mouse_only'], [[1, 3, 5, 1, 99], [0, 2, 0, 0, 99]]),
+            ('H', ['A', 'B', 'D', 'E', 'human_only'], [[2, 0, 4, 1, 999]])):
+        native = ad.AnnData(X=sparse.csr_matrix(values),
+            obs=pd.DataFrame(index=[f'r{i}' for i in range(len(values))]),
+            var=pd.DataFrame(index=names))
+        path = tmp_path / f'{sample}.h5ad'
+        native.write_h5ad(path)
+        source_paths[sample] = path
+    # Deliberately interleave specimens; the saved coordinate/order is authoritative.
+    obs = pd.DataFrame({'sample': ['M', 'H', 'M'],
+                        'comparison_species': ['mouse', 'human', 'mouse'],
+                        'shared_pseudospace': [.7, .3, .1]}, index=['M_r1', 'H_r0', 'M_r0'])
+    restored = rebuild_pt_expression(obs, source_paths, orthologs)
+    assert restored.obs_names.tolist() == obs.index.tolist()
+    np.testing.assert_array_equal(restored.obs.shared_pseudospace, obs.shared_pseudospace)
+    assert restored.var.measured_in_both_inputs.tolist() == [True, True, False, False, True]
+    np.testing.assert_array_equal(restored.layers['counts'].toarray(),
+                                  [[0, 2, 0, 0, 0], [2, 0, 0, 4, 1], [1, 3, 5, 0, 1]])
+    np.testing.assert_array_equal(restored.obs.ortholog_library_size, [2, 3, 5])
+    # Gene e has only two counts across all structures and would fail the old 20-count filter.
+    assert restored.var.loc['e', 'measured_in_both_inputs']
+    assert restored.layers['lognorm'][1, 4] == pytest.approx(np.log1p(1e4 / 3))
+    assert restored.layers['lognorm'][0, 1] == pytest.approx(np.log1p(1e4))
+    assert restored.layers['lognorm'][1, 0] == pytest.approx(np.log1p(2 / 3 * 1e4))
+    assert restored.layers['lognorm'][2, 2] == pytest.approx(np.log1p(5 / 5 * 1e4))
+    # Human B is a measured zero, while human c is an unmeasured structural zero.
+    assert restored.var.loc['b', 'measured_H'] and not restored.var.loc['c', 'measured_H']
+    with pytest.raises(ValueError, match='missing from the source'):
+        rebuild_pt_expression(obs.rename(index={'M_r1': 'M_not_there'}), source_paths, orthologs)
 
 
 def test_nested_effects_hc3_and_specimen_contrasts():

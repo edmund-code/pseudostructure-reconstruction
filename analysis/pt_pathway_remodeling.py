@@ -20,7 +20,7 @@
 # >
 # > The healthy comparison contains two mouse specimens and two human cortex sections from **one donor**. `HUK1_MED1` is a specimen name, not evidence of medullary tissue. Model uncertainty is conditional on observed structures; pathway nulls compare genes, not independent donors. All enrichment and stability results are exploratory.
 #
-# **Inputs:** notebook 03's `cross_species_pt_dpt.h5ad` and `ortholog_map_used.csv`; local Reactome, Hallmark, and KEGG JSON libraries. Notebook 09 is needed only for the final G2G/Jeffreys sensitivity comparison. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling/` (or your configured results root), never into Git.
+# **Inputs:** notebook 03's `cross_species_pt_dpt.h5ad` (structure identities and coordinates only), `ortholog_map_used.csv`, and the four original `tubule_by_gene/*_tubule_by_gene_caleb.h5ad` count matrices; local Reactome, Hallmark, and KEGG JSON libraries. Notebook 09 is needed only for the final G2G/Jeffreys sensitivity comparison. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling/` (or your configured results root), never into Git.
 
 # %% [markdown]
 # ## 1 · Find the input and output folders
@@ -55,7 +55,7 @@ print('Results folder:', output)
 # %% [markdown]
 # ## 2 · Check the cohort and preserve the coordinate
 #
-# We require the saved PT labels, shared pseudospace, raw counts, normalized expression, and measured-in-both-species flag. An ortholog column filled with structural zeros is not evidence that a gene was assayed.
+# We read only the saved PT labels, specimen identities, and shared pseudospace from notebook 03. Its expression matrix has already passed an upstream gene filter, so section 3 reloads expression from the original specimens instead. Structure selection and coordinate orientation remain unchanged.
 #
 # > **Support rule, fixed before fitting**
 # >
@@ -67,12 +67,14 @@ import numpy as np
 import pandas as pd
 from IPython.display import display
 
-adata = ad.read_h5ad(input_path)
+# Read metadata only: notebook 03 owns the coordinate, not this analysis gene universe.
+saved_pt = ad.read_h5ad(input_path, backed='r')
+pt_obs = saved_pt.obs.copy()
+saved_pt.file.close()
+adata = ad.AnnData(obs=pt_obs)
 required = {'comparison_species', 'sample', 'broad_tubule_marker_call', 'shared_pseudospace'}
-if not required.issubset(adata.obs) or not {'counts', 'lognorm'}.issubset(adata.layers):
-    raise ValueError('Notebook 03 artifact is missing required labels, coordinate, or expression layers.')
-if 'measured_in_both_inputs' not in adata.var or adata.var.measured_in_both_inputs.dtype != bool:
-    raise ValueError('A boolean measured_in_both_inputs audit is required.')
+if not required.issubset(adata.obs):
+    raise ValueError('Notebook 03 artifact is missing required labels or coordinate.')
 adata = adata[adata.obs.broad_tubule_marker_call.astype(str).eq('PT')].copy()
 expected = {'mouse': ['Ctrl1A2', 'Ctrl1A4'], 'human': ['HUK1_COR1', 'HUK1_MED1']}
 actual = adata.obs.groupby('comparison_species', observed=True)['sample'].apply(
@@ -98,36 +100,67 @@ display(adata.obs.groupby(['comparison_species', 'sample'], observed=True).size(
 print(f'Common observed interval: {lo:.3f}–{hi:.3f}; the coordinate is unchanged.')
 
 # %% [markdown]
-# ## 3 · Freeze the measurable gene universe
+# ## 3 · Start from all accepted orthologs and apply two rules
 #
-# Keep measured-in-both orthologs detected in at least **2% of structures on an equal-specimen basis**. We do not select DE genes or standardize gene expression. Per-species detection remains visible: measured-but-zero expression in one species is allowed.
+# We rebuild expression for the **same retained PT structures**, starting from every pair in the accepted one-to-one ortholog map. We do not inherit notebook 03's 5% detection or 20-total-count gene filters: those were used to construct its embedding, whose saved coordinate we continue to use unchanged.
 #
-# Mean expression, detection, and coverage are measured before looking at pathway results. Coverage is the fraction of occupied coordinate bins in which a gene is detected, averaged across specimens. These three quantities will define the matched pathway nulls.
+# | Step | Rule | Purpose |
+# |---|---|---|
+# | Starting panel | All accepted one-to-one human–mouse ortholog pairs | Define comparable gene identities |
+# | 1. Measurement availability | The gene must be present in every specimen's original feature list | Exclude missing measurements masquerading as zeros |
+# | 2. PT detection | Mean of the four specimen-specific detection fractions ≥2% | Remove genes with very little observed PT expression |
+#
+# > **Detection means expression greater than zero**
+# >
+# > Each specimen contributes equally, regardless of its number of structures. The 2% threshold is not required separately in each species or each specimen. A gene measured but unexpressed in one species can remain eligible. A feature missing from an input cannot.
+#
+# ### Normalize before applying the detection threshold
+#
+# For each structure, sum raw counts over **all orthologs measured in every specimen**, scale to 10,000 counts, and apply natural-log `log1p`. That measured panel defines the denominator before the 2% filter. Changing the detection cutoff therefore cannot change the normalization of genes that remain. Pseudobulk uses raw counts and the same measured panel for its library-size denominator.
+#
+# > **A new analysis universe requires a new run**
+# >
+# > Restoring genes and changing the normalization denominator can change fitted curves, ranks, candidate pathways, and program groups. The old 9,914-gene results are not assumed to persist. The coordinate and retained structure identities stay fixed. Existing cache keys are invalidated by the new input and logic version.
+#
+# Mean expression and positional coverage are **matching covariates, not extra eligibility filters**. Coverage is the fraction of occupied coordinate bins with detection, averaged across specimens. All accepted pairs appear in the audit, including unmeasured genes that cannot enter testing.
+#
 
 # %%
 from scipy import sparse
+from pseudospace.pathway_inputs import rebuild_pt_expression
 from pseudospace.pathway_remodeling import gene_covariates
+
+orthologs = pd.read_csv(map_path)
+source_paths = {name: data_root / 'tubule_by_gene' / f'{name}_tubule_by_gene_caleb.h5ad'
+                for names in expected.values() for name in names}
+# Recover counts for exactly these structures; normalize on the full measured ortholog panel.
+pt_obs = adata.obs.copy()
+adata = rebuild_pt_expression(pt_obs, source_paths, orthologs, target_sum=1e4)
+pd.testing.assert_frame_equal(adata.obs[pt_obs.columns], pt_obs)
+adata.var.to_csv(output / 'ortholog_measurement_audit.csv')
+adata.obs[['sample', 'shared_pseudospace', 'ortholog_library_size']].to_csv(
+    output / 'structure_expression_audit.csv')
 
 min_detection = .02
 expression = sparse.csr_matrix(adata.layers['lognorm'], dtype=float)
-if not np.isfinite(expression.data).all() or (expression.data < 0).any():
-    raise ValueError('Expected finite, nonnegative log-normalized expression.')
-orthologs = pd.read_csv(map_path)
-if not {'mouse_symbol', 'human_symbol'}.issubset(orthologs):
-    raise ValueError('Accepted ortholog map lacks mouse/human symbols.')
-if orthologs[['mouse_symbol', 'human_symbol']].isna().any().any() or orthologs.mouse_symbol.duplicated().any() or orthologs.human_symbol.duplicated().any():
-    raise ValueError('Expected the accepted one-to-one ortholog map.')
 universe = gene_covariates(expression, position, human, specimen, adata.var_names)
 universe['measured_in_both'] = adata.var.measured_in_both_inputs.to_numpy()
-universe['accepted_ortholog'] = universe.gene.isin(orthologs.mouse_symbol)
-universe['eligible'] = universe.measured_in_both & universe.accepted_ortholog & universe.detection.ge(min_detection)
+universe['accepted_ortholog'] = True  # The starting columns are exactly the accepted pairs.
+universe['eligible'] = universe.measured_in_both & universe.detection.ge(min_detection)
 universe.to_csv(output / 'gene_universe.csv', index=False)
 genes = universe.loc[universe.eligible, 'gene'].tolist()
 if len(genes) < 30:
     raise ValueError('Too few eligible genes for competitive pathway testing.')
 Y = expression[:, universe.eligible.to_numpy()]
 covariates = universe.set_index('gene').loc[genes]
-print(f'{len(genes):,} / {adata.n_vars:,} genes retained; no DE filtering.')
+
+# A three-row flow table is the complete gene-selection story for the paper.
+gene_filter_flow = pd.DataFrame({'stage': ['Accepted one-to-one orthologs',
+    'Measured in every specimen', 'Equal-specimen PT detection ≥2%'],
+    'n_genes': [len(universe), int(universe.measured_in_both.sum()), len(genes)]})
+gene_filter_flow['removed_at_step'] = gene_filter_flow.n_genes.shift(fill_value=len(universe)) - gene_filter_flow.n_genes
+gene_filter_flow.to_csv(output / 'gene_filter_flow.csv', index=False)
+display(gene_filter_flow)
 display(covariates[['mean_expression', 'detection', 'detection_mouse', 'detection_human', 'coverage']].describe().round(3))
 
 # %% [markdown]
@@ -157,11 +190,13 @@ display(covariates[['mean_expression', 'detection', 'detection_mouse', 'detectio
 from pseudospace.pathway_remodeling import fit_nested_trajectories
 from pseudospace.stage_cache import cached_payload, cached_frame, digest
 import pseudospace.pathway_remodeling as remodeling
+import pseudospace.pathway_inputs as pathway_inputs
+import pseudospace.cross_species as cross_species
 import pseudospace.levelshape as levelshape
 import pseudospace.stats_gam as stats_gam
 
 basis_df = 6
-NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v3'  # Bump when a cached calculation changes.
+NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v4-full-orthologs'  # Bump when a cached calculation changes.
 grid = np.linspace(lo, hi, 61)
 # Require local data from every specimen, not only overlapping range endpoints.
 local_counts = pd.DataFrame({name: [np.sum((specimen == name) & (abs(position - s) <= .08 * (hi - lo)))
@@ -169,7 +204,8 @@ local_counts = pd.DataFrame({name: [np.sum((specimen == name) & (abs(position - 
 local_counts.to_csv(output / 'grid_support_counts.csv', index_label='position')
 if local_counts.min().min() < 15:
     raise ValueError('A grid neighborhood has fewer than 15 structures in a specimen; inspect support before fitting.')
-cache_code = digest([NOTEBOOK_LOGIC_VERSION, Path(remodeling.__file__), Path(levelshape.__file__), Path(stats_gam.__file__)])
+cache_code = digest([NOTEBOOK_LOGIC_VERSION, Path(remodeling.__file__), Path(levelshape.__file__), Path(stats_gam.__file__),
+                     Path(pathway_inputs.__file__), Path(cross_species.__file__)])
 fit_inputs = {'Y': digest(Y), 'position': position, 'human': human, 'specimen': specimen, 'genes': genes}
 fit = cached_payload('nested_gene_models',
     lambda: fit_nested_trajectories(Y, position, human, specimen, grid, basis_df=basis_df, return_residuals=True),
@@ -467,6 +503,8 @@ plt.close(fig)
 # > The human sections are not independent donors. We therefore do not report biological DE p-values or pretend that a count-based donor-level DE model can solve the missing replication. The t statistic is a noise-scaled ranking of this dataset, not confirmatory DE. Summing log-normalized expression would not be pseudobulk and is not done here.
 #
 # Bulk uses the same supported structures, eligible genes, pathway members, matching strata, and rank-AUC/GSEA machinery. Its empirical BH family spans the bulk pathway tests. Primary model-test q-values remain frozen.
+#
+# Library sizes sum counts over the **full measured ortholog panel before the PT detection filter**, matching section 3's denominator definition. The inherited notebook 03 gene filters play no role in this benchmark.
 
 # %%
 from pseudospace.specimen import pseudobulk_profiles
@@ -721,7 +759,11 @@ final_table['caveat'] = 'Exploratory gene-set evidence; two mouse specimens, two
 final_table.to_csv(output / 'pathway_evidence_atlas.csv', index=False)
 manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint': cache_code,
     'fit_input_fingerprint': digest(fit_inputs), 'input_fingerprint': digest(input_path),
-    'ortholog_fingerprint': digest(map_path), 'expression_fingerprint': fit_inputs['Y'],
+    'ortholog_fingerprint': digest(map_path),
+    'source_count_fingerprints': {name: digest(path) for name, path in source_paths.items()},
+    'expression_reconstruction': dict(adata.uns['expression_reconstruction']),
+    'retained_structures_fingerprint': digest(adata.obs_names.to_numpy()),
+    'gene_filter_flow': gene_filter_flow.to_dict(orient='records'), 'expression_fingerprint': fit_inputs['Y'],
     'coordinate': '03 shared_pseudospace; unchanged', 'common_support': [float(lo), float(hi)],
     'n_genes': len(genes), 'n_pathways': len(gene_sets), 'basis_df': basis_df,
     'detection_threshold': min_detection, 'matching_bins': 3, 'n_null': n_null, 'gsea_permutations': gsea_permutations, 'seed': seed,

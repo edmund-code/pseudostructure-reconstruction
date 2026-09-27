@@ -735,3 +735,288 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
 (output / 'run_manifest.json').write_text(json.dumps(manifest, indent=2))
 display(final_table[final_table.pathway_id.isin(candidate_ids)].sort_values('q_empirical_T_spatial').head(20))
 print('Saved evidence atlas and run manifest to', output)
+
+# %% [markdown]
+# ## 15 · Freeze discovery and begin paper interpretation
+#
+# > **A new stage, with the original analysis preserved**
+# >
+# > Sections 1–14 establish the coordinate, gene statistics, candidate pathways, correlation annotation, and robustness. Everything below interprets those results. It does not refit the coordinate, change the spatial AUC, recalculate discovery q-values, or replace the earlier program table.
+#
+# The paper question is: **which recurring groups of genes explain the human–mouse differences, where do they differ along PT pseudospace, and what does this reveal beyond an overall species contrast?**
+#
+# We retain **every original candidate**. Correlation support and retention across sensitivity runs are evidence annotations. For reading order only, a `paper_priority` flag later marks correlation-supported terms retained in at least 75% of **all planned** runs; unavailable runs therefore cannot make robustness look better. This is not a second discovery rule.
+#
+# > **What these data can support**
+# >
+# > There are two healthy mouse specimens and two healthy **cortex** sections from **one human donor**. The medulla-labelled section is also cortex. Programs, driver genes, and direction descriptions are exploratory observations in this cohort, not validated mechanisms or population-level species effects.
+#
+# Run the earlier sections first. The new files live in a fingerprinted `paper_interpretation/` folder, leaving the discovery exports in place. The fingerprint covers the frozen inputs and interpretation implementation; rerunning the same interpretation preserves a manually edited review worksheet.
+
+# %%
+from pseudospace import pathway_programs as paper_helpers
+
+# Copy the candidate rows so paper annotations cannot change the discovery table.
+frozen_candidates = final_table[final_table.pathway_id.isin(candidate_ids)].copy()
+assert set(frozen_candidates.pathway_id) == set(candidate_ids)
+paper_input_hash = digest({'atlas': final_table, 'members': member_evidence,
+    'curves': local_curves, 'gene_statistics': gene_stats, 'gene_sets': gene_sets,
+    'fits': {key: fit[key] for key in ('grid', 'z', 'human', 'mouse', 'delta')}, 'manifest': manifest})
+# Bump this version if changing the appended notebook code or its settings.
+paper_version = '12-paper-interpretation-v1'
+paper_run = digest({'inputs': paper_input_hash, 'version': paper_version,
+    'helper': project / 'pseudospace' / 'pathway_programs.py'})
+paper_output = output / 'paper_interpretation' / paper_run
+paper_output.mkdir(parents=True, exist_ok=True)
+frozen_candidates.to_csv(paper_output / 'frozen_candidates.csv', index=False)
+print(f'{len(frozen_candidates)} frozen candidates. Interpretation folder: {paper_output}')
+
+# %% [markdown]
+# ## 16 · Ask whether frequently annotated genes dominate the effect
+#
+# A gene appearing in many pathway definitions can make several terms look like separate discoveries. We add **one overlap sensitivity**, inspired by the downweighting idea in [PADOG](https://tarcalab.med.wayne.edu/software/padog/), without implementing PADOG or adding another enrichment test.
+#
+# For each gene, count the number of **all tested terms across the loaded libraries** containing it, and give it weight $w_g=1/\sqrt{f_g}$. For each pathway, compute each member's probability of outranking the same nonmember background on $T_{\mathrm{spatial}}$, with half credit for ties. Average those probabilities using the weights, then subtract 0.5.
+#
+# > **How to read the sensitivity**
+# >
+# > The original AUC effect is the unweighted mean of the same member contributions. A negative `overlap_effect_change` means downweighting broadly annotated members weakens that effect. A positive rank change means the pathway falls in the **effect ranking across all tested pathways**. These are descriptive changes, not new p-values; the original matched-null q-value does not apply to the weighted effect.
+#
+# Library redundancy affects annotation frequency, so this check is conditional on this exact library collection. We save the frequencies and weights. No pathway is removed because of this sensitivity.
+
+# %%
+overlap_check, annotation_weights = paper_helpers.overlap_sensitivity(gene_stats.T_spatial, gene_sets)
+# Confirm that the sensitivity starts from the original spatial effect.
+original_check = overlap_check.merge(final_table[['pathway_id', 'effect_T_spatial']], on='pathway_id')
+assert np.allclose(original_check.original_effect, original_check.effect_T_spatial)
+overlap_check.to_csv(paper_output / 'overlap_sensitivity.csv', index=False)
+annotation_weights.to_csv(paper_output / 'annotation_weights.csv', index=False)
+display(overlap_check[overlap_check.pathway_id.isin(candidate_ids)]
+    .sort_values('overlap_effect_change').head(12))
+
+# %% [markdown]
+# ## 17 · Group pathways by their active genes and spatial behavior
+#
+# [EnrichmentMap](https://doi.org/10.1371/journal.pone.0013984) motivates reading related terms together. Here, the grouping uses the evidence that drove the spatial signal:
+#
+# | Ingredient | Definition | Weight in grouping |
+# |---|---|---:|
+# | Active genes | Union of the existing positive GSEA leading edge, broad supporters, and local spatial drivers | 50%: Jaccard overlap |
+# | Divergence $D(s)$ | Original unsigned local enrichment curve | 25%: positive Pearson correlation |
+# | Direction $S(s)$ | Original relative signed enrichment curve | 25%: positive Pearson correlation |
+# | Full membership | All tested genes assigned to each term | Supplemental only; 0% |
+#
+# A constant curve supplies no correlation evidence; missing curves or active genes stop the analysis; negative correlations contribute zero. The active-gene definitions come directly from section 10, so we introduce no new driver-selection thresholds.
+#
+# Complete linkage at distance **0.55** requires every pair within a group to have combined similarity of at least **0.45**. This is a transparent, descriptive resolution choice, not an optimized biological boundary. We do **not** tune it to obtain 8–20 groups. Singletons remain visible; broader biological themes can be proposed during review.
+#
+# > **A grouping is not yet a named biological program**
+# >
+# > These are draft program groups. Similarity can reflect shared genes, similar curves, or both. The pairwise table exposes each component. A network edge passes the same similarity threshold, but an edge connecting two groups does not merge them: complete linkage is stricter than connected components.
+#
+# Every candidate becomes a network node. The exported edge table can be read by Cytoscape; the complete pairwise table also retains absent edges. Program IDs depend on their exact member terms, allowing annotations to be traced to a specific grouping.
+
+# %%
+paper_membership, paper_pairs, active_sets = paper_helpers.active_programs(
+    candidate_ids, gene_sets, member_evidence, local_curves, distance_cut=.55)
+paper_membership.to_csv(paper_output / 'program_membership.csv', index=False)
+paper_pairs.to_csv(paper_output / 'pathway_pairwise_similarity.csv', index=False)
+paper_pairs[paper_pairs.network_edge].to_csv(paper_output / 'network_edges.csv', index=False)
+assert set(paper_membership.pathway_id) == set(candidate_ids)
+print(f'{len(candidate_ids)} terms → {paper_membership.paper_program.nunique()} draft groups.')
+display(paper_membership.groupby('paper_program').size().rename('n_terms').value_counts().sort_index())
+
+# %% [markdown]
+# ## 18 · Choose draft representatives and retain bulk context
+#
+# We choose one or two terms to make each packet readable, while retaining **all terms** in the supplementary table. The first representative maximizes the equally weighted percentile ranks of spatial effect, tested/requested coverage, retention over all planned sensitivity runs, and coverage of the group's shared active genes. The shared core contains genes active in at least two terms; if there is no shared core, use the active union.
+#
+# A second representative must add at least 10% of the group's active-gene union beyond the first. Among eligible second terms, the same score determines selection. Ties resolve by pathway ID. These are **draft computational representatives**: biological interpretability still requires reviewing the term names and genes. No automatic label is presented as a validated mechanism.
+#
+# > **What did bulk already know?**
+# >
+# > Each representative retains its original bulk, level, and spatial effects and q-values. `continuous-only candidate` means the spatial screen found a candidate while the chosen bulk/level screens did not; it does not prove absence of a bulk effect. `bulk/level plus spatial structure` means pseudospace adds localization or restructuring to a difference already accessible to bulk/level analysis.
+# >
+# > The original `bulk/level captures difference` terms remain in the complete tested atlas. They are not silently promoted into spatial programs. A program whose terms span several comparison classes is labelled **mixed context**, rather than being assigned the most favorable class.
+
+# %%
+paper_terms = paper_helpers.representative_terms(paper_membership, frozen_candidates, active_sets)
+paper_terms = paper_terms.merge(overlap_check, on='pathway_id', validate='one_to_one')
+paper_terms.to_csv(paper_output / 'all_candidate_terms.csv', index=False)
+paper_terms.to_csv(paper_output / 'network_nodes.csv', index=False)
+final_table.to_csv(paper_output / 'complete_discovery_atlas.csv', index=False)
+
+paper_summary = paper_terms.groupby('paper_program').agg(
+    n_terms=('pathway_id', 'size'), n_priority_terms=('paper_priority', 'sum'),
+    n_correlation_supported=('correlation_support', lambda x: x.eq('Correlation-supported').sum()),
+    median_planned_retention=('planned_retention', 'median'),
+    minimum_overlap_effect_change=('overlap_effect_change', 'min'),
+    bulk_context=('comparison_group', lambda x: x.iloc[0] if x.nunique() == 1 else 'mixed context'))
+paper_representatives = paper_terms[paper_terms.representative_order.gt(0)].sort_values(
+    ['paper_program', 'representative_order'])
+paper_summary['draft_label'] = paper_representatives.groupby('paper_program').pathway.first()
+paper_summary['representative_terms'] = paper_representatives.groupby('paper_program').pathway_id.agg(';'.join)
+paper_summary = paper_summary.sort_values(['n_priority_terms', 'n_terms'], ascending=False)
+display(paper_summary.head(15))
+
+# %% [markdown]
+# ## 19 · Open each program: shared drivers, private genes, and mixed directions
+#
+# A pathway's signed average can hide simultaneous human-high and mouse-high genes. Following the **directionality distinction**, rather than the tests, in [piano](https://doi.org/10.1093/nar/gkt111), we describe both sides separately.
+#
+# At each grid point, count active genes with $Z\geq2$ and $Z\leq-2$. A side is descriptively prominent when it includes at least **two genes and 20% of active genes**. Both sides prominent means `mixed`; one side prominent means `human-high dominated` or `mouse-high dominated`; otherwise the label is `weak / sparse`. These are display rules for working statistics, **not local significance thresholds**. We export the actual counts and fractions so the labels can be checked.
+#
+# > **Two different patterns**
+# >
+# > Simultaneous opposing genes at the same position produce a mixed pattern. Human-high dominance in one region and mouse-high dominance elsewhere produces a positional direction switch. Neither pattern should be compressed into a single signed mean. $S(s)$ itself is relative to background genes and is not proof that most pathway members are absolutely human-high.
+#
+# A **shared active driver** supports at least two terms within the draft group. A **term-specific active gene** supports exactly one term within a multi-term group; it need not be unique elsewhere in the atlas. Single-term groups are labelled separately. Large local $|Z|$ identifies genes to inspect, not necessarily a large expression effect: check the saved $\delta$, detection information in the member table, and actual fitted curves.
+
+# %%
+paper_genes, paper_directions = paper_helpers.program_gene_evidence(
+    paper_terms, member_evidence, genes, grid, fit, z_threshold=2., fraction=.2)
+paper_genes.to_csv(paper_output / 'program_gene_evidence.csv', index=False)
+paper_directions.to_csv(paper_output / 'program_direction_by_position.csv', index=False)
+member_evidence[member_evidence.pathway_id.isin(candidate_ids)].to_csv(
+    paper_output / 'candidate_member_evidence.csv', index=False)
+paper_summary['n_active_genes'] = paper_genes.groupby('paper_program').gene.nunique()
+paper_summary['n_shared_active_genes'] = paper_genes[paper_genes.n_active_terms.ge(2)].groupby('paper_program').size()
+paper_summary['n_shared_active_genes'] = paper_summary.n_shared_active_genes.fillna(0).astype(int)
+paper_summary['mixed_grid_fraction'] = paper_directions.assign(
+    mixed=paper_directions.direction_description.eq('mixed')).groupby('paper_program').mixed.mean()
+paper_summary['positional_direction_switch'] = paper_directions.groupby('paper_program').direction_description.agg(
+    lambda x: {'human-high dominated', 'mouse-high dominated'}.issubset(set(x)))
+paper_summary.to_csv(paper_output / 'program_summary.csv')
+display(paper_summary.head(15))
+
+# %% [markdown]
+# ### Preserve the numerical source of every panel
+#
+# The figure source contains all active genes at every fitted grid position, including unclipped signed $Z$, human and mouse fitted expression, and their difference. The pathway source contains the original candidate $D(s)$ and $S(s)$ curves. Program membership and representative tables link these sources to every packet. No residual matrix or new fit is needed here.
+
+# %%
+paper_gene_order = sorted(paper_genes.gene.unique())
+paper_gene_rows = gene_index.get_indexer(paper_gene_order)
+assert (paper_gene_rows >= 0).all()
+paper_gene_source = pd.DataFrame({'gene': np.repeat(paper_gene_order, len(grid)),
+    'position': np.tile(grid, len(paper_gene_order))})
+for measure in ('z', 'human', 'mouse', 'delta'):
+    paper_gene_source[measure] = fit[measure][paper_gene_rows].ravel()
+paper_gene_source.to_csv(paper_output / 'gene_curve_source.csv.gz', index=False)
+local_curves[local_curves.pathway_id.isin(candidate_ids)].to_csv(
+    paper_output / 'pathway_curve_source.csv', index=False)
+
+# %% [markdown]
+# ## 20 · Generate an evidence packet for every draft program
+#
+# **Figure question:** which genes produce this program's spatial difference, and what does position add to its bulk comparison?
+#
+# | Panel | Evidence it contributes | Reading rule |
+# |---|---|---|
+# | Representative $D(s)$ and $S(s)$ | Where unsigned divergence and relative direction occur | R1/R2 map to full term names and bulk context in the packet caption |
+# | Active-gene heatmap | Which genes differ at which positions, including opposing signs | Order by each gene's maximum $|Z|$ position; `*` marks shared active drivers |
+# | Human and mouse gene fits | Whether the local statistic corresponds to a plausible expression pattern | Up to four examples, balancing shared and term-specific roles when available |
+#
+# Heatmaps include **every active gene**, paginated at 36 rows for readability. A shared symmetric color scale saturates at $Z=\pm6$; source tables retain the full values. D and S use common axes across programs. The curve examples take the two strongest peak-$|Z|$ genes per role, then fill remaining slots up to four by peak $|Z|$; all remaining genes are retained in the source table and heatmaps.
+#
+# > **Figure scope and limitations**
+# >
+# > These are paper-planning evidence panels, not a final manuscript figure selection. Human and mouse curves are the existing equal-specimen fitted means with zero specimen contrasts. No donor-level confidence interval can be justified from one human donor, so these descriptive curves have no uncertainty ribbons. HC3 $Z$ does not account for spatial dependence, donor replication, or coordinate uncertainty. Differences in sampled structures or alignment remain alternative explanations.
+#
+# Exports are editable PDF/SVG panels at 183 mm width, with 300-dpi PNG previews. Each program receives a caption with its representative terms, bulk context, robustness, overlap sensitivity, and cohort caveat. All packets are saved; only the first two groups in the evidence-based reading order are displayed inline to keep the notebook manageable. Change `preview_programs` here to inspect others.
+
+# %%
+from IPython.display import Markdown
+
+preview_programs = paper_summary.head(2).index.tolist()
+for paper_program in paper_summary.index:
+    packet = paper_output / paper_program
+    packet.mkdir(exist_ok=True)
+    packet_terms = paper_representatives[paper_representatives.paper_program.eq(paper_program)]
+    caption = [f'# {paper_program}: draft program evidence',
+        f"Bulk context: {paper_summary.loc[paper_program, 'bulk_context']}.",
+        'Representatives are computational suggestions; biological names and interpretation require review.']
+    for row in packet_terms.itertuples():
+        caption.append(f'R{row.representative_order}: {row.pathway}. {row.comparison_group}; '
+            f'spatial AUC effect {row.effect_T_spatial:.3f}, matched q {row.q_empirical_T_spatial:.3g}; '
+            f'bulk q {row.q_empirical_T_bulk:.3g}, level q {row.q_empirical_T_level:.3g}; '
+            f'{row.correlation_support}, correlation q {row.q_corr:.3g}; '
+            f'retained {int(row.n_retained)}/{int(row.n_planned)} planned runs '
+            f'({int(row.n_testable)} testable); overlap effect change {row.overlap_effect_change:.3f}.')
+    caption.extend(['D and S are original pathway curves, not a new program score. '
+        'S is relative to the gene background; consult absolute signed Z as well.',
+        'Heatmaps: every active gene, ordered by peak |Z| position; * = active in two or more group terms. '
+        'Colors saturate at ±6; raw values are in gene_curve_source.csv.gz. '
+        'Each gene occurs once per program even if it supports several terms.',
+        'Gene fits: up to four examples chosen by peak |Z| within shared/term-specific roles; '
+        'human solid orange, mouse dashed blue. Original balanced model means, no uncertainty ribbons. '
+        'Expression is log-normalized; early/late refer to the established coordinate, not validated anatomical boundaries.',
+        'Exploratory: two healthy mouse specimens; two healthy cortex sections from ONE human donor. '
+        'Structural HC3 statistics are not donor-level tests. No new p-values or claims of pathway activation.',
+        'Source: pathway_curve_source.csv, gene_curve_source.csv.gz, program_gene_evidence.csv, '
+        'candidate_member_evidence.csv, all_candidate_terms.csv in the parent folder.'])
+    (packet / 'caption.md').write_text('\n\n'.join(caption))
+    if paper_program in preview_programs:
+        display(Markdown('\n\n'.join(caption)))
+    for panel_name, paper_figure in paper_helpers.program_figures(
+            paper_program, paper_terms, paper_genes, local_curves, genes, grid, fit):
+        paper_figure.savefig(packet / f'{panel_name}.pdf')
+        paper_figure.savefig(packet / f'{panel_name}.svg')
+        paper_figure.savefig(packet / f'{panel_name}.png', dpi=300)
+        if paper_program in preview_programs:
+            plt.show()
+        plt.close(paper_figure)
+print(f'Saved evidence packets for {len(paper_summary)} draft groups.')
+
+# %% [markdown]
+# ## 21 · Turn the packets into a paper outline through biological review
+#
+# The worksheet is deliberately unfinished: the data can nominate a program but cannot supply a trustworthy biological label or mechanism by itself. Review the **genes and curves**, not just the pathway title. Edit the CSV outside the notebook; reruns of the same fingerprint keep it intact. Changing inputs, helper code, or `paper_version` creates a new folder rather than applying old annotations to new groups.
+#
+# | Review question | What to record |
+# |---|---|
+# | Is this one coherent biological theme? | Reviewed program label, or a proposed merge/split with a reason |
+# | Are the representatives interpretable? | One or two reviewed pathway IDs and the rationale; defaults are suggestions |
+# | What does pseudospace add? | Localization, directional reorganization, or little added information over bulk/level |
+# | Which genes carry the claim? | Shared versus term-specific genes; identify domination by a small gene family |
+# | Could the pattern reflect the model or sampling? | Detection, support, specimen sensitivity, overlap sensitivity, and coordinate concerns |
+# | Is there independent support? | Verified literature references and a specific independent-donor or experimental validation plan |
+#
+# > **Suggested paper structure**
+# >
+# > 1. Establish the fixed coordinate, shared support, cohort, and analysis question using the existing workflow.
+# > 2. Show the frozen pathway screen with effect sizes, bulk comparison, correlation annotations, and robustness; retain the complete tested family in supplements.
+# > 3. Use a small, biologically reviewed set of program packets to demonstrate what continuous position adds. Include mixed-direction programs where appropriate, rather than selecting only clean signed changes.
+# > 4. Separate observed expression patterns from proposed biological explanations. Independent human donors and external validation are subsequent evidence, not something this notebook has already supplied.
+#
+# The number of programs is an outcome of the documented grouping rule. A smaller main-figure selection should follow biological review and complementary evidence, not a target count or the smallest q-values. Correlation-sensitive and unstable terms remain in the supplements and their caveats travel with them.
+
+# %%
+review_path = paper_output / 'biological_review.csv'
+if not review_path.exists():
+    review_sheet = paper_summary.reset_index()[['paper_program', 'draft_label', 'representative_terms', 'bulk_context']]
+    for review_column in ('reviewed_label', 'reviewed_representative_ids', 'merge_split_proposal',
+                         'gene_based_interpretation', 'what_position_adds', 'alternative_explanations',
+                         'literature_references', 'external_validation_plan', 'main_figure_rationale', 'review_status'):
+        review_sheet[review_column] = ''
+    review_sheet.to_csv(review_path, index=False)
+paper_review = pd.read_csv(review_path, keep_default_na=False)
+assert paper_review.paper_program.is_unique and set(paper_review.paper_program) == set(paper_summary.index)
+
+# Record interpretation choices separately from the untouched discovery manifest.
+paper_manifest = {'version': paper_version, 'run': paper_run, 'frozen_input_hash': paper_input_hash,
+    'discovery_manifest': manifest, 'interpretation_code': digest(project / 'pseudospace' / 'pathway_programs.py'),
+    'overlap': 'member weights 1/sqrt(frequency in all tested terms); unchanged nonmember background; no p-values',
+    'similarity_weights': {'active_jaccard': .5, 'positive_D_correlation': .25, 'positive_S_correlation': .25},
+    'linkage': 'complete', 'distance_cut': .55, 'priority_planned_retention': .75,
+    'direction_description': {'absolute_z': 2, 'minimum_fraction': .2, 'minimum_genes': 2},
+    'heatmap_z_saturation': 6, 'n_frozen_candidates': len(candidate_ids),
+    'n_draft_groups': len(paper_summary), 'n_priority_terms': int(paper_terms.paper_priority.sum()),
+    'review_status': 'Draft groups and representatives; worksheet is not automatically applied to figures.'}
+(paper_output / 'interpretation_manifest.json').write_text(json.dumps(paper_manifest, indent=2))
+# Final guard: no discovery input was mutated by interpretation.
+assert paper_input_hash == digest({'atlas': final_table, 'members': member_evidence,
+    'curves': local_curves, 'gene_statistics': gene_stats, 'gene_sets': gene_sets,
+    'fits': {key: fit[key] for key in ('grid', 'z', 'human', 'mouse', 'delta')}, 'manifest': manifest})
+display(paper_review.head(10))
+print('Biological review worksheet:', review_path)

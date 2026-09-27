@@ -222,6 +222,63 @@ np.savez_compressed(output / 'gene_trajectories.npz', genes=np.array(genes),
 display(gene_stats.sort_values('T_spatial', ascending=False).head(10))
 
 # %% [markdown]
+# ### Visual check: what each nested model permits
+#
+# The example gene is chosen by the largest observed $T_{\rm spatial}$ **only to illustrate the fit**. Each panel shows the same retained structures and a one-gene refit with the primary model’s knots and balancing weights. The plotted full-model curves are checked against the saved primary fit. Gray is the shared curve in $M_0$; $M_{\rm level}$ allows a constant species offset; $M_{\rm full}$ also allows that difference to vary with position. Points are individual log-normalized structures, colored by species. They are not independent donor replicates. The curves cover the common observed interval and show the equal-specimen comparison with specimen intercepts set to their within-species mean. A constrained Gaussian model can predict values below zero; these are fitted values on the log-normalized scale, not observed counts. Compare the three constraints rather than treating the chosen gene as independent evidence.
+
+# %%
+import matplotlib.pyplot as plt
+from pseudospace.levelshape import build_ls_designs
+
+example_gene = int(np.argmax(fit['T_spatial']))
+example_name = genes[example_gene]
+example_values = Y[:, example_gene].toarray().ravel()
+example_weights = np.zeros(len(position))
+example_nuisance = []
+for group in (False, True):
+    names = np.unique(specimen[human == group])
+    for name in names:
+        mask = specimen == name
+        example_weights[mask] = len(position) / (2 * len(names) * mask.sum())
+    example_nuisance.extend((specimen == name).astype(float) - (specimen == names[-1]).astype(float)
+                            for name in names[:-1])
+model_designs = [np.column_stack([design, *example_nuisance])
+                 for design in build_ls_designs(position, human.astype(float), fit['knots'])[:3]]
+root_weights = np.sqrt(example_weights)
+model_betas = [np.linalg.lstsq(root_weights[:, None] * design,
+                              root_weights * example_values, rcond=None)[0]
+               for design in model_designs]
+example_curves = {}
+for label, group in [('mouse', 0.), ('human', 1.)]:
+    grid_designs = build_ls_designs(grid, np.full(len(grid), group), fit['knots'])[:3]
+    example_curves[label] = [design @ beta[:design.shape[1]]
+                             for design, beta in zip(grid_designs, model_betas)]
+np.testing.assert_allclose(example_curves['mouse'][2], fit['mouse'][example_gene])
+np.testing.assert_allclose(example_curves['human'][2], fit['human'][example_gene])
+
+colors = {'mouse': '#0072B2', 'human': '#D55E00'}
+fig, axes = plt.subplots(1, 3, figsize=(12, 3.6), sharex=True, sharey=True, layout='constrained')
+for i, (ax, title) in enumerate(zip(axes, ['M0: shared curve', 'Mlevel: parallel curves',
+                                            'Mfull: position-dependent difference'])):
+    for label, group in [('mouse', 0), ('human', 1)]:
+        mask = human == group
+        ax.scatter(position[mask], example_values[mask], s=2, alpha=.07,
+                   color=colors[label], rasterized=True)
+    if i == 0:
+        ax.plot(grid, example_curves['mouse'][i], color='0.15', lw=2, label='Shared')
+    else:
+        for label in ('mouse', 'human'):
+            ax.plot(grid, example_curves[label][i], color=colors[label], lw=2,
+                    label=label.capitalize())
+    ax.set(title=title, xlabel='Established shared PT pseudospace', xlim=(position.min(), position.max()))
+    ax.legend(frameon=False, fontsize=8)
+axes[0].set_ylabel('log1p(counts per 10,000)')
+fig.suptitle(f'Nested models for {example_name} (illustration selected by spatial score)')
+fig.savefig(output / 'nested_gam_example.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# %% [markdown]
 # ## 5 · Load broad pathway libraries and audit coverage
 #
 # Map library members through notebook 03's accepted ortholog table. Retain pathways with **10–300 eligible genes**, counting after the measurement and detection filters. Test all eligible terms; choose biology only after discovery.
@@ -291,6 +348,31 @@ spatial = pathway_tests[pathway_tests.statistic.eq('T_spatial')].copy()
 spatial = spatial.merge(coverage[['pathway_id', 'library', 'pathway', 'tested_fraction']], on='pathway_id')
 spatial = spatial.sort_values(['q_empirical', 'effect', 'pathway_id'], ascending=[True, False, True])
 display(spatial[['library', 'pathway', 'n_genes', 'effect', 'q_empirical', 'mc_se', 'tested_fraction']].head(15))
+
+# %% [markdown]
+# ### Visual check: what a pathway AUC measures
+#
+# For the top-ranked spatial pathway, these curves show where its tested member genes and the other eligible genes fall in the $T_{\rm spatial}$ ranking. A pathway shifted toward high percentiles has an AUC above 0.5. The displayed matched $q$ comes from the separate covariate-matched random-set test; the curves themselves are descriptive and do not show that null. The top row is selected for illustration, not as an additional discovery rule.
+
+# %%
+from textwrap import fill
+
+example_pathway = spatial.iloc[0]
+member_mask = gene_stats.index.isin(gene_sets[example_pathway.pathway_id])
+percentile = gene_stats.T_spatial.rank(pct=True).to_numpy()
+fig, ax = plt.subplots(figsize=(7, 4), layout='constrained')
+for selected, label, color in [(~member_mask, 'Other eligible genes', '0.55'),
+                               (member_mask, 'Pathway members', '#D55E00')]:
+    values = np.sort(percentile[selected])
+    ax.step(np.r_[0, values], np.r_[0, np.arange(1, len(values) + 1) / len(values)],
+            where='post', color=color, lw=2, label=f'{label} (n={len(values):,})')
+ax.set(xlim=(0, 1), ylim=(0, 1), xlabel='Percentile of spatial gene statistic',
+       ylabel='Cumulative fraction of genes', title=f'Pathway rank distribution\n{fill(example_pathway.pathway, width=60)}')
+ax.legend(frameon=False, loc='upper left',
+          title=f"AUC = {example_pathway.auc:.2f}; matched q = {example_pathway.q_empirical:.2g}")
+fig.savefig(output / 'pathway_auc_example.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
 
 # %% [markdown]
 # ### Freeze the candidates before inspecting local curves

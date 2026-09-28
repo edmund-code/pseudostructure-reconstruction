@@ -678,6 +678,45 @@ leading_edges = {r.pathway_id: str(r.Lead_genes).split(';') for r in
 display(gsea[gsea.statistic.eq('T_spatial')].sort_values('q_bh_family').head(10))
 
 # %% [markdown]
+# ### AUC–GSEA concordance for spatial remodeling
+#
+# Both screens use the same $T_{\rm spatial}$ ranking and pathway memberships. Compare their effect summaries for every pathway returned by both methods. Spearman correlation uses pathways with **positive NES**; the scatterplot retains both NES directions. The 2×2 table counts positive-effect AUC discoveries under the matched spatial BH family and positive-NES GSEA findings under its existing BH family (all pathway–statistic pairs). These different nulls and correction families can give different significance calls. Agreement is descriptive and does not enter the primary candidate rule.
+#
+
+# %%
+auc_gsea = spatial[['pathway_id', 'effect', 'q_empirical']].merge(
+    gsea.loc[gsea.statistic.eq('T_spatial'), ['pathway_id', 'NES', 'q_bh_family']],
+    on='pathway_id', how='inner', validate='one_to_one')
+auc_gsea['NES'] = pd.to_numeric(auc_gsea.NES, errors='coerce')
+auc_gsea = auc_gsea.loc[np.isfinite(auc_gsea.effect) & np.isfinite(auc_gsea.NES)].copy()
+auc_gsea['auc_hit'] = auc_gsea.effect.gt(0) & auc_gsea.q_empirical.le(.05)
+auc_gsea['gsea_hit'] = auc_gsea.NES.gt(0) & auc_gsea.q_bh_family.le(.05)
+positive_nes = auc_gsea.loc[auc_gsea.NES.gt(0)]
+rho = positive_nes.effect.corr(positive_nes.NES, method='spearman') if len(positive_nes) >= 2 else np.nan
+print(f'Shared spatial pathways: {len(auc_gsea)} / {len(spatial)} AUC pathways; '
+      f'positive-NES Spearman rho: {rho:.3f} (n={len(positive_nes)})')
+overlap = pd.crosstab(auc_gsea.auc_hit, auc_gsea.gsea_hit).reindex(
+    index=[False, True], columns=[False, True], fill_value=0)
+overlap.index.name = 'AUC: positive effect and matched q ≤ 0.05'
+overlap.columns.name = 'GSEA: positive NES and BH q ≤ 0.05'
+assert overlap.to_numpy().sum() == len(auc_gsea)
+display(overlap)
+fig, ax = plt.subplots(figsize=(6, 4.5))
+ax.scatter(auc_gsea.effect, auc_gsea.NES, color='0.6', s=14, alpha=.55, label='Shared pathways')
+both = auc_gsea.auc_hit & auc_gsea.gsea_hit
+ax.scatter(auc_gsea.loc[both, 'effect'], auc_gsea.loc[both, 'NES'],
+           color='#b45425', s=20, alpha=.8, label='Both pass their q cutoff')
+ax.axvline(0, color='0.35', ls='--', lw=.8)
+ax.axhline(0, color='0.35', ls='--', lw=.8)
+ax.set(xlabel='Spatial AUC − 0.5', ylabel='Unweighted GSEA NES',
+       title='Spatial pathway AUC–GSEA concordance')
+ax.legend(frameon=False)
+fig.savefig(output / 'pathway_auc_gsea_concordance.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+
+# %% [markdown]
 # ## 8 · Return to pseudospace: magnitude and direction
 #
 # At each saved grid position, rank **all eligible genes**, then compute:

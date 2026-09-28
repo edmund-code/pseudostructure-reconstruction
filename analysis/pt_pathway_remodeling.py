@@ -20,7 +20,8 @@
 # >
 # > The healthy comparison contains two mouse specimens and two human cortex sections from **one donor**. `HUK1_MED1` is a specimen name, not evidence of medullary tissue. Model uncertainty is conditional on observed structures; pathway nulls compare genes, not independent donors. All enrichment and stability results are exploratory.
 #
-# **Inputs:** notebook 03's `cross_species_pt_dpt.h5ad` (structure identities and coordinates only), `ortholog_map_used.csv`, and the four original `tubule_by_gene/*_tubule_by_gene_caleb.h5ad` count matrices; local Reactome, Hallmark, and KEGG JSON libraries. Notebook 09 is needed only for the final G2G/Jeffreys sensitivity comparison. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling/` (or your configured results root), never into Git.
+# **Inputs:** notebook 03's `cross_species_pt_dpt.h5ad` (structure identities and coordinates only), `ortholog_map_used.csv`, and the four original `tubule_by_gene/*_tubule_by_gene_caleb.h5ad` count matrices; local Reactome, Hallmark, and KEGG JSON libraries. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling/` (or your configured results root), never into Git.
+#
 
 # %% [markdown]
 # ## 1 · Find the input and output folders
@@ -507,6 +508,37 @@ spatial = spatial.sort_values(['q_empirical', 'effect', 'pathway_id'], ascending
 display(spatial[['library', 'pathway', 'n_genes', 'effect', 'q_empirical', 'mc_se', 'tested_fraction']].head(15))
 
 # %% [markdown]
+# ### Primary spatial pathway screen
+#
+# Each dot is one tested pathway. Orange dots pass the predeclared positive-effect, matched-q discovery rule; labels identify only six leading terms. The y-axis is pathway-level evidence for **T_spatial**, not a local gridwise test. These findings remain exploratory with one human donor.
+#
+
+# %%
+from textwrap import fill
+fig, ax = plt.subplots(figsize=(8, 5), layout='constrained')
+hits = spatial.q_empirical.le(.05) & spatial.effect.gt(0)
+for mask, color, label, size in [(~hits, '0.75', 'Other tested pathways', 13),
+                                  (hits, '#D55E00', 'Spatial candidates', 23)]:
+    ax.scatter(spatial.loc[mask, 'effect'],
+               -np.log10(spatial.loc[mask, 'q_empirical'].clip(lower=1e-300)),
+               s=size, color=color, alpha=.7, label=f'{label} (n={mask.sum()})')
+leading = spatial.loc[hits].head(6)
+ax.scatter(leading.effect, -np.log10(leading.q_empirical.clip(lower=1e-300)),
+           s=42, facecolors='none', edgecolors='black', linewidth=.8)
+labels = '\n'.join(fill(row.pathway, width=36) for row in leading.itertuples())
+ax.text(1.02, .98, 'Leading matched-q terms\n\n' + labels,
+        transform=ax.transAxes, va='top', fontsize=8)
+ax.axhline(-np.log10(.05), color='0.4', ls='--', lw=.8)
+ax.axvline(0, color='0.4', lw=.8)
+ax.set(xlabel='Spatial pathway effect (AUC − 0.5)', ylabel='−log10(matched empirical q)',
+       title='Primary discovery: spatial trajectory remodeling')
+ax.legend(frameon=False, loc='upper left')
+fig.savefig(output / 'pathway_spatial_discovery.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+
+# %% [markdown]
 # ### Visual check: what a pathway AUC measures
 #
 # For the top-ranked spatial pathway, these curves show where its tested member genes and the other eligible genes fall in the $T_{\rm spatial}$ ranking. A pathway shifted toward high percentiles has an AUC above 0.5. The displayed matched $q$ comes from the separate covariate-matched random-set test; the curves themselves are descriptive and do not show that null. The top row is selected for illustration, not as an additional discovery rule.
@@ -618,6 +650,14 @@ fig, ax = plt.subplots(figsize=(6.5, 5.5), layout='constrained')
 points = ax.scatter(-np.log10(finite_correlation.q_empirical.clip(lower=1e-300)),
                     -np.log10(finite_correlation.q_corr.clip(lower=1e-300)),
                     c=finite_correlation.rho_used, cmap='viridis', vmin=0, s=18, alpha=.8)
+for support, marker, edge in [('Correlation-supported', 'o', '#D55E00'),
+                               ('Correlation-sensitive', 's', '#0072B2')]:
+    marked = correlation_candidates[correlation_candidates.correlation_support.eq(support)]
+    ax.scatter(-np.log10(marked.q_empirical.clip(lower=1e-300)),
+               -np.log10(marked.q_corr.clip(lower=1e-300)),
+               s=42, facecolors='none', edgecolors=edge, marker=marker,
+               linewidth=1.1, label=f'{support} candidates (n={len(marked)})')
+ax.legend(frameon=False, fontsize=8)
 cutoff = -np.log10(.05)
 ax.axvline(cutoff, color='0.4', ls='--', lw=.8)
 ax.axhline(cutoff, color='0.4', ls='--', lw=.8)
@@ -630,6 +670,7 @@ fig.savefig(output / 'pathway_correlation_diagnostic.pdf', bbox_inches='tight')
 plt.show()
 plt.close(fig)
 print('Correlation estimates unavailable:', int(spatial.q_corr.isna().sum()))
+
 
 # %% [markdown]
 # ## 7 · Complementary preranked GSEA and leading edges
@@ -702,10 +743,16 @@ overlap.columns.name = 'GSEA: positive NES and BH q ≤ 0.05'
 assert overlap.to_numpy().sum() == len(auc_gsea)
 display(overlap)
 fig, ax = plt.subplots(figsize=(6, 4.5))
-ax.scatter(auc_gsea.effect, auc_gsea.NES, color='0.6', s=14, alpha=.55, label='Shared pathways')
-both = auc_gsea.auc_hit & auc_gsea.gsea_hit
-ax.scatter(auc_gsea.loc[both, 'effect'], auc_gsea.loc[both, 'NES'],
-           color='#b45425', s=20, alpha=.8, label='Both pass their q cutoff')
+groups = [
+    (~auc_gsea.auc_hit & ~auc_gsea.gsea_hit, 'Neither', '0.75'),
+    (auc_gsea.auc_hit & ~auc_gsea.gsea_hit, 'AUC only', '#D55E00'),
+    (~auc_gsea.auc_hit & auc_gsea.gsea_hit, 'GSEA only', '#009E73'),
+    (auc_gsea.auc_hit & auc_gsea.gsea_hit, 'Both', '#0072B2'),
+]
+for mask, label, color in groups:
+    ax.scatter(auc_gsea.loc[mask, 'effect'], auc_gsea.loc[mask, 'NES'],
+               color=color, s=14 if label == 'Neither' else 25,
+               alpha=.55 if label == 'Neither' else .85, label=f'{label} (n={mask.sum()})')
 ax.axvline(0, color='0.35', ls='--', lw=.8)
 ax.axhline(0, color='0.35', ls='--', lw=.8)
 ax.set(xlabel='Spatial AUC − 0.5', ylabel='Unweighted GSEA NES',
@@ -768,6 +815,35 @@ axes[1].legend(*axes[0].get_legend_handles_labels(), fontsize=8,
 fig.savefig(output / 'pathway_local_curves.pdf', bbox_inches='tight')
 plt.show()
 plt.close(fig)
+
+# %% [markdown]
+# ### Where and how broadly do candidate pathways diverge?
+#
+# Peak position and width describe the existing D(s) curves. Color shows the median **absolute signed gene Z** at that peak: orange is human-high, blue is mouse-high. Early and late refer only to the shared PT coordinate, not anatomical S1/S2/S3 segments. Point size measures the fraction of the grid at or above half the positive peak, not significance.
+#
+
+# %%
+if len(phenotypes):
+    fig, ax = plt.subplots(figsize=(8, 5), layout='constrained')
+    direction_limit = max(1, np.nanmax(np.abs(phenotypes.median_member_z_at_peak)))
+    points = ax.scatter(phenotypes.peak_position, phenotypes.peak_divergence,
+                        s=25 + 140 * phenotypes.affected_grid_fraction,
+                        c=phenotypes.median_member_z_at_peak, cmap='RdBu_r',
+                        vmin=-direction_limit, vmax=direction_limit,
+                        edgecolor='0.3', linewidth=.3, alpha=.8)
+    for pathway in illustration_ids[:5]:
+        row = phenotypes.set_index('pathway_id').loc[pathway]
+        ax.annotate(fill(pathway.split('::', 1)[-1], width=25),
+                    (row.peak_position, row.peak_divergence),
+                    xytext=(4, 4), textcoords='offset points', fontsize=7)
+    ax.set(xlim=(grid[0], grid[-1]), xlabel='Established shared PT pseudospace',
+           ylabel='Peak D(s): divergence rank-AUC − 0.5',
+           title='Spatial location and breadth of pathway remodeling')
+    fig.colorbar(points, ax=ax, label='Median member Z at peak (human − mouse)')
+    fig.savefig(output / 'pathway_spatial_phenotypes.pdf', bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
+
 
 # %% [markdown]
 # ## 9 · Compare with conventional PT pseudobulk
@@ -850,6 +926,44 @@ display(comparison.groupby('comparison_group').size().rename('pathways'))
 display(comparison[comparison.pathway_id.isin(candidate_ids)].head(12))
 
 # %% [markdown]
+# ### What does continuous position reveal beyond pseudobulk?
+#
+# The scatter compares the existing bulk and spatial AUC effects; color uses the notebook's frozen comparison groups, which also consider the level screen. The count panel keeps the large weak-evidence background visible without hiding the smaller groups. A bulk/level negative screen does not prove a zero overall species effect.
+#
+
+# %%
+group_colors = {'continuous-only candidate': '#D55E00',
+                'bulk/level plus spatial structure': '#0072B2',
+                'bulk/level captures difference': '#009E73', 'weak evidence': '0.75'}
+group_order = list(group_colors)
+fig, axes = plt.subplots(1, 2, figsize=(11, 5), gridspec_kw={'width_ratios': [2, 1]},
+                         layout='constrained')
+for group in reversed(group_order):
+    rows = comparison[comparison.comparison_group.eq(group)]
+    axes[0].scatter(rows.effect_T_bulk, rows.effect_T_spatial, s=15 if group == 'weak evidence' else 25,
+                    alpha=.55 if group == 'weak evidence' else .8,
+                    color=group_colors[group], label=group)
+axes[0].axhline(0, color='0.5', lw=.7)
+axes[0].axvline(0, color='0.5', lw=.7)
+axes[0].set(xlabel='Pseudobulk pathway effect (AUC − 0.5)',
+            ylabel='Spatial pathway effect (AUC − 0.5)',
+            title='Continuous versus conventional evidence')
+axes[0].legend(frameon=False, fontsize=8)
+counts = comparison.comparison_group.value_counts().reindex(group_order, fill_value=0)
+axes[1].barh(np.arange(len(counts)), counts, color=[group_colors[g] for g in group_order])
+axes[1].set(yticks=np.arange(len(counts)), yticklabels=group_order,
+            xlabel='Tested pathways (log scale)', title='Screen categories')
+axes[1].set_xscale('symlog', linthresh=1)
+axes[1].invert_yaxis()
+for i, count in enumerate(counts):
+    axes[1].annotate(str(count), (max(count, 1), i), xytext=(4, 0),
+                     textcoords='offset points', va='center', fontsize=8)
+fig.savefig(output / 'pathway_continuous_vs_bulk_overview.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+
+# %% [markdown]
 # ## 10 · Inspect the genes behind each pathway
 #
 # These roles can overlap; they are explanations, not new discovery filters:
@@ -882,21 +996,61 @@ member_evidence.to_csv(output / 'pathway_member_evidence.csv', index=False)
 display(member_evidence[member_evidence.spatial_driver].head(15))
 
 # %%
-# Plot two drivers from each of the first three illustrated pathways.
-for pathway in illustration_ids[:3]:
-    drivers = member_evidence[member_evidence.pathway_id.eq(pathway)].nlargest(2, 'peak_abs_z')
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3), sharex=True, layout='constrained')
-    for ax, row in zip(axes, drivers.itertuples()):
-        i = gene_index.get_loc(row.gene)
-        ax.plot(grid, fit['mouse'][i], color='#0072B2', label='mouse')
-        ax.plot(grid, fit['human'][i], color='#D55E00', label='human')
-        ax.set(title=f'{row.gene} · detection {row.detection:.0%}',
-               xlabel='Shared PT pseudospace', ylabel='Fitted log-normalized expression')
-        ax.legend(frameon=False)
-    fig.suptitle(pathway.replace('::', ': ', 1))
-    fig.savefig(output / f'drivers_{illustration_ids.index(pathway) + 1:02d}.pdf', bbox_inches='tight')
+from textwrap import fill
+
+def plot_pathway_evidence(pathway, detail):
+    """Show existing pathway curves, prioritized signed gene evidence, and fitted examples."""
+    selected = (detail.sort_values(
+        ['spatial_driver', 'leading_edge', 'broad_supporter', 'peak_abs_z', 'gene'],
+        ascending=[False, False, False, False, True]).head(15).copy())
+    indices = gene_index.get_indexer(selected.gene)
+    selected = selected.iloc[np.argsort(np.argmax(np.abs(fit['z'][indices]), axis=1), kind='stable')]
+    indices = gene_index.get_indexer(selected.gene)
+    trace = local_curves[local_curves.pathway_id.eq(pathway)].sort_values('position')
+    fig = plt.figure(figsize=(11, 8), layout='constrained')
+    layout = fig.add_gridspec(3, 2, height_ratios=[1, 2.4, 1.2])
+    for column, label, axis in [('divergence', 'D(s): unsigned excess AUC', fig.add_subplot(layout[0, 0])),
+                                ('direction', 'S(s): relative direction', fig.add_subplot(layout[0, 1]))]:
+        axis.plot(trace.position, trace[column], color='#0072B2')
+        axis.axhline(0, color='0.6', lw=.7)
+        axis.set(xlim=(grid[0], grid[-1]), xlabel='Shared PT pseudospace', ylabel=label)
+    axis = fig.add_subplot(layout[1, :])
+    step = (grid[-1] - grid[0]) / (len(grid) - 1)
+    heat = axis.imshow(fit['z'][indices], cmap='RdBu_r', vmin=-6, vmax=6,
+        aspect='auto', interpolation='none',
+        extent=(grid[0] - step / 2, grid[-1] + step / 2, len(selected) - .5, -.5))
+    labels = []
+    for row in selected.itertuples():
+        roles = ''.join(letter for field, letter in [('spatial_driver', 'D'),
+            ('leading_edge', 'E'), ('broad_supporter', 'B')] if getattr(row, field))
+        bulk_sign = '+' if row.bulk_logcpm_effect > 0 else '−' if row.bulk_logcpm_effect < 0 else '0'
+        labels.append(f'{row.gene}  [{roles or "–"}]  det {row.detection:.0%}  bulk {bulk_sign}')
+    axis.set(yticks=np.arange(len(selected)), yticklabels=labels,
+             title='Top gene evidence, ordered by peak |Z| position')
+    fig.colorbar(heat, ax=axis, label='Signed Z (human − mouse)', extend='both')
+    drivers = detail.sort_values(['peak_abs_z', 'gene'], ascending=[False, True]).head(2)
+    for j, row in enumerate(drivers.itertuples()):
+        axis = fig.add_subplot(layout[2, j])
+        index = gene_index.get_loc(row.gene)
+        axis.plot(grid, fit['human'][index], color='#D55E00', label='Human')
+        axis.plot(grid, fit['mouse'][index], color='#0072B2', ls='--', label='Mouse')
+        axis.set(xlim=(grid[0], grid[-1]), title=f'{row.gene} · detection {row.detection:.0%}',
+                 xlabel='Shared PT pseudospace', ylabel='Fitted log-normalized expression')
+        axis.legend(frameon=False, fontsize=8)
+    fig.suptitle(fill(pathway.replace('::', ': ', 1), width=65))
+    return fig
+
+for number, pathway in enumerate(illustration_ids[:3], 1):
+    detail = member_evidence[member_evidence.pathway_id.eq(pathway)]
+    fig = plot_pathway_evidence(pathway, detail)
+    fig.savefig(output / f'pathway_gene_evidence_{number:02d}.pdf', bbox_inches='tight')
     plt.show()
     plt.close(fig)
+
+
+# %% [markdown]
+# The heatmap shows **signed** gene evidence: red is human-high and blue is mouse-high. D/E/B mark the existing driver, leading-edge, and broad-support roles; detection and bulk sign give context for each row. Inspect the fitted curves below before treating an extreme Z as an interpretable expression change. Color saturation is for display, not a local significance call.
+#
 
 # %% [markdown]
 # ## 11 · Collapse redundant terms after discovery
@@ -977,40 +1131,50 @@ stability_summary.to_csv(output / 'pathway_stability_summary.csv')
 display(stability_summary.head(15))
 
 # %% [markdown]
-# ## 13 · Optional G2G / Jeffreys sensitivity from notebook 09
+# ### Which candidates survive the planned sensitivity runs?
 #
-# Read the saved gene statistics only after freezing discovery. This comparison uses the intersection of eligible genes and reruns matched rank-AUC on the same intersected membership for all methods. Each statistic receives BH correction across its full tested pathway family. High `1 − alignment_similarity` means poor G2G alignment; high fixed Jeffreys mismatch describes distributional differences without warping.
+# Green means the original spatial candidate remains positive with matched q ≤ 0.05 in that run; pale gray means testable but not retained; dark gray means unavailable. Rows are ordered by retained/testable runs, then the original matched q. The notebook samples 24 rows across the most, middle, and least retained candidates and saves the complete candidate matrix separately. These are section and model sensitivities, not donor replication.
 #
-# These methods measure different things: GAM spatial statistics isolate nonconstant mean differences, G2G permits alignment, and Jeffreys mismatch includes local variance differences. Agreement is useful sensitivity evidence; disagreement can be informative. This is **not** independent validation or a replacement coordinate. A missing notebook-09 artifact is recorded as unavailable and does not stop primary analysis.
 
 # %%
-sensitivity_path = results_root / 'pt_genes2genes' / 'g2g_vs_fixed_gene_comparison.csv'
-g2g_status = 'unavailable: run notebook 09 to add this sensitivity comparison'
-g2g_tests = pd.DataFrame()
-if sensitivity_path.is_file():
-    saved = pd.read_csv(sensitivity_path).set_index('gene')
-    columns = ['alignment_similarity', 'fixed_overall_mismatch']
-    if not saved.index.is_unique or not set(columns).issubset(saved):
-        raise ValueError('Notebook 09 sensitivity table has an unexpected schema.')
-    shared = gene_index.intersection(saved.dropna(subset=columns).index, sort=False)
-    if len(shared) < 30:
-        raise ValueError('Too few genes shared with notebook 09.')
-    sensitivity_scores = gene_stats.loc[shared, ['T_spatial']].assign(
-        G2G_divergence=1 - saved.loc[shared, 'alignment_similarity'],
-        Jeffreys_mismatch=saved.loc[shared, 'fixed_overall_mismatch'])
-    sensitivity_sets = {p: sorted(set(members) & set(shared)) for p, members in gene_sets.items()}
-    sensitivity_sets = {p: members for p, members in sensitivity_sets.items() if 10 <= len(members) <= min(300, len(shared) - 1)}
-    sensitivity_strata = matching_strata(covariates.loc[shared], bins=3)
-    g2g_tests = cached_frame('g2g_jeffreys_sensitivity',
-        lambda: matched_pathway_tests(sensitivity_scores, sensitivity_sets, sensitivity_strata, n_null=n_null, seed=seed),
-        root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed},
-        inputs={'statistics': sensitivity_scores, 'sets': sensitivity_sets, 'strata': sensitivity_strata}, code=cache_code)
-    g2g_tests.to_csv(output / 'g2g_jeffreys_pathway_sensitivity.csv', index=False)
-    concordance = sensitivity_scores.corr(method='spearman')
-    concordance.to_csv(output / 'g2g_jeffreys_gene_rank_concordance.csv')
-    display(concordance)
-    g2g_status = f'completed on {len(shared)} shared genes; coordinate and support differ in notebook 09'
-print(g2g_status)
+from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.patches import Patch
+
+if candidate_ids:
+    q_order = spatial.set_index('pathway_id').q_empirical
+    ordered_ids = (stability_summary.assign(q=q_order)
+        .sort_values(['retention_fraction', 'n_retained', 'q'], ascending=[False, False, True]).index.tolist())
+    variant_order = [item[0] for item in variants]
+    stability_lookup = stability.set_index(['pathway_id', 'variant'])
+    def draw_stability(ids):
+        values = np.array([[int(stability_lookup.loc[(pathway, variant), 'retained'])
+                            if stability_lookup.loc[(pathway, variant), 'testable'] else -1
+                            for variant in variant_order] for pathway in ids])
+        fig, ax = plt.subplots(figsize=(10, max(4, .27 * len(ids) + 1.3)), layout='constrained')
+        ax.imshow(values, aspect='auto', interpolation='none',
+                  cmap=ListedColormap(['#555555', '#e5e5e5', '#009E73']),
+                  norm=BoundaryNorm([-1.5, -.5, .5, 1.5], 3))
+        labels = [spatial.set_index('pathway_id').loc[pathway, 'pathway'] for pathway in ids]
+        ax.set(xticks=np.arange(len(variant_order)), xticklabels=variant_order,
+               yticks=np.arange(len(ids)), yticklabels=labels,
+               title='Candidate retention across planned sensitivities')
+        ax.tick_params(axis='x', labelrotation=45)
+        ax.legend(handles=[Patch(color=c, label=label) for c, label in
+            [('#009E73', 'Retained'), ('#e5e5e5', 'Not retained'), ('#555555', 'Unavailable')]],
+            loc='upper left', bbox_to_anchor=(1, 1), frameon=False)
+        return fig
+    middle = len(ordered_ids) // 2
+    display_ids = list(dict.fromkeys(ordered_ids[:8] + ordered_ids[max(0, middle - 4):middle + 4] + ordered_ids[-8:]))
+    display_ids.sort(key=ordered_ids.index)
+    fig = draw_stability(display_ids)
+    fig.savefig(output / 'pathway_stability_overview.pdf', bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
+    if len(ordered_ids) > 24:
+        fig = draw_stability(ordered_ids)
+        fig.savefig(output / 'pathway_stability_all_candidates.pdf', bbox_inches='tight')
+        plt.close(fig)
+
 
 # %% [markdown]
 # ## 14 · Final evidence table and reproducibility record
@@ -1049,7 +1213,7 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
     'detection_threshold': min_detection, 'matching_bins': 3, 'n_null': n_null, 'gsea_permutations': gsea_permutations, 'seed': seed,
     'libraries': {name: digest(library_dir / f'{name}.json') for name in libraries},
     'packages': {name: version(name) for name in ['numpy', 'scipy', 'pandas', 'anndata', 'patsy', 'statsmodels', 'gseapy']},
-    'g2g_status': g2g_status, 'n_candidates': len(candidate_ids),
+    'n_candidates': len(candidate_ids),
     'correlation_test': 'spatial CAMERA-style rank variance; equal-specimen Fisher mean; normal tail',
     'empirical_bh_families': 'separate T_spatial, T_level, T_total; all tested pathways across libraries',
     'correlation_bh_family': 'all tested spatial pathways across libraries',
@@ -1058,6 +1222,7 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
 (output / 'run_manifest.json').write_text(json.dumps(manifest, indent=2))
 display(final_table[final_table.pathway_id.isin(candidate_ids)].sort_values('q_empirical_T_spatial').head(20))
 print('Saved evidence atlas and run manifest to', output)
+
 
 # %% [markdown]
 # ## 15 · Freeze discovery and begin paper interpretation
@@ -1150,6 +1315,39 @@ print(f'{len(candidate_ids)} terms → {paper_membership.paper_program.nunique()
 display(paper_membership.groupby('paper_program').size().rename('n_terms').value_counts().sort_index())
 
 # %% [markdown]
+# ### Why do related terms form draft programs?
+#
+# The matrix uses the **same combined similarity** as the descriptive grouping. It shows terms from the largest multi-term groups; all pairwise values remain in the exported table. Blocks within a group help explain the shared program label, while similarity across groups need not merge them under complete linkage.
+#
+
+# %%
+multi = paper_membership.groupby('paper_program').filter(lambda rows: len(rows) > 1)
+if len(multi) > 1:
+    selected_programs = multi.paper_program.value_counts().head(4).index
+    selected_ids = multi[multi.paper_program.isin(selected_programs)].pathway_id.head(24).tolist()
+    selected_ids = sorted(selected_ids, key=lambda pathway: (
+        paper_membership.set_index('pathway_id').loc[pathway, 'paper_program'],
+        spatial.set_index('pathway_id').loc[pathway, 'q_empirical'], pathway))
+    similarity = pd.DataFrame(np.eye(len(selected_ids)), index=selected_ids, columns=selected_ids)
+    for row in paper_pairs.itertuples():
+        if row.source in similarity.index and row.target in similarity.columns:
+            similarity.loc[row.source, row.target] = similarity.loc[row.target, row.source] = row.similarity
+    fig, ax = plt.subplots(figsize=(max(7, .4 * len(selected_ids) + 3),
+                                    max(6, .4 * len(selected_ids) + 2)), layout='constrained')
+    artist = ax.imshow(similarity, cmap='viridis', vmin=0, vmax=1, interpolation='none')
+    names = [spatial.set_index('pathway_id').loc[pathway, 'pathway'][:38] for pathway in selected_ids]
+    ax.set(xticks=np.arange(len(names)), xticklabels=names,
+           yticks=np.arange(len(names)), yticklabels=names,
+           title='Similarity used for draft program grouping')
+    ax.tick_params(axis='x', labelrotation=90, labelsize=7)
+    ax.tick_params(axis='y', labelsize=7)
+    fig.colorbar(artist, ax=ax, label='Combined active-gene and curve similarity')
+    fig.savefig(paper_output / 'program_similarity_overview.pdf', bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
+
+
+# %% [markdown]
 # ## 18 · Choose draft representatives and retain bulk context
 #
 # We choose one or two terms to make each packet readable, while retaining **all terms** in the supplementary table. The first representative maximizes the equally weighted percentile ranks of spatial effect, tested/requested coverage, retention over all planned sensitivity runs, and coverage of the group's shared active genes. The shared core contains genes active in at least two terms; if there is no shared core, use the active union.
@@ -1240,13 +1438,14 @@ local_curves[local_curves.pathway_id.isin(candidate_ids)].to_csv(
 # | Active-gene heatmap | Which genes differ at which positions, including opposing signs | Order by each gene's maximum $|Z|$ position; `*` marks shared active drivers |
 # | Human and mouse gene fits | Whether the local statistic corresponds to a plausible expression pattern | Up to four examples, balancing shared and term-specific roles when available |
 #
-# Heatmaps include **every active gene**, paginated at 36 rows for readability. A shared symmetric color scale saturates at $Z=\pm6$; source tables retain the full values. D and S use common axes across programs. The curve examples take the two strongest peak-$|Z|$ genes per role, then fill remaining slots up to four by peak $|Z|$; all remaining genes are retained in the source table and heatmaps.
+# A prioritized 15-gene heatmap is shown first; supplementary heatmaps include **every active gene**, paginated at 36 rows for readability. A shared symmetric color scale saturates at $Z=\pm6$; source tables retain the full values. D and S use common axes across programs. The curve examples take the two strongest peak-$|Z|$ genes per role, then fill remaining slots up to four by peak $|Z|$; all remaining genes are retained in the source table and heatmaps.
 #
 # > **Figure scope and limitations**
 # >
 # > These are paper-planning evidence panels, not a final manuscript figure selection. Human and mouse curves are the existing equal-specimen fitted means with zero specimen contrasts. No donor-level confidence interval can be justified from one human donor, so these descriptive curves have no uncertainty ribbons. HC3 $Z$ does not account for spatial dependence, donor replication, or coordinate uncertainty. Differences in sampled structures or alignment remain alternative explanations.
 #
 # Exports are editable PDF/SVG panels at 183 mm width, with 300-dpi PNG previews. Each program receives a caption with its representative terms, bulk context, robustness, overlap sensitivity, and cohort caveat. All packets are saved; only the first two groups in the evidence-based reading order are displayed inline to keep the notebook manageable. Change `preview_programs` here to inspect others.
+#
 
 # %%
 from IPython.display import Markdown
@@ -1268,7 +1467,8 @@ for paper_program in paper_summary.index:
             f'({int(row.n_testable)} testable); overlap effect change {row.overlap_effect_change:.3f}.')
     caption.extend(['D and S are original pathway curves, not a new program score. '
         'S is relative to the gene background; consult absolute signed Z as well.',
-        'Heatmaps: every active gene, ordered by peak |Z| position; * = active in two or more group terms. '
+        'Heatmaps: the primary panel shows up to 15 prioritized genes; supplementary pages show every active gene. '
+    'Rows follow peak |Z| position; * = active in two or more group terms. '
         'Colors saturate at ±6; raw values are in gene_curve_source.csv.gz. '
         'Each gene occurs once per program even if it supports several terms.',
         'Gene fits: up to four examples chosen by peak |Z| within shared/term-specific roles; '
@@ -1286,10 +1486,11 @@ for paper_program in paper_summary.index:
         paper_figure.savefig(packet / f'{panel_name}.pdf')
         paper_figure.savefig(packet / f'{panel_name}.svg')
         paper_figure.savefig(packet / f'{panel_name}.png', dpi=300)
-        if paper_program in preview_programs:
+        if paper_program in preview_programs and panel_name in {'pathway_curves', 'top_genes', 'gene_fits'}:
             plt.show()
         plt.close(paper_figure)
 print(f'Saved evidence packets for {len(paper_summary)} draft groups.')
+
 
 # %% [markdown]
 # ## 21 · Turn the packets into a paper outline through biological review

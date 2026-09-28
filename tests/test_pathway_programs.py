@@ -5,7 +5,7 @@ import pytest
 pd = pytest.importorskip('pandas')
 pytest.importorskip('scipy')
 from pseudospace.pathway_programs import (
-    active_programs, overlap_sensitivity, program_gene_evidence, representative_terms,
+    active_programs, overlap_sensitivity, program_figures, program_gene_evidence, representative_terms,
 )
 
 
@@ -81,3 +81,26 @@ def test_bidirectional_genes_do_not_cancel_and_singletons_are_not_called_private
     assert empty.empty and direction_empty.empty
     with pytest.raises(ValueError, match='align'):
         program_gene_evidence(terms, members, genes, grid, {**fit, 'z': z.T})
+
+
+def test_program_packet_prioritizes_drivers_and_keeps_complete_gene_panel():
+    plt = pytest.importorskip('matplotlib.pyplot')
+    genes = [f'g{i:02d}' for i in range(16)]
+    grid = np.array([0., .5, 1.])
+    table = pd.DataFrame({'paper_program': 'P', 'gene': genes, 'gene_role': 'single-term program',
+        'n_active_terms': 1, 'peak_position': np.linspace(0, 1, 16), 'peak_abs_z': np.arange(16)[::-1],
+        'spatial_driver': [False] * 15 + [True], 'leading_edge': False, 'broad_supporter': False})
+    terms = pd.DataFrame({'paper_program': ['P'], 'pathway_id': ['A'], 'representative_order': [1]})
+    curves = pd.DataFrame({'pathway_id': ['A'] * 3, 'position': grid,
+                           'divergence': [0., .1, .2], 'direction': [-.2, 0., .2]})
+    z = np.tile(grid, (16, 1))
+    fit = {'z': z, 'human': z, 'mouse': -z}
+    figures = dict(program_figures('P', terms, table, curves, genes, grid, fit))
+    try:
+        top_labels = [label.get_text() for label in figures['top_genes'].axes[0].get_yticklabels()]
+        full_labels = [label.get_text() for label in figures['active_genes_01'].axes[0].get_yticklabels()]
+        assert len(top_labels) == 15 and 'g15' in top_labels and 'g14' not in top_labels
+        assert len(full_labels) == 16 and 'g14' in full_labels
+    finally:
+        for figure in figures.values():
+            plt.close(figure)

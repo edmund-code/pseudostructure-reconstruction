@@ -181,7 +181,7 @@ def program_gene_evidence(terms, members, genes, grid, fit, *, z_threshold=2., f
 
 
 def program_figures(program, terms, gene_table, curves, genes, grid, fit, *, heatmap_limit=6.):
-    """Yield readable evidence panels; all active genes are paginated, never dropped.
+    """Yield a concise gene panel and complete paginated supplemental panels.
 
     Fits are the original equal-specimen model means, not independent donor means.
     The four example genes balance shared and term-specific roles when available.
@@ -213,9 +213,12 @@ def program_figures(program, terms, gene_table, curves, genes, grid, fit, *, hea
         fig.suptitle(program)
         yield 'pathway_curves', fig
 
-        # Pagination preserves every active gene while keeping the text readable at export size.
-        for start in range(0, len(detail), 36):
-            page = detail.iloc[start:start + 36]
+        ranked = detail.sort_values(
+            ['spatial_driver', 'leading_edge', 'broad_supporter', 'peak_abs_z', 'gene'],
+            ascending=[False, False, False, False, True])
+        top = ranked.head(15).sort_values(['peak_position', 'gene'])
+
+        def gene_heatmap(page, title):
             idx = index.get_indexer(page.gene)
             fig, ax = plt.subplots(figsize=(7.2, max(2.4, .13 * len(page) + 1.1)), layout='constrained')
             step = (grid[-1] - grid[0]) / (len(grid) - 1)
@@ -224,13 +227,20 @@ def program_figures(program, terms, gene_table, curves, genes, grid, fit, *, hea
                 extent=(grid[0] - step / 2, grid[-1] + step / 2, len(page) - .5, -.5))
             labels = [g + (' *' if n >= 2 else '') for g, n in zip(page.gene, page.n_active_terms)]
             ax.set(yticks=np.arange(len(page)), yticklabels=labels, xlabel='Established PT pseudospace',
-                   title=f'{program} | active genes {start + 1}–{start + len(page)} / {len(detail)}')
+                   title=title)
             fig.colorbar(artist, ax=ax, label='Signed Z (human − mouse)', extend='both')
+            return fig
+
+        yield 'top_genes', gene_heatmap(top, f'{program} | prioritized active genes ({len(top)} / {len(detail)})')
+        # Pagination preserves every active gene when the concise panel omits rows.
+        for start in range(0, len(detail), 36) if len(detail) > len(top) else ():
+            page = detail.iloc[start:start + 36]
+            fig = gene_heatmap(page, f'{program} | all active genes {start + 1}–{start + len(page)} / {len(detail)}')
             yield f'active_genes_{start // 36 + 1:02d}', fig
 
-        ranked = detail.sort_values(['peak_abs_z', 'gene'], ascending=[False, True])
-        examples = ranked.groupby('gene_role', sort=True).head(2).head(4)
-        examples = pd.concat([examples, ranked]).drop_duplicates('gene').head(4)
+        curve_ranked = detail.sort_values(['peak_abs_z', 'gene'], ascending=[False, True])
+        examples = curve_ranked.groupby('gene_role', sort=True).head(2).head(4)
+        examples = pd.concat([examples, curve_ranked]).drop_duplicates('gene').head(4)
         fig, axes = plt.subplots(2, 2, figsize=(7.2, 4.4), layout='constrained')
         for ax, row in zip(axes.flat, examples.itertuples()):
             idx = index.get_loc(row.gene)

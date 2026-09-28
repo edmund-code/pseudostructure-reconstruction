@@ -48,15 +48,16 @@ python analysis/human_vs_healthy_mouse.py \
 Read [the human-versus-healthy-mouse workflow guide](docs/workflows/human_vs_healthy_mouse.md)
 before interpreting its descriptive curves.
 
-For the minimal PT pathway workflow, run the reviewed PT scFates producer and then notebook 12:
+For the PT pathway workflow, run the two-pass nephron/scFates producer and then notebook 12:
 
 ```bash
 python analysis/minimal_pt_scfates.py --data-root /path/to/private/pseudospace-data --results-root /path/to/private/pseudospace-results
 python analysis/pt_pathway_remodeling.py --data-root /path/to/private/pseudospace-data --results-root /path/to/private/pseudospace-results
 ```
 
-The first step compares a nonbranching scFates curve with DPT and writes notebook 12's PT
-coordinate and ortholog-map inputs under `minimal_pt_scfates/`.
+The first step repeats notebook 03's reviewed clustering, nephron filtering, and second Harmony
+pass. It compares nonbranching scFates with DPT on the full nephron and PT subset, then writes
+notebook 12's PT coordinate and ortholog-map inputs under `minimal_pt_scfates/`.
 
 For synthetic regression checks that need no research data:
 

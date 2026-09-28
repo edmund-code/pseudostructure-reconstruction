@@ -1,13 +1,13 @@
 # %% [markdown]
-# # 13 · Minimal PT scFates pseudospace
+# # 13 · Reviewed nephron and PT scFates pseudospace
 #
-# Build only the two files notebook 12 needs: a reviewed PT structure table with a shared
-# coordinate, and the accepted human–mouse ortholog map. The input is the four original
-# tubule-by-gene matrices plus the HCOP table. No notebook 03 output is read.
+# Reproduce notebook 03's reviewed two-pass Harmony path from the four original
+# tubule-by-gene matrices and HCOP table: cluster the full cohort, retain the reviewed
+# tubular nephron, reintegrate it, and then take the PT subset. No notebook 03 output is read.
 #
-# **Primary coordinate:** scFates' nonbranching principal curve on the shared Harmony PT
-# embedding. **Comparator:** Scanpy DPT on the same PT embedding and rooted at the same end.
-# scFates' curve is a constrained single path, not a principal tree or branch analysis.
+# Compare nonbranching scFates and Scanpy DPT on both the full nephron and PT subset.
+# The PT scFates curve supplies notebook 12's primary coordinate. The full-nephron
+# nonbranching curve is a diagnostic forced through potentially branching biology.
 # See https://scfates.readthedocs.io/en/latest/Basic_Curved_trajectory_analysis.html .
 #
 # Two human sections come from one healthy cortex donor; `HUK1_MED1` is a source name, not
@@ -48,11 +48,12 @@ for path in (*source_paths.values(), ortholog_path):
         raise FileNotFoundError(path)
 
 SEED = 0
-NOTEBOOK_LOGIC_VERSION = '13-minimal-pt-scfates-v1'
+NOTEBOOK_LOGIC_VERSION = '13-nephron-scfates-v2'
 HARMONY_VERSION = '2.0.5'
 SCFATES_NODES = 30
-PT_DIMS = 5
+TRAJECTORY_DIMS = 5
 PT_NEIGHBORS = 30
+PASS2_LOGIC_VERSION = '13-nephron-pass2-v1'
 REVIEWED_CLUSTER_LABELS = {
     # Confirmed against this partition's marker detection and the reviewed notebook 03
     # cluster memberships. The PT rows have Slc5a2 0.91 (S1), Slc22a6 0.94 (S2),
@@ -68,10 +69,10 @@ REVIEWED_FINGERPRINT = {
 }
 
 # %% [markdown]
-# ## 2 · Rebuild the reviewed PT subset
+# ## 2 · Rebuild and review the full-cohort clusters
 #
 # Keep notebook 03's input/QC/Harmony/Leiden settings that define its reviewed cluster IDs;
-# omit its global-nephron trajectory and all downstream expression analyses. The accepted
+# then retain its nephron classes for the second integration. The accepted
 # map creates target columns even for unmeasured human genes. As in notebook 03, keep those
 # columns for the pinned clustering, but notebook 12 later excludes every unmeasured gene
 # from analysis. Changing this gene set would change the Leiden partition.
@@ -97,6 +98,7 @@ from pseudospace.cross_species import (read_ortholog_table, build_one_to_one_ort
 from pseudospace.harmony import run_harmony_rpy2, select_harmony_hvgs_by_condition
 from pseudospace.io_qc import annotate_mito_ribo_mouse_symbols
 from pseudospace.stage_cache import cached_anndata, digest
+from pseudospace.vocabulary import KEEP_TUBULE_CLASSES, coarse_for
 
 # Validation stays outside the cache. A changed R installation must never silently reuse it.
 installed_harmony = str(ro.r('as.character(packageVersion("harmony"))')[0])
@@ -188,15 +190,9 @@ if fingerprint != REVIEWED_FINGERPRINT:
 if set(cohort.obs.leiden_coarse.astype(str)) != set(REVIEWED_CLUSTER_LABELS):
     raise ValueError('Reviewed cluster map does not cover the current partition.')
 cohort.obs['segment_class'] = cohort.obs.leiden_coarse.astype(str).map(REVIEWED_CLUSTER_LABELS)
-cohort.obs['coarse_class'] = np.where(cohort.obs.segment_class.str.startswith('PT-'), 'PT',
-    cohort.obs.segment_class)
+cohort.obs['coarse_class'] = cohort.obs.segment_class.map(coarse_for)
 cohort.obs['broad_tubule_marker_call'] = cohort.obs.coarse_class
-pt = cohort[cohort.obs.coarse_class.eq('PT')].copy()
-if set(pt.obs.segment_class) != {'PT-S1', 'PT-S2', 'PT-S3'}:
-    raise ValueError('The reviewed PT subset must contain S1, S2, and S3.')
-pt.obs.groupby(['comparison_species', 'sample', 'segment_class'], observed=True).size().rename(
-    'structures').to_csv(output / 'pt_cluster_counts.csv')
-display(pt.obs.groupby(['sample', 'segment_class'], observed=True).size().unstack(fill_value=0))
+display(cohort.obs.groupby(['sample', 'segment_class'], observed=True).size().unstack(fill_value=0))
 
 # Centroids are input metadata, not inferred from the expression graph. Inspect PT spatial
 # coverage in every specimen before relying on a trajectory from segmented structures.
@@ -217,59 +213,163 @@ plt.show()
 plt.close(fig)
 
 # %% [markdown]
-# ## 3 · Fit one nonbranching scFates curve and a DPT comparator
+# ## 3 · Retain reviewed nephron classes and run pass-2 Harmony
 #
-# Fit both methods in the first five Harmony dimensions of the reviewed PT subset. Predeclared
-# early and late marker panels orient the path; they do not assign clusters or pick pathways.
-# scFates chooses the early endpoint of its **single curve**. DPT starts at a structure near
-# that same endpoint. Every saved coordinate is scaled to [0, 1] on all PT structures before
-# notebook 12 takes its four-specimen common-support interval.
+# The first-pass Leiden labels stay fixed. Remove glomerular, smooth-muscle and unresolved
+# clusters, then repeat species-balanced HVG selection, PCA, Harmony, neighbors and UMAP on
+# the retained tubular nephron. PT is selected only after this reintegration. No cluster
+# has a reviewed DTL label in this cohort, so full-nephron coverage means all reviewed
+# tubular structures, not a complete set of anatomical segments.
+
+# %%
+nephron_mask = cohort.obs.coarse_class.isin(KEEP_TUBULE_CLASSES).to_numpy()
+filter_counts = (cohort.obs.assign(pass2_decision=np.where(nephron_mask, 'retained', 'removed'))
+    .groupby(['coarse_class', 'pass2_decision'], observed=True).size()
+    .rename('n_structures').reset_index())
+filter_counts.to_csv(output / 'pass2_nephron_filter_counts.csv', index=False)
+display(filter_counts)
+if nephron_mask.sum() < 100 or cohort.obs.loc[nephron_mask, 'comparison_species'].nunique() != 2:
+    raise ValueError('Pass-2 nephron needs at least 100 structures from both species.')
+
+def build_nephron_embedding():
+    obj = cohort[nephron_mask].copy()
+    obj = select_harmony_hvgs_by_condition(
+        obj, group_key='comparison_species', groups=('mouse', 'human'),
+        mode='intersection', min_mean=.0125, max_mean=3, min_disp=.5)
+    hvg = obj[:, obj.var.highly_variable_for_harmony.to_numpy(bool)].copy()
+    hvg.X = hvg.layers['lognorm'].copy()
+    sc.tl.pca(hvg, n_comps=50, random_state=SEED)
+    ro.r(f'set.seed({SEED})')
+    hvg = run_harmony_rpy2(hvg, batch_key='sample', n_pcs=50, theta=6,
+                           lambda_val=1, max_iter=30, tau=0)
+    obj.obsm['X_harmony'] = hvg.obsm['X_harmony'].copy()
+    sc.pp.neighbors(obj, n_neighbors=30, use_rep='X_harmony', random_state=SEED)
+    sc.tl.umap(obj, random_state=SEED)
+    return obj
+
+nephron = cached_anndata('pass2_nephron_embedding', build_nephron_embedding,
+    root=output / 'stage_cache',
+    params={'seed': SEED, 'harmony': HARMONY_VERSION, 'scanpy': sc.__version__,
+            'logic': PASS2_LOGIC_VERSION},
+    inputs={'pass1_embedding': digest(np.asarray(cohort.obsm['X_harmony'])),
+            'retained_ids': digest(cohort.obs_names[nephron_mask].tolist()),
+            'reviewed_labels': digest(cohort.obs.segment_class.astype(str).tolist())},
+    code=digest([PASS2_LOGIC_VERSION, Path(run_harmony_rpy2.__code__.co_filename)]))
+if not nephron.obs_names.equals(cohort.obs_names[nephron_mask]):
+    raise ValueError('Pass-2 cache does not match the reviewed nephron membership.')
+pt = nephron[nephron.obs.coarse_class.eq('PT')].copy()
+if set(pt.obs.segment_class) != {'PT-S1', 'PT-S2', 'PT-S3'}:
+    raise ValueError('The reviewed PT subset must contain S1, S2, and S3.')
+pt.obs.groupby(['comparison_species', 'sample', 'segment_class'], observed=True).size().rename(
+    'structures').to_csv(output / 'pt_cluster_counts.csv')
+display(pt.obs.groupby(['sample', 'segment_class'], observed=True).size().unstack(fill_value=0))
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4), layout='constrained')
+for ax, key, title in zip(axes, ('sample', 'coarse_class', 'segment_class'),
+                          ('Specimen', 'Nephron family', 'Reviewed segment')):
+    codes = nephron.obs[key].astype('category')
+    for category in codes.cat.categories:
+        mask = codes.eq(category).to_numpy()
+        ax.scatter(*nephron.obsm['X_umap'][mask, :2].T, s=1.5, alpha=.55,
+                   label=str(category), rasterized=True)
+    ax.set(title=title, xlabel='UMAP 1', ylabel='UMAP 2')
+    ax.legend(frameon=False, markerscale=3, fontsize=7, ncol=2)
+fig.savefig(output / 'pass2_nephron_umap.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# %% [markdown]
+# ## 4 · Compare nonbranching scFates and DPT on nephron and PT
+#
+# Each comparison fits both methods to the same first five pass-2 Harmony dimensions.
+# The marker panels orient the paths after cluster review. DPT starts near the scFates
+# early root. The full-nephron single curve is a topology diagnostic, not a claim that
+# every nephron segment lies along one anatomical path. The PT scFates curve is the
+# coordinate saved for notebook 12.
 
 # %%
 early_genes = ('Slc5a2', 'Slc5a12', 'Gatm')
 late_genes = ('Slc22a7', 'Slc7a13', 'Cyp7b1')
-for panel in (early_genes, late_genes):
-    if len(set(panel) & set(pt.var_names)) < 2:
-        raise ValueError(f'Too few measured axis markers in {panel}.')
-axis_genes = [g for g in (*early_genes, *late_genes) if g in pt.var_names]
-axis_values = pt[:, axis_genes].X
-axis_values = axis_values.toarray() if sparse.issparse(axis_values) else np.asarray(axis_values)
-axis_z = np.empty_like(axis_values, dtype=float)
-for group in samples:
-    mask = pt.obs.comparison_species.astype(str).eq(group).to_numpy()
-    block = axis_values[mask]
-    axis_z[mask] = (block - block.mean(axis=0)) / np.maximum(block.std(axis=0), 1e-6)
-marker_axis = axis_z[:, [axis_genes.index(g) for g in late_genes if g in axis_genes]].mean(axis=1) - axis_z[:, [axis_genes.index(g) for g in early_genes if g in axis_genes]].mean(axis=1)
-pt.obs['pt_marker_axis'] = marker_axis
-pt.obs['early_tip_score'] = -marker_axis
-pt.obsm['X_pt'] = np.asarray(pt.obsm['X_harmony'][:, :PT_DIMS], dtype=float)
-scf.tl.curve(pt, Nodes=SCFATES_NODES, use_rep='X_pt', ndims_rep=PT_DIMS, seed=SEED)
-graph = pt.uns['graph']
-degree = np.asarray(graph['B']).astype(bool).sum(axis=0)
-if not (len(graph['tips']) == 2 and len(graph['forks']) == 0
-        and np.count_nonzero(degree == 1) == 2 and np.all(degree <= 2)):
-    raise ValueError('scFates principal graph is not a single nonbranching path.')
-scf.tl.root(pt, 'early_tip_score', tips_only=True)
-root_node = int(pt.uns['graph']['root'])
-membership = np.asarray(pt.obsm['X_R'][:, root_node]).ravel()
-near_root = np.flatnonzero(membership >= np.quantile(membership, .99))
-root_cell = near_root[np.argmax(pt.obs.early_tip_score.to_numpy()[near_root])]
-# One seeded mapping keeps this producer small; increase n_map to assess projection uncertainty.
-scf.tl.pseudotime(pt, n_jobs=2, n_map=1, seed=SEED)
-scfates_time = pt.obs.t.to_numpy(float)
-if not np.isfinite(scfates_time).all() or np.ptp(scfates_time) <= 0:
-    raise ValueError('scFates did not give every PT structure finite pseudotime.')
-pt.obs['shared_pseudospace'] = (scfates_time - scfates_time.min()) / np.ptp(scfates_time)
 
-sc.pp.neighbors(pt, n_neighbors=PT_NEIGHBORS, use_rep='X_pt', random_state=SEED,
-                key_added='pt_neighbors')
-sc.tl.diffmap(pt, neighbors_key='pt_neighbors', random_state=SEED)
-pt.uns['iroot'] = int(root_cell)
-sc.tl.dpt(pt, neighbors_key='pt_neighbors')
-dpt_time = pt.obs.dpt_pseudotime.to_numpy(float)
-if not np.isfinite(dpt_time).all() or np.ptp(dpt_time) <= 0:
-    raise ValueError('DPT is disconnected from the shared PT root.')
-pt.obs['dpt_pseudospace'] = (dpt_time - dpt_time.min()) / np.ptp(dpt_time)
+def fit_coordinates(obj, name, n_neighbors):
+    axis_genes = [g for g in (*early_genes, *late_genes) if g in obj.var_names]
+    for panel in (early_genes, late_genes):
+        if len(set(panel) & set(axis_genes)) < 2:
+            raise ValueError(f'{name}: too few measured axis markers in {panel}.')
+    values = obj[:, axis_genes].X
+    values = values.toarray() if sparse.issparse(values) else np.asarray(values)
+    z = np.empty_like(values, dtype=float)
+    for species in samples:
+        mask = obj.obs.comparison_species.astype(str).eq(species).to_numpy()
+        block = values[mask]
+        z[mask] = (block - block.mean(axis=0)) / np.maximum(block.std(axis=0), 1e-6)
+    obj.obs['pt_marker_axis'] = (
+        z[:, [axis_genes.index(g) for g in late_genes if g in axis_genes]].mean(axis=1)
+        - z[:, [axis_genes.index(g) for g in early_genes if g in axis_genes]].mean(axis=1))
+    obj.obs['early_tip_score'] = -obj.obs.pt_marker_axis
+    obj.obsm['X_trajectory'] = np.asarray(obj.obsm['X_harmony'][:, :TRAJECTORY_DIMS], dtype=float)
+    scf.tl.curve(obj, Nodes=SCFATES_NODES, use_rep='X_trajectory',
+                 ndims_rep=TRAJECTORY_DIMS, seed=SEED)
+    graph = obj.uns['graph']
+    degree = np.asarray(graph['B']).astype(bool).sum(axis=0)
+    if not (len(graph['tips']) == 2 and len(graph['forks']) == 0
+            and np.count_nonzero(degree == 1) == 2 and np.all(degree <= 2)):
+        raise ValueError(f'{name}: scFates graph is not one nonbranching path.')
+    scf.tl.root(obj, 'early_tip_score', tips_only=True)
+    root_node = int(graph['root'])
+    membership = np.asarray(obj.obsm['X_R'][:, root_node]).ravel()
+    near_root = np.flatnonzero(membership >= np.quantile(membership, .99))
+    root_cell = near_root[np.argmax(obj.obs.early_tip_score.to_numpy()[near_root])]
+    # One seeded mapping keeps the producer compact; more maps would quantify projection uncertainty.
+    scf.tl.pseudotime(obj, n_jobs=2, n_map=1, seed=SEED)
+    scfates_time = obj.obs.t.to_numpy(float)
+    if not np.isfinite(scfates_time).all() or np.ptp(scfates_time) <= 0:
+        raise ValueError(f'{name}: scFates gave non-finite or constant pseudotime.')
+    obj.obs['shared_pseudospace'] = (scfates_time - scfates_time.min()) / np.ptp(scfates_time)
+
+    sc.pp.neighbors(obj, n_neighbors=n_neighbors, use_rep='X_trajectory',
+                    random_state=SEED, key_added='trajectory_neighbors')
+    sc.tl.diffmap(obj, neighbors_key='trajectory_neighbors', random_state=SEED)
+    obj.uns['iroot'] = int(root_cell)
+    sc.tl.dpt(obj, neighbors_key='trajectory_neighbors')
+    dpt_time = obj.obs.dpt_pseudotime.to_numpy(float)
+    finite = np.isfinite(dpt_time)
+    if finite.sum() < .95 * obj.n_obs or np.ptp(dpt_time[finite]) <= 0:
+        raise ValueError(f'{name}: DPT has too many disconnected or constant structures.')
+    normalized = np.full(obj.n_obs, np.nan)
+    normalized[finite] = (dpt_time[finite] - dpt_time[finite].min()) / np.ptp(dpt_time[finite])
+    obj.obs['dpt_pseudospace'] = normalized
+    print(f'{name}: {obj.n_obs:,} structures; {int((~finite).sum()):,} DPT-disconnected; '
+          f'scFates root node {root_node}, DPT root {obj.obs_names[root_cell]}')
+    return graph, root_node, root_cell
+
+nephron_graph, nephron_root_node, nephron_root_cell = fit_coordinates(
+    nephron, 'nephron', max(PT_NEIGHBORS, int(np.sqrt(nephron.n_obs))))
+pt_graph, pt_root_node, pt_root_cell = fit_coordinates(pt, 'PT', PT_NEIGHBORS)
+if not np.isfinite(pt.obs.dpt_pseudospace).all():
+    raise ValueError('PT DPT must cover every saved structure.')
+
+def compare_methods(obj, name):
+    rows = []
+    for specimen, obs in obj.obs.groupby('sample', observed=True):
+        finite = obs.dpt_pseudospace.notna()
+        valid = obs.loc[finite]
+        rows.append({'subset': name, 'specimen': specimen,
+            'species': obs.comparison_species.iloc[0], 'n_structures': len(obs),
+            'n_dpt_connected': int(finite.sum()),
+            'spearman_scfates_dpt': spearmanr(valid.shared_pseudospace, valid.dpt_pseudospace).statistic,
+            'spearman_scfates_marker_axis': spearmanr(obs.shared_pseudospace, obs.pt_marker_axis).statistic,
+            'spearman_dpt_marker_axis': spearmanr(valid.dpt_pseudospace, valid.pt_marker_axis).statistic})
+    obj.obs[['comparison_species', 'sample', 'segment_class', 'coarse_class',
+             'pt_marker_axis', 'shared_pseudospace', 'dpt_pseudospace']].to_csv(
+        output / f'{name}_coordinate_comparison.csv')
+    return pd.DataFrame(rows)
+
+nephron_comparison = compare_methods(nephron, 'nephron')
+comparison = compare_methods(pt, 'pt')
+pd.concat([nephron_comparison, comparison]).to_csv(
+    output / 'coordinate_agreement_by_specimen_and_subset.csv', index=False)
+display(pd.concat([nephron_comparison, comparison]).round(3))
 segment_order = ('PT-S1', 'PT-S2', 'PT-S3')
 order_rows = []
 for name, obs in pt.obs.groupby('sample', observed=True):
@@ -282,34 +382,75 @@ for name, obs in pt.obs.groupby('sample', observed=True):
 order_table = pd.DataFrame(order_rows)
 order_table.to_csv(output / 'pt_segment_order_by_specimen.csv', index=False)
 display(order_table.round(3))
-pt.obs[['comparison_species', 'sample', 'segment_class', 'pt_marker_axis',
-        'shared_pseudospace', 'dpt_pseudospace']].to_csv(output / 'pt_coordinate_comparison.csv')
-comparison = pd.DataFrame([{'specimen': name, 'species': obs.comparison_species.iloc[0],
-    'n_structures': len(obs),
-    'spearman_scfates_dpt': spearmanr(obs.shared_pseudospace, obs.dpt_pseudospace).statistic,
-    'spearman_scfates_marker_axis': spearmanr(obs.shared_pseudospace, obs.pt_marker_axis).statistic,
-    'spearman_dpt_marker_axis': spearmanr(obs.dpt_pseudospace, obs.pt_marker_axis).statistic}
-    for name, obs in pt.obs.groupby('sample', observed=True)])
 comparison.to_csv(output / 'coordinate_agreement_by_specimen.csv', index=False)
-display(comparison.round(3))
 
 # %% [markdown]
-# ## 4 · Inspect the curve, ordering, and method agreement
+# ## 5 · Inspect full-nephron and PT paths and method agreement
 #
-# The embedding uses the same five dimensions for scFates and DPT. A high overall correlation
-# can hide a reversed or flattened segment in one specimen; inspect each specimen and the
-# S1/S2/S3 distributions before interpreting notebook 12. Disagreement is a coordinate
-# sensitivity signal, not an extra test of species biology.
+# The full-nephron panels show whether a forced single scFates curve preserves the reviewed
+# families, and whether it agrees with DPT within each specimen. The PT panels repeat those
+# checks on the subset that notebook 12 actually uses. Discordance is a coordinate diagnostic.
+
+# %%
+fig, axes = plt.subplots(1, 3, figsize=(15, 4), layout='constrained')
+xy = nephron.obsm['X_umap'][:, :2]
+for family in KEEP_TUBULE_CLASSES:
+    mask = nephron.obs.coarse_class.eq(family).to_numpy()
+    if mask.any():
+        axes[0].scatter(xy[mask, 0], xy[mask, 1], s=2, alpha=.4,
+                        label=family, rasterized=True)
+axes[0].legend(frameon=False, markerscale=4)
+axes[0].set(title='Reviewed nephron families', xlabel='UMAP 1', ylabel='UMAP 2')
+for ax, column, title in zip(axes[1:], ('shared_pseudospace', 'dpt_pseudospace'),
+                             ('scFates · full nephron', 'DPT · full nephron')):
+    points = ax.scatter(xy[:, 0], xy[:, 1], c=nephron.obs[column], s=2,
+                        cmap='viridis', rasterized=True)
+    fig.colorbar(points, ax=ax, label='Pseudospace')
+    ax.set(title=title, xlabel='UMAP 1', ylabel='UMAP 2')
+fig.savefig(output / 'nephron_scfates_dpt_umap.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# %%
+fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharex=True, sharey=True, layout='constrained')
+for ax, (specimen, obs) in zip(axes.flat, nephron.obs.groupby('sample', observed=True)):
+    for family in KEEP_TUBULE_CLASSES:
+        rows = obs.loc[obs.coarse_class.eq(family)]
+        ax.scatter(rows.shared_pseudospace, rows.dpt_pseudospace, s=3, alpha=.2,
+                   label=family)
+    rho = nephron_comparison.set_index('specimen').loc[specimen, 'spearman_scfates_dpt']
+    ax.plot([0, 1], [0, 1], color='0.3', lw=.8, ls='--')
+    ax.set(title=f'{specimen} · Spearman {rho:.2f}', xlim=(0, 1), ylim=(0, 1),
+           xlabel='scFates pseudospace', ylabel='DPT pseudospace')
+axes[0, 0].legend(frameon=False, markerscale=3)
+fig.savefig(output / 'nephron_scfates_vs_dpt_by_specimen.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# %%
+families = [family for family in KEEP_TUBULE_CLASSES if family in set(nephron.obs.coarse_class)]
+fig, axes = plt.subplots(2, 2, figsize=(12, 7), sharex=True, layout='constrained')
+for row, (column, title) in enumerate((('shared_pseudospace', 'scFates'),
+                                        ('dpt_pseudospace', 'DPT'))):
+    for col, species in enumerate(samples):
+        obs = nephron.obs.loc[nephron.obs.comparison_species.eq(species)]
+        values = [obs.loc[obs.coarse_class.eq(family), column].dropna().to_numpy()
+                  for family in families]
+        axes[row, col].boxplot(values, tick_labels=families, showfliers=False)
+        axes[row, col].set(title=f'{title} · {species}', ylim=(0, 1), ylabel='Pseudospace')
+fig.savefig(output / 'nephron_family_order_scfates_dpt.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
 
 # %%
 colors = {'PT-S1': '#4C9BD3', 'PT-S2': '#5B8E55', 'PT-S3': '#D6B48A'}
 fig, axes = plt.subplots(1, 3, figsize=(14, 4), layout='constrained')
-xy = pt.obsm['X_pt'][:, :2]
+xy = pt.obsm['X_trajectory'][:, :2]
 for label in segment_order:
     mask = pt.obs.segment_class.eq(label).to_numpy()
     axes[0].scatter(xy[mask, 0], xy[mask, 1], s=2, alpha=.25, color=colors[label], label=label)
-nodes = np.asarray(graph['F'])[:2].T
-for a, b in np.argwhere(np.triu(np.asarray(graph['B']) > 0)):
+nodes = np.asarray(pt_graph['F'])[:2].T
+for a, b in np.argwhere(np.triu(np.asarray(pt_graph['B']) > 0)):
     axes[0].plot(nodes[[a, b], 0], nodes[[a, b], 1], color='black', lw=1)
 axes[0].scatter(nodes[:, 0], nodes[:, 1], s=9, color='black')
 axes[0].legend(frameon=False, markerscale=4)
@@ -359,29 +500,33 @@ plt.close(fig)
 # %% [markdown]
 # ### Current coordinate check
 #
-# In the current four-specimen run, scFates places the PT-S3 median after both PT-S1 and PT-S2 in every specimen. Human PT-S1 and PT-S2 overlap: their median difference is +0.006 in `HUK1_COR1` and −0.001 in `HUK1_MED1`. The S1/S2 cluster labels therefore should not be read as sharply separated positions in human cortex.
-#
-# Within-specimen scFates–DPT Spearman correlations are 0.49–0.72. The two coordinates are related but not interchangeable; notebook 12 uses **scFates only** as its primary coordinate. These are structure-level diagnostics from two mouse specimens and two cortex sections of one human donor, not biological replication. The producer refits Harmony and clustering, so its PT membership can differ from notebook 03; a comparison with the old notebook 12 run is not a coordinate-only sensitivity analysis. Inspect the saved per-specimen tables and plots if the input data or integration changes.
+# Inspect `coordinate_agreement_by_specimen_and_subset.csv`, the full-nephron family plots,
+# and the PT segment plots together. A high pooled correlation can hide reversed or flat
+# ordering in one specimen. Two mouse specimens and two cortex sections of one human donor
+# give structure-level diagnostics, not independent donor replication. The producer refits
+# clustering and pass-2 Harmony, so changes from notebook 03 are not coordinate-only effects.
 
 # %% [markdown]
-# ## 5 · Save the small notebook 12 contract
+# ## 6 · Save the nephron diagnostic and notebook 12 PT contract
 #
-# Notebook 12 reloads raw counts itself. Save metadata only: specimen identity, reviewed PT
-# label, the primary scFates coordinate, and DPT for sensitivity inspection. Both human slices
-# retain the `cortex` annotation. The ortholog CSV was written before embedding, with the same
-# accepted pairs used to build the cross-species object.
+# Save metadata-only coordinates for both scopes. Notebook 12 reads the PT file and reloads
+# expression from raw counts. Both human slices retain the `cortex` annotation.
 
 # %%
 contract = ('comparison_species', 'sample', 'region', 'segment_class', 'coarse_class',
             'broad_tubule_marker_call', 'shared_pseudospace', 'dpt_pseudospace')
-saved = ad.AnnData(obs=pt.obs.loc[:, contract].copy())
-saved.uns['coordinate_method'] = 'scFates 1.2.5 tl.curve; 30 nodes; 5 Harmony dimensions; no forks'
-saved.uns['comparison_method'] = 'Scanpy DPT; same PT embedding and early endpoint'
-saved.uns['reviewed_cluster_fingerprint'] = fingerprint
-saved.uns['scfates_root_node'] = root_node
-saved.uns['dpt_root_structure'] = str(pt.obs_names[root_cell])
-saved.write_h5ad(output / 'cross_species_pt_scfates.h5ad')
-assert saved.obs_names.equals(pt.obs_names)
-assert saved.obs.shared_pseudospace.between(0, 1).all()
+for name, obj, root_node, root_cell in (
+    ('nephron', nephron, nephron_root_node, nephron_root_cell),
+    ('pt', pt, pt_root_node, pt_root_cell)):
+    saved = ad.AnnData(obs=obj.obs.loc[:, contract].copy())
+    saved.uns['coordinate_method'] = (
+        'scFates 1.2.5 tl.curve; 30 nodes; 5 pass-2 Harmony dimensions; no forks')
+    saved.uns['comparison_method'] = 'Scanpy DPT; same pass-2 embedding and early endpoint'
+    saved.uns['reviewed_cluster_fingerprint'] = fingerprint
+    saved.uns['scfates_root_node'] = root_node
+    saved.uns['dpt_root_structure'] = str(obj.obs_names[root_cell])
+    saved.write_h5ad(output / f'cross_species_{name}_scfates.h5ad')
+    assert saved.obs_names.equals(obj.obs_names)
+    assert saved.obs.shared_pseudospace.between(0, 1).all()
 print('Notebook 12 inputs:', output / 'cross_species_pt_scfates.h5ad',
       output / 'ortholog_map_used.csv', sep='\n  ')

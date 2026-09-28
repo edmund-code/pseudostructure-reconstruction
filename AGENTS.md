@@ -17,8 +17,9 @@ subproject that produces its GeoJSON inputs.
 - Entry points: the notebooks in `analysis/notebooks/`, with generated `.py` mirrors at
   `analysis/mouse_only_pseudospace.py` (active mouse-only workflow),
   `analysis/human_vs_healthy_mouse.py` (cross-species),
-  `analysis/minimal_pt_scfates.py` (13: minimal reviewed PT input with a nonbranching scFates
-  coordinate and a DPT comparison for notebook 12),
+  `analysis/minimal_pt_scfates.py` (13: notebook-03-style two-pass Harmony, reviewed nephron
+  filtering and PT subsetting, with nonbranching scFates versus DPT on both scopes; its PT
+  scFates coordinate feeds notebook 12),
   `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace, recomputes
   no coordinate), and `analysis/human_mouse_spatial_rewiring.py` (06: continuous PT conservation and
   spatial rewiring — reads 03's PT object, caches its own per-specimen fits, and cross-checks against
@@ -152,8 +153,9 @@ tables under `docs/results/`.
     13-cluster fingerprint must be updated together with the labels. The workflow stops before DPT
     if it drifts — never bypass the guard.
   - The original 02/03 pseudospace coordinate is Scanpy DPT on the pass-2 Harmony embedding,
-    rooted in PT and oriented by the early→late marker axis. Notebook 13 builds a separate
-    nonbranching scFates PT coordinate for notebook 12 and retains DPT as its comparator.
+    rooted in PT and oriented by the early→late marker axis. Notebook 13 repeats the two-pass
+    integration and compares nonbranching scFates with DPT on the nephron and PT subset. Its
+    separate PT scFates coordinate feeds notebook 12.
   - Model selection in `segmentation/` is pooled class-agnostic PQ (not validation loss); D4 TTA is
     required for reported inference.
 - **The public `obs` label contract** consumed by the package, QuPath export, and spatial

@@ -90,7 +90,7 @@ def rebuild_pt_expression(pt_obs, source_paths, orthologs, *, target_sum=1e4):
         'normalization': 'log1p(count / all-measured-ortholog library size * target_sum)',
         'target_sum': float(target_sum), 'n_accepted_pairs': len(symbols),
         'n_measured_in_every_specimen': int(var.measured_in_both_inputs.sum()),
-        'coordinate': 'saved notebook 03 PT structures and shared_pseudospace; unchanged',
+        'coordinate': 'saved PT structures and shared_pseudospace; unchanged',
     }
     pd.testing.assert_frame_equal(result.obs[pt_obs.columns], pt_obs)
     return result

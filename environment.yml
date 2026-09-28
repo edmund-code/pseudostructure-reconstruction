@@ -29,4 +29,5 @@ dependencies:
       - --extra-index-url https://download.pytorch.org/whl/cpu
       - shapely>=2
       - gseapy>=1.3,<1.4
+      - scFates==1.2.5
       - genes2genes @ git+https://github.com/Teichlab/Genes2Genes.git@42ba945d370a864464a2d3cc7174aa0ee451e600

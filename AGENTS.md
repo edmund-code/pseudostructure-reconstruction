@@ -17,6 +17,8 @@ subproject that produces its GeoJSON inputs.
 - Entry points: the notebooks in `analysis/notebooks/`, with generated `.py` mirrors at
   `analysis/mouse_only_pseudospace.py` (active mouse-only workflow),
   `analysis/human_vs_healthy_mouse.py` (cross-species),
+  `analysis/minimal_pt_scfates.py` (13: minimal reviewed PT input with a nonbranching scFates
+  coordinate and a DPT comparison for notebook 12),
   `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace, recomputes
   no coordinate), and `analysis/human_mouse_spatial_rewiring.py` (06: continuous PT conservation and
   spatial rewiring — reads 03's PT object, caches its own per-specimen fits, and cross-checks against
@@ -60,7 +62,8 @@ python analysis/human_vs_healthy_mouse.py   --data-root <dir> --results-root <di
 python analysis/gam_human_vs_mouse.py       --data-root <dir> --results-root <dir>   # needs 03's outputs
 python analysis/pt_gam_clustering.py        --data-root <dir> --results-root <dir>   # needs 03's outputs
 python analysis/pt_genes2genes.py           --data-root <dir> --results-root <dir>   # needs 03's outputs; 07 atlas optional
-python analysis/pt_pathway_remodeling.py    --data-root <dir> --results-root <dir>   # 12: gene-first nested models; 09 sensitivity optional
+python analysis/minimal_pt_scfates.py       --data-root <dir> --results-root <dir>   # 13: run before 12; scFates primary, DPT comparator
+python analysis/pt_pathway_remodeling.py    --data-root <dir> --results-root <dir>   # 12: gene-first nested models on 13's scFates coordinate
 # env-var equivalents: PSEUDOSPACE_DATA_ROOT, PSEUDOSPACE_RESULTS_ROOT
 
 # QuPath export / spatial validation
@@ -148,8 +151,9 @@ tables under `docs/results/`.
   - The coarse-label checkpoint requires explicit per-cluster confirmation, and the reference
     13-cluster fingerprint must be updated together with the labels. The workflow stops before DPT
     if it drifts — never bypass the guard.
-  - The canonical pseudospace coordinate is Scanpy DPT on the pass-2 Harmony embedding, rooted in PT
-    and oriented by the early→late marker axis.
+  - The original 02/03 pseudospace coordinate is Scanpy DPT on the pass-2 Harmony embedding,
+    rooted in PT and oriented by the early→late marker axis. Notebook 13 builds a separate
+    nonbranching scFates PT coordinate for notebook 12 and retains DPT as its comparator.
   - Model selection in `segmentation/` is pooled class-agnostic PQ (not validation loss); D4 TTA is
     required for reported inference.
 - **The public `obs` label contract** consumed by the package, QuPath export, and spatial
@@ -186,7 +190,8 @@ tables under `docs/results/`.
   `07_pt_gam_clustering.ipynb → analysis/pt_gam_clustering.py`, and
   `08_pt_cross_species_validation.ipynb → analysis/pt_cross_species_validation.py`, and
   `09_pt_genes2genes.ipynb → analysis/pt_genes2genes.py`, and
-  `12_pt_pathway_remodeling.ipynb → analysis/pt_pathway_remodeling.py`.
+  `12_pt_pathway_remodeling.ipynb → analysis/pt_pathway_remodeling.py`, and
+  `13_minimal_pt_scfates.ipynb → analysis/minimal_pt_scfates.py`.
   (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
 
   ```bash
@@ -208,6 +213,8 @@ tables under `docs/results/`.
     analysis/notebooks/09_pt_genes2genes.ipynb
   jupytext --to py:percent --output analysis/pt_pathway_remodeling.py \
     analysis/notebooks/12_pt_pathway_remodeling.ipynb
+  jupytext --to py:percent --output analysis/minimal_pt_scfates.py \
+    analysis/notebooks/13_minimal_pt_scfates.ipynb
   ```
 
   Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.

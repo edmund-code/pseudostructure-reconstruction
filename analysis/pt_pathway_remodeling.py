@@ -3,7 +3,7 @@
 #
 # **Start with gene trajectories. Discover pathways from gene statistics. Return to pseudospace to explain the differences.**
 #
-# The PT coordinate is already established in notebook 03. We read it exactly as saved; we do not rebuild DPT, reverse it, or align species anew. This notebook is a separate analysis and leaves notebooks 06 and 09 intact.
+# The primary PT coordinate comes from notebook 13’s nonbranching scFates curve. We read it exactly as saved; we do not refit the curve or align species anew. Notebook 13 compares it with DPT on the same PT structures and embedding. Its refitted PT labels can differ from notebook 03, so changes from earlier DPT-based results are not coordinate-only effects. This notebook is a separate pathway analysis and leaves notebooks 06 and 09 intact.
 #
 # > **Reading guide**
 # >
@@ -20,7 +20,7 @@
 # >
 # > The healthy comparison contains two mouse specimens and two human cortex sections from **one donor**. `HUK1_MED1` is a specimen name, not evidence of medullary tissue. Model uncertainty is conditional on observed structures; pathway nulls compare genes, not independent donors. All enrichment and stability results are exploratory.
 #
-# **Inputs:** notebook 03's `cross_species_pt_dpt.h5ad` (structure identities and coordinates only), `ortholog_map_used.csv`, and the four original `tubule_by_gene/*_tubule_by_gene_caleb.h5ad` count matrices; local Reactome, Hallmark, and KEGG JSON libraries. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling/` (or your configured results root), never into Git.
+# **Inputs:** notebook 13’s `cross_species_pt_scfates.h5ad` (structure identities and coordinates only), `ortholog_map_used.csv`, and the four original `tubule_by_gene/*_tubule_by_gene_caleb.h5ad` count matrices; local Reactome, Hallmark, and KEGG JSON libraries. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling_scfates/` (or your configured results root), never into Git.
 #
 
 # %% [markdown]
@@ -43,24 +43,24 @@ parser.add_argument('--results-root', type=Path)
 args, _ = parser.parse_known_args()
 data_root = Path(args.data_root or os.environ.get('PSEUDOSPACE_DATA_ROOT') or project / 'data').expanduser()
 results_root = Path(args.results_root or os.environ.get('PSEUDOSPACE_RESULTS_ROOT') or project / 'results').expanduser()
-upstream = results_root / 'human_vs_healthy_mouse'
-output = results_root / 'pt_pathway_remodeling'
+upstream = results_root / 'minimal_pt_scfates'
+output = results_root / 'pt_pathway_remodeling_scfates'
 output.mkdir(parents=True, exist_ok=True)
-input_path = upstream / 'cross_species_pt_dpt.h5ad'
+input_path = upstream / 'cross_species_pt_scfates.h5ad'
 map_path = upstream / 'ortholog_map_used.csv'
 for path in (input_path, map_path):
     if not path.is_file():
-        raise FileNotFoundError(f'Run notebook 03 first: missing {path}')
+        raise FileNotFoundError(f'Run notebook 13 first: missing {path}')
 print('Results folder:', output)
 
 # %% [markdown]
 # ## 2 · Check the cohort and preserve the coordinate
 #
-# We read only the saved PT labels, specimen identities, and shared pseudospace from notebook 03. Its expression matrix has already passed an upstream gene filter, so section 3 reloads expression from the original specimens instead. Structure selection and coordinate orientation remain unchanged.
+# We read only the saved PT labels, specimen identities, and shared pseudospace from notebook 13. Its artifact contains metadata only, so section 3 reloads expression from the original specimens. Structure selection and coordinate orientation remain unchanged.
 #
 # > **Support rule, fixed before fitting**
 # >
-# > Use the intersection of the four specimens' 1st–99th percentile coordinate intervals. The models, gene universe, and bulk benchmark use those same structures. This avoids comparing a well-observed trajectory with an extrapolated tail. Positions remain in notebook 03's original units.
+# > Use the intersection of the four specimens' 1st–99th percentile coordinate intervals. The models, gene universe, and bulk benchmark use those same structures. This avoids comparing a well-observed trajectory with an extrapolated tail. Positions remain on notebook 13’s saved [0, 1] scFates scale.
 
 # %%
 import anndata as ad
@@ -68,14 +68,14 @@ import numpy as np
 import pandas as pd
 from IPython.display import display
 
-# Read metadata only: notebook 03 owns the coordinate, not this analysis gene universe.
+# Read metadata only: notebook 13 owns the coordinate, not this analysis gene universe.
 saved_pt = ad.read_h5ad(input_path, backed='r')
 pt_obs = saved_pt.obs.copy()
 saved_pt.file.close()
 adata = ad.AnnData(obs=pt_obs)
 required = {'comparison_species', 'sample', 'broad_tubule_marker_call', 'shared_pseudospace'}
 if not required.issubset(adata.obs):
-    raise ValueError('Notebook 03 artifact is missing required labels or coordinate.')
+    raise ValueError('Notebook 13 artifact is missing required labels or coordinate.')
 adata = adata[adata.obs.broad_tubule_marker_call.astype(str).eq('PT')].copy()
 expected = {'mouse': ['Ctrl1A2', 'Ctrl1A4'], 'human': ['HUK1_COR1', 'HUK1_MED1']}
 actual = adata.obs.groupby('comparison_species', observed=True)['sample'].apply(
@@ -84,7 +84,7 @@ if actual != expected or not adata.obs_names.is_unique or not adata.var_names.is
     raise ValueError(f'Unexpected cohort or duplicate identifiers: {actual}')
 position = adata.obs.shared_pseudospace.to_numpy(float)
 if not np.isfinite(position).all() or position.min() < 0 or position.max() > 1:
-    raise ValueError('Expected the already oriented [0, 1] coordinate from notebook 03.')
+    raise ValueError('Expected the already oriented [0, 1] coordinate from notebook 13.')
 support = adata.obs.groupby('sample', observed=True).shared_pseudospace.quantile([.01, .99]).unstack()
 lo, hi = support[.01].max(), support[.99].min()
 if hi <= lo:
@@ -103,7 +103,7 @@ print(f'Common observed interval: {lo:.3f}–{hi:.3f}; the coordinate is unchang
 # %% [markdown]
 # ## 3 · Start from all accepted orthologs and apply two rules
 #
-# We rebuild expression for the **same retained PT structures**, starting from every pair in the accepted one-to-one ortholog map. We do not inherit notebook 03's 5% detection or 20-total-count gene filters: those were used to construct its embedding, whose saved coordinate we continue to use unchanged.
+# We rebuild expression for the **same retained PT structures**, starting from every pair in the accepted one-to-one ortholog map. We do not inherit notebook 13’s 5% detection or 20-total-count embedding filters: those were used to construct its embedding, whose saved coordinate we continue to use unchanged.
 #
 # | Step | Rule | Purpose |
 # |---|---|---|
@@ -197,7 +197,7 @@ import pseudospace.levelshape as levelshape
 import pseudospace.stats_gam as stats_gam
 
 basis_df = 6
-NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v5-bh-by-statistic'  # Bump when a cached calculation changes.
+NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v6-scfates-coordinate'  # Bump when a cached calculation changes.
 grid = np.linspace(lo, hi, 61)
 # Require local data from every specimen, not only overlapping range endpoints.
 local_counts = pd.DataFrame({name: [np.sum((specimen == name) & (abs(position - s) <= .08 * (hi - lo)))
@@ -282,7 +282,7 @@ plt.close(fig)
 # %% [markdown]
 # ## 5 · Load broad pathway libraries and audit coverage
 #
-# Map library members through notebook 03's accepted ortholog table. Retain pathways with **10–300 eligible genes**, counting after the measurement and detection filters. Test all eligible terms; choose biology only after discovery.
+# Map library members through notebook 13’s accepted ortholog table. Retain pathways with **10–300 eligible genes**, counting after the measurement and detection filters. Test all eligible terms; choose biology only after discovery.
 #
 # > **Read the denominator**
 # >
@@ -858,7 +858,7 @@ if len(phenotypes):
 #
 # Bulk uses the same supported structures, eligible genes, pathway members, matching strata, and rank-AUC/GSEA machinery. Its empirical BH family spans the bulk pathway tests. Primary model-test q-values remain frozen.
 #
-# Library sizes sum counts over the **full measured ortholog panel before the PT detection filter**, matching section 3's denominator definition. The inherited notebook 03 gene filters play no role in this benchmark.
+# Library sizes sum counts over the **full measured ortholog panel before the PT detection filter**, matching section 3's denominator definition. The inherited notebook 13 embedding gene filters play no role in this benchmark.
 
 # %%
 from pseudospace.specimen import pseudobulk_profiles
@@ -949,13 +949,13 @@ axes[0].set(xlabel='Pseudobulk pathway effect (AUC − 0.5)',
             ylabel='Spatial pathway effect (AUC − 0.5)',
             title='Continuous versus conventional evidence')
 axes[0].legend(frameon=False, fontsize=8)
-counts = comparison.comparison_group.value_counts().reindex(group_order, fill_value=0)
-axes[1].barh(np.arange(len(counts)), counts, color=[group_colors[g] for g in group_order])
-axes[1].set(yticks=np.arange(len(counts)), yticklabels=group_order,
+group_counts = comparison.comparison_group.value_counts().reindex(group_order, fill_value=0)
+axes[1].barh(np.arange(len(group_counts)), group_counts, color=[group_colors[g] for g in group_order])
+axes[1].set(yticks=np.arange(len(group_counts)), yticklabels=group_order,
             xlabel='Tested pathways (log scale)', title='Screen categories')
 axes[1].set_xscale('symlog', linthresh=1)
 axes[1].invert_yaxis()
-for i, count in enumerate(counts):
+for i, count in enumerate(group_counts):
     axes[1].annotate(str(count), (max(count, 1), i), xytext=(4, 0),
                      textcoords='offset points', va='center', fontsize=8)
 fig.savefig(output / 'pathway_continuous_vs_bulk_overview.pdf', bbox_inches='tight')
@@ -966,7 +966,7 @@ plt.close(fig)
 # %% [markdown]
 # ### Reviewed PT-S1, PT-S2, and PT-S3 cluster benchmark
 #
-# Notebook 03 reviewed the Leiden clusters labeled `PT-S1`, `PT-S2`, and `PT-S3`. Use those saved `segment_class` labels on the **same common-support structures** as the continuous model and whole-PT pseudobulk. These are cluster labels, not equal-width pseudospace bins. Keep the saved coordinate and labels unchanged; report the number of structures per specimen and cluster.
+# Notebook 13 confirmed the reviewed Leiden clusters labeled `PT-S1`, `PT-S2`, and `PT-S3`. Use those saved `segment_class` labels on the **same common-support structures** as the continuous model and whole-PT pseudobulk. These are cluster labels, not equal-width pseudospace bins. Keep the saved coordinate and labels unchanged; report the number of structures per specimen and cluster.
 #
 # Within each specimen and cluster, sum raw counts and calculate log2(CPM + 1), using **all accepted orthologs measured in every specimen** for that cluster library's denominator. The same PT-wide 2% detection rule defines eligible genes, and the same pathway members and matching strata are used throughout. For each cluster, rank genes by the absolute Welch statistic between the two mouse specimens and two human cortex sections, then run the matched rank-AUC and unweighted preranked GSEA screens used for whole-PT pseudobulk. Signed mean log2(CPM + 1) differences retain direction. Each cluster's matched BH correction spans all tested pathways across the three libraries; GSEA BH spans all three cluster screens together.
 #
@@ -975,7 +975,7 @@ plt.close(fig)
 # %%
 segments = ('PT-S1', 'PT-S2', 'PT-S3')
 if 'segment_class' not in adata.obs:
-    raise ValueError('Notebook 03 PT artifact lacks reviewed segment_class labels.')
+    raise ValueError('Notebook 13 PT artifact lacks reviewed segment_class labels.')
 labels = adata.obs.segment_class.astype(str).to_numpy()
 if set(labels) != set(segments):
     raise ValueError(f'Expected only reviewed PT-S1/S2/S3 labels, got {sorted(set(labels))}.')
@@ -1350,7 +1350,7 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
     'expression_reconstruction': dict(adata.uns['expression_reconstruction']),
     'retained_structures_fingerprint': digest(adata.obs_names.to_numpy()),
     'gene_filter_flow': gene_filter_flow.to_dict(orient='records'), 'expression_fingerprint': fit_inputs['Y'],
-    'coordinate': '03 shared_pseudospace; unchanged', 'common_support': [float(lo), float(hi)],
+    'coordinate': '13 scFates shared_pseudospace; unchanged', 'common_support': [float(lo), float(hi)],
     'n_genes': len(genes), 'n_pathways': len(gene_sets), 'basis_df': basis_df,
     'detection_threshold': min_detection, 'matching_bins': 3, 'n_null': n_null, 'gsea_permutations': gsea_permutations, 'seed': seed,
     'libraries': {name: digest(library_dir / f'{name}.json') for name in libraries},

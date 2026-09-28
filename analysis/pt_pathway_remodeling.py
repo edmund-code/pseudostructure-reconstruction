@@ -964,6 +964,103 @@ plt.close(fig)
 
 
 # %% [markdown]
+# ### Reviewed PT-S1, PT-S2, and PT-S3 cluster benchmark
+#
+# Notebook 03 reviewed the Leiden clusters labeled `PT-S1`, `PT-S2`, and `PT-S3`. Use those saved `segment_class` labels on the **same common-support structures** as the continuous model and whole-PT pseudobulk. These are cluster labels, not equal-width pseudospace bins. Keep the saved coordinate and labels unchanged; report the number of structures per specimen and cluster.
+#
+# Within each specimen and cluster, sum raw counts and calculate log2(CPM + 1), using **all accepted orthologs measured in every specimen** for that cluster library's denominator. The same PT-wide 2% detection rule defines eligible genes, and the same pathway members and matching strata are used throughout. For each cluster, rank genes by the absolute Welch statistic between the two mouse specimens and two human cortex sections, then run the matched rank-AUC and unweighted preranked GSEA screens used for whole-PT pseudobulk. Signed mean log2(CPM + 1) differences retain direction. Each cluster's matched BH correction spans all tested pathways across the three libraries; GSEA BH spans all three cluster screens together.
+#
+# These cluster-level rankings are **descriptive**: two human sections come from one donor, and cluster membership was learned from the joint dataset. A cluster-specific hit does not prove a biological segment effect or test whether its effect differs from another cluster. Compare the pathway effects and gene directions with the existing continuous spatial screen; the primary discovery list is unchanged.
+
+# %%
+segments = ('PT-S1', 'PT-S2', 'PT-S3')
+if 'segment_class' not in adata.obs:
+    raise ValueError('Notebook 03 PT artifact lacks reviewed segment_class labels.')
+labels = adata.obs.segment_class.astype(str).to_numpy()
+if set(labels) != set(segments):
+    raise ValueError(f'Expected only reviewed PT-S1/S2/S3 labels, got {sorted(set(labels))}.')
+segment_counts = (pd.DataFrame({'specimen': specimen, 'segment_class': labels})
+    .groupby(['specimen', 'segment_class']).size().unstack(fill_value=0)
+    .reindex(index=bulk_all.index, columns=segments, fill_value=0))
+if segment_counts.lt(20).any().any():
+    raise ValueError(f'Fewer than 20 structures in a reviewed cluster and specimen:\n{segment_counts}')
+segment_counts.to_csv(output / 'reviewed_pt_cluster_counts.csv')
+display(segment_counts)
+
+segment_raw_parts = []
+for label in segments:
+    keep = labels == label
+    part = pseudobulk_profiles(counts[keep], specimen[keep], position[keep], n_bins=1,
+        gene_names=adata.var_names, min_structures_per_bin=20).set_index('specimen')
+    segment_raw_parts.append(part.reindex(bulk_all.index))
+segment_raw = pd.concat(segment_raw_parts, keys=segments, names=['segment_class', 'specimen'])
+count_columns = ['count_' + gene for gene in adata.var_names]
+np.testing.assert_array_equal(segment_raw[count_columns].groupby('specimen').sum().loc[bulk_all.index].to_numpy(),
+                              bulk_all[count_columns].to_numpy())
+segment_library = segment_raw[['count_' + gene for gene in measured_genes]].sum(axis=1)
+if segment_library.le(0).any():
+    raise ValueError('An empty reviewed-cluster pseudobulk library cannot be normalized.')
+segment_expression = np.log2(segment_raw[['count_' + gene for gene in genes]].div(segment_library, axis=0) * 1e6 + 1)
+segment_expression.columns = genes
+segment_expression.to_csv(output / 'reviewed_pt_cluster_pseudobulk_logcpm.csv')
+
+segment_gene_parts = []
+segment_rankings = pd.DataFrame(index=pd.Index(genes, name='gene'))
+for label in segments:
+    block = segment_expression.loc[label]
+    mouse_block = block.loc[expected['mouse']]
+    human_block = block.loc[expected['human']]
+    effect = human_block.mean() - mouse_block.mean()
+    se = np.sqrt(human_block.var(ddof=1) / 2 + mouse_block.var(ddof=1) / 2).clip(lower=1e-6)
+    statistic = 'T_' + label
+    segment_rankings[statistic] = (effect / se).abs().reindex(genes)
+    segment_gene_parts.append(pd.DataFrame({'segment_class': label, 'gene': genes,
+        'human_minus_mouse_logcpm': effect.reindex(genes).to_numpy(),
+        'T_welch_abs': segment_rankings[statistic].to_numpy()}))
+segment_gene_stats = pd.concat(segment_gene_parts, ignore_index=True)
+segment_gene_stats.to_csv(output / 'reviewed_pt_cluster_gene_statistics.csv', index=False)
+segment_tests = cached_frame('matched_reviewed_pt_clusters',
+    lambda: matched_pathway_tests(segment_rankings, gene_sets, strata, n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed, 'segments': segments},
+    inputs={'statistics': segment_rankings, 'sets': gene_sets, 'strata': strata}, code=cache_code)
+segment_tests['segment_class'] = segment_tests.statistic.str.removeprefix('T_')
+segment_tests.to_csv(output / 'reviewed_pt_cluster_pathway_rank_auc.csv', index=False)
+segment_gsea = cached_frame('reviewed_pt_cluster_gsea', lambda: run_gsea(segment_rankings),
+    root=output / 'stage_cache',
+    params={'seed': seed, 'permutations': gsea_permutations, 'weight': 0,
+            'gseapy': version('gseapy'), 'segments': segments},
+    inputs={'statistics': segment_rankings, 'sets': gene_sets}, code=cache_code)
+segment_gsea['segment_class'] = segment_gsea.statistic.str.removeprefix('T_')
+segment_gsea.to_csv(output / 'reviewed_pt_cluster_pathway_gsea.csv', index=False)
+
+segment_comparison = comparison[['pathway_id', 'effect_T_spatial', 'q_empirical_T_spatial',
+                                 'effect_T_bulk', 'q_empirical_T_bulk']].copy()
+for label in segments:
+    rows = segment_tests.loc[segment_tests.segment_class.eq(label),
+                             ['pathway_id', 'effect', 'q_empirical']]
+    segment_comparison = segment_comparison.merge(rows.rename(columns={
+        'effect': f'effect_{label}', 'q_empirical': f'q_{label}'}),
+        on='pathway_id', validate='one_to_one')
+segment_comparison['primary_spatial_candidate'] = segment_comparison.pathway_id.isin(candidate_ids)
+segment_comparison.to_csv(output / 'pathway_continuous_vs_reviewed_pt_clusters.csv', index=False)
+segment_screen_summary = (segment_tests.assign(
+    matched_hit=lambda frame: frame.q_empirical.le(.05) & frame.effect.gt(0))
+    .groupby('segment_class').agg(tested=('pathway_id', 'size'), matched_hits=('matched_hit', 'sum')))
+segment_screen_summary['gsea_hits'] = (segment_gsea.assign(
+    gsea_hit=lambda frame: frame.q_bh_family.le(.05) & pd.to_numeric(frame.NES).gt(0))
+    .groupby('segment_class').gsea_hit.sum())
+segment_screen_summary['spatial_candidate_overlap'] = 0
+for label in segments:
+    segment_screen_summary.loc[label, 'spatial_candidate_overlap'] = int((
+        segment_comparison.primary_spatial_candidate & segment_comparison[f'q_{label}'].le(.05)
+        & segment_comparison[f'effect_{label}'].gt(0)).sum())
+segment_screen_summary.to_csv(output / 'reviewed_pt_cluster_screen_summary.csv')
+display(segment_screen_summary)
+display(segment_comparison.loc[segment_comparison.primary_spatial_candidate]
+    .sort_values('q_empirical_T_spatial').head(12))
+
+
+# %% [markdown]
 # ## 10 · Inspect the genes behind each pathway
 #
 # These roles can overlap; they are explanations, not new discovery filters:

@@ -314,6 +314,100 @@ print(f'{len(gene_sets):,} eligible pathways across {len(libraries)} libraries.'
 display(coverage.groupby('library').agg(terms=('pathway', 'size'), tested=('tested_here', 'sum')))
 
 # %% [markdown]
+# ## 5a · Audit whether the matched null matters before discovery
+#
+# A gene's spatial score may depend on how readily that gene is measured. First, plot $T_{\rm spatial}$ against mean log-normalized expression, detection fraction, and occupied-bin coverage across **all eligible genes**. The vertical axis uses $\log(1+T_{\rm spatial})$ only to display its long tail; the Spearman correlations use the original score. These relationships indicate possible measurement bias, but do not by themselves establish whether pathway results change.
+#
+# Then test the **same complete pathway family and all three gene statistics** with two random-set nulls. The uniform null samples any eligible genes while preserving pathway size. The matched null also preserves each pathway's counts in the expression/detection/coverage strata. Both use 9,999 draws, the same seed, and BH correction over the same pathway–statistic pairs. Their observed AUCs must agree exactly: only the null distribution and resulting p/q values may differ. A large change in the candidate list shows that the sampling rule matters in this cohort; it does not prove that either null is biologically calibrated, especially for terms near the q cutoff or the Monte Carlo resolution limit. The comparison is diagnostic; the predeclared matched discovery rule in section 6 remains fixed. Neither null accounts for donor replication or within-pathway gene correlation.
+
+# %%
+import matplotlib.pyplot as plt
+
+covariate_names = {'mean_expression': 'Mean log-normalized expression',
+                   'detection': 'Detection fraction',
+                   'coverage': 'Pseudospace coverage'}
+covariate_rho = gene_stats[list(covariate_names)].corrwith(gene_stats.T_spatial, method='spearman')
+covariate_rho.rename('spearman_with_T_spatial').to_csv(output / 'spatial_statistic_covariate_correlations.csv')
+fig, axes = plt.subplots(1, 3, figsize=(12, 3.5), sharey=True, layout='constrained')
+hexes = []
+for ax, (column, label) in zip(axes, covariate_names.items()):
+    hexes.append(ax.hexbin(gene_stats[column], np.log1p(gene_stats.T_spatial),
+                           gridsize=40, mincnt=1, bins='log', cmap='Blues'))
+    ax.set(xlabel=label, title=f'Spearman ρ = {covariate_rho[column]:.2f}')
+common_max = max(hb.get_array().max() for hb in hexes)
+for hb in hexes:
+    hb.set_clim(1, common_max)
+axes[0].set_ylabel('log1p(spatial gene statistic)')
+fig.colorbar(hexes[-1], ax=axes, label='Genes per hexagon (log color scale)')
+fig.savefig(output / 'spatial_statistic_measurement_covariates.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# %%
+from pseudospace.pathway_remodeling import matching_strata, matched_pathway_tests
+
+n_null = 9999
+seed = 12
+strata = matching_strata(covariates, bins=3)
+rankings = gene_stats[['T_total', 'T_level', 'T_spatial']]
+matched_null_audit = cached_frame('matched_primary',
+    lambda: matched_pathway_tests(rankings, gene_sets, strata, n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed},
+    inputs={'statistics': rankings, 'sets': gene_sets, 'strata': strata}, code=cache_code)
+uniform_strata = np.zeros(len(strata), dtype=int)
+uniform_null_audit = cached_frame('uniform_size_null',
+    lambda: matched_pathway_tests(rankings, gene_sets, uniform_strata, n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed},
+    inputs={'statistics': rankings, 'sets': gene_sets, 'strata': uniform_strata},
+    code=digest([cache_code, 'uniform-size-null-v1']))
+uniform_null_audit.to_csv(output / 'pathway_uniform_size_null.csv', index=False)
+null_comparison = matched_null_audit.merge(
+    uniform_null_audit, on=['pathway_id', 'statistic'], suffixes=('_matched', '_uniform'),
+    validate='one_to_one')
+assert len(null_comparison) == len(matched_null_audit) == len(uniform_null_audit)
+for column in ('n_genes', 'auc', 'effect'):
+    np.testing.assert_allclose(null_comparison[f'{column}_matched'],
+                               null_comparison[f'{column}_uniform'], rtol=0, atol=1e-12)
+null_comparison.to_csv(output / 'pathway_null_comparison.csv', index=False)
+
+spatial_null = null_comparison.loc[null_comparison.statistic.eq('T_spatial')].copy()
+positive = spatial_null.effect_matched.gt(0)
+spatial_null['matched_hit'] = positive & spatial_null.q_empirical_matched.le(.05)
+spatial_null['uniform_hit'] = positive & spatial_null.q_empirical_uniform.le(.05)
+spatial_null['cutoff_discordant'] = spatial_null.matched_hit.ne(spatial_null.uniform_hit)
+null_summary = pd.Series({
+    'tested_spatial_pathways': len(spatial_null),
+    'matched_candidates': int(spatial_null.matched_hit.sum()),
+    'uniform_candidates': int(spatial_null.uniform_hit.sum()),
+    'both': int((spatial_null.matched_hit & spatial_null.uniform_hit).sum()),
+    'matched_only': int((spatial_null.matched_hit & ~spatial_null.uniform_hit).sum()),
+    'uniform_only': int((~spatial_null.matched_hit & spatial_null.uniform_hit).sum()),
+    'median_absolute_q_difference': float((spatial_null.q_empirical_matched -
+                                            spatial_null.q_empirical_uniform).abs().median()),
+})
+null_summary.rename('value').to_csv(output / 'pathway_null_comparison_summary.csv')
+display(null_summary.to_frame('value'))
+
+x = -np.log10(spatial_null.q_empirical_uniform.clip(lower=1 / (n_null + 1)))
+y = -np.log10(spatial_null.q_empirical_matched.clip(lower=1 / (n_null + 1)))
+fig, ax = plt.subplots(figsize=(6, 5), layout='constrained')
+same = ~spatial_null.cutoff_discordant
+ax.scatter(x[same], y[same], s=11, color='0.55', alpha=.35,
+           rasterized=True, label='Same candidate status')
+ax.scatter(x[~same], y[~same], s=24, color='#D55E00', alpha=.85,
+           rasterized=True, label='Cutoff changed')
+limit = max(float(x.max()), float(y.max()), -np.log10(.05)) + .2
+ax.plot([0, limit], [0, limit], color='0.65', lw=.8)
+ax.axvline(-np.log10(.05), color='0.35', ls='--', lw=.8)
+ax.axhline(-np.log10(.05), color='0.35', ls='--', lw=.8)
+ax.set(xlim=(0, limit), ylim=(0, limit), xlabel='−log10(q), uniform size null',
+       ylabel='−log10(q), matched null', title='Does covariate matching change pathway evidence?')
+ax.legend(frameon=False, fontsize=8, loc='upper left')
+fig.savefig(output / 'pathway_null_comparison.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# %% [markdown]
 # ## 6 · Primary discovery: matched rank-AUC enrichment
 #
 # For each statistic, compare all member genes with all eligible nonmembers:

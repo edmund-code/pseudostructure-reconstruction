@@ -343,6 +343,65 @@ fig.savefig(output / 'spatial_statistic_measurement_covariates.pdf', bbox_inches
 plt.show()
 plt.close(fig)
 
+# %% [markdown]
+# ### Read the actual matching buckets
+#
+# The null uses quantile cuts with ties kept together, so a covariate can have fewer than three buckets. Each matrix fixes one **coverage** bucket; rows are mean-expression buckets and columns are detection buckets. A cell gives the number of eligible genes in that joint stratum, including zero-count cells. The interval labels show the cut rules ($<$ below a cut; $\ge$ at or above it), and the exported boundary table retains the unrounded cut values. The plot's assignments are checked against the strata used by the pathway test. Small or empty joint buckets restrict the replacement genes available to a matched draw; inspect `fixed_member_fraction` in the later pathway audit.
+
+# %%
+from pseudospace.pathway_remodeling import matching_strata
+
+matching_columns = ('mean_expression', 'detection', 'coverage')
+actual_strata = matching_strata(covariates, bins=3)
+bucket_codes, bucket_labels, boundary_rows = {}, {}, []
+for name in matching_columns:
+    values = covariates[name].to_numpy(float)
+    edges = np.unique(np.quantile(values, np.linspace(0, 1, 4)[1:-1]))
+    codes = np.searchsorted(edges, values, side='right')
+    labels = (['all values'] if not len(edges) else
+              [f'< {edges[0]:.4g}'] +
+              [f'{low:.4g}–< {high:.4g}' for low, high in zip(edges[:-1], edges[1:])] +
+              [f'≥ {edges[-1]:.4g}'])
+    bucket_codes[name], bucket_labels[name] = codes, labels
+    for bucket, label in enumerate(labels):
+        boundary_rows.append({'covariate': name, 'bucket': bucket + 1, 'interval': label,
+                              'lower_cut': edges[bucket - 1] if bucket else np.nan,
+                              'upper_cut': edges[bucket] if bucket < len(edges) else np.nan,
+                              'n_genes': int(np.sum(codes == bucket))})
+joint_codes = np.column_stack([bucket_codes[name] for name in matching_columns])
+np.testing.assert_array_equal(np.unique(joint_codes, axis=0, return_inverse=True)[1], actual_strata)
+bucket_counts = np.zeros(tuple(len(bucket_labels[name]) for name in matching_columns), dtype=int)
+np.add.at(bucket_counts, tuple(bucket_codes[name] for name in matching_columns), 1)
+assert bucket_counts.sum() == len(covariates)
+pd.DataFrame(boundary_rows).to_csv(output / 'matching_bucket_boundaries.csv', index=False)
+pd.DataFrame([{'expression_bucket': i + 1, 'detection_bucket': j + 1,
+               'coverage_bucket': k + 1, 'n_genes': int(bucket_counts[i, j, k])}
+              for i, j, k in np.ndindex(bucket_counts.shape)]).to_csv(
+    output / 'matching_joint_bucket_counts.csv', index=False)
+
+coverage_labels = bucket_labels['coverage']
+fig, axes = plt.subplots(1, len(coverage_labels), figsize=(5.5 * len(coverage_labels), 4.7),
+                         sharey=True, layout='constrained')
+axes = np.atleast_1d(axes)
+for k, ax in enumerate(axes):
+    counts = bucket_counts[:, :, k]
+    ax.imshow(counts, origin='lower', cmap='Blues', vmin=0,
+              vmax=max(1, int(bucket_counts.max())))
+    for i, j in np.ndindex(counts.shape):
+        ax.text(j, i, f'{counts[i, j]:,}', ha='center', va='center',
+                color='white' if counts[i, j] > bucket_counts.max() / 2 else '0.15')
+    ax.set(xticks=np.arange(counts.shape[1]), yticks=np.arange(counts.shape[0]),
+           xticklabels=bucket_labels['detection'], yticklabels=bucket_labels['mean_expression'],
+           xlabel='Detection fraction',
+           title=f'Coverage {coverage_labels[k]}  (n={counts.sum():,})')
+    ax.tick_params(axis='x', labelrotation=25)
+axes[0].set_ylabel('Mean log-normalized expression')
+fig.suptitle(f'Gene counts in matching strata (n={len(covariates):,}; ' +
+             f'{np.count_nonzero(bucket_counts)}/{bucket_counts.size} occupied)')
+fig.savefig(output / 'matching_strata_matrix.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
 # %%
 from pseudospace.pathway_remodeling import matching_strata, matched_pathway_tests
 

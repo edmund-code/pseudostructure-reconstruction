@@ -1070,6 +1070,51 @@ programs.to_csv(output / 'pathway_program_membership.csv', index=False)
 display(representatives.head(20))
 
 # %% [markdown]
+# ### How do the candidate pathways cluster?
+#
+# This dendrogram uses the **same** four equal-weight similarities and complete linkage as the program assignments above. The dashed line is the existing distance cutoff of 0.45. Branch height describes pathway similarity, not statistical significance; labels are retained in the saved PDF for close inspection. The grouping is checked against the membership table before plotting.
+#
+
+# %%
+from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
+from scipy.spatial.distance import squareform
+
+if len(candidate_ids) > 1:
+    traces = {p: local_curves[local_curves.pathway_id.eq(p)].sort_values('position') for p in candidate_ids}
+    distances = np.zeros((len(candidate_ids), len(candidate_ids)))
+    def jaccard(left, right):
+        left, right = set(left), set(right)
+        return len(left & right) / len(left | right) if left | right else 0.
+    for i, left in enumerate(candidate_ids):
+        for j in range(i):
+            right = candidate_ids[j]
+            similarities = [jaccard(gene_sets[left], gene_sets[right]),
+                            jaccard(leading_edges.get(left, []), leading_edges.get(right, []))]
+            for column in ('divergence', 'direction'):
+                a, b = traces[left][column].to_numpy(), traces[right][column].to_numpy()
+                correlation = np.corrcoef(a, b)[0, 1] if np.std(a) > 1e-10 and np.std(b) > 1e-10 else 0.
+                similarities.append(max(float(correlation), 0.))
+            distances[i, j] = distances[j, i] = 1 - np.mean(similarities)
+    tree = linkage(squareform(distances), method='complete')
+    assigned = programs.set_index('pathway_id').loc[candidate_ids, 'program'].to_numpy()
+    assert np.array_equal(fcluster(tree, .45, criterion='distance'), assigned)
+    labels = [p.replace('::', ': ', 1) for p in candidate_ids]
+    fig, ax = plt.subplots(figsize=(11, max(5, .23 * len(labels))), layout='constrained')
+    dendrogram(tree, labels=labels, orientation='left', leaf_font_size=6,
+               color_threshold=.45, above_threshold_color='0.7', ax=ax)
+    ax.axvline(.45, color='0.3', ls='--', lw=.8)
+    ax.set(xlabel='Complete-linkage distance (1 − mean similarity)',
+           title='Exploratory candidate pathway clustering')
+    fig.savefig(output / 'pathway_program_dendrogram.pdf', bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
+elif candidate_ids:
+    print('One candidate: no pairwise pathway tree to display.')
+else:
+    print('No spatial candidates: pathway clustering was skipped.')
+
+
+# %% [markdown]
 # ## 12 · Ask whether the spatial evidence is fragile
 #
 # Refit all genes, then retest the full eligible pathway family under:

@@ -196,7 +196,7 @@ import pseudospace.levelshape as levelshape
 import pseudospace.stats_gam as stats_gam
 
 basis_df = 6
-NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v4-full-orthologs'  # Bump when a cached calculation changes.
+NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v5-bh-by-statistic'  # Bump when a cached calculation changes.
 grid = np.linspace(lo, hi, 61)
 # Require local data from every specimen, not only overlapping range endpoints.
 local_counts = pd.DataFrame({name: [np.sum((specimen == name) & (abs(position - s) <= .08 * (hi - lo)))
@@ -318,7 +318,7 @@ display(coverage.groupby('library').agg(terms=('pathway', 'size'), tested=('test
 #
 # A gene's spatial score may depend on how readily that gene is measured. First, plot $T_{\rm spatial}$ against mean log-normalized expression, detection fraction, and occupied-bin coverage across **all eligible genes**. The vertical axis uses $\log(1+T_{\rm spatial})$ only to display its long tail; the Spearman correlations use the original score. These relationships indicate possible measurement bias, but do not by themselves establish whether pathway results change.
 #
-# Then test the **same complete pathway family and all three gene statistics** with two random-set nulls. The uniform null samples any eligible genes while preserving pathway size. The matched null also preserves each pathway's counts in the expression/detection/coverage strata. Both use 9,999 draws, the same seed, and BH correction over the same pathway–statistic pairs. Their observed AUCs must agree exactly: only the null distribution and resulting p/q values may differ. A large change in the candidate list shows that the sampling rule matters in this cohort; it does not prove that either null is biologically calibrated, especially for terms near the q cutoff or the Monte Carlo resolution limit. The comparison is diagnostic; the predeclared matched discovery rule in section 6 remains fixed. Neither null accounts for donor replication or within-pathway gene correlation.
+# Then test the **same complete pathway family and all three gene statistics** with two random-set nulls. The uniform null samples any eligible genes while preserving pathway size. The matched null also preserves each pathway's counts in the expression/detection/coverage strata. Both use 9,999 draws and the same seed; for each statistic, BH correction spans every tested pathway across all three libraries. Their observed AUCs must agree exactly: only the null distribution and resulting p/q values may differ. A large change in the candidate list shows that the sampling rule matters in this cohort; it does not prove that either null is biologically calibrated, especially for terms near the q cutoff or the Monte Carlo resolution limit. The comparison is diagnostic; the predeclared matched discovery rule in section 6 remains fixed. Neither null accounts for donor replication or within-pathway gene correlation.
 
 # %%
 import matplotlib.pyplot as plt
@@ -479,7 +479,7 @@ plt.close(fig)
 # >
 # > Divide mean expression, detection, and coverage into coarse tertiles (ties stay together). Each random set has the pathway's exact size and stratum counts, sampled without replacement from the full eligible universe. Test the upper tail using $(1+\#\{AUC_{null}\ge AUC_{observed}\})/(B+1)$.
 #
-# BH correction spans **all pathways, libraries, and three model statistics together**. Nominal Mann–Whitney p-values are shown only as diagnostics. The matching addresses measurability; it does **not** preserve inter-gene correlation or create biological replication.
+# BH correction is **separate for each statistic** and spans every tested pathway across KEGG, Reactome, and Hallmark within that statistic. $T_{\rm spatial}$ is the primary discovery family; $T_{\rm level}$ and $T_{\rm total}$ are secondary characterization families. At the pathway level, the null is competitive enrichment of each gene statistic against matched genes, not a donor-level test of a species effect. Nominal Mann–Whitney p-values are shown only as diagnostics. The matching addresses measurability; it does **not** preserve inter-gene correlation or create biological replication.
 #
 # `null_auc_sd` and `fixed_member_fraction` expose overly restricted nulls. With 9,999 draws the smallest empirical p-value is 0.0001; `mc_se` reports Monte Carlo uncertainty. Borderline discoveries need more draws and a rerun of the entire family, not selective extra testing of attractive terms.
 
@@ -497,6 +497,10 @@ pathway_tests = cached_frame('matched_primary',
     root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed},
     inputs={'statistics': rankings, 'sets': gene_sets, 'strata': strata}, code=cache_code)
 pathway_tests.to_csv(output / 'pathway_rank_auc.csv', index=False)
+family_summary = (pathway_tests.assign(hit=lambda frame: frame.q_empirical.le(.05) & frame.effect.gt(0))
+    .groupby('statistic').agg(tested=('pathway_id', 'size'), exploratory_hits=('hit', 'sum')))
+family_summary.to_csv(output / 'pathway_bh_family_summary.csv')
+display(family_summary)
 spatial = pathway_tests[pathway_tests.statistic.eq('T_spatial')].copy()
 spatial = spatial.merge(coverage[['pathway_id', 'library', 'pathway', 'tested_fraction']], on='pathway_id')
 spatial = spatial.sort_values(['q_empirical', 'effect', 'pathway_id'], ascending=[True, False, True])
@@ -530,7 +534,7 @@ plt.close(fig)
 # %% [markdown]
 # ### Freeze the candidates before inspecting local curves
 #
-# A discovery candidate has positive spatial enrichment and empirical **q ≤ 0.05**. This cutoff is a reproducible exploratory shortlist, not a confirmatory claim. If none pass, the notebook still exports the full screen and plots up to six highest-ranked terms clearly marked as illustrations. It never converts a top-ranked term into a discovery automatically.
+# A discovery candidate has positive spatial enrichment and empirical **q ≤ 0.05 within the spatial pathway family**. This cutoff is a reproducible exploratory shortlist, not a confirmatory claim. If none pass, the notebook still exports the full screen and plots up to six highest-ranked terms clearly marked as illustrations. It never converts a top-ranked term into a discovery automatically.
 
 # %%
 candidate_ids = spatial.loc[spatial.q_empirical.le(.05) & spatial.effect.gt(0), 'pathway_id'].tolist()
@@ -574,7 +578,7 @@ display(residual_correlations.groupby('specimen').agg(
 #
 # $$Z_{\mathrm{corr}}=\frac{U-mn/2-0.5}{\sqrt{V_\rho\,\mathrm{tie\ factor}}},\qquad p_{\mathrm{corr}}=1-\Phi(Z_{\mathrm{corr}}).$$
 #
-# BH correction spans **all tested spatial pathways across all three libraries**, not just the candidates. Missing correlation estimates retain a conservative p=1 slot in that family but are displayed as unavailable; entirely tied rankings give p=1. The existing matched q-values retain their original three-statistic family.
+# BH correction spans **all tested spatial pathways across all three libraries**, not just the candidates. Missing correlation estimates retain a conservative p=1 slot in that family but are displayed as unavailable; entirely tied rankings give p=1. The matched spatial q-values use their own full spatial-pathway family across the three libraries.
 #
 # > **Two complementary checks**
 # >
@@ -782,13 +786,15 @@ bulk_gsea.to_csv(output / 'bulk_pathway_gsea.csv', index=False)
 # | High | High | Bulk detects a difference; continuous analysis adds its spatial structure |
 # | Low | Low | Weak evidence under this screen |
 #
-# “High” below uses positive effect and matched q ≤ 0.05. “Low” means not passing this exploratory cutoff, **not proof of no effect**. A pathway found by both methods remains valuable: report bulk rank effect, spatial rank effect, peak location, local direction, sign changes, and genes driving the peak.
+# “High” below uses positive effect and matched q ≤ 0.05. In the exported atlas, `q_spatial`, `q_level`, and `q_total` are the empirical BH values from their separate pathway families. “Low” means not passing this exploratory cutoff, **not proof of no effect**. A pathway found by both methods remains valuable: report level/bulk and spatial AUC effects, peak location, local direction, sign changes, and genes driving the peak. Different q-value statuses do not test whether one effect is statistically stronger than another; compare the effect sizes directly.
 
 # %%
 all_tests = pd.concat([pathway_tests, bulk_tests], ignore_index=True)
 comparison = all_tests.pivot(index='pathway_id', columns='statistic', values=['effect', 'q_empirical'])
 comparison.columns = ['_'.join(c) for c in comparison.columns]
 comparison = comparison.reset_index()
+for name in ('spatial', 'level', 'total'):
+    comparison[f'q_{name}'] = comparison[f'q_empirical_T_{name}']
 level_high = comparison.q_empirical_T_level.le(.05) & comparison.effect_T_level.gt(0)
 bulk_high = comparison.q_empirical_T_bulk.le(.05) & comparison.effect_T_bulk.gt(0)
 spatial_high = comparison.pathway_id.isin(candidate_ids)
@@ -879,7 +885,7 @@ display(representatives.head(20))
 # 2. Spline basis sizes 4 and 8 instead of 6.
 # 3. Raising the detection threshold from 2% to 5%.
 #
-# The coordinate and grid stay fixed. Each refit rebalances the remaining specimens; the detection sensitivity updates membership and the matched gene background. Every sensitivity run corrects across **all three statistics and all eligible pathways**, so candidate-only BH cannot make retention easier.
+# The coordinate and grid stay fixed. Each refit rebalances the remaining specimens; the detection sensitivity updates membership and the matched gene background. Every sensitivity run corrects **within each statistic across all eligible pathways from all three libraries**, so candidate-only BH cannot make retention easier.
 #
 # > **Stability of this dataset**
 # >
@@ -934,7 +940,7 @@ display(stability_summary.head(15))
 # %% [markdown]
 # ## 13 · Optional G2G / Jeffreys sensitivity from notebook 09
 #
-# Read the saved gene statistics only after freezing discovery. This comparison uses the intersection of eligible genes and reruns matched rank-AUC on the same intersected membership for all methods. High `1 − alignment_similarity` means poor G2G alignment; high fixed Jeffreys mismatch describes distributional differences without warping.
+# Read the saved gene statistics only after freezing discovery. This comparison uses the intersection of eligible genes and reruns matched rank-AUC on the same intersected membership for all methods. Each statistic receives BH correction across its full tested pathway family. High `1 − alignment_similarity` means poor G2G alignment; high fixed Jeffreys mismatch describes distributional differences without warping.
 #
 # These methods measure different things: GAM spatial statistics isolate nonconstant mean differences, G2G permits alignment, and Jeffreys mismatch includes local variance differences. Agreement is useful sensitivity evidence; disagreement can be informative. This is **not** independent validation or a replacement coordinate. A missing notebook-09 artifact is recorded as unavailable and does not stop primary analysis.
 
@@ -978,7 +984,7 @@ print(g2g_status)
 #
 # The table preserves both continuous-only candidates and pathways for which continuous analysis adds detail to a bulk-accessible difference. Program grouping and driver selection happen after discovery.
 #
-# Correlation support annotates the primary spatial screen only. The original matched-null candidate rule, bulk comparison, program representatives, and stability definition remain unchanged; `q_corr` is not an extra discovery or retention filter.
+# Correlation support annotates the primary spatial screen only. The primary matched-null candidate rule, bulk comparison, program representatives, and stability definition remain unchanged; `q_corr` is not an extra discovery or retention filter.
 
 # %%
 final_table = comparison.merge(programs[['pathway_id', 'program', 'representative']], on='pathway_id', how='left')
@@ -1006,6 +1012,7 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
     'packages': {name: version(name) for name in ['numpy', 'scipy', 'pandas', 'anndata', 'patsy', 'statsmodels', 'gseapy']},
     'g2g_status': g2g_status, 'n_candidates': len(candidate_ids),
     'correlation_test': 'spatial CAMERA-style rank variance; equal-specimen Fisher mean; normal tail',
+    'empirical_bh_families': 'separate T_spatial, T_level, T_total; all tested pathways across libraries',
     'correlation_bh_family': 'all tested spatial pathways across libraries',
     'correlation_candidate_counts': correlation_candidates.correlation_support.value_counts().to_dict(),
     'caveat': final_table.caveat.iloc[0]}

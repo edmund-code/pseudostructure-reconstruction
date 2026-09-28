@@ -8,6 +8,7 @@ pytest.importorskip('patsy')
 pytest.importorskip('statsmodels')
 from scipy.stats import mannwhitneyu
 from scipy import sparse
+from statsmodels.stats.multitest import multipletests
 from statsmodels.regression.linear_model import WLS
 
 from pseudospace.pathway_remodeling import (
@@ -112,6 +113,9 @@ def test_auc_matching_ties_and_relative_direction():
     pd.testing.assert_frame_equal(result, repeat)
     assert result.p_empirical.between(.001, 1).all()
     assert result.q_empirical.ge(result.p_empirical - 1e-12).all()
+    for _, family in result.groupby('statistic'):
+        np.testing.assert_allclose(family.q_empirical,
+                                   multipletests(family.p_empirical, method='fdr_bh')[1])
     # A completely fixed matched stratum has p=1, never a zero-variance false discovery.
     fixed = matched_pathway_tests(scores, {'fixed': ['a', 'b']}, [0, 0, 1, 1, 1, 1], n_null=99)
     assert (fixed.p_empirical == 1).all() and (fixed.fixed_member_fraction == 1).all()

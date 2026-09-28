@@ -151,7 +151,8 @@ def matched_pathway_tests(statistics, gene_sets, strata, *, n_null=9999, seed=12
 
     Draw without replacement within every stratum, from the entire eligible
     universe (including original members). Reuse stratum/count draws across
-    pathways and statistics. BH spans all supplied pathway/statistic pairs.
+    pathways and statistics. BH spans all supplied pathways separately for
+    each statistic.
     Does NOT preserve within-pathway gene correlation or calibrate donor inference.
     """
     if n_null < 1 or not statistics.index.is_unique or not gene_sets:
@@ -196,7 +197,8 @@ def matched_pathway_tests(statistics, gene_sets, strata, *, n_null=9999, seed=12
                          'null_auc_mean': null[:, j].mean(), 'null_auc_sd': null[:, j].std(),
                          'fixed_member_fraction': fixed_members / n, 'n_null': n_null})
     frame = pd.DataFrame(rows)
-    frame['q_empirical'] = multipletests(frame.p_empirical, method='fdr_bh')[1]
+    frame['q_empirical'] = frame.groupby('statistic').p_empirical.transform(
+        lambda p: multipletests(p, method='fdr_bh')[1])
     return frame
 
 

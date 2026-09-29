@@ -1490,6 +1490,159 @@ pathway_segment_heatmap('segment_vs_rest',
     'conventional_segment_marker_pathway_heatmap.pdf')
 
 # %% [markdown]
+# ## 9b · Match the pathway question and enrichment test
+#
+# The earlier “discrete screen only” label compares **signed segment GSEA for any species difference** with an **unsigned test of position-dependent shape**. Those are different hypotheses. Here we ask the same directional question in each reviewed segment on both sides: which pathways are human-high or mouse-high? We use the same count-supported ortholog universe, pathway membership, weighted multilevel GSEA, and BH family spanning all pathway × segment tests.
+#
+# For the smooth model, evaluate its full-model human–mouse working $Z_g(s)$ curve over the **observed positions of each specimen in that segment**. Average positions within each specimen, then average the four specimen distributions equally. The resulting gene ranking is an average local working $Z$, not a calibrated donor-level test statistic. Segment labels define where the smooth curve is queried in this *benchmark*; this is not a cluster-independent discovery test. The fitted smooth curves themselves are unchanged.
+#
+# The count-based DESeq2 Wald statistic and the structure-level smooth-model $Z$ still have different noise models. Neither screen is guaranteed to contain all hits from the other. This paired GSEA comparison isolates much of the earlier pathway-test mismatch; the original $T_{\rm spatial}$ screen continues to answer the distinct question of changing trajectory shape.
+
+# %%
+# Compare signed pathway enrichment after holding gene/pathway universe and GSEA method fixed.
+# Histogram weights approximate each segment's observed coordinate distribution on the fit grid.
+grid_edges = np.r_[-np.inf, (grid[:-1] + grid[1:]) / 2, np.inf]
+shared_gene_index = pd.Index(genes).get_indexer(conventional_genes)
+assert (shared_gene_index >= 0).all() and fit['z'].shape == (len(genes), len(grid))
+continuous_local_gsea_parts = []
+continuous_local_weights = {}
+for label in segments:
+    specimen_weights = []
+    for name in expected['mouse'] + expected['human']:
+        locations = adata.obs.loc[
+            adata.obs['sample'].astype(str).eq(name)
+            & adata.obs.segment_class.astype(str).eq(label),
+            'shared_pseudospace'].to_numpy(float)
+        if len(locations) < 15:
+            raise ValueError(f'{name} {label}: too few structures for a segment-matched curve query.')
+        histogram = np.histogram(locations, bins=grid_edges)[0].astype(float)
+        specimen_weights.append(histogram / histogram.sum())
+    weights = np.mean(specimen_weights, axis=0)
+    assert np.isclose(weights.sum(), 1) and len(specimen_weights) == 4
+    continuous_local_weights[label] = weights
+    scores = fit['z'][shared_gene_index] @ weights
+    if not np.isfinite(scores).all():
+        raise ValueError(f'{label}: nonfinite smooth-model working Z ranking.')
+    ranking = pd.DataFrame({'gene': conventional_genes, 'stat': scores,
+                            'scope': 'smooth_species_within_segment',
+                            'segment_class': label})
+    result = cached_frame('smooth_signed_gsea_' + label,
+        lambda data=ranking: conventional_gsea(data), root=output / 'stage_cache',
+        params={'method': 'multilevel', 'weight': 1, 'seed': seed,
+                'gseapy': version('gseapy'), 'coordinate_query': 'equal_specimen_segment_positions'},
+        inputs={'ranking': ranking[['gene', 'stat']], 'sets': conventional_gene_sets},
+        code=digest([conventional_code, Path(remodeling.__file__), 'smooth-segment-gsea-v1']))
+    continuous_local_gsea_parts.append(result)
+pd.DataFrame(continuous_local_weights, index=grid).to_csv(
+    output / "continuous_segment_coordinate_weights.csv", index_label="position")
+continuous_local_gsea = pd.concat(continuous_local_gsea_parts, ignore_index=True)
+continuous_local_gsea['NES'] = pd.to_numeric(continuous_local_gsea.NES)
+continuous_local_gsea['p_nominal'] = pd.to_numeric(continuous_local_gsea['NOM p-val'])
+if continuous_local_gsea.p_nominal.isna().any():
+    raise ValueError('Smooth segment GSEA returned missing nominal p-values.')
+continuous_local_gsea['q_family'] = multipletests(
+    continuous_local_gsea.p_nominal, method='fdr_bh')[1]
+continuous_local_gsea['direction'] = np.where(
+    continuous_local_gsea.NES.gt(0), 'human_high', 'mouse_high')
+continuous_local_gsea.to_csv(output / 'continuous_segment_signed_gsea.csv', index=False)
+
+discrete_signed_gsea = conventional_gsea_results.loc[
+    conventional_gsea_results.scope.eq('species_within_segment')].copy()
+for rows in (discrete_signed_gsea, continuous_local_gsea):
+    assert rows.groupby('segment_class').pathway_id.nunique().reindex(segments).eq(len(benchmark)).all()
+    assert set(rows.pathway_id) == set(benchmark.pathway_id)
+signed_comparison = benchmark[['pathway_id', 'comparison_group', 'spatial_q_original',
+                               'spatial_q_shared']].copy()
+for prefix, rows in [('cluster', discrete_signed_gsea), ('smooth', continuous_local_gsea)]:
+    by_pathway = rows.groupby('pathway_id').agg(
+        **{f'{prefix}_best_q': ('q_family', 'min'),
+           f'{prefix}_best_abs_NES': ('NES', lambda x: x.abs().max())})
+    signed_comparison = signed_comparison.merge(by_pathway, on='pathway_id', validate='one_to_one')
+    signed_comparison[f'{prefix}_signed_hit'] = signed_comparison[f'{prefix}_best_q'].le(.05)
+signed_comparison['signed_gsea_group'] = np.select(
+    [signed_comparison.cluster_signed_hit & signed_comparison.smooth_signed_hit,
+     signed_comparison.cluster_signed_hit,
+     signed_comparison.smooth_signed_hit],
+    ['both signed GSEA screens', 'cluster signed GSEA only', 'smooth signed GSEA only'],
+    default='neither signed GSEA screen')
+signed_comparison.to_csv(output / 'conventional_vs_smooth_signed_gsea_pathways.csv', index=False)
+signed_counts = signed_comparison.signed_gsea_group.value_counts().rename('pathways')
+signed_counts.to_csv(output / 'conventional_vs_smooth_signed_gsea_summary.csv')
+display(signed_counts)
+prior_discrete = signed_comparison.comparison_group.eq('discrete screen only')
+print('Prior spatial-shape-comparison “discrete screen only” pathways also detected by '
+      'smooth segment GSEA:', int((prior_discrete & signed_comparison.smooth_signed_hit).sum()),
+      '/', int(prior_discrete.sum()))
+
+
+# %% [markdown]
+# The overlap table is the **like-for-like signed pathway screen**. A pathway in “cluster signed GSEA only” is a screen discordance, not proof that the smooth model cannot represent its biology. Review its NES and q-values in all three segments, individual genes, and specimen-level effects. The shape test remains useful for asking what changes *within* and *between* segments, beyond broad level differences. A strict superset test would fit discrete segment effects and added smooth positional effects in one nested expression model; these two existing models are not nested.
+
+# %%
+# Show overlap and the directional signal behind it, with one color scale for both methods.
+overlap_signed = pd.crosstab(
+    signed_comparison.cluster_signed_hit, signed_comparison.smooth_signed_hit).reindex(
+    index=[False, True], columns=[False, True], fill_value=0)
+fig, ax = plt.subplots(figsize=(5, 4), layout='constrained')
+ax.imshow(overlap_signed.to_numpy(), cmap='Blues', aspect='auto')
+ax.set(xticks=[0, 1], xticklabels=['No', 'Yes'], yticks=[0, 1], yticklabels=['No', 'Yes'],
+       xlabel='Smooth segment GSEA q ≤ 0.05', ylabel='Cluster segment GSEA q ≤ 0.05',
+       title='Signed pathway screen overlap')
+for (i, j), count in np.ndenumerate(overlap_signed.to_numpy()):
+    ax.text(j, i, str(count), ha='center', va='center',
+            color='white' if count > overlap_signed.to_numpy().max() / 2 else 'black')
+fig.savefig(output / 'conventional_vs_smooth_signed_gsea_overlap.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+prior_ids = set(signed_comparison.loc[
+    signed_comparison.comparison_group.eq('discrete screen only'), 'pathway_id'])
+prior_top = (discrete_signed_gsea.loc[discrete_signed_gsea.pathway_id.isin(prior_ids)]
+    .groupby('pathway_id').q_family.min().nsmallest(8).index.tolist())
+cluster_top = signed_comparison.loc[
+    signed_comparison.signed_gsea_group.eq('cluster signed GSEA only')].nsmallest(
+    5, 'cluster_best_q').pathway_id.tolist()
+smooth_top = signed_comparison.loc[
+    signed_comparison.signed_gsea_group.eq('smooth signed GSEA only')].nsmallest(
+    5, 'smooth_best_q').pathway_id.tolist()
+chosen = list(dict.fromkeys(prior_top + cluster_top + smooth_top))
+combined_signed = pd.concat([
+    discrete_signed_gsea.assign(method='Cluster'),
+    continuous_local_gsea.assign(method='Smooth')], ignore_index=True)
+columns = pd.MultiIndex.from_product([['Cluster', 'Smooth'], segments],
+                                      names=['method', 'segment_class'])
+nes = combined_signed.pivot(index='pathway_id', columns=['method', 'segment_class'],
+                            values='NES').reindex(index=chosen, columns=columns)
+q = combined_signed.pivot(index='pathway_id', columns=['method', 'segment_class'],
+                          values='q_family').reindex(index=chosen, columns=columns)
+assert np.isfinite(nes.to_numpy(float)).all() and np.isfinite(q.to_numpy(float)).all()
+limit = max(2., float(np.nanquantile(abs(nes.to_numpy(float)), .98)))
+fig, ax = plt.subplots(figsize=(10, max(5, .35 * len(chosen) + 1.5)), layout='constrained')
+image = ax.imshow(nes.to_numpy(float), cmap='RdBu_r', vmin=-limit, vmax=limit,
+                  aspect='auto', interpolation='none')
+ax.axvline(2.5, color='black', lw=1)
+ax.set(xticks=range(len(columns)),
+       xticklabels=[f'{method}\n{segment}' for method, segment in columns],
+       yticks=range(len(chosen)),
+       yticklabels=[shorten(item.replace('Reactome_2022::', 'Reactome: ')
+                            .replace('MSigDB_Hallmark_2020::', 'Hallmark: ')
+                            .replace('KEGG_2019_Mouse::', 'KEGG: '),
+                            width=65, placeholder='…') for item in chosen],
+       title='Human-high (red) and mouse-high (blue) signed pathway enrichment')
+for i, j in np.ndindex(q.shape):
+    if q.iat[i, j] <= .05:
+        ax.text(j, i, '•', ha='center', va='center',
+                color='white' if abs(nes.iat[i, j]) > limit / 2 else 'black', fontsize=12)
+fig.colorbar(image, ax=ax, label='GSEA NES; dot: pooled three-segment BH q ≤ 0.05')
+fig.savefig(output / 'conventional_vs_smooth_signed_gsea_heatmap.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+display(signed_comparison.loc[signed_comparison.signed_gsea_group.eq(
+    'cluster signed GSEA only')].nsmallest(12, 'cluster_best_q')[
+    ['pathway_id', 'cluster_best_q', 'smooth_best_q', 'spatial_q_shared']])
+
+
+# %% [markdown]
 # ## 10 · Inspect the genes behind each pathway
 #
 # These roles can overlap; they are explanations, not new discovery filters:

@@ -964,7 +964,7 @@ plt.close(fig)
 
 
 # %% [markdown]
-# ### Reviewed PT-S1, PT-S2, and PT-S3 cluster benchmark
+# ### Unsigned PT-S1, PT-S2, and PT-S3 cluster diagnostic
 #
 # Notebook 13 confirmed the reviewed Leiden clusters labeled `PT-S1`, `PT-S2`, and `PT-S3`. Use those saved `segment_class` labels on the **same common-support structures** as the continuous model and whole-PT pseudobulk. These are cluster labels, not equal-width pseudospace bins. Keep the saved coordinate and labels unchanged; report the number of structures per specimen and cluster.
 #
@@ -1071,11 +1071,14 @@ display(segment_comparison.loc[segment_comparison.primary_spatial_candidate]
 
 
 # %% [markdown]
-# ### Which pathways are continuous-only relative to the reviewed PT clusters?
+# ### What does the unsigned cluster diagnostic miss?
 #
 # Keep the primary matched rank-AUC criterion visible: positive effect and empirical BH q ≤ 0.05. Also count positive GSEA results at GSEApy’s **per-cluster** FDR q ≤ 0.05. The named continuous-only export contains spatial candidates with neither adjusted cluster signal; the full comparison table retains the separate matched and GSEA calls. Nominal matched p-values are shown as exploratory rankings, not adjusted hits. The pooled three-cluster GSEA BH column remains available but is resolution-limited by 999 permutations.
 #
 # These tests have different nulls and correction families. A cluster screen missing either cutoff is not evidence that the pathway is absent from that segment, nor a test that the continuous and cluster effects differ. With two mice and two cortex sections from one human donor, inspect the effect sizes and member-gene curves before interpreting a continuous-only label.
+#
+# This unsigned comparison ranks the *magnitude* of human–mouse differences. Its continuous-only export is retained for provenance; the signed count-model benchmark below is the conventional comparison for the paper.
+#
 
 # %%
 cluster_screen = segment_comparison.copy()
@@ -1130,6 +1133,361 @@ cluster_gsea_top = (segment_gsea.loc[pd.to_numeric(segment_gsea.NES).gt(0)]
     .groupby('segment_class', sort=False).head(8)
     [['segment_class', 'pathway_id', 'NES', 'FDR q-val', 'q_bh_family']])
 display(cluster_gsea_top)
+
+# %% [markdown]
+# ## 9a · Conventional PT analysis: signed pseudobulk DE
+#
+# The reviewed PT-S1/S2/S3 assignments define two study-style contrasts on the same common-support structures:
+#
+# 1. **Human versus mouse within each segment.** Sum raw counts by specimen × segment; fit a separate DESeq2 negative-binomial model (`~ species`) to each segment and rank every eligible gene by its **signed Wald statistic**. Positive log2 fold change and statistic mean human-high. This is the discrete comparator for continuous spatial remodeling.
+# 2. **Segment versus the other PT segments.** Within each specimen, compare the target segment with the sum of the other two using a paired `~ specimen + segment_group` design. Positive values mean segment-enriched. These contrasts characterize the reviewed cluster labels; they are not human–mouse tests.
+#
+# A fixed filter requires at least 10 raw counts in at least two pseudobulks **within each of S1, S2, and S3**. This produces one common gene universe for all three species contrasts and for the continuous reanalysis below. Retain the original PT-wide universe and candidate list separately. Every fitted count is an original measured ortholog; no Harmony expression or normalized values enter DESeq2. Counts, sample depth, DEG tables, and filtering decisions are exported. The existing logCPM profiles also record whether both human sections lie above or below both mouse specimens for each model-selected gene; this is a section-level consistency check, not independent-donor replication. Reactome, Hallmark, and KEGG are the same pathway libraries used by the continuous screen.
+#
+# **Inference limit:** the two human sections come from one donor. DESeq2 estimates specimen/section-level variation but cannot estimate variation among human donors here. Its Wald p-values, DEG FDR values, GSEA results, and ORA results are descriptive model outputs, not population-level evidence for a species effect. Cluster assignment was learned on these same data. Interpret effects, replicate consistency, and gene membership before biological claims. [DESeq2 method](https://pmc.ncbi.nlm.nih.gov/articles/PMC4302049/); [pseudobulk rationale](https://www.nature.com/articles/s41467-021-25960-2); [PyDESeq2 workflow](https://pydeseq2.readthedocs.io/en/v0.5.4/auto_examples/plot_minimal_pydeseq2_pipeline.html).
+
+# %%
+import pseudospace.conventional_pt as conventional_pt
+from pseudospace.conventional_pt import deseq2_contrast
+
+raw_blocks = {}
+for label in segments:
+    block = segment_raw.loc[label, ['count_' + gene for gene in genes]].copy()
+    block.columns = genes
+    block = block.loc[bulk_all.index]
+    if not np.equal(block.to_numpy(), np.floor(block.to_numpy())).all():
+        raise ValueError(f'{label}: pseudobulk has noninteger counts.')
+    raw_blocks[label] = block.astype(np.int64)
+
+common_count_support = np.logical_and.reduce([
+    raw_blocks[label].ge(10).sum(axis=0).ge(2).to_numpy() for label in segments])
+conventional_genes = pd.Index(genes)[common_count_support]
+if len(conventional_genes) < 1000:
+    raise ValueError('Too few genes have count support in all reviewed PT segments.')
+conventional_gene_sets = {pathway: [gene for gene in members if gene in conventional_genes]
+    for pathway, members in gene_sets.items()}
+conventional_gene_sets = {pathway: members for pathway, members in conventional_gene_sets.items()
+                          if 10 <= len(members) <= 300}
+if not conventional_gene_sets:
+    raise ValueError('No pathways remain in the common conventional gene universe.')
+conventional_coverage = pd.DataFrame({'pathway_id': list(gene_sets),
+    'original_members': [len(gene_sets[pathway]) for pathway in gene_sets],
+    'shared_members': [len(set(gene_sets[pathway]) & set(conventional_genes)) for pathway in gene_sets]})
+conventional_coverage['tested'] = conventional_coverage.pathway_id.isin(conventional_gene_sets)
+conventional_coverage.to_csv(output / 'conventional_pathway_coverage.csv', index=False)
+(pd.DataFrame({'gene': genes, 'common_count_support': common_count_support})
+    .to_csv(output / 'conventional_gene_universe.csv', index=False))
+
+sample_qc = (segment_counts.stack().rename('n_structures').reset_index()
+    .rename(columns={'level_1': 'segment_class'}))
+sample_qc['species'] = sample_qc.specimen.map({name: species for species, names in expected.items()
+                                                for name in names})
+sample_qc['library_counts'] = [int(raw_blocks[row.segment_class].loc[row.specimen].sum())
+                               for row in sample_qc.itertuples()]
+sample_qc['detected_genes'] = [int(raw_blocks[row.segment_class].loc[row.specimen].gt(0).sum())
+                               for row in sample_qc.itertuples()]
+assert sample_qc.species.notna().all() and sample_qc.library_counts.gt(0).all()
+sample_qc.to_csv(output / 'conventional_pseudobulk_qc.csv', index=False)
+display(sample_qc)
+print(f'Common DE universe: {len(conventional_genes):,} genes; '
+      f'{len(conventional_gene_sets):,} comparable pathway sets.')
+
+# %%
+conventional_code = digest([cache_code, Path(conventional_pt.__file__),
+                            'signed-deseq2-v1', version('pydeseq2')])
+conventional_de_parts = []
+for label in segments:
+    model_counts = raw_blocks[label][conventional_genes]
+    model_metadata = pd.DataFrame({'species': [
+        'mouse' if name in expected['mouse'] else 'human' for name in model_counts.index]},
+        index=model_counts.index)
+    result = cached_frame('conventional_species_' + label,
+        lambda counts=model_counts, metadata=model_metadata: deseq2_contrast(
+            counts, metadata, design='~species', contrast=('species', 'human', 'mouse')),
+        root=output / 'stage_cache', params={'design': '~species', 'contrast': 'human_vs_mouse',
+                                            'version': version('pydeseq2')},
+        inputs={'counts': model_counts, 'metadata': model_metadata}, code=conventional_code)
+    result['scope'] = 'species_within_segment'
+    result['segment_class'] = label
+    conventional_de_parts.append(result)
+
+    other = [part for part in segments if part != label]
+    rest_counts = raw_blocks[other[0]][conventional_genes] + raw_blocks[other[1]][conventional_genes]
+    paired_counts = pd.concat([model_counts, rest_counts], keys=['target', 'rest'],
+                              names=['segment_group', 'specimen'])
+    paired_metadata = paired_counts.index.to_frame(index=False)
+    paired_metadata.index = [f'{specimen}|{group}' for group, specimen in paired_counts.index]
+    paired_counts.index = paired_metadata.index
+    marker_result = cached_frame('conventional_marker_' + label,
+        lambda counts=paired_counts, metadata=paired_metadata: deseq2_contrast(
+            counts, metadata, design='~specimen + segment_group',
+            contrast=('segment_group', 'target', 'rest')),
+        root=output / 'stage_cache', params={'design': '~specimen + segment_group',
+            'contrast': 'target_vs_rest', 'version': version('pydeseq2')},
+        inputs={'counts': paired_counts, 'metadata': paired_metadata}, code=conventional_code)
+    marker_result['scope'] = 'segment_vs_rest'
+    marker_result['segment_class'] = label
+    conventional_de_parts.append(marker_result)
+
+conventional_de = pd.concat(conventional_de_parts, ignore_index=True)
+assert conventional_de.groupby(['scope', 'segment_class']).gene.nunique().eq(len(conventional_genes)).all()
+conventional_de['logcpm_complete_pair_separation'] = pd.Series(pd.NA, index=conventional_de.index, dtype='boolean')
+for label in segments:
+    block = segment_expression.loc[label, conventional_genes]
+    human_above = block.loc[expected['human']].min().gt(block.loc[expected['mouse']].max())
+    mouse_above = block.loc[expected['mouse']].min().gt(block.loc[expected['human']].max())
+    mask = conventional_de.scope.eq('species_within_segment') & conventional_de.segment_class.eq(label)
+    rows = conventional_de.loc[mask]
+    conventional_de.loc[mask, 'logcpm_complete_pair_separation'] = np.where(
+        rows.log2FoldChange.gt(0), human_above.reindex(rows.gene).to_numpy(),
+        mouse_above.reindex(rows.gene).to_numpy())
+conventional_de.to_csv(output / 'conventional_pt_deseq2_gene_statistics.csv', index=False)
+species_de = conventional_de.loc[conventional_de.scope.eq('species_within_segment')].copy()
+species_de['selected_gene'] = species_de.padj.le(.05) & species_de.log2FoldChange.abs().ge(1)
+separation_audit = species_de.loc[species_de.selected_gene].groupby('segment_class').agg(
+    selected_genes=('gene', 'size'),
+    complete_pair_separation=('logcpm_complete_pair_separation', 'sum'),
+    fraction_complete_pair_separation=('logcpm_complete_pair_separation', 'mean'))
+separation_audit.to_csv(output / 'conventional_species_pair_separation.csv')
+display(separation_audit)
+de_summary = conventional_de.assign(
+    human_or_target_high=lambda frame: frame.padj.le(.05) & frame.log2FoldChange.ge(1),
+    mouse_or_rest_high=lambda frame: frame.padj.le(.05) & frame.log2FoldChange.le(-1))
+de_summary = de_summary.groupby(['scope', 'segment_class']).agg(
+    genes=('gene', 'size'), tested=('stat', 'count'),
+    higher=('human_or_target_high', 'sum'), lower=('mouse_or_rest_high', 'sum'))
+de_summary.to_csv(output / 'conventional_pt_de_summary.csv')
+display(de_summary)
+
+# %% [markdown]
+# ### Directional pathway enrichment
+#
+# For each signed Wald ranking, use weighted preranked GSEA (`weight=1`) so magnitude and direction both contribute. GSEApy's multilevel procedure resolves p-values below the 999-permutation floor of the earlier unsigned diagnostic. BH correction spans **all pathways and all three segment contrasts within each contrast type** (species or segment identity); retain GSEApy's per-run FDR as a separate column. Positive NES is human-high for the species test and segment-enriched for the marker test; negative NES reverses that direction. The same shared gene/pathway universe is used for all six rankings.
+#
+# A second, thresholded view runs hypergeometric ORA on DESeq2 genes with adjusted gene p ≤ 0.05 and |log2FC| ≥ 1, separately for each direction. The tested-gene universe is the background. ORA is supplementary because its DEG threshold and the present replication can strongly affect the list. Its BH family covers all pathway × segment × direction tests within a contrast type. [GSEApy preranked methods](https://gseapy.readthedocs.io/en/latest/gseapy_example.html).
+
+# %%
+from scipy.stats import hypergeom
+
+def conventional_gsea(de_rows):
+    ranking = de_rows[['gene', 'stat']].dropna().sort_values(
+        ['stat', 'gene'], ascending=[False, True], kind='stable')
+    if ranking.gene.duplicated().any() or len(ranking) < 1000:
+        raise ValueError('Signed GSEA needs unique genes and adequate testable coverage.')
+    fit_result = gp.prerank(rnk=ranking, gene_sets=conventional_gene_sets,
+        min_size=10, max_size=300, weight=1, method='multilevel',
+        seed=seed, threads=2, outdir=None, no_plot=True)
+    table = fit_result.res2d.rename(columns={'Term': 'pathway_id'}).copy()
+    table['scope'] = de_rows.scope.iloc[0]
+    table['segment_class'] = de_rows.segment_class.iloc[0]
+    return table
+
+conventional_gsea_parts = []
+for (scope, label), rows in conventional_de.groupby(['scope', 'segment_class'], sort=True):
+    result = cached_frame('conventional_gsea_' + scope + '_' + label,
+        lambda data=rows: conventional_gsea(data), root=output / 'stage_cache',
+        params={'method': 'multilevel', 'weight': 1, 'seed': seed,
+                'gseapy': version('gseapy')},
+        inputs={'de': rows[['gene', 'stat']], 'sets': conventional_gene_sets},
+        code=digest([conventional_code, 'multilevel-gsea-v1']))
+    conventional_gsea_parts.append(result)
+conventional_gsea_results = pd.concat(conventional_gsea_parts, ignore_index=True)
+conventional_gsea_results['NES'] = pd.to_numeric(conventional_gsea_results.NES)
+conventional_gsea_results['p_nominal'] = pd.to_numeric(conventional_gsea_results['NOM p-val'])
+if conventional_gsea_results.p_nominal.isna().any():
+    raise ValueError('GSEA returned missing nominal p-values; inspect the rankings.')
+conventional_gsea_results['q_family'] = conventional_gsea_results.groupby('scope').p_nominal.transform(
+    lambda values: multipletests(values, method='fdr_bh')[1])
+conventional_gsea_results['direction'] = np.where(
+    conventional_gsea_results.scope.eq('species_within_segment'),
+    np.where(conventional_gsea_results.NES.gt(0), 'human_high', 'mouse_high'),
+    np.where(conventional_gsea_results.NES.gt(0), 'segment_enriched', 'rest_enriched'))
+conventional_gsea_results.to_csv(output / 'conventional_pt_signed_gsea.csv', index=False)
+
+def conventional_ora(de_rows):
+    tested = de_rows.loc[de_rows.stat.notna()].set_index('gene')
+    universe = set(tested.index)
+    rows = []
+    for direction, selected in [('higher', tested.loc[tested.padj.le(.05) & tested.log2FoldChange.ge(1)]),
+                                ('lower', tested.loc[tested.padj.le(.05) & tested.log2FoldChange.le(-1)])]:
+        selected_genes = set(selected.index)
+        for pathway, members in conventional_gene_sets.items():
+            member_genes = set(members) & universe
+            overlap = member_genes & selected_genes
+            rows.append({'scope': de_rows.scope.iloc[0], 'segment_class': de_rows.segment_class.iloc[0],
+                         'direction': direction, 'pathway_id': pathway,
+                         'n_tested_genes': len(universe), 'n_deg': len(selected_genes),
+                         'n_pathway_genes': len(member_genes), 'n_overlap': len(overlap),
+                         'p_value': hypergeom.sf(len(overlap) - 1, len(universe),
+                                                len(member_genes), len(selected_genes)) if member_genes else 1.,
+                         'overlap_genes': ';'.join(sorted(overlap))})
+    return pd.DataFrame(rows)
+
+conventional_ora_results = pd.concat([conventional_ora(rows) for _, rows in
+    conventional_de.groupby(['scope', 'segment_class'], sort=True)], ignore_index=True)
+conventional_ora_results['q_family'] = conventional_ora_results.groupby('scope').p_value.transform(
+    lambda values: multipletests(values, method='fdr_bh')[1])
+conventional_ora_results.to_csv(output / 'conventional_pt_ora.csv', index=False)
+pathway_summary = (conventional_gsea_results.assign(hit=lambda frame: frame.q_family.le(.05))
+    .groupby(['scope', 'segment_class', 'direction']).hit.agg(['sum', 'count']))
+pathway_summary.to_csv(output / 'conventional_pt_pathway_summary.csv')
+display(pathway_summary)
+
+# %% [markdown]
+# ### What does continuous position add beyond S1/S2/S3?
+#
+# Retest the continuous spatial statistic on the **same genes and pathway members** used by the signed discrete benchmark; leave the notebook's original primary list unchanged. A robust continuous candidate passes the original and shared-universe matched screens. Compare it with directional segment GSEA after correcting across the full three-segment family. Also apply the same matched rank-AUC test to the **absolute DESeq2 Wald statistics** within S1/S2/S3, using the same shared gene universe and matching strata as the continuous reanalysis. Correct its empirical p-values across all pathways and all three segment tests for the comparison, while retaining the per-segment q-values as diagnostics. This magnitude companion prevents mixed human-high and mouse-high members from being mistaken for a gain of continuous position merely because signed GSEA cancels them. A continuous-only *screen result* requires that all three GSEA contrasts were testable and that neither discrete screen passed its adjusted cutoff. This does **not** prove a segment effect is zero or establish a significant difference between methods: the models and pathway nulls differ, and one human donor cannot support a population novelty claim. Export the full table, screen-only shortlist, gene-level contrasts, and heatmaps for biological review.
+
+# %%
+shared_strata = pd.Series(strata, index=pd.Index(genes)).loc[conventional_genes].to_numpy()
+absolute_segment_scores = pd.DataFrame(index=conventional_genes)
+for label in segments:
+    rows = conventional_de.loc[(conventional_de.scope.eq('species_within_segment'))
+                               & (conventional_de.segment_class.eq(label))].set_index('gene')
+    absolute_segment_scores['abs_wald_' + label] = rows.loc[conventional_genes, 'stat'].abs()
+if not np.isfinite(absolute_segment_scores.to_numpy()).all():
+    raise ValueError('Magnitude benchmark contains untestable Wald statistics.')
+absolute_segment_tests = cached_frame('conventional_abs_wald_auc',
+    lambda: matched_pathway_tests(absolute_segment_scores, conventional_gene_sets,
+                                  shared_strata, n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed,
+                                        'ranking': 'absolute_deseq2_wald'},
+    inputs={'scores': absolute_segment_scores, 'sets': conventional_gene_sets,
+            'strata': shared_strata},
+    code=digest([conventional_code, Path(remodeling.__file__), 'abs-wald-auc-v1']))
+absolute_segment_tests['q_three_segments'] = multipletests(
+    absolute_segment_tests.p_empirical, method='fdr_bh')[1]
+absolute_segment_tests.to_csv(output / 'conventional_pt_abs_deseq2_rank_auc.csv', index=False)
+shared_scores = gene_stats.loc[conventional_genes, ['T_spatial']]
+shared_spatial = cached_frame('conventional_shared_spatial_auc',
+    lambda: matched_pathway_tests(shared_scores, conventional_gene_sets, shared_strata,
+                                  n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed,
+                                        'universe': 'shared_de_genes'},
+    inputs={'scores': shared_scores, 'sets': conventional_gene_sets, 'strata': shared_strata},
+    code=digest([cache_code, Path(remodeling.__file__), 'shared-conventional-v1']))
+shared_spatial.to_csv(output / 'conventional_shared_universe_spatial_auc.csv', index=False)
+
+species_gsea = conventional_gsea_results.loc[
+    conventional_gsea_results.scope.eq('species_within_segment')].copy()
+benchmark = shared_spatial[['pathway_id', 'effect', 'q_empirical']].rename(columns={
+    'effect': 'spatial_effect_shared', 'q_empirical': 'spatial_q_shared'})
+benchmark = benchmark.merge(spatial[['pathway_id', 'effect', 'q_empirical']].rename(columns={
+    'effect': 'spatial_effect_original', 'q_empirical': 'spatial_q_original'}),
+    on='pathway_id', validate='one_to_one')
+for label in segments:
+    values = species_gsea.loc[species_gsea.segment_class.eq(label),
+        ['pathway_id', 'NES', 'p_nominal', 'q_family']]
+    benchmark = benchmark.merge(values.rename(columns={
+        'NES': f'NES_{label}', 'p_nominal': f'gsea_p_{label}',
+        'q_family': f'gsea_q_{label}'}), on='pathway_id', how='left', validate='one_to_one')
+for label in segments:
+    magnitude = absolute_segment_tests.loc[absolute_segment_tests.statistic.eq('abs_wald_' + label),
+        ['pathway_id', 'effect', 'q_three_segments']]
+    benchmark = benchmark.merge(magnitude.rename(columns={
+        'effect': f'magnitude_effect_{label}', 'q_three_segments': f'magnitude_q_{label}'}),
+        on='pathway_id', validate='one_to_one')
+benchmark['all_segments_tested'] = benchmark[[f'NES_{label}' for label in segments]].notna().all(axis=1)
+benchmark['continuous_candidate'] = (benchmark.spatial_effect_original.gt(0)
+    & benchmark.spatial_q_original.le(.05) & benchmark.spatial_effect_shared.gt(0)
+    & benchmark.spatial_q_shared.le(.05))
+benchmark['any_segment_gsea_hit'] = benchmark[[f'gsea_q_{label}' for label in segments]].le(.05).any(axis=1)
+benchmark['any_segment_magnitude_hit'] = np.column_stack([
+    benchmark[f'magnitude_effect_{label}'].gt(0) & benchmark[f'magnitude_q_{label}'].le(.05)
+    for label in segments]).any(axis=1)
+benchmark['any_segment_signal'] = (benchmark.any_segment_gsea_hit
+    | benchmark.any_segment_magnitude_hit)
+benchmark['best_segment_q'] = benchmark[[f'gsea_q_{label}' for label in segments]].min(axis=1)
+benchmark['best_magnitude_q'] = benchmark[[f'magnitude_q_{label}' for label in segments]].min(axis=1)
+benchmark['max_abs_segment_NES'] = benchmark[[f'NES_{label}' for label in segments]].abs().max(axis=1)
+benchmark['comparison_group'] = np.select(
+    [~benchmark.all_segments_tested,
+     benchmark.continuous_candidate & ~benchmark.any_segment_signal,
+     benchmark.continuous_candidate & benchmark.any_segment_signal,
+     ~benchmark.continuous_candidate & benchmark.any_segment_signal],
+    ['not comparable: discrete coverage', 'continuous screen only',
+     'continuous and discrete', 'discrete screen only'], default='neither screen')
+benchmark = benchmark.merge(phenotypes[['pathway_id', 'peak_position', 'affected_width']],
+                            on='pathway_id', how='left', validate='one_to_one')
+assert benchmark.pathway_id.is_unique
+assert benchmark.loc[benchmark.comparison_group.eq('continuous screen only'),
+                     'all_segments_tested'].all()
+benchmark['max_segment_magnitude_effect'] = benchmark[[
+    f'magnitude_effect_{label}' for label in segments]].max(axis=1)
+benchmark.to_csv(output / 'conventional_pt_vs_continuous_pathways.csv', index=False)
+continuous_screen_only = benchmark.loc[benchmark.comparison_group.eq('continuous screen only')].sort_values(
+    ['spatial_q_shared', 'spatial_effect_shared'], ascending=[True, False])
+continuous_screen_only.to_csv(output / 'conventional_pt_continuous_screen_only.csv', index=False)
+benchmark_counts = benchmark.comparison_group.value_counts().rename('pathways')
+benchmark_counts.to_csv(output / 'conventional_pt_vs_continuous_summary.csv')
+display(benchmark_counts)
+colors = {'neither screen': '0.75', 'continuous screen only': '#D55E00',
+          'continuous and discrete': '#0072B2', 'discrete screen only': '#009E73',
+          'not comparable: discrete coverage': '#555555'}
+fig, ax = plt.subplots(figsize=(7, 6), layout='constrained')
+for group in colors:
+    rows = benchmark.loc[benchmark.comparison_group.eq(group)]
+    if rows.empty:
+        continue
+    ax.scatter(rows.max_segment_magnitude_effect, rows.spatial_effect_shared,
+               s=15 if group == 'neither screen' else 24,
+               alpha=.45 if group == 'neither screen' else .8,
+               color=colors[group], label=f'{group} (n={len(rows)})')
+ax.axhline(0, color='0.5', lw=.7)
+ax.axvline(0, color='0.5', lw=.7)
+ax.set(xlabel='Strongest discrete pathway magnitude effect (rank-AUC − 0.5)',
+       ylabel='Continuous spatial pathway effect (rank-AUC − 0.5)',
+       title='Continuous versus S1/S2/S3 magnitude screens')
+ax.legend(frameon=False, fontsize=8, loc='best')
+fig.savefig(output / 'conventional_pt_vs_continuous_effects.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+display(continuous_screen_only[['pathway_id', 'spatial_effect_shared', 'spatial_q_shared',
+                                'best_segment_q', 'best_magnitude_q', 'max_abs_segment_NES',
+                                'peak_position', 'affected_width']].head(20).round(3))
+
+# %%
+from textwrap import shorten
+
+def pathway_segment_heatmap(scope, title, filename, top_per_segment=7):
+    rows = conventional_gsea_results.loc[conventional_gsea_results.scope.eq(scope)]
+    chosen = list(dict.fromkeys(rows.sort_values(['q_family', 'p_nominal'])
+        .groupby('segment_class', sort=False).head(top_per_segment).pathway_id))
+    if scope == 'species_within_segment':
+        chosen = list(dict.fromkeys(chosen + continuous_screen_only.pathway_id.head(8).tolist()))
+    if not chosen:
+        return
+    nes = rows.pivot(index='pathway_id', columns='segment_class', values='NES').reindex(
+        index=chosen, columns=segments)
+    q = rows.pivot(index='pathway_id', columns='segment_class', values='q_family').reindex(
+        index=chosen, columns=segments)
+    limit = max(2., float(np.nanquantile(abs(nes.to_numpy(float)), .98)))
+    fig, ax = plt.subplots(figsize=(8, max(5, .30 * len(chosen) + 1.5)), layout='constrained')
+    image = ax.imshow(nes.to_numpy(float), cmap='RdBu_r', vmin=-limit, vmax=limit,
+                      aspect='auto', interpolation='none')
+    ax.set(xticks=range(len(segments)), xticklabels=segments,
+           yticks=range(len(chosen)),
+           yticklabels=[shorten(item.replace('Reactome_2022::', 'Reactome: ')
+                                .replace('MSigDB_Hallmark_2020::', 'Hallmark: ')
+                                .replace('KEGG_2019_Mouse::', 'KEGG: '),
+                                width=70, placeholder='…') for item in chosen],
+           title=title, xlabel='Dots: pooled three-segment BH q ≤ 0.05; blank: not testable')
+    for i in range(len(chosen)):
+        for j in range(len(segments)):
+            if pd.notna(q.iat[i, j]) and q.iat[i, j] <= .05:
+                color = 'white' if abs(nes.iat[i, j]) > limit / 2 else 'black'
+                ax.text(j, i, '•', ha='center', va='center', color=color, fontsize=12)
+    fig.colorbar(image, ax=ax, label='Signed GSEA NES')
+    fig.savefig(output / filename, bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
+
+pathway_segment_heatmap('species_within_segment',
+    'Human-high (red) versus mouse-high (blue) pathways by PT segment',
+    'conventional_species_pathway_heatmap.pdf')
+pathway_segment_heatmap('segment_vs_rest',
+    'Segment-enriched (red) versus other-PT-enriched (blue) pathways',
+    'conventional_segment_marker_pathway_heatmap.pdf')
 
 # %% [markdown]
 # ## 10 · Inspect the genes behind each pathway
@@ -1414,6 +1772,15 @@ final_table = final_table.merge(spatial[correlation_columns + ['correlation_supp
     on='pathway_id', how='left', validate='one_to_one')
 final_table['caveat'] = 'Exploratory gene-set evidence; two mouse specimens, two cortex sections from one human donor.'
 final_table.to_csv(output / 'pathway_evidence_atlas.csv', index=False)
+
+conventional_review = benchmark.merge(final_table[['pathway_id', 'program', 'q_corr',
+    'correlation_support', 'n_testable', 'n_retained', 'retention_fraction']],
+    on='pathway_id', how='left', validate='one_to_one')
+conventional_review.to_csv(output / 'conventional_pt_vs_continuous_evidence_review.csv', index=False)
+display(conventional_review.loc[conventional_review.comparison_group.eq('continuous screen only')]
+    .sort_values('spatial_q_shared')[['pathway_id', 'spatial_q_shared', 'best_segment_q', 'best_magnitude_q',
+        'peak_position', 'q_corr', 'correlation_support', 'n_retained', 'n_testable']].head(20))
+
 manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint': cache_code,
     'fit_input_fingerprint': digest(fit_inputs), 'input_fingerprint': digest(input_path),
     'ortholog_fingerprint': digest(map_path),

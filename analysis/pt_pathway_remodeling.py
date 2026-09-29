@@ -1061,6 +1061,53 @@ display(segment_comparison.loc[segment_comparison.primary_spatial_candidate]
 
 
 # %% [markdown]
+# ### Which pathways are continuous-only relative to the reviewed PT clusters?
+#
+# Use the same primary screen rule for each method: positive matched rank-AUC effect and empirical BH q ≤ 0.05. A **continuous-only by this screen** pathway passes the spatial test but none of the PT-S1, PT-S2, or PT-S3 cluster tests. Export every such pathway, not just the top displayed rows, and retain all tested pathways with their four-way classification in the comparison table. Cluster GSEA is shown as a separate supporting flag; it does not change the matched-screen classification.
+#
+# A cluster screen missing this cutoff is not evidence that the pathway is absent from that segment, nor a test that the continuous and cluster effects differ. With two mice and two cortex sections from one human donor, the comparison is descriptive; inspect the pathway effect sizes, q-values, and member-gene curves before interpreting a continuous-only label.
+
+# %%
+cluster_screen = segment_comparison.copy()
+cluster_screen['continuous_hit'] = cluster_screen.pathway_id.isin(candidate_ids)
+for label in segments:
+    cluster_screen[f'hit_{label}'] = (cluster_screen[f'effect_{label}'].gt(0)
+                                       & cluster_screen[f'q_{label}'].le(.05))
+cluster_screen['any_cluster_hit'] = cluster_screen[[f'hit_{label}' for label in segments]].any(axis=1)
+cluster_screen['min_cluster_q'] = cluster_screen[[f'q_{label}' for label in segments]].min(axis=1)
+cluster_effects = cluster_screen[[f'effect_{label}' for label in segments]]
+cluster_screen['max_cluster_effect'] = cluster_effects.max(axis=1)
+cluster_screen['strongest_cluster'] = cluster_effects.idxmax(axis=1).str.removeprefix('effect_')
+gsea_hits = (segment_gsea.assign(hit=segment_gsea.q_bh_family.le(.05)
+                                 & pd.to_numeric(segment_gsea.NES).gt(0))
+    .groupby('pathway_id', observed=True).hit.any())
+cluster_screen['any_cluster_gsea_hit'] = gsea_hits.reindex(
+    cluster_screen.pathway_id, fill_value=False).to_numpy(bool)
+cluster_screen['comparison_group_vs_clusters'] = np.select(
+    [cluster_screen.continuous_hit & ~cluster_screen.any_cluster_hit,
+     cluster_screen.continuous_hit & cluster_screen.any_cluster_hit,
+     ~cluster_screen.continuous_hit & cluster_screen.any_cluster_hit],
+    ['continuous-only by matched screen', 'continuous and cluster hit', 'cluster-only hit'],
+    default='neither screen hit')
+assert cluster_screen.pathway_id.is_unique
+assert cluster_screen.continuous_hit.equals(cluster_screen.primary_spatial_candidate)
+assert len(cluster_screen) == len(segment_comparison)
+cluster_screen.to_csv(output / 'pathway_continuous_vs_reviewed_pt_clusters.csv', index=False)
+continuous_only = cluster_screen.loc[cluster_screen.comparison_group_vs_clusters.eq(
+    'continuous-only by matched screen')].sort_values(
+    ['q_empirical_T_spatial', 'effect_T_spatial'], ascending=[True, False])
+continuous_only.to_csv(output / 'pathway_continuous_only_vs_pt_clusters.csv', index=False)
+cluster_screen_summary = (cluster_screen.groupby('comparison_group_vs_clusters', observed=True)
+    .size().reindex(['continuous-only by matched screen', 'continuous and cluster hit',
+                     'cluster-only hit', 'neither screen hit'], fill_value=0)
+    .rename('pathways'))
+cluster_screen_summary.to_csv(output / 'pathway_continuous_vs_pt_clusters_summary.csv')
+display(cluster_screen_summary)
+display(continuous_only[['pathway_id', 'effect_T_spatial', 'q_empirical_T_spatial',
+                         'strongest_cluster', 'max_cluster_effect', 'min_cluster_q',
+                         'any_cluster_gsea_hit']].head(20).round(3))
+
+# %% [markdown]
 # ## 10 · Inspect the genes behind each pathway
 #
 # These roles can overlap; they are explanations, not new discovery filters:

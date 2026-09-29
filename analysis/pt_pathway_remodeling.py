@@ -970,7 +970,7 @@ plt.close(fig)
 #
 # Within each specimen and cluster, sum raw counts and calculate log2(CPM + 1), using **all accepted orthologs measured in every specimen** for that cluster library's denominator. The same PT-wide 2% detection rule defines eligible genes, and the same pathway members and matching strata are used throughout. For each cluster, rank genes by the absolute Welch statistic between the two mouse specimens and two human cortex sections, then run the matched rank-AUC and unweighted preranked GSEA screens used for whole-PT pseudobulk. Signed mean log2(CPM + 1) differences retain direction. Each cluster's matched BH correction spans all tested pathways across the three libraries; GSEA BH spans all three cluster screens together.
 #
-# These cluster-level rankings are **descriptive**: two human sections come from one donor, and cluster membership was learned from the joint dataset. A cluster-specific hit does not prove a biological segment effect or test whether its effect differs from another cluster. Compare the pathway effects and gene directions with the existing continuous spatial screen; the primary discovery list is unchanged.
+# These cluster-level rankings are **descriptive**: two human sections come from one donor, and cluster membership was learned from the joint dataset. A cluster-specific hit does not prove a biological segment effect or test whether its effect differs from another cluster. Compare the pathway effects and gene directions with the existing continuous spatial screen; the primary discovery list is unchanged. Report nominal matched-test signals and GSEApy’s per-cluster FDR alongside the stricter matched BH and pooled GSEA BH results. The latter GSEA correction uses a 0.001 p-value floor from 999 permutations; near-zero counts can reflect that resolution. GSEApy FDR covers pathways within each cluster run, not the three clusters jointly.
 
 # %%
 segments = ('PT-S1', 'PT-S2', 'PT-S3')
@@ -1037,18 +1037,28 @@ segment_comparison = comparison[['pathway_id', 'effect_T_spatial', 'q_empirical_
                                  'effect_T_bulk', 'q_empirical_T_bulk']].copy()
 for label in segments:
     rows = segment_tests.loc[segment_tests.segment_class.eq(label),
-                             ['pathway_id', 'effect', 'q_empirical']]
+                             ['pathway_id', 'effect', 'p_empirical', 'q_empirical']]
     segment_comparison = segment_comparison.merge(rows.rename(columns={
-        'effect': f'effect_{label}', 'q_empirical': f'q_{label}'}),
-        on='pathway_id', validate='one_to_one')
+        'effect': f'effect_{label}', 'p_empirical': f'p_{label}',
+        'q_empirical': f'q_{label}'}), on='pathway_id', validate='one_to_one')
+    gsea_rows = segment_gsea.loc[segment_gsea.segment_class.eq(label),
+                                 ['pathway_id', 'NES', 'FDR q-val', 'q_bh_family']]
+    segment_comparison = segment_comparison.merge(gsea_rows.rename(columns={
+        'NES': f'NES_{label}', 'FDR q-val': f'gsea_fdr_{label}',
+        'q_bh_family': f'gsea_family_q_{label}'}), on='pathway_id', validate='one_to_one')
 segment_comparison['primary_spatial_candidate'] = segment_comparison.pathway_id.isin(candidate_ids)
 segment_comparison.to_csv(output / 'pathway_continuous_vs_reviewed_pt_clusters.csv', index=False)
 segment_screen_summary = (segment_tests.assign(
+    matched_nominal=lambda frame: frame.p_empirical.le(.05) & frame.effect.gt(0),
     matched_hit=lambda frame: frame.q_empirical.le(.05) & frame.effect.gt(0))
-    .groupby('segment_class').agg(tested=('pathway_id', 'size'), matched_hits=('matched_hit', 'sum')))
-segment_screen_summary['gsea_hits'] = (segment_gsea.assign(
-    gsea_hit=lambda frame: frame.q_bh_family.le(.05) & pd.to_numeric(frame.NES).gt(0))
-    .groupby('segment_class').gsea_hit.sum())
+    .groupby('segment_class').agg(tested=('pathway_id', 'size'),
+        matched_nominal=('matched_nominal', 'sum'), matched_hits=('matched_hit', 'sum')))
+gsea_screen_counts = (segment_gsea.assign(
+    gsea_package_fdr_hit=lambda frame: pd.to_numeric(frame['FDR q-val']).le(.05) & pd.to_numeric(frame.NES).gt(0),
+    gsea_family_hit=lambda frame: frame.q_bh_family.le(.05) & pd.to_numeric(frame.NES).gt(0))
+    .groupby('segment_class').agg(gsea_package_fdr_hits=('gsea_package_fdr_hit', 'sum'),
+                                  gsea_family_bh_hits=('gsea_family_hit', 'sum')))
+segment_screen_summary = segment_screen_summary.join(gsea_screen_counts)
 segment_screen_summary['spatial_candidate_overlap'] = 0
 for label in segments:
     segment_screen_summary.loc[label, 'spatial_candidate_overlap'] = int((
@@ -1063,9 +1073,9 @@ display(segment_comparison.loc[segment_comparison.primary_spatial_candidate]
 # %% [markdown]
 # ### Which pathways are continuous-only relative to the reviewed PT clusters?
 #
-# Use the same primary screen rule for each method: positive matched rank-AUC effect and empirical BH q ≤ 0.05. A **continuous-only by this screen** pathway passes the spatial test but none of the PT-S1, PT-S2, or PT-S3 cluster tests. Export every such pathway, not just the top displayed rows, and retain all tested pathways with their four-way classification in the comparison table. Cluster GSEA is shown as a separate supporting flag; it does not change the matched-screen classification.
+# Keep the primary matched rank-AUC criterion visible: positive effect and empirical BH q ≤ 0.05. Also count positive GSEA results at GSEApy’s **per-cluster** FDR q ≤ 0.05. The named continuous-only export contains spatial candidates with neither adjusted cluster signal; the full comparison table retains the separate matched and GSEA calls. Nominal matched p-values are shown as exploratory rankings, not adjusted hits. The pooled three-cluster GSEA BH column remains available but is resolution-limited by 999 permutations.
 #
-# A cluster screen missing this cutoff is not evidence that the pathway is absent from that segment, nor a test that the continuous and cluster effects differ. With two mice and two cortex sections from one human donor, the comparison is descriptive; inspect the pathway effect sizes, q-values, and member-gene curves before interpreting a continuous-only label.
+# These tests have different nulls and correction families. A cluster screen missing either cutoff is not evidence that the pathway is absent from that segment, nor a test that the continuous and cluster effects differ. With two mice and two cortex sections from one human donor, inspect the effect sizes and member-gene curves before interpreting a continuous-only label.
 
 # %%
 cluster_screen = segment_comparison.copy()
@@ -1078,34 +1088,48 @@ cluster_screen['min_cluster_q'] = cluster_screen[[f'q_{label}' for label in segm
 cluster_effects = cluster_screen[[f'effect_{label}' for label in segments]]
 cluster_screen['max_cluster_effect'] = cluster_effects.max(axis=1)
 cluster_screen['strongest_cluster'] = cluster_effects.idxmax(axis=1).str.removeprefix('effect_')
-gsea_hits = (segment_gsea.assign(hit=segment_gsea.q_bh_family.le(.05)
-                                 & pd.to_numeric(segment_gsea.NES).gt(0))
-    .groupby('pathway_id', observed=True).hit.any())
-cluster_screen['any_cluster_gsea_hit'] = gsea_hits.reindex(
-    cluster_screen.pathway_id, fill_value=False).to_numpy(bool)
+cluster_screen['any_cluster_gsea_hit'] = np.column_stack([
+    cluster_screen[f'NES_{label}'].gt(0) & cluster_screen[f'gsea_family_q_{label}'].le(.05)
+    for label in segments]).any(axis=1)
+cluster_screen['any_cluster_gsea_package_hit'] = np.column_stack([
+    cluster_screen[f'NES_{label}'].gt(0) & cluster_screen[f'gsea_fdr_{label}'].le(.05)
+    for label in segments]).any(axis=1)
+cluster_screen['any_cluster_adjusted_signal'] = (cluster_screen.any_cluster_hit
+    | cluster_screen.any_cluster_gsea_package_hit)
+cluster_screen['continuous_only_matched_screen'] = (cluster_screen.continuous_hit
+    & ~cluster_screen.any_cluster_hit)
 cluster_screen['comparison_group_vs_clusters'] = np.select(
-    [cluster_screen.continuous_hit & ~cluster_screen.any_cluster_hit,
-     cluster_screen.continuous_hit & cluster_screen.any_cluster_hit,
-     ~cluster_screen.continuous_hit & cluster_screen.any_cluster_hit],
-    ['continuous-only by matched screen', 'continuous and cluster hit', 'cluster-only hit'],
-    default='neither screen hit')
+    [cluster_screen.continuous_hit & ~cluster_screen.any_cluster_adjusted_signal,
+     cluster_screen.continuous_hit & cluster_screen.any_cluster_adjusted_signal,
+     ~cluster_screen.continuous_hit & cluster_screen.any_cluster_adjusted_signal],
+    ['continuous-only across adjusted screens', 'continuous and cluster signal',
+     'cluster-only signal'], default='neither adjusted screen')
 assert cluster_screen.pathway_id.is_unique
 assert cluster_screen.continuous_hit.equals(cluster_screen.primary_spatial_candidate)
 assert len(cluster_screen) == len(segment_comparison)
 cluster_screen.to_csv(output / 'pathway_continuous_vs_reviewed_pt_clusters.csv', index=False)
 continuous_only = cluster_screen.loc[cluster_screen.comparison_group_vs_clusters.eq(
-    'continuous-only by matched screen')].sort_values(
+    'continuous-only across adjusted screens')].sort_values(
     ['q_empirical_T_spatial', 'effect_T_spatial'], ascending=[True, False])
+assert (continuous_only.continuous_hit & ~continuous_only.any_cluster_adjusted_signal).all()
 continuous_only.to_csv(output / 'pathway_continuous_only_vs_pt_clusters.csv', index=False)
 cluster_screen_summary = (cluster_screen.groupby('comparison_group_vs_clusters', observed=True)
-    .size().reindex(['continuous-only by matched screen', 'continuous and cluster hit',
-                     'cluster-only hit', 'neither screen hit'], fill_value=0)
+    .size().reindex(['continuous-only across adjusted screens', 'continuous and cluster signal',
+                     'cluster-only signal', 'neither adjusted screen'], fill_value=0)
     .rename('pathways'))
 cluster_screen_summary.to_csv(output / 'pathway_continuous_vs_pt_clusters_summary.csv')
 display(cluster_screen_summary)
+print('Spatial candidates with no matched cluster hit:', int(cluster_screen.continuous_only_matched_screen.sum()))
+print('Spatial candidates also found by per-cluster GSEA FDR:', int((
+    cluster_screen.continuous_hit & cluster_screen.any_cluster_gsea_package_hit).sum()))
 display(continuous_only[['pathway_id', 'effect_T_spatial', 'q_empirical_T_spatial',
                          'strongest_cluster', 'max_cluster_effect', 'min_cluster_q',
-                         'any_cluster_gsea_hit']].head(20).round(3))
+                         'any_cluster_gsea_package_hit']].head(20).round(3))
+cluster_gsea_top = (segment_gsea.loc[pd.to_numeric(segment_gsea.NES).gt(0)]
+    .sort_values(['segment_class', 'FDR q-val', 'NES'], ascending=[True, True, False])
+    .groupby('segment_class', sort=False).head(8)
+    [['segment_class', 'pathway_id', 'NES', 'FDR q-val', 'q_bh_family']])
+display(cluster_gsea_top)
 
 # %% [markdown]
 # ## 10 · Inspect the genes behind each pathway

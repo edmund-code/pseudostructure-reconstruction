@@ -428,17 +428,28 @@ plt.show()
 plt.close(fig)
 
 # %%
-families = [family for family in KEEP_TUBULE_CLASSES if family in set(nephron.obs.coarse_class)]
-fig, axes = plt.subplots(2, 2, figsize=(12, 7), sharex=True, layout='constrained')
+from pseudospace.vocabulary import SEGMENT_DISPLAY_ORDER
+
+reviewed_segments = [segment for segment in SEGMENT_DISPLAY_ORDER
+                     if segment in set(nephron.obs.segment_class.astype(str))]
+fig, axes = plt.subplots(2, 2, figsize=(16, 9), sharey=True, layout='constrained')
 for row, (column, title) in enumerate((('shared_pseudospace', 'scFates'),
                                         ('dpt_pseudospace', 'DPT'))):
     for col, species in enumerate(samples):
         obs = nephron.obs.loc[nephron.obs.comparison_species.eq(species)]
-        values = [obs.loc[obs.coarse_class.eq(family), column].dropna().to_numpy()
-                  for family in families]
-        axes[row, col].boxplot(values, tick_labels=families, showfliers=False)
-        axes[row, col].set(title=f'{title} · {species}', ylim=(0, 1), ylabel='Pseudospace')
-fig.savefig(output / 'nephron_family_order_scfates_dpt.pdf', bbox_inches='tight')
+        values = [obs.loc[obs.segment_class.astype(str).eq(segment), column]
+                  .dropna().to_numpy(float) for segment in reviewed_segments]
+        axes[row, col].boxplot([v if len(v) else np.array([np.nan]) for v in values],
+                               showfliers=False)
+        axes[row, col].set_xticks(range(1, len(reviewed_segments) + 1))
+        axes[row, col].set_xticklabels([f'{segment}\n(n={len(v):,})'
+                                       for segment, v in zip(reviewed_segments, values)])
+        plt.setp(axes[row, col].get_xticklabels(), rotation=45, ha='right')
+        axes[row, col].set(title=f'{title} · {species.title()} (n={len(obs):,})',
+                           ylim=(0, 1), ylabel='Pseudospace' if col == 0 else '')
+fig.suptitle('Full-nephron pseudospace by reviewed segment', y=1.02)
+fig.savefig(output / 'nephron_segment_order_scfates_dpt.pdf', bbox_inches='tight')
+fig.savefig(output / 'nephron_segment_order_scfates_dpt.png', dpi=150, bbox_inches='tight')
 plt.show()
 plt.close(fig)
 
@@ -482,26 +493,123 @@ plt.show()
 plt.close(fig)
 
 # %%
-fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharex=True, layout='constrained')
+fig, axes = plt.subplots(2, 2, figsize=(16, 9), sharey=True, layout='constrained')
 for row, (column, title) in enumerate((('shared_pseudospace', 'scFates'),
                                         ('dpt_pseudospace', 'DPT'))):
     for col, species in enumerate(samples):
         obs = pt.obs.loc[pt.obs.comparison_species.eq(species)]
-        values = [obs.loc[obs.segment_class.eq(label), column].to_numpy() for label in segment_order]
-        box = axes[row, col].boxplot(values, tick_labels=segment_order, showfliers=False,
-                                      patch_artist=True)
-        for patch, label in zip(box['boxes'], segment_order):
-            patch.set_facecolor(colors[label])
-        axes[row, col].set(title=f'{title} · {species}', ylim=(0, 1), ylabel='Pseudospace')
+        values = [obs.loc[obs.segment_class.eq(label), column].dropna().to_numpy(float)
+                  for label in segment_order]
+        axes[row, col].boxplot(values, showfliers=False)
+        axes[row, col].set_xticks(range(1, len(segment_order) + 1))
+        axes[row, col].set_xticklabels([f'{label}\n(n={len(v):,})'
+                                       for label, v in zip(segment_order, values)])
+        plt.setp(axes[row, col].get_xticklabels(), rotation=45, ha='right')
+        axes[row, col].set(title=f'{title} · {species.title()} (n={len(obs):,})',
+                           ylim=(0, 1), ylabel='Pseudospace' if col == 0 else '')
+fig.suptitle('PT-specific pseudospace by reviewed segment', y=1.02)
 fig.savefig(output / 'pt_segment_order_scfates_dpt.pdf', bbox_inches='tight')
+fig.savefig(output / 'pt_segment_order_scfates_dpt.png', dpi=150, bbox_inches='tight')
 plt.show()
 plt.close(fig)
 
 # %% [markdown]
+# ### Marker-gradient heatmaps for both coordinates
+#
+# Use notebook 03's fine reference panels as visual checks, without changing the reviewed
+# labels. Each figure holds mouse and human rows with scFates and DPT columns in the same
+# gene order and colour range. As in notebook 03, each panel trims 5% from both coordinate
+# tails, bins 120 positions, smooths across bins, and z-scores each gene along its own
+# coordinate. Interpolated gaps and within-gene scaling make these diagnostic plots, not
+# measurements of absolute expression or independent significance tests.
+
+# %%
+from pseudospace.heatmaps import binned_interpolated_expression
+
+NEPHRON_HEATMAP_MARKERS = {
+    'PT-S1': ('Lrp2', 'Cubn', 'Slc34a1', 'Slc5a2', 'Slc5a12', 'Gatm'),
+    'PT-S2': ('Slc22a6', 'Slc13a3', 'Cyp2e1'),
+    'PT-S3': ('Slc22a7', 'Slc7a13', 'Cyp7b1', 'Slc6a18', 'Acsm3'),
+    'DTL': ('Aqp1', 'Slc14a2', 'Corin', 'Fst'),
+    'ATL': ('Clcnka', 'Sptssb', 'Akr1b3'),
+    'TAL': ('Slc12a1', 'Umod', 'Kcnj1', 'Cldn16'),
+    'DCT': ('Slc12a3', 'Pvalb', 'Trpm6', 'Egf'),
+    'CNT': ('Calb1', 'Hsd11b2', 'Slc8a1'),
+    'CCD': ('Aqp2', 'Aqp3', 'Fxyd4'),
+    'OMCD': ('Atp6v0d2', 'Rhcg', 'Foxi1'),
+    'IMCD': ('Aqp4', 'Slc14a2', 'Wnt7b'),
+}
+PT_HEATMAP_MARKERS = {
+    'PT-S1': ('Slc5a2', 'Slc5a12', 'Gatm'),
+    'PT-S2': ('Slc22a6', 'Slc13a3', 'Cyp2e1'),
+    'PT-S3': ('Slc22a7', 'Cyp7b1'),
+}
+
+def compare_marker_heatmaps(obj, marker_groups, scope):
+    measured = obj.var.measured_in_both_inputs.astype(bool)
+    panels = {group: [gene for gene in genes if gene in obj.var_names and measured.loc[gene]]
+              for group, genes in marker_groups.items()}
+    coverage = pd.DataFrame([{'program': group, 'requested_genes': len(genes),
+                              'measured_genes': len(panels[group]),
+                              'genes_used': '; '.join(panels[group])}
+                             for group, genes in marker_groups.items()])
+    coverage.to_csv(output / f'{scope}_marker_heatmap_coverage.csv', index=False)
+    if any(not genes for genes in panels.values()):
+        raise ValueError(f'{scope}: a reference program has no jointly measured genes.')
+    rows = [(group, gene) for group, genes in panels.items() for gene in genes]
+    unique_genes = list(dict.fromkeys(gene for _, gene in rows))
+    gene_idx = [unique_genes.index(gene) for _, gene in rows]
+    labels = [f'{group} · {gene}' if gene == panels[group][0] else gene
+              for group, gene in rows]
+    fig, axes = plt.subplots(2, 2, figsize=(15, max(6, .34 * len(rows) + 2)),
+                             sharex=True, sharey=True, layout='constrained')
+    image = None
+    for row, species in enumerate(samples):
+        species_mask = obj.obs.comparison_species.astype(str).eq(species).to_numpy()
+        for col, (column, method) in enumerate((('shared_pseudospace', 'scFates'),
+                                                 ('dpt_pseudospace', 'DPT'))):
+            subset = obj[species_mask & np.isfinite(obj.obs[column].to_numpy(float)),
+                         unique_genes].copy()
+            order = np.argsort(subset.obs[column].to_numpy(float), kind='stable')
+            n_trim = int(np.floor(.05 * len(order)))
+            subset = subset[order[n_trim:len(order) - n_trim]].copy()
+            _, heatmap_z, _, edges, _ = binned_interpolated_expression(
+                subset, gene_idx, column, n_bins=120, smooth_sigma=2.5)
+            if heatmap_z.shape[0] != len(rows) or not np.isfinite(heatmap_z).all():
+                raise ValueError(f'{scope} {species} {method}: invalid marker heatmap.')
+            ax = axes[row, col]
+            image = ax.imshow(np.clip(heatmap_z, -2, 2), aspect='auto', cmap='bwr',
+                              vmin=-2, vmax=2, interpolation='nearest',
+                              extent=(edges[0], edges[-1], len(rows) - .5, -.5))
+            ax.set(xlim=(0, 1), title=f'{species.title()} · {method} (n={subset.n_obs:,})',
+                   xlabel='Pseudospace' if row == 1 else '')
+            ax.set_yticks(np.arange(len(rows)))
+            if col == 0:
+                ax.set_yticklabels(labels, fontsize=7 if scope == 'nephron' else 9)
+            else:
+                ax.tick_params(labelleft=False)
+            boundary = 0
+            for genes in panels.values():
+                boundary += len(genes)
+                if boundary < len(rows):
+                    ax.axhline(boundary - .5, color='black', lw=.5)
+    fig.colorbar(image, ax=axes, label='Within-gene z-score', shrink=.65)
+    fig.suptitle(f'{scope.upper()} marker gradients · scFates versus DPT', fontsize=15)
+    fig.savefig(output / f'{scope}_marker_heatmap_scfates_dpt.pdf', bbox_inches='tight')
+    fig.savefig(output / f'{scope}_marker_heatmap_scfates_dpt.png', dpi=180,
+                bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
+    return coverage
+
+display(compare_marker_heatmaps(nephron, NEPHRON_HEATMAP_MARKERS, 'nephron'))
+display(compare_marker_heatmaps(pt, PT_HEATMAP_MARKERS, 'pt'))
+
+# %% [markdown]
 # ### Current coordinate check
 #
-# Inspect `coordinate_agreement_by_specimen_and_subset.csv`, the full-nephron family plots,
-# and the PT segment plots together. A high pooled correlation can hide reversed or flat
+# Inspect `coordinate_agreement_by_specimen_and_subset.csv`, the reviewed-segment plots,
+# and the paired marker heatmaps together. A high pooled correlation can hide reversed or flat
 # ordering in one specimen. Two mouse specimens and two cortex sections of one human donor
 # give structure-level diagnostics, not independent donor replication. The producer refits
 # clustering and pass-2 Harmony, so changes from notebook 03 are not coordinate-only effects.

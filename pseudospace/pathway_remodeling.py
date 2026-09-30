@@ -22,8 +22,9 @@ def fit_nested_trajectories(expression, position, human, specimen, grid, *, basi
     The same within-species sum-to-zero specimen intercept contrasts enter all
     three models. This avoids confounding an unconstrained specimen dummy with
     species. No penalty is used: fixed low basis dimension regularizes the fit
-    and preserves exact nesting. Return partial-F *ranking* statistics and HC3
-    structural uncertainty for the full-model human-minus-mouse contrast.
+    and preserves exact nesting. Return partial-F *ranking* statistics, a signed
+    human-minus-mouse level coefficient with HC3 structural uncertainty, and HC3
+    uncertainty for the full-model human-minus-mouse contrast.
     Optionally retain raw full-model residuals (structures x genes); all existing
     statistics are identical whether or not residuals are retained.
     """
@@ -68,11 +69,14 @@ def fit_nested_trajectories(expression, position, human, specimen, grid, *, basi
     human_design[:, p_base + 1:2 * p_base] = base[:, 1:]
     contrast = human_design - mouse_design
     projection = contrast @ solvers[2]
+    level_leverage = np.einsum('ij,ji->i', designs[1], solvers[1])
     leverage = np.einsum('ij,ji->i', designs[2], solvers[2])
-    if np.any(leverage >= .99):
+    if np.any(level_leverage >= .99) or np.any(leverage >= .99):
         raise ValueError('Near-unit leverage: reduce spline dimension or improve support.')
     g = y.shape[1]
     result = {key: np.empty(g) for key in ('T_level', 'T_spatial', 'T_total')}
+    result.update({key: np.empty(g) for key in
+                   ('beta_human_level', 'se_human_level', 'Z_level')})
     result.update({key: np.empty((g, len(grid))) for key in ('mouse', 'human', 'delta', 'se', 'z')})
     if return_residuals:
         result['residuals'] = np.empty((n, g))
@@ -89,6 +93,16 @@ def fit_nested_trajectories(expression, position, human, specimen, grid, *, basi
             added = designs[full].shape[1] - designs[reduced].shape[1]
             noise = np.maximum(sse[full] / (n - designs[full].shape[1]), 1e-12)
             result[key][block] = np.maximum(sse[reduced] - sse[full], 0) / added / noise
+        # In M_level, c=1 is human and c=0 is mouse. This is the constant
+        # human-minus-mouse offset conditional on the shared curve and specimen
+        # contrasts. The HC3 projection includes the WLS score weights.
+        level_beta = betas[1][p_base]
+        level_projection = solvers[1][p_base]
+        level_se = np.sqrt(np.maximum(level_projection ** 2 @
+            (residuals[1] / (1 - level_leverage[:, None])) ** 2, 1e-12))
+        result['beta_human_level'][block] = level_beta
+        result['se_human_level'][block] = level_se
+        result['Z_level'][block] = level_beta / level_se
         delta = contrast @ betas[2]
         # HC3 sandwich: balance weights are not assumed to be inverse variances.
         se = np.sqrt(np.maximum(projection ** 2 @ (residuals[2] / (1 - leverage[:, None])) ** 2, 1e-12))

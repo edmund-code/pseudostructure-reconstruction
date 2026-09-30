@@ -11,9 +11,9 @@
 #
 # | Object | Question |
 # |---|---|
-# | $T_{\mathrm{level},g}$ | Is there an approximately constant human–mouse difference? |
-# | $T_{\mathrm{spatial},g}$ | Does the difference change with PT position? **Primary discovery.** |
-# | $T_{\mathrm{total},g}$ | Is there any trajectory difference? |
+# | $T_{\mathrm{level},g}$ | Is there a broad/global human–mouse offset along PT? |
+# | $T_{\mathrm{spatial},g}$ | Does the difference change with PT position after allowing a global species shift? |
+# | $T_{\mathrm{total},g}$ | Is there any difference between full species-specific trajectories and a shared trajectory? |
 # | $Z_g(s)$ | Where is the difference, and which species is higher? |
 #
 # > **What this cohort can tell us**
@@ -21,6 +21,9 @@
 # > The healthy comparison contains two mouse specimens and two human cortex sections from **one donor**. `HUK1_MED1` is a specimen name, not evidence of medullary tissue. Model uncertainty is conditional on observed structures; pathway nulls compare genes, not independent donors. All enrichment and stability results are exploratory.
 #
 # **Inputs:** notebook 13’s `cross_species_pt_scfates.h5ad` (structure identities and coordinates only), `ortholog_map_used.csv`, and the four original `tubule_by_gene/*_tubule_by_gene_caleb.h5ad` count matrices; local Reactome, Hallmark, and KEGG JSON libraries. Run in `kidney-pseudospace`. Tables, caches, and figures go to `results/pt_pathway_remodeling_scfates/` (or your configured results root), never into Git.
+#
+#
+# **Paper question:** does reconstructing fine-grained PT position preserve broad species biology while exposing an additional spatial dimension? The **continuous/pseudostructure framework** comprises `T_level`, `T_spatial`, and `T_total`; `T_spatial` pathways alone are **spatial-remodeling pathways**. A strong constant shift can give strong `T_level` and weak `T_spatial`: this is expected, not a failure to recover conventional biology. A localized, changing, or direction-reversing difference can give strong `T_spatial` even when whole-PT evidence is weak. Different significance sets need not nest, and these comparisons do not establish universal superiority or power.
 #
 
 # %% [markdown]
@@ -186,6 +189,15 @@ display(covariates[['mean_expression', 'detection', 'detection_mouse', 'detectio
 # [Weighted regression assumptions](https://www.statsmodels.org/stable/examples/notebooks/generated/wls.html).
 #
 # The full-model residuals are saved with the trajectory export for the correlation check below. They are **raw observed minus fitted expression**, including the fitted specimen effects. `residuals` has structures as rows and genes as columns; the saved `structures`, `specimen`, and `genes` arrays identify those axes. Only the primary fit retains this large matrix. After updating, restart the kernel and run all cells so the updated helper and residuals are loaded.
+#
+# | Nested comparison | Statistic | Biological alternative |
+# |---|---|---|
+# | Shared → level (`M0` vs `Mlevel`) | `T_level` | Broad human–mouse offset after adjusting common position and specimen contrasts |
+# | Level → full (`Mlevel` vs `Mfull`) | `T_spatial` | Difference varies with position after allowing a global species shift |
+# | Shared → full (`M0` vs `Mfull`) | `T_total` | Omnibus evidence of any species trajectory difference |
+#
+# The level coefficient is the human indicator column (`mouse=0`, `human=1`) of **Mlevel**, with within-species specimen contrasts summing to zero. We retain its fitted coefficient and HC3 SE as `Z_level = beta_human_level / se_human_level`. Positive means human-high; negative means mouse-high, conditional on the common curve. This is a structure-conditional working statistic with the same replication caveats as local Z, not a donor-level Wald test. Its HC3 denominator differs from the residual-variance denominator of `T_level`; it is not a signed square root of F. The full-model intercept is basis-dependent when interactions are present and is not used as the level effect.
+#
 
 # %%
 from pseudospace.pathway_remodeling import fit_nested_trajectories
@@ -197,7 +209,7 @@ import pseudospace.levelshape as levelshape
 import pseudospace.stats_gam as stats_gam
 
 basis_df = 6
-NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v6-scfates-coordinate'  # Bump when a cached calculation changes.
+NOTEBOOK_LOGIC_VERSION = '12-pathway-remodeling-v7-level-spatial-information'  # Bump when a cached calculation changes.
 grid = np.linspace(lo, hi, 61)
 # Require local data from every specimen, not only overlapping range endpoints.
 local_counts = pd.DataFrame({name: [np.sum((specimen == name) & (abs(position - s) <= .08 * (hi - lo)))
@@ -213,7 +225,7 @@ fit = cached_payload('nested_gene_models',
     root=output / 'stage_cache', params={'basis_df': basis_df, 'grid': grid, 'return_residuals': True},
     inputs=fit_inputs, code=cache_code)
 gene_stats = covariates.copy()
-for name in ('T_level', 'T_spatial', 'T_total'):
+for name in ('T_level', 'T_spatial', 'T_total', 'beta_human_level', 'se_human_level', 'Z_level'):
     gene_stats[name] = fit[name]
 gene_stats['mean_human_minus_mouse'] = fit['delta'].mean(axis=1)
 gene_stats['spatial_rms'] = fit['delta'].std(axis=1)
@@ -221,6 +233,40 @@ gene_stats.to_csv(output / 'gene_statistics.csv')
 np.savez_compressed(output / 'gene_trajectories.npz', genes=np.array(genes),
     structures=adata.obs_names.to_numpy(dtype=str), specimen=np.asarray(specimen, str), **fit)
 display(gene_stats.sort_values('T_spatial', ascending=False).head(10))
+
+# %% [markdown]
+# ### Figure A · What the trajectory framework asks
+#
+# **Interpretation schematic, not fitted data.** Shared curves, a constant human offset, and a varying human offset represent the three model constraints. The shared→full omnibus comparison includes both the level and positional alternatives. A constant-shift pathway is retained biology even without spatial significance.
+
+# %%
+import matplotlib.pyplot as plt
+plt.rcParams.update({'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sans'], 'pdf.fonttype': 42, 'svg.fonttype': 'none', 'font.size': 9,
+                     'axes.spines.top': False, 'axes.spines.right': False})
+fig, ax = plt.subplots(figsize=(7.1, 3.5), layout='constrained')
+sketch_s = np.linspace(0, 1, 100)
+for k, title in enumerate(('Shared curve', 'Global level shift', 'Position-varying difference')):
+    baseline = .3 + .25 * np.sin(np.pi * sketch_s)
+    difference = np.zeros_like(sketch_s) if k == 0 else (
+        np.full_like(sketch_s, .35) if k == 1 else .35 + .3 * np.sin(2 * np.pi * sketch_s))
+    ax.plot(k * 1.4 + sketch_s, baseline, color='#0072B2', lw=2)
+    ax.plot(k * 1.4 + sketch_s, baseline + difference, color='#D55E00', lw=2, ls='--')
+    ax.text(k * 1.4 + .5, 1.32, title, ha='center', fontsize=8)
+for left, right, y, label in ((.5, 1.9, 1.6, 'T_level'),
+                            (1.9, 3.3, 1.6, 'T_spatial'), (.5, 3.3, 2.0, 'T_total')):
+    ax.annotate('', xy=(right, y), xytext=(left, y),
+                arrowprops={'arrowstyle': '<->', 'lw': .8})
+    ax.text((left + right) / 2, y + .07, label, ha='center', fontsize=9)
+ax.set(xlim=(-.1, 3.9), ylim=(0, 2.25), xticks=[.5, 1.9, 3.3],
+       xticklabels=['PT position →'] * 3, yticks=[], ylabel='Illustrative expression')
+ax.plot([], [], color='#0072B2', label='Mouse')
+ax.plot([], [], color='#D55E00', ls='--', label='Human')
+ax.legend(loc='lower center', bbox_to_anchor=(.5, -.34), ncol=2, frameon=False)
+fig.savefig(output / 'framework_A_model_interpretation.pdf', bbox_inches='tight')
+fig.savefig(output / 'framework_A_model_interpretation.svg', bbox_inches='tight')
+fig.savefig(output / 'framework_A_model_interpretation.png', bbox_inches='tight', dpi=600)
+plt.show()
+plt.close(fig)
 
 # %% [markdown]
 # ### Visual check: what each nested model permits
@@ -480,7 +526,7 @@ plt.close(fig)
 # >
 # > Divide mean expression, detection, and coverage into coarse tertiles (ties stay together). Each random set has the pathway's exact size and stratum counts, sampled without replacement from the full eligible universe. Test the upper tail using $(1+\#\{AUC_{null}\ge AUC_{observed}\})/(B+1)$.
 #
-# BH correction is **separate for each statistic** and spans every tested pathway across KEGG, Reactome, and Hallmark within that statistic. $T_{\rm spatial}$ is the primary discovery family; $T_{\rm level}$ and $T_{\rm total}$ are secondary characterization families. At the pathway level, the null is competitive enrichment of each gene statistic against matched genes, not a donor-level test of a species effect. Nominal Mann–Whitney p-values are shown only as diagnostics. The matching addresses measurability; it does **not** preserve inter-gene correlation or create biological replication.
+# BH correction is **separate for each statistic** and spans every tested pathway across KEGG, Reactome, and Hallmark within that statistic. $T_{\rm spatial}$ defines the frozen spatial-remodeling discovery family; $T_{\rm level}$ and $T_{\rm total}$ are also main results for broad and omnibus differences. These three exploratory families are corrected separately, not jointly across statistics. At the pathway level, the null is competitive enrichment of each gene statistic against matched genes, not a donor-level test of a species effect. Nominal Mann–Whitney p-values are shown only as diagnostics. The matching addresses measurability; it does **not** preserve inter-gene correlation or create biological replication.
 #
 # `null_auc_sd` and `fixed_member_fraction` expose overly restricted nulls. With 9,999 draws the smallest empirical p-value is 0.0001; `mc_se` reports Monte Carlo uncertainty. Borderline discoveries need more draws and a rerun of the entire family, not selective extra testing of attractive terms.
 
@@ -506,6 +552,66 @@ spatial = pathway_tests[pathway_tests.statistic.eq('T_spatial')].copy()
 spatial = spatial.merge(coverage[['pathway_id', 'library', 'pathway', 'tested_fraction']], on='pathway_id')
 spatial = spatial.sort_values(['q_empirical', 'effect', 'pathway_id'], ascending=[True, False, True])
 display(spatial[['library', 'pathway', 'n_genes', 'effect', 'q_empirical', 'mc_se', 'tested_fraction']].head(15))
+
+# %% [markdown]
+# ### All three framework results · Global shifts and spatial remodeling
+#
+# Use the **same original pathway universe** and positive AUC effect plus empirical BH q ≤ 0.05 for all three statistics, each corrected over the full pathway family. `level+ / spatial−` describes broad shifts; `level+ / spatial+` adds remodeling to global evidence; `level− / spatial+` highlights positional information obscured by aggregation; neither means no strong evidence in those two screens. `T_total` is annotated independently: pathway-level competitive tests need not inherit gene-model nesting. Figure C shows the three information-bearing classes with omnibus support; the large neither class and total-only count appear as an annotation, and all eight exact intersections remain in the full table. Counts are pathway terms, not independent biological programs.
+
+# %%
+framework_wide = pathway_tests.pivot(index='pathway_id', columns='statistic',
+    values=['auc', 'effect', 'p_empirical', 'q_empirical'])
+framework_wide.columns = ['_'.join(column) for column in framework_wide.columns]
+framework_wide = framework_wide.reset_index()
+for name in ('level', 'spatial', 'total'):
+    framework_wide[name + '_hit'] = (framework_wide['effect_T_' + name].gt(0)
+        & framework_wide['q_empirical_T_' + name].le(.05))
+framework_wide['information_class'] = np.select(
+    [framework_wide.level_hit & framework_wide.spatial_hit,
+     framework_wide.level_hit, framework_wide.spatial_hit],
+    ['level+ / spatial+', 'level+ / spatial−', 'level− / spatial+'], default='neither')
+framework_counts = pd.Series({
+    'tested': len(framework_wide),
+    'level significant': int(framework_wide.level_hit.sum()),
+    'spatial significant': int(framework_wide.spatial_hit.sum()),
+    'total significant': int(framework_wide.total_hit.sum()),
+    'level only (relative to spatial)': int((framework_wide.level_hit & ~framework_wide.spatial_hit).sum()),
+    'spatial only (relative to level)': int((~framework_wide.level_hit & framework_wide.spatial_hit).sum()),
+    'level + spatial': int((framework_wide.level_hit & framework_wide.spatial_hit).sum()),
+    'level + total': int((framework_wide.level_hit & framework_wide.total_hit).sum()),
+    'spatial + total': int((framework_wide.spatial_hit & framework_wide.total_hit).sum()),
+    'all three': int((framework_wide.level_hit & framework_wide.spatial_hit & framework_wide.total_hit).sum()),
+    'total only': int((framework_wide.total_hit & ~framework_wide.level_hit & ~framework_wide.spatial_hit).sum()),
+    'none of three': int((~framework_wide[['level_hit', 'spatial_hit', 'total_hit']].any(axis=1)).sum())},
+    name='pathways')
+framework_counts.to_csv(output / 'framework_test_summary.csv')
+framework_intersections = (framework_wide.groupby(['level_hit', 'spatial_hit', 'total_hit'])
+    .size().rename('pathways').reindex(pd.MultiIndex.from_product([[False, True]] * 3,
+        names=['level_hit', 'spatial_hit', 'total_hit']), fill_value=0))
+framework_intersections.to_csv(output / 'framework_exact_intersections.csv')
+framework_wide.to_csv(output / 'framework_level_spatial_total.csv', index=False)
+display(framework_counts.to_frame())
+display(framework_intersections.to_frame())
+# Show the three information-bearing classes; report neither in the annotation and full tables.
+class_order = ['level+ / spatial−', 'level+ / spatial+', 'level− / spatial+']
+class_counts = pd.crosstab(framework_wide.information_class, framework_wide.total_hit).reindex(
+    index=class_order, columns=[False, True], fill_value=0)
+fig, ax = plt.subplots(figsize=(7.1, 3.8), layout='constrained')
+ax.barh(class_order, class_counts[True], color='#0072B2', label='Total +')
+ax.barh(class_order, class_counts[False], left=class_counts[True], color='0.8', label='Total −')
+ax.invert_yaxis()
+ax.set(xlabel='Pathway terms (matched q ≤ 0.05, positive AUC effect)',
+       title='Global and positional evidence: original pathway universe')
+ax.text(.5, -.32, f'Neither level nor spatial: {(framework_wide.information_class == "neither").sum():,} terms; '
+        f'total-only evidence: {framework_counts["total only"]}', transform=ax.transAxes, ha='center', fontsize=8)
+ax.set_yticks(range(len(class_order)), labels=[
+    f'{label} (n={int(class_counts.loc[label].sum())})' for label in class_order])
+ax.legend(loc='upper left', bbox_to_anchor=(1, 1), frameon=False)
+fig.savefig(output / 'framework_C_information_classes.pdf', bbox_inches='tight')
+fig.savefig(output / 'framework_C_information_classes.svg', bbox_inches='tight')
+fig.savefig(output / 'framework_C_information_classes.png', bbox_inches='tight', dpi=600)
+plt.show()
+plt.close(fig)
 
 # %% [markdown]
 # ### Primary spatial pathway screen
@@ -846,19 +952,17 @@ if len(phenotypes):
 
 
 # %% [markdown]
-# ## 9 · Compare with conventional PT pseudobulk
+# ## 9 · Conventional aggregation and the information hierarchy
 #
-# The clean comparison is already inside the nested models: level versus spatial, using identical expression data and enrichment machinery.
+# | Representation | Question |
+# |---|---|
+# | Whole-PT pseudobulk | Is a gene/pathway different on average between species? |
+# | Reviewed S1/S2/S3 | Is it different within a coarse anatomical region? |
+# | Pseudostructure/GAM | Is there a broad species shift, and how does that difference vary continuously with PT position? |
 #
-# For a recognizable independent *method* benchmark, sum **raw counts per specimen**, normalize each pseudobulk library over all measured-in-both accepted orthologs (before detection filtering), and use log2(CPM + 1). The ranking is the absolute Welch t statistic across the two mouse specimens and two human sections; the signed difference in mean log2(CPM + 1) is retained as the bulk effect.
+# Increasing positional representation allows new questions; it does not require `bulk hits ⊂ cluster hits ⊂ T_spatial hits`. A constant species shift should be accessible through `T_level` even if `T_spatial` is weak. Segment evidence does not by itself test a difference between segments.
 #
-# > **This is a descriptive pseudobulk benchmark**
-# >
-# > The human sections are not independent donors. We therefore do not report biological DE p-values or pretend that a count-based donor-level DE model can solve the missing replication. The t statistic is a noise-scaled ranking of this dataset, not confirmatory DE. Summing log-normalized expression would not be pseudobulk and is not done here.
-#
-# Bulk uses the same supported structures, eligible genes, pathway members, matching strata, and rank-AUC/GSEA machinery. Its empirical BH family spans the bulk pathway tests. Primary model-test q-values remain frozen.
-#
-# Library sizes sum counts over the **full measured ortholog panel before the PT detection filter**, matching section 3's denominator definition. The inherited notebook 13 embedding gene filters play no role in this benchmark.
+# First retain the existing descriptive absolute-Welch pseudobulk benchmark: sum raw counts per specimen, normalize to log2(CPM + 1) over the full measured ortholog panel before detection filtering, and rank absolute Welch statistics. It uses the original gene/pathway universe and matching strata. Section 9a adds the direct **whole-PT DESeq2 versus signed GAM-level GSEA** sanity check using common count-supported genes. The human sections are from one donor, so neither benchmark is confirmatory species inference. Summing log-normalized expression is not pseudobulk and is not done here.
 
 # %%
 from pseudospace.specimen import pseudobulk_profiles
@@ -897,7 +1001,7 @@ bulk_gsea.to_csv(output / 'bulk_pathway_gsea.csv', index=False)
 # | Level/bulk evidence | Spatial evidence | Reading |
 # |---|---|---|
 # | High | Low | Level or bulk largely captures the observed difference |
-# | Low | High | Candidate continuous-only discovery |
+# | Low | High | Position-dependent remodeling without broad evidence |
 # | High | High | Bulk detects a difference; continuous analysis adds its spatial structure |
 # | Low | Low | Weak evidence under this screen |
 #
@@ -916,7 +1020,7 @@ spatial_high = comparison.pathway_id.isin(candidate_ids)
 comparison['comparison_group'] = np.select(
     [spatial_high & ~(level_high | bulk_high), spatial_high & (level_high | bulk_high),
      ~spatial_high & (level_high | bulk_high)],
-    ['continuous-only candidate', 'bulk/level plus spatial structure', 'bulk/level captures difference'],
+    ['spatial-remodeling without bulk/level evidence', 'bulk/level plus spatial structure', 'bulk/level captures difference'],
     default='weak evidence')
 comparison = comparison.merge(phenotypes, on='pathway_id', how='left')
 comparison['median_member_bulk_effect'] = comparison.pathway_id.map(
@@ -924,44 +1028,6 @@ comparison['median_member_bulk_effect'] = comparison.pathway_id.map(
 comparison.to_csv(output / 'pathway_continuous_vs_bulk.csv', index=False)
 display(comparison.groupby('comparison_group').size().rename('pathways'))
 display(comparison[comparison.pathway_id.isin(candidate_ids)].head(12))
-
-# %% [markdown]
-# ### What does continuous position reveal beyond pseudobulk?
-#
-# The scatter compares the existing bulk and spatial AUC effects; color uses the notebook's frozen comparison groups, which also consider the level screen. The count panel keeps the large weak-evidence background visible without hiding the smaller groups. A bulk/level negative screen does not prove a zero overall species effect.
-#
-
-# %%
-group_colors = {'continuous-only candidate': '#D55E00',
-                'bulk/level plus spatial structure': '#0072B2',
-                'bulk/level captures difference': '#009E73', 'weak evidence': '0.75'}
-group_order = list(group_colors)
-fig, axes = plt.subplots(1, 2, figsize=(11, 5), gridspec_kw={'width_ratios': [2, 1]},
-                         layout='constrained')
-for group in reversed(group_order):
-    rows = comparison[comparison.comparison_group.eq(group)]
-    axes[0].scatter(rows.effect_T_bulk, rows.effect_T_spatial, s=15 if group == 'weak evidence' else 25,
-                    alpha=.55 if group == 'weak evidence' else .8,
-                    color=group_colors[group], label=group)
-axes[0].axhline(0, color='0.5', lw=.7)
-axes[0].axvline(0, color='0.5', lw=.7)
-axes[0].set(xlabel='Pseudobulk pathway effect (AUC − 0.5)',
-            ylabel='Spatial pathway effect (AUC − 0.5)',
-            title='Continuous versus conventional evidence')
-axes[0].legend(frameon=False, fontsize=8)
-group_counts = comparison.comparison_group.value_counts().reindex(group_order, fill_value=0)
-axes[1].barh(np.arange(len(group_counts)), group_counts, color=[group_colors[g] for g in group_order])
-axes[1].set(yticks=np.arange(len(group_counts)), yticklabels=group_order,
-            xlabel='Tested pathways (log scale)', title='Screen categories')
-axes[1].set_xscale('symlog', linthresh=1)
-axes[1].invert_yaxis()
-for i, count in enumerate(group_counts):
-    axes[1].annotate(str(count), (max(count, 1), i), xytext=(4, 0),
-                     textcoords='offset points', va='center', fontsize=8)
-fig.savefig(output / 'pathway_continuous_vs_bulk_overview.pdf', bbox_inches='tight')
-plt.show()
-plt.close(fig)
-
 
 # %% [markdown]
 # ### Unsigned PT-S1, PT-S2, and PT-S3 cluster diagnostic
@@ -1073,11 +1139,11 @@ display(segment_comparison.loc[segment_comparison.primary_spatial_candidate]
 # %% [markdown]
 # ### What does the unsigned cluster diagnostic miss?
 #
-# Keep the primary matched rank-AUC criterion visible: positive effect and empirical BH q ≤ 0.05. Also count positive GSEA results at GSEApy’s **per-cluster** FDR q ≤ 0.05. The named continuous-only export contains spatial candidates with neither adjusted cluster signal; the full comparison table retains the separate matched and GSEA calls. Nominal matched p-values are shown as exploratory rankings, not adjusted hits. The pooled three-cluster GSEA BH column remains available but is resolution-limited by 999 permutations.
+# Keep the primary matched rank-AUC criterion visible: positive effect and empirical BH q ≤ 0.05. Also count positive GSEA results at GSEApy’s **per-cluster** FDR q ≤ 0.05. The named spatial-only export contains spatial candidates with neither adjusted cluster signal; the full comparison table retains the separate matched and GSEA calls. Nominal matched p-values are shown as exploratory rankings, not adjusted hits. The pooled three-cluster GSEA BH column remains available but is resolution-limited by 999 permutations.
 #
-# These tests have different nulls and correction families. A cluster screen missing either cutoff is not evidence that the pathway is absent from that segment, nor a test that the continuous and cluster effects differ. With two mice and two cortex sections from one human donor, inspect the effect sizes and member-gene curves before interpreting a continuous-only label.
+# These tests have different nulls and correction families. A cluster screen missing either cutoff is not evidence that the pathway is absent from that segment, nor a test that the continuous and cluster effects differ. With two mice and two cortex sections from one human donor, inspect the effect sizes and member-gene curves before interpreting a spatial-only label.
 #
-# This unsigned comparison ranks the *magnitude* of human–mouse differences. Its continuous-only export is retained for provenance; the signed count-model benchmark below is the conventional comparison for the paper.
+# This unsigned comparison ranks the *magnitude* of human–mouse differences. Its spatial-only export is retained for provenance; the signed count-model benchmark below is the conventional comparison for the paper.
 #
 
 # %%
@@ -1105,19 +1171,19 @@ cluster_screen['comparison_group_vs_clusters'] = np.select(
     [cluster_screen.continuous_hit & ~cluster_screen.any_cluster_adjusted_signal,
      cluster_screen.continuous_hit & cluster_screen.any_cluster_adjusted_signal,
      ~cluster_screen.continuous_hit & cluster_screen.any_cluster_adjusted_signal],
-    ['continuous-only across adjusted screens', 'continuous and cluster signal',
+    ['spatial-only across adjusted screens', 'continuous and cluster signal',
      'cluster-only signal'], default='neither adjusted screen')
 assert cluster_screen.pathway_id.is_unique
 assert cluster_screen.continuous_hit.equals(cluster_screen.primary_spatial_candidate)
 assert len(cluster_screen) == len(segment_comparison)
 cluster_screen.to_csv(output / 'pathway_continuous_vs_reviewed_pt_clusters.csv', index=False)
 continuous_only = cluster_screen.loc[cluster_screen.comparison_group_vs_clusters.eq(
-    'continuous-only across adjusted screens')].sort_values(
+    'spatial-only across adjusted screens')].sort_values(
     ['q_empirical_T_spatial', 'effect_T_spatial'], ascending=[True, False])
 assert (continuous_only.continuous_hit & ~continuous_only.any_cluster_adjusted_signal).all()
 continuous_only.to_csv(output / 'pathway_continuous_only_vs_pt_clusters.csv', index=False)
 cluster_screen_summary = (cluster_screen.groupby('comparison_group_vs_clusters', observed=True)
-    .size().reindex(['continuous-only across adjusted screens', 'continuous and cluster signal',
+    .size().reindex(['spatial-only across adjusted screens', 'continuous and cluster signal',
                      'cluster-only signal', 'neither adjusted screen'], fill_value=0)
     .rename('pathways'))
 cluster_screen_summary.to_csv(output / 'pathway_continuous_vs_pt_clusters_summary.csv')
@@ -1334,9 +1400,120 @@ pathway_summary.to_csv(output / 'conventional_pt_pathway_summary.csv')
 display(pathway_summary)
 
 # %% [markdown]
+# ### Whole-PT DESeq2 versus GAM level · Broad biology recovery
+#
+# **Question:** does the trajectory model recover broad species differences detected after collapsing PT? Fit whole-PT DESeq2 on the same raw specimen counts summed across the three reviewed segments. Use the existing common count-supported orthologs and pathway members. Compare its **signed human-minus-mouse Wald ranking** with `Z_level` from Mlevel, using exactly the same weighted multilevel GSEA, seed, and full-pathway BH convention (separate full families for the two rankings). Positive NES means human-high for both. The gene universe is checked before enrichment; missing statistics stop this paired comparison rather than silently shrinking one ranking.
+#
+# Also retest **all three unsigned GAM statistics together** on that common universe, retaining positive-effect matched empirical q ≤ 0.05 and separate full families. Compare magnitude-based `T_level` with absolute whole-PT DESeq2 Wald using the same matched enrichment procedure. Original-universe q-values stay available separately. Report overlap in both directions, pathway NES/effect rank correlation, signed gene-statistic correlation, and direction concordance. Exact identity is not expected: count dispersion, normalization, common-position adjustment, weighting, and structure-conditional HC3 uncertainty differ. These are descriptive estimator comparisons, not tests of one method's superiority.
+
+# %%
+shared_strata = pd.Series(strata, index=pd.Index(genes)).loc[conventional_genes].to_numpy()
+whole_pt_counts = sum(raw_blocks[label][conventional_genes] for label in segments)
+np.testing.assert_array_equal(whole_pt_counts.to_numpy(),
+    bulk_all[['count_' + gene for gene in conventional_genes]].to_numpy())
+whole_pt_metadata = pd.DataFrame({'species': ['mouse' if name in expected['mouse'] else 'human'
+    for name in whole_pt_counts.index]}, index=whole_pt_counts.index)
+whole_pt_de = cached_frame('whole_pt_deseq2',
+    lambda: deseq2_contrast(whole_pt_counts, whole_pt_metadata, design='~species',
+                           contrast=('species', 'human', 'mouse')),
+    root=output / 'stage_cache', params={'design': '~species', 'contrast': 'human_vs_mouse',
+                                       'version': version('pydeseq2')},
+    inputs={'counts': whole_pt_counts, 'metadata': whole_pt_metadata}, code=conventional_code)
+whole_pt_de['scope'] = 'whole_pt_species'
+whole_pt_de['segment_class'] = 'whole_PT'
+whole_pt_de.to_csv(output / 'whole_pt_deseq2_gene_statistics.csv', index=False)
+level_gene_comparison = whole_pt_de.set_index('gene')[['stat', 'log2FoldChange', 'padj']].join(
+    gene_stats[['beta_human_level', 'se_human_level', 'Z_level']], how='left').loc[conventional_genes]
+if not np.isfinite(level_gene_comparison[['stat', 'Z_level']].to_numpy()).all():
+    raise ValueError('Whole-PT versus level comparison needs finite statistics on the same gene universe.')
+level_gene_comparison.to_csv(output / 'whole_pt_vs_gam_level_genes.csv')
+level_signed_rows = pd.DataFrame({'gene': conventional_genes,
+    'stat': gene_stats.loc[conventional_genes, 'Z_level'].to_numpy(),
+    'scope': 'gam_level_species', 'segment_class': 'whole_PT'})
+global_gsea_parts = []
+for method, rows in [('DESeq2', whole_pt_de), ('GAM_level', level_signed_rows)]:
+    result = cached_frame('global_signed_gsea_' + method,
+        lambda data=rows: conventional_gsea(data), root=output / 'stage_cache',
+        params={'method': 'multilevel', 'weight': 1, 'seed': seed, 'gseapy': version('gseapy')},
+        inputs={'ranking': rows[['gene', 'stat']], 'sets': conventional_gene_sets},
+        code=digest([conventional_code, 'global-level-signed-gsea-v1']))
+    result['method'] = method
+    result['NES'] = pd.to_numeric(result.NES)
+    result['p_nominal'] = pd.to_numeric(result['NOM p-val'])
+    if not np.isfinite(result.p_nominal).all() or set(result.pathway_id) != set(conventional_gene_sets):
+        raise ValueError('Global GSEA must test every common pathway with finite p-values.')
+    result['q_family'] = multipletests(result.p_nominal, method='fdr_bh')[1]
+    global_gsea_parts.append(result)
+global_signed_gsea = pd.concat(global_gsea_parts, ignore_index=True)
+global_signed_gsea.to_csv(output / 'whole_pt_and_gam_level_signed_gsea.csv', index=False)
+shared_framework_scores = gene_stats.loc[conventional_genes, ['T_level', 'T_spatial', 'T_total']].copy()
+shared_framework_scores['T_whole_pt_deseq2_abs'] = level_gene_comparison.stat.abs()
+shared_framework_tests = cached_frame('common_framework_and_whole_pt_auc',
+    lambda: matched_pathway_tests(shared_framework_scores, conventional_gene_sets, shared_strata,
+                                  n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed},
+    inputs={'scores': shared_framework_scores, 'sets': conventional_gene_sets, 'strata': shared_strata},
+    code=digest([cache_code, 'common-framework-whole-pt-v1']))
+shared_framework_tests.to_csv(output / 'common_framework_and_whole_pt_rank_auc.csv', index=False)
+global_pathway_comparison = global_signed_gsea.pivot(index='pathway_id', columns='method',
+    values=['NES', 'p_nominal', 'q_family'])
+global_pathway_comparison.columns = ['_'.join(column) for column in global_pathway_comparison.columns]
+for method in ('DESeq2', 'GAM_level'):
+    global_pathway_comparison[method + '_hit'] = global_pathway_comparison['q_family_' + method].le(.05)
+global_pathway_comparison['signed_group'] = np.select(
+    [global_pathway_comparison.DESeq2_hit & global_pathway_comparison.GAM_level_hit,
+     global_pathway_comparison.DESeq2_hit, global_pathway_comparison.GAM_level_hit],
+    ['shared', 'DESeq2 only', 'GAM level only'], default='neither')
+global_pathway_comparison.to_csv(output / 'whole_pt_vs_gam_level_pathways.csv')
+
+def global_overlap_summary(left, right, score_left, score_right, label):
+    both = left & right
+    informative = both & score_left.ne(0) & score_right.ne(0)
+    return {'comparison': label, 'DESeq2_hits': int(left.sum()), 'GAM_level_hits': int(right.sum()),
+        'shared': int(both.sum()), 'DESeq2_only': int((left & ~right).sum()),
+        'GAM_level_only': int((right & ~left).sum()),
+        'fraction_DESeq2_recovered': both.sum() / left.sum() if left.any() else np.nan,
+        'fraction_GAM_level_shared': both.sum() / right.sum() if right.any() else np.nan,
+        'score_spearman': score_left.corr(score_right, method='spearman'),
+        'shared_direction_concordance': (np.sign(score_left[informative]) ==
+            np.sign(score_right[informative])).mean() if informative.any() else np.nan}
+unsigned_global = shared_framework_tests.pivot(index='pathway_id', columns='statistic',
+    values=['effect', 'q_empirical'])
+unsigned_global.columns = ['_'.join(column) for column in unsigned_global.columns]
+unsigned_de_hit = unsigned_global.effect_T_whole_pt_deseq2_abs.gt(0) & unsigned_global.q_empirical_T_whole_pt_deseq2_abs.le(.05)
+unsigned_level_hit = unsigned_global.effect_T_level.gt(0) & unsigned_global.q_empirical_T_level.le(.05)
+global_summary = pd.DataFrame([
+    global_overlap_summary(global_pathway_comparison.DESeq2_hit, global_pathway_comparison.GAM_level_hit,
+        global_pathway_comparison.NES_DESeq2, global_pathway_comparison.NES_GAM_level, 'signed GSEA'),
+    global_overlap_summary(unsigned_de_hit, unsigned_level_hit,
+        unsigned_global.effect_T_whole_pt_deseq2_abs, unsigned_global.effect_T_level, 'unsigned matched AUC')])
+# Magnitude effects have no biological direction; suppress the meaningless sign comparison.
+global_summary.loc[global_summary.comparison.eq('unsigned matched AUC'), 'shared_direction_concordance'] = np.nan
+global_summary['gene_stat_spearman'] = level_gene_comparison.stat.corr(level_gene_comparison.Z_level, method='spearman')
+global_summary['gene_direction_concordance'] = (np.sign(level_gene_comparison.stat) == np.sign(level_gene_comparison.Z_level)).mean()
+global_summary.to_csv(output / 'whole_pt_vs_gam_level_summary.csv', index=False)
+display(global_summary.round(3))
+fig, ax = plt.subplots(figsize=(5.5, 4.5), layout='constrained')
+for group, color in [('neither', '0.8'), ('DESeq2 only', '#D55E00'),
+                     ('GAM level only', '#009E73'), ('shared', '#0072B2')]:
+    rows = global_pathway_comparison.loc[global_pathway_comparison.signed_group.eq(group)]
+    ax.scatter(rows.NES_DESeq2, rows.NES_GAM_level, s=12, alpha=.65,
+               color=color, label=f'{group} (n={len(rows)})')
+ax.axhline(0, color='0.5', lw=.6)
+ax.axvline(0, color='0.5', lw=.6)
+ax.set(xlabel='Whole-PT DESeq2 signed GSEA NES', ylabel='GAM-level signed GSEA NES',
+       title='Broad species biology in the trajectory framework')
+ax.legend(loc='upper left', bbox_to_anchor=(1, 1), frameon=False, fontsize=8)
+fig.savefig(output / 'framework_B_bulk_vs_level.pdf', bbox_inches='tight')
+fig.savefig(output / 'framework_B_bulk_vs_level.svg', bbox_inches='tight')
+fig.savefig(output / 'framework_B_bulk_vs_level.png', bbox_inches='tight', dpi=600)
+plt.show()
+plt.close(fig)
+
+# %% [markdown]
 # ### What does continuous position add beyond S1/S2/S3?
 #
-# Retest the continuous spatial statistic on the **same genes and pathway members** used by the signed discrete benchmark; leave the notebook's original primary list unchanged. A robust continuous candidate passes the original and shared-universe matched screens. Compare it with directional segment GSEA after correcting across the full three-segment family. Also apply the same matched rank-AUC test to the **absolute DESeq2 Wald statistics** within S1/S2/S3, using the same shared gene universe and matching strata as the continuous reanalysis. Correct its empirical p-values across all pathways and all three segment tests for the comparison, while retaining the per-segment q-values as diagnostics. This magnitude companion prevents mixed human-high and mouse-high members from being mistaken for a gain of continuous position merely because signed GSEA cancels them. A continuous-only *screen result* requires that all three GSEA contrasts were testable and that neither discrete screen passed its adjusted cutoff. This does **not** prove a segment effect is zero or establish a significant difference between methods: the models and pathway nulls differ, and one human donor cannot support a population novelty claim. Export the full table, screen-only shortlist, gene-level contrasts, and heatmaps for biological review.
+# Retest the continuous spatial statistic on the **same genes and pathway members** used by the signed discrete benchmark; leave the notebook's original primary list unchanged. A robust continuous candidate passes the original and shared-universe matched screens. Compare it with directional segment GSEA after correcting across the full three-segment family. Also apply the same matched rank-AUC test to the **absolute DESeq2 Wald statistics** within S1/S2/S3, using the same shared gene universe and matching strata as the continuous reanalysis. Correct its empirical p-values across all pathways and all three segment tests for the comparison, while retaining the per-segment q-values as diagnostics. This magnitude companion prevents mixed human-high and mouse-high members from being mistaken for a gain of continuous position merely because signed GSEA cancels them. A spatial-only *screen result* requires that all three GSEA contrasts were testable and that neither discrete screen passed its adjusted cutoff. This does **not** prove a segment effect is zero or establish a significant difference between methods: the models and pathway nulls differ, and one human donor cannot support a population novelty claim. Export the full table, screen-only shortlist, gene-level contrasts, and heatmaps for biological review.
 
 # %%
 shared_strata = pd.Series(strata, index=pd.Index(genes)).loc[conventional_genes].to_numpy()
@@ -1358,14 +1535,8 @@ absolute_segment_tests = cached_frame('conventional_abs_wald_auc',
 absolute_segment_tests['q_three_segments'] = multipletests(
     absolute_segment_tests.p_empirical, method='fdr_bh')[1]
 absolute_segment_tests.to_csv(output / 'conventional_pt_abs_deseq2_rank_auc.csv', index=False)
-shared_scores = gene_stats.loc[conventional_genes, ['T_spatial']]
-shared_spatial = cached_frame('conventional_shared_spatial_auc',
-    lambda: matched_pathway_tests(shared_scores, conventional_gene_sets, shared_strata,
-                                  n_null=n_null, seed=seed),
-    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed,
-                                        'universe': 'shared_de_genes'},
-    inputs={'scores': shared_scores, 'sets': conventional_gene_sets, 'strata': shared_strata},
-    code=digest([cache_code, Path(remodeling.__file__), 'shared-conventional-v1']))
+# Reuse the all-three-statistic common-universe screen above.
+shared_spatial = shared_framework_tests.loc[shared_framework_tests.statistic.eq('T_spatial')].copy()
 shared_spatial.to_csv(output / 'conventional_shared_universe_spatial_auc.csv', index=False)
 
 species_gsea = conventional_gsea_results.loc[
@@ -1405,24 +1576,24 @@ benchmark['comparison_group'] = np.select(
      benchmark.continuous_candidate & ~benchmark.any_segment_signal,
      benchmark.continuous_candidate & benchmark.any_segment_signal,
      ~benchmark.continuous_candidate & benchmark.any_segment_signal],
-    ['not comparable: discrete coverage', 'continuous screen only',
-     'continuous and discrete', 'discrete screen only'], default='neither screen')
+    ['not comparable: discrete coverage', 'spatial screen only',
+     'spatial and discrete', 'discrete screen only'], default='neither screen')
 benchmark = benchmark.merge(phenotypes[['pathway_id', 'peak_position', 'affected_width']],
                             on='pathway_id', how='left', validate='one_to_one')
 assert benchmark.pathway_id.is_unique
-assert benchmark.loc[benchmark.comparison_group.eq('continuous screen only'),
+assert benchmark.loc[benchmark.comparison_group.eq('spatial screen only'),
                      'all_segments_tested'].all()
 benchmark['max_segment_magnitude_effect'] = benchmark[[
     f'magnitude_effect_{label}' for label in segments]].max(axis=1)
 benchmark.to_csv(output / 'conventional_pt_vs_continuous_pathways.csv', index=False)
-continuous_screen_only = benchmark.loc[benchmark.comparison_group.eq('continuous screen only')].sort_values(
+continuous_screen_only = benchmark.loc[benchmark.comparison_group.eq('spatial screen only')].sort_values(
     ['spatial_q_shared', 'spatial_effect_shared'], ascending=[True, False])
 continuous_screen_only.to_csv(output / 'conventional_pt_continuous_screen_only.csv', index=False)
 benchmark_counts = benchmark.comparison_group.value_counts().rename('pathways')
 benchmark_counts.to_csv(output / 'conventional_pt_vs_continuous_summary.csv')
 display(benchmark_counts)
-colors = {'neither screen': '0.75', 'continuous screen only': '#D55E00',
-          'continuous and discrete': '#0072B2', 'discrete screen only': '#009E73',
+colors = {'neither screen': '0.75', 'spatial screen only': '#D55E00',
+          'spatial and discrete': '#0072B2', 'discrete screen only': '#009E73',
           'not comparable: discrete coverage': '#555555'}
 fig, ax = plt.subplots(figsize=(7, 6), layout='constrained')
 for group in colors:
@@ -1579,22 +1750,7 @@ print('Prior spatial-shape-comparison “discrete screen only” pathways also d
 # The overlap table is the **like-for-like signed pathway screen**. A pathway in “cluster signed GSEA only” is a screen discordance, not proof that the smooth model cannot represent its biology. Review its NES and q-values in all three segments, individual genes, and specimen-level effects. The shape test remains useful for asking what changes *within* and *between* segments, beyond broad level differences. A strict superset test would fit discrete segment effects and added smooth positional effects in one nested expression model; these two existing models are not nested.
 
 # %%
-# Show overlap and the directional signal behind it, with one color scale for both methods.
-overlap_signed = pd.crosstab(
-    signed_comparison.cluster_signed_hit, signed_comparison.smooth_signed_hit).reindex(
-    index=[False, True], columns=[False, True], fill_value=0)
-fig, ax = plt.subplots(figsize=(5, 4), layout='constrained')
-ax.imshow(overlap_signed.to_numpy(), cmap='Blues', aspect='auto')
-ax.set(xticks=[0, 1], xticklabels=['No', 'Yes'], yticks=[0, 1], yticklabels=['No', 'Yes'],
-       xlabel='Smooth segment GSEA q ≤ 0.05', ylabel='Cluster segment GSEA q ≤ 0.05',
-       title='Signed pathway screen overlap')
-for (i, j), count in np.ndenumerate(overlap_signed.to_numpy()):
-    ax.text(j, i, str(count), ha='center', va='center',
-            color='white' if count > overlap_signed.to_numpy().max() / 2 else 'black')
-fig.savefig(output / 'conventional_vs_smooth_signed_gsea_overlap.pdf', bbox_inches='tight')
-plt.show()
-plt.close(fig)
-
+# Directional diagnostic for the strongest screen discrepancies; overlap counts are in Figure D.
 prior_ids = set(signed_comparison.loc[
     signed_comparison.comparison_group.eq('discrete screen only'), 'pathway_id'])
 prior_top = (discrete_signed_gsea.loc[discrete_signed_gsea.pathway_id.isin(prior_ids)]
@@ -1643,7 +1799,166 @@ display(signed_comparison.loc[signed_comparison.signed_gsea_group.eq(
 
 
 # %% [markdown]
+# ### Integrated pathway classes and the fate of cluster signed-GSEA-only terms
+#
+# The earlier run had **52 cluster signed-GSEA-only pathways**. Recompute this count; it is a discordance between two signed segment screens, not a list missed by the framework. For every pathway in the common tested universe retain original and common-universe matched results for `T_level`, `T_spatial`, `T_total`; whole-PT and signed level GSEA; all three conventional and smooth segment NES/p/q; and the magnitude companion. Minimum segment q is a summary of an already pooled three-segment BH family, not a new pathway p-value.
+#
+# Categories are descriptive and editable: spatial evidence takes priority, then coarse/global evidence, then unresolved conventional-only and no-evidence classes. Independent boolean flags and raw statistics retain overlapping evidence. “Any framework evidence” includes any positive-effect matched level/spatial/total call in the original or common universe, signed GAM-level GSEA, or smooth segment signed GSEA. Report the three matched tests separately as well; diagnostic support in either universe is labelled explicitly and does not redefine the common-universe information classes. Near-threshold means at least one eligible framework q < 0.10 or < 0.15 **without** q ≤ 0.05 support. No-support means no call under these specified screens, not proof of no biological difference. Different competitive nulls and directional cancellation remain possible explanations.
+#
+# Figure D is a diagnostic partition: supported elsewhere, unsupported but near 0.10, unsupported near 0.15, and unsupported at those thresholds. For the strongest genuinely unsupported terms, export all member-gene level coefficients/SE, full signed curves, specimen/segment logCPM effects, DESeq2 estimates and leading edges; inspect these before assigning a biological explanation.
+
+# %%
+integrated = pd.DataFrame({'pathway_id': sorted(conventional_gene_sets)})
+integrated['pathway_name'] = integrated.pathway_id.str.split('::', n=1).str[-1]
+shared_raw = shared_framework_tests.pivot(index='pathway_id', columns='statistic',
+    values=['auc', 'effect', 'p_empirical', 'q_empirical'])
+shared_raw.columns = ['common_' + '_'.join(column) for column in shared_raw.columns]
+integrated = integrated.merge(shared_raw, on='pathway_id', validate='one_to_one')
+integrated = integrated.merge(framework_wide.drop(columns=['level_hit', 'spatial_hit',
+    'total_hit', 'information_class']).add_prefix('original_').rename(
+    columns={'original_pathway_id': 'pathway_id'}), on='pathway_id', validate='one_to_one')
+integrated = integrated.merge(global_pathway_comparison, on='pathway_id', validate='one_to_one')
+for prefix, rows in [('cluster', discrete_signed_gsea), ('smooth', continuous_local_gsea)]:
+    segment_values = rows.pivot(index='pathway_id', columns='segment_class',
+        values=['NES', 'p_nominal', 'q_family'])
+    segment_values.columns = [prefix + '_' + '_'.join(column) for column in segment_values.columns]
+    integrated = integrated.merge(segment_values, on='pathway_id', validate='one_to_one')
+    integrated[prefix + '_best_q'] = integrated[[prefix + '_q_family_' + label for label in segments]].min(axis=1)
+    integrated[prefix + '_hit'] = integrated[prefix + '_best_q'].le(.05)
+integrated = integrated.merge(benchmark[['pathway_id', 'any_segment_magnitude_hit',
+    'best_magnitude_q', *[f'magnitude_effect_{label}' for label in segments],
+    *[f'magnitude_q_{label}' for label in segments]]], on='pathway_id', validate='one_to_one')
+for name in ('level', 'spatial', 'total'):
+    integrated[name + '_hit'] = (integrated['common_effect_T_' + name].gt(0)
+        & integrated['common_q_empirical_T_' + name].le(.05))
+for name in ('level', 'spatial', 'total'):
+    integrated['original_' + name + '_hit'] = (integrated['original_effect_T_' + name].gt(0)
+        & integrated['original_q_empirical_T_' + name].le(.05))
+    integrated[name + '_support_either_universe'] = integrated[name + '_hit'] | integrated['original_' + name + '_hit']
+integrated['bulk_hit'] = integrated.DESeq2_hit
+integrated['coarse_hit'] = integrated.cluster_hit | integrated.any_segment_magnitude_hit
+integrated['matched_framework_n_common'] = integrated[['level_hit', 'spatial_hit', 'total_hit']].sum(axis=1)
+integrated['matched_framework_n'] = integrated[[name + '_support_either_universe' for name in ('level', 'spatial', 'total')]].sum(axis=1)
+integrated['any_matched_framework_hit'] = integrated.matched_framework_n.gt(0)
+integrated['any_framework_hit'] = integrated.any_matched_framework_hit | integrated.GAM_level_hit | integrated.smooth_hit
+integrated['information_class'] = np.select(
+    [integrated.level_hit & integrated.spatial_hit, integrated.level_hit, integrated.spatial_hit],
+    ['level+ / spatial+', 'level+ / spatial−', 'level− / spatial+'], default='neither')
+integrated['pathway_category'] = np.select(
+    [integrated.spatial_hit & (integrated.bulk_hit | integrated.level_hit | integrated.GAM_level_hit),
+     integrated.spatial_hit & integrated.coarse_hit, integrated.spatial_hit & ~integrated.bulk_hit,
+     integrated.bulk_hit & integrated.any_framework_hit, integrated.any_framework_hit,
+     integrated.bulk_hit & ~integrated.coarse_hit, integrated.bulk_hit | integrated.coarse_hit],
+    ['global + spatial remodeling', 'coarse segment evidence + continuous spatial evidence',
+     'spatial remodeling without bulk evidence', 'global evidence in bulk and framework',
+     'framework evidence without spatial call', 'conventional global only',
+     'conventional-only / unresolved'], default='no evidence')
+# Nonpositive matched AUC enrichment cannot support or approach the positive-enrichment rule.
+framework_q = pd.DataFrame({name: integrated['common_q_empirical_T_' + name].where(
+    integrated['common_effect_T_' + name].gt(0), 1.) for name in ('level', 'spatial', 'total')})
+for name in ('level', 'spatial', 'total'):
+    framework_q['original_' + name] = integrated['original_q_empirical_T_' + name].where(
+        integrated['original_effect_T_' + name].gt(0), 1.)
+framework_q['signed_level'] = integrated.q_family_GAM_level
+framework_q['smooth_segment'] = integrated.smooth_best_q
+integrated['best_framework_q'] = framework_q.min(axis=1)
+for threshold, suffix in ((.1, '010'), (.15, '015')):
+    integrated['framework_q_lt_' + suffix] = integrated.best_framework_q.lt(threshold)
+    integrated['near_threshold_' + suffix] = ~integrated.any_framework_hit & integrated.best_framework_q.lt(threshold)
+integrated['cluster_signed_only'] = integrated.cluster_hit & ~integrated.smooth_hit
+integrated['caveat'] = 'Exploratory; two mouse specimens, two cortex sections from one human donor.'
+assert len(integrated) == len(conventional_gene_sets) and integrated.pathway_id.is_unique
+assert integrated[['common_q_empirical_T_' + name for name in ('level', 'spatial', 'total')]].notna().all().all()
+integrated.to_csv(output / 'integrated_pathway_classification.csv', index=False)
+integrated.pathway_category.value_counts().to_csv(output / 'integrated_pathway_class_counts.csv')
+cluster_only_review = integrated.loc[integrated.cluster_signed_only].sort_values(['cluster_best_q', 'pathway_id']).copy()
+cluster_only_review['diagnostic_fate'] = np.select(
+    [cluster_only_review.any_framework_hit, cluster_only_review.near_threshold_010,
+     cluster_only_review.near_threshold_015],
+    ['Supported elsewhere in framework', 'Unsupported; q < 0.10', 'Unsupported; 0.10 ≤ q < 0.15'],
+    default='Unsupported; q ≥ 0.15')
+cluster_only_review.to_csv(output / 'cluster_signed_only_framework_review.csv', index=False)
+cluster_only_summary = pd.Series({
+    'cluster-only in signed segment comparison': len(cluster_only_review),
+    'supported by level (either universe)': int(cluster_only_review.level_support_either_universe.sum()),
+    'supported by spatial (either universe)': int(cluster_only_review.spatial_support_either_universe.sum()),
+    'supported by total (either universe)': int(cluster_only_review.total_support_either_universe.sum()),
+    'supported by multiple matched tests (either universe)': int(cluster_only_review.matched_framework_n.ge(2).sum()),
+    'supported by signed GAM level': int(cluster_only_review.GAM_level_hit.sum()),
+    'supported by ANY framework test': int(cluster_only_review.any_framework_hit.sum()),
+    'no significant framework evidence': int((~cluster_only_review.any_framework_hit).sum()),
+    'unsupported but q < 0.10': int(cluster_only_review.near_threshold_010.sum()),
+    'unsupported but q < 0.15': int(cluster_only_review.near_threshold_015.sum()),
+    'unsupported and q ≥ 0.15': int((~cluster_only_review.any_framework_hit & ~cluster_only_review.framework_q_lt_015).sum())},
+    name='pathways')
+cluster_only_summary.to_csv(output / 'cluster_signed_only_framework_summary.csv')
+display(cluster_only_summary.to_frame())
+display(integrated.pathway_category.value_counts())
+display(cluster_only_review[['pathway_id', 'cluster_best_q', 'smooth_best_q',
+    'common_q_empirical_T_level', 'common_q_empirical_T_spatial', 'common_q_empirical_T_total',
+    'q_family_GAM_level', 'diagnostic_fate']].head(12))
+fate_order = ['Supported elsewhere in framework', 'Unsupported; q < 0.10',
+              'Unsupported; 0.10 ≤ q < 0.15', 'Unsupported; q ≥ 0.15']
+fate_counts = cluster_only_review.diagnostic_fate.value_counts().reindex(fate_order, fill_value=0)
+fig, ax = plt.subplots(figsize=(7.1, 3.5), layout='constrained')
+ax.barh(fate_order, fate_counts, color=['#0072B2', '#E69F00', '#D55E00', '0.65'])
+ax.invert_yaxis()
+ax.set_yticks(range(len(fate_order)), labels=[
+    f'{label} (n={int(fate_counts[label])})' for label in fate_order])
+ax.set(xlabel='Pathway terms', title=f'Fate of {len(cluster_only_review)} cluster signed-GSEA-only pathways')
+fig.savefig(output / 'framework_D_cluster_only_fate.pdf', bbox_inches='tight')
+fig.savefig(output / 'framework_D_cluster_only_fate.svg', bbox_inches='tight')
+fig.savefig(output / 'framework_D_cluster_only_fate.png', bbox_inches='tight', dpi=600)
+plt.show()
+plt.close(fig)
+
+# Inspect three strongest unsupported terms plus up to two well away from threshold; no new discovery test.
+unsupported_review = cluster_only_review.loc[~cluster_only_review.any_framework_hit]
+discordant_ids = list(dict.fromkeys(unsupported_review.head(3).pathway_id.tolist()
+    + unsupported_review.loc[~unsupported_review.framework_q_lt_015].head(2).pathway_id.tolist()))
+discordant_gene_parts = []
+for pathway in discordant_ids:
+    members = conventional_gene_sets[pathway]
+    detail = level_gene_comparison.loc[members].reset_index().rename(columns={'index': 'gene'})
+    detail['pathway_id'] = pathway
+    member_rows = pd.Index(genes).get_indexer(detail.gene)
+    detail['full_delta_min'] = fit['delta'][member_rows].min(axis=1)
+    detail['full_delta_max'] = fit['delta'][member_rows].max(axis=1)
+    detail['full_delta_reverses'] = detail.full_delta_min.lt(0) & detail.full_delta_max.gt(0)
+    for label in segments:
+        segment_de_rows = species_de.loc[species_de.segment_class.eq(label)].set_index('gene')
+        for field in ('stat', 'log2FoldChange', 'padj'):
+            detail['cluster_' + field + '_' + label] = segment_de_rows.loc[detail.gene, field].to_numpy()
+        leading = discrete_signed_gsea.loc[(discrete_signed_gsea.pathway_id.eq(pathway))
+            & discrete_signed_gsea.segment_class.eq(label), 'Lead_genes'].iloc[0]
+        detail['cluster_leading_' + label] = detail.gene.isin(str(leading).split(';'))
+        for name in expected['mouse'] + expected['human']:
+            detail['logcpm_' + label + '_' + name] = segment_expression.loc[(label, name), detail.gene].to_numpy()
+    discordant_gene_parts.append(detail)
+discordant_gene_review = (pd.concat(discordant_gene_parts, ignore_index=True) if discordant_gene_parts
+    else pd.DataFrame(columns=['pathway_id', 'gene']))
+discordant_gene_review.to_csv(output / 'cluster_only_strongest_discordant_gene_review.csv', index=False)
+discordant_curve_parts = []
+for pathway in discordant_ids:
+    for gene in conventional_gene_sets[pathway]:
+        row = genes.index(gene)
+        discordant_curve_parts.append(pd.DataFrame({'pathway_id': pathway, 'gene': gene, 'position': grid,
+            'mouse': fit['mouse'][row], 'human': fit['human'][row], 'delta': fit['delta'][row],
+            'se': fit['se'][row], 'z': fit['z'][row]}))
+(pd.concat(discordant_curve_parts, ignore_index=True) if discordant_curve_parts
+    else pd.DataFrame(columns=['pathway_id', 'gene', 'position', 'delta', 'z'])).to_csv(
+        output / 'cluster_only_strongest_discordant_curves.csv', index=False)
+display(cluster_only_review.loc[cluster_only_review.pathway_id.isin(discordant_ids),
+    ['pathway_id', 'cluster_best_q', 'smooth_best_q', 'best_framework_q', 'q_family_DESeq2']])
+for pathway in discordant_ids:
+    detail = discordant_gene_review.loc[discordant_gene_review.pathway_id.eq(pathway)]
+    lead_columns = ['cluster_leading_' + label for label in segments]
+    display(detail.loc[detail[lead_columns].any(axis=1)].sort_values('Z_level', key=abs, ascending=False).head(8))
+
+# %% [markdown]
 # ## 9c · Benchmark total human–mouse differences with shared models
+#
+# **Supporting robustness/control analysis, not the central paper claim.** Holding much of the statistical machinery constant helps assess whether additional findings arise solely from comparing different pipelines. Observed retention is a result to report, not a nesting requirement.
 #
 # This benchmark asks the **same biological question** in each model: do human and mouse differ anywhere among the measured structures? Every method gets one ranking opportunity per gene, and each pathway family is tested once per method. There is no threshold tuning or second pass over a selected pathway list.
 #
@@ -2313,9 +2628,12 @@ if candidate_ids:
 # >
 # > Check coverage and null resolution; inspect absolute gene directions and fitted curves; consider specimen and basis sensitivity; keep correlation and one-human-donor limitations beside the result. Neither a small pathway q-value nor a stable section-level pattern is population-level human inference.
 #
-# The table preserves both continuous-only candidates and pathways for which continuous analysis adds detail to a bulk-accessible difference. Program grouping and driver selection happen after discovery.
+# The table preserves both spatial-remodeling without bulk/level evidences and pathways for which continuous analysis adds detail to a bulk-accessible difference. Program grouping and driver selection happen after discovery.
 #
 # Correlation support annotates the primary spatial screen only. The primary matched-null candidate rule, bulk comparison, program representatives, and stability definition remain unchanged; `q_corr` is not an extra discovery or retention filter.
+#
+# `integrated_pathway_classification.csv` is the common-universe master comparison of broad, positional, and conventional evidence. `pathway_evidence_atlas.csv` retains the original-universe spatial program, member-gene, correlation, and stability annotations; join by pathway ID when selecting biological examples.
+#
 
 # %%
 final_table = comparison.merge(programs[['pathway_id', 'program', 'representative']], on='pathway_id', how='left')
@@ -2334,7 +2652,7 @@ conventional_review = benchmark.merge(final_table[['pathway_id', 'program', 'q_c
     'correlation_support', 'n_testable', 'n_retained', 'retention_fraction']],
     on='pathway_id', how='left', validate='one_to_one')
 conventional_review.to_csv(output / 'conventional_pt_vs_continuous_evidence_review.csv', index=False)
-display(conventional_review.loc[conventional_review.comparison_group.eq('continuous screen only')]
+display(conventional_review.loc[conventional_review.comparison_group.eq('spatial screen only')]
     .sort_values('spatial_q_shared')[['pathway_id', 'spatial_q_shared', 'best_segment_q', 'best_magnitude_q',
         'peak_position', 'q_corr', 'correlation_support', 'n_retained', 'n_testable']].head(20))
 
@@ -2351,6 +2669,10 @@ manifest = {'logic_version': NOTEBOOK_LOGIC_VERSION, 'implementation_fingerprint
     'libraries': {name: digest(library_dir / f'{name}.json') for name in libraries},
     'packages': {name: version(name) for name in ['numpy', 'scipy', 'pandas', 'anndata', 'patsy', 'statsmodels', 'gseapy']},
     'n_candidates': len(candidate_ids),
+    'signed_level': 'Mlevel human indicator coefficient / HC3 SE; structure-conditional',
+    'global_signed_gsea': 'same common genes/sets; weight=1 multilevel; separate BH per method',
+    'common_framework': 'all three statistics; positive AUC; separate full-family BH per statistic',
+    'integrated_categories': 'descriptive overlapping flags retained; q cutoff 0.05; near 0.10/0.15',
     'correlation_test': 'spatial CAMERA-style rank variance; equal-specimen Fisher mean; normal tail',
     'empirical_bh_families': 'separate T_spatial, T_level, T_total; all tested pathways across libraries',
     'correlation_bh_family': 'all tested spatial pathways across libraries',
@@ -2493,7 +2815,7 @@ if len(multi) > 1:
 #
 # > **What did bulk already know?**
 # >
-# > Each representative retains its original bulk, level, and spatial effects and q-values. `continuous-only candidate` means the spatial screen found a candidate while the chosen bulk/level screens did not; it does not prove absence of a bulk effect. `bulk/level plus spatial structure` means pseudospace adds localization or restructuring to a difference already accessible to bulk/level analysis.
+# > Each representative retains its original bulk, level, and spatial effects and q-values. `spatial-remodeling without bulk/level evidence` means the spatial screen found a candidate while the chosen bulk/level screens did not; it does not prove absence of a bulk effect. `bulk/level plus spatial structure` means pseudospace adds localization or restructuring to a difference already accessible to bulk/level analysis.
 # >
 # > The original `bulk/level captures difference` terms remain in the complete tested atlas. They are not silently promoted into spatial programs. A program whose terms span several comparison classes is labelled **mixed context**, rather than being assigned the most favorable class.
 
@@ -2646,7 +2968,7 @@ print(f'Saved evidence packets for {len(paper_summary)} draft groups.')
 # > **Suggested paper structure**
 # >
 # > 1. Establish the fixed coordinate, shared support, cohort, and analysis question using the existing workflow.
-# > 2. Show the frozen pathway screen with effect sizes, bulk comparison, correlation annotations, and robustness; retain the complete tested family in supplements.
+# > 2. Show broad biology recovery through whole-PT DESeq2 versus GAM level, then the level/spatial information classes. Present positional localization with correlation annotations and robustness; retain the complete tested family in supplements.
 # > 3. Use a small, biologically reviewed set of program packets to demonstrate what continuous position adds. Include mixed-direction programs where appropriate, rather than selecting only clean signed changes.
 # > 4. Separate observed expression patterns from proposed biological explanations. Independent human donors and external validation are subsequent evidence, not something this notebook has already supplied.
 #
@@ -2681,3 +3003,43 @@ assert paper_input_hash == digest({'atlas': final_table, 'members': member_evide
     'fits': {key: fit[key] for key in ('grid', 'z', 'human', 'mouse', 'delta')}, 'manifest': manifest})
 display(paper_review.head(10))
 print('Biological review worksheet:', review_path)
+
+# %% [markdown]
+# ## 22 · Manuscript conclusion and numerical summary
+#
+# 1. Conventional whole-PT and S1/S2/S3 analyses recover many strong species differences in this cohort.
+# 2. The GAM/pseudostructure framework captures broad/global differences through `T_level` and total-difference modeling. Lack of `T_spatial` significance is expected for constant shifts and must not be read as failure to retain conventional biology. The signed level comparison quantifies recovery without assuming identical estimators or lists.
+# 3. The major added value of `T_spatial` is testing and localizing position-dependent remodeling that whole-PT or coarse-region aggregation loses or dilutes. Screen discrepancies alone do not demonstrate greater power.
+#
+# **Paper interpretation:** “Pseudostructure reconstruction preserves a fine-grained positional coordinate. Broad species differences detectable by conventional aggregation remain accessible within the trajectory framework, while position-dependent modeling reveals an additional class of pathway remodeling that cannot be described by whole-PT or coarse S1/S2/S3 summaries.”
+#
+# The numerical summary below distinguishes original and common universes, retains the controlled Section 9c comparison as supporting evidence, and reports unresolved cluster-screen discrepancies. Term counts are not independent programs. Biological examples require gene/curve review; one human donor limits population inference.
+
+# %%
+print('MANUSCRIPT SUMMARY — exploratory, one human donor; counts are pathway terms')
+print(f'Universe: original {len(genes):,} genes / {len(framework_wide):,} pathways; '
+      f'common {len(conventional_genes):,} genes / {len(integrated):,} pathways.')
+print(f'Original matched framework: level={framework_counts["level significant"]}, '
+      f'spatial={framework_counts["spatial significant"]}, total={framework_counts["total significant"]}; '
+      f'level-only={framework_counts["level only (relative to spatial)"]}, '
+      f'level+spatial={framework_counts["level + spatial"]}, '
+      f'spatial-only={framework_counts["spatial only (relative to level)"]}, '
+      f'all-three={framework_counts["all three"]}, total-only={framework_counts["total only"]}.')
+for row in global_summary.itertuples(index=False):
+    direction_note = f'{row.shared_direction_concordance:.3f}' if row.comparison == 'signed GSEA' else 'not applicable (unsigned)'
+    print(f'{row.comparison}: shared={row.shared}; DESeq2-only={row.DESeq2_only}; '
+          f'GAM-level-only={row.GAM_level_only}; recovery={row.fraction_DESeq2_recovered:.1%}; '
+          f'GAM shared fraction={row.fraction_GAM_level_shared:.1%}; '
+          f'pathway rank rho={row.score_spearman:.3f}; shared direction agreement={direction_note}.')
+print(f'Signed gene ranks: rho={global_summary.gene_stat_spearman.iloc[0]:.3f}, '
+      f'direction agreement={global_summary.gene_direction_concordance.iloc[0]:.1%}.')
+print('Signed segment GSEA: ' + '; '.join(f'{name}={count}' for name, count in signed_counts.items()))
+print('Common-universe information classes: ' + '; '.join(
+    f'{name}={count}' for name, count in integrated.information_class.value_counts().items()))
+print('Integrated classes: ' + '; '.join(f'{name}={count}' for name, count in integrated.pathway_category.value_counts().items()))
+print('Cluster-only support (overlapping counts): ' + '; '.join(
+    f'{name}={count}' for name, count in cluster_only_summary.items()))
+print('Section 9c supporting control:')
+print(benchmark_summary.round(3).to_string(index=False))
+print('Interpretation: broad biology remains accessible through level/total modeling; '
+      'spatial modeling adds positional questions. Significance sets need not nest.')

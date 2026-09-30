@@ -103,6 +103,129 @@ def test_nested_effects_hc3_and_specimen_contrasts():
     assert np.allclose(uneven['se'][1], expected)
 
 
+def test_signed_level_statistic_matches_hc3_wls_under_unequal_specimen_sizes():
+    rng = np.random.default_rng(43)
+    sample_sizes = {'m1': 80, 'm2': 55, 'h1': 70, 'h2': 40}
+    specimen = np.concatenate([np.repeat(name, size) for name, size in sample_sizes.items()])
+    human = np.isin(specimen, ['h1', 'h2']).astype(float)
+    position = np.concatenate([np.linspace(.01, .99, size)
+                               for size in sample_sizes.values()])
+    noise = rng.normal(0, .2, (len(position), 2))
+    y = 2 + position[:, None] + noise
+    y[:, 0] += 1.5 * human
+    y[:, 1] -= 1.2 * human
+    grid = np.linspace(.05, .95, 9)
+    fit = fit_nested_trajectories(y, position, human, specimen, grid)
+
+    x_level = build_ls_designs(position, human, fit['knots'])[1]
+    nuisance = []
+    for group in (0., 1.):
+        group_names = np.unique(specimen[human == group])
+        nuisance.extend((specimen == name).astype(float) -
+                        (specimen == group_names[-1]).astype(float)
+                        for name in group_names[:-1])
+    x = np.column_stack([x_level, *nuisance])
+    weights = np.zeros(len(position))
+    for group in (0., 1.):
+        group_names = np.unique(specimen[human == group])
+        for name in group_names:
+            mask = specimen == name
+            weights[mask] = len(position) / (2 * len(group_names) * mask.sum())
+    p_base = x_level.shape[1] - 1
+    for gene in range(y.shape[1]):
+        reference = WLS(y[:, gene], x, weights=weights).fit(cov_type='HC3')
+        beta = reference.params[p_base]
+        se = reference.bse[p_base]
+        assert fit['beta_human_level'][gene] == pytest.approx(beta)
+        assert fit['se_human_level'][gene] == pytest.approx(se)
+        assert fit['Z_level'][gene] == pytest.approx(beta / se)
+    assert fit['Z_level'][0] > 0 and fit['Z_level'][1] < 0
+    swapped = fit_nested_trajectories(y, position, 1 - human, specimen, grid)
+    np.testing.assert_allclose(swapped['beta_human_level'], -fit['beta_human_level'])
+    np.testing.assert_allclose(swapped['Z_level'], -fit['Z_level'])
+
+
+def test_notebook_integrated_classification_uses_both_universes_and_direction(tmp_path):
+    """Exercise the notebook's own integrated-classification source on synthetic rows."""
+    import json
+    from pathlib import Path
+
+    notebook = json.loads((Path(__file__).resolve().parents[1] / 'analysis/notebooks/12_pt_pathway_remodeling.ipynb').read_text())
+    source = next(''.join(cell['source']) for cell in notebook['cells']
+                  if ''.join(cell.get('source', [])).startswith("integrated = pd.DataFrame({'pathway_id': sorted(conventional_gene_sets)})"))
+    # Stop after the actual classification exports and before plots/manual-review packets.
+    code = source.split('fate_order = ', 1)[0]
+    pathways = [f'P{i}' for i in range(5)]
+    segments = ['S1', 'S2', 'S3']
+    stats = ['T_level', 'T_spatial', 'T_total']
+
+    def matched_rows(q_by_pathway, effect_by_pathway):
+        return pd.DataFrame([{'pathway_id': pathway, 'statistic': stat,
+            'auc': .5 + effect_by_pathway[pathway], 'effect': effect_by_pathway[pathway],
+            'p_empirical': q_by_pathway[pathway], 'q_empirical': q_by_pathway[pathway]}
+            for pathway in pathways for stat in stats])
+
+    q_original = {p: .8 for p in pathways}
+    e_original = {p: .2 for p in pathways}
+    q_common = {p: .8 for p in pathways}
+    e_common = {p: .2 for p in pathways}
+    original = matched_rows(q_original, e_original).pivot(index='pathway_id', columns='statistic',
+        values=['auc', 'effect', 'p_empirical', 'q_empirical'])
+    original.columns = ['_'.join(column) for column in original.columns]
+    original = original.reset_index()
+    original.loc[original.pathway_id.eq('P0'), 'q_empirical_T_level'] = .01
+    for name in ('level', 'spatial', 'total'):
+        original[name + '_hit'] = (original['effect_T_' + name].gt(0)
+            & original['q_empirical_T_' + name].le(.05))
+    original['information_class'] = 'neither'
+    common = matched_rows(q_common, e_common)
+    # P1 has common-universe spatial support; P2 has tiny q-values but negative effects.
+    common.loc[common.pathway_id.eq('P1') & common.statistic.eq('T_spatial'), 'q_empirical'] = .01
+    common.loc[common.pathway_id.eq('P1') & common.statistic.eq('T_spatial'), 'p_empirical'] = .01
+    common.loc[common.pathway_id.eq('P2'), ['effect', 'auc']] = [-.2, .3]
+    common.loc[common.pathway_id.eq('P2'), ['q_empirical', 'p_empirical']] = [.001, .001]
+    common.loc[common.pathway_id.eq('P3') & common.statistic.eq('T_level'),
+               ['q_empirical', 'p_empirical']] = [.08, .08]
+    common.loc[common.pathway_id.eq('P4') & common.statistic.eq('T_level'),
+               ['q_empirical', 'p_empirical']] = [.13, .13]
+    signed = pd.DataFrame({'pathway_id': pathways, 'NES_DESeq2': [1.] * 5,
+        'p_nominal_DESeq2': [.5] * 5, 'q_family_DESeq2': [.5] * 5,
+        'NES_GAM_level': [1.] * 5, 'p_nominal_GAM_level': [.5] * 5,
+        'q_family_GAM_level': [.5] * 5, 'DESeq2_hit': [False] * 5,
+        'GAM_level_hit': [False] * 5})
+    cluster = pd.DataFrame([{'pathway_id': p, 'segment_class': seg, 'NES': 2.,
+        'p_nominal': (.001 if p != 'P1' else .5),
+        'q_family': (.01 if p != 'P1' else .5)} for p in pathways for seg in segments])
+    smooth_q = {'P0': .4, 'P1': .4, 'P2': .4, 'P3': .4, 'P4': .4}
+    smooth = pd.DataFrame([{'pathway_id': p, 'segment_class': seg, 'NES': 1.,
+        'p_nominal': smooth_q[p], 'q_family': smooth_q[p]} for p in pathways for seg in segments])
+    benchmark = pd.DataFrame({'pathway_id': pathways, 'any_segment_magnitude_hit': [False] * 5,
+        'best_magnitude_q': [.8] * 5, **{f'magnitude_effect_{seg}': [.2] * 5 for seg in segments},
+        **{f'magnitude_q_{seg}': [.8] * 5 for seg in segments}})
+    namespace = {'pd': pd, 'np': np, 'conventional_gene_sets': {p: [p + '_g'] for p in pathways},
+        'shared_framework_tests': common, 'framework_wide': original,
+        'global_pathway_comparison': signed, 'discrete_signed_gsea': cluster,
+        'continuous_local_gsea': smooth, 'segments': segments, 'benchmark': benchmark,
+        'output': tmp_path, 'display': lambda *_args, **_kwargs: None}
+    exec(compile(code, '<notebook integrated classification>', 'exec'), namespace)
+    integrated = namespace['integrated'].set_index('pathway_id')
+    review = namespace['cluster_only_review'].set_index('pathway_id')
+    assert integrated.loc['P0', 'level_support_either_universe']
+    assert integrated.loc['P0', 'matched_framework_n'] == 1
+    assert integrated.loc['P1', 'spatial_hit']
+    assert integrated.loc['P1', 'pathway_category'] == 'spatial remodeling without bulk evidence'
+    assert not integrated.loc['P2', 'any_framework_hit']
+    assert integrated.loc['P2', 'common_q_empirical_T_level'] == .001
+    assert integrated.loc['P2', 'best_framework_q'] > .15
+    assert not integrated.loc['P2', 'near_threshold_010']
+    assert review.loc['P0', 'diagnostic_fate'] == 'Supported elsewhere in framework'
+    assert review.loc['P3', 'diagnostic_fate'] == 'Unsupported; q < 0.10'
+    assert review.loc['P4', 'diagnostic_fate'] == 'Unsupported; 0.10 ≤ q < 0.15'
+    assert review.loc['P2', 'diagnostic_fate'] == 'Unsupported; q ≥ 0.15'
+    assert review.loc['P3', 'common_q_empirical_T_level'] == .08
+    assert review.loc['P0', 'original_q_empirical_T_level'] == .01
+
+
 def test_auc_matching_ties_and_relative_direction():
     values = np.array([1., 2., 2., 4., 8., 9.])
     assert rank_auc(values, [0, 2]) == mannwhitneyu(values[[0, 2]], values[[1, 3, 4, 5]]).statistic / 8

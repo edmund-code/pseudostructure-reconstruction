@@ -1,258 +1,128 @@
 # AGENTS.md
 
-Private, reproducible kidney-spatial research workspace: reconstructs a nephron "pseudospace"
-(position along the nephron) from Visium HD tubule aggregates, plus the H&E panoptic segmentation
-subproject that produces its GeoJSON inputs.
+Private, reproducible kidney-spatial research workspace. `analysis/` reconstructs nephron
+"pseudospace" from Visium HD tubule aggregates; `segmentation/` provides H&E panoptic segmentation
+and its GeoJSON inputs.
 
 ## Project
 
-- Two connected workflows: `analysis/` (pseudospace) and `segmentation/` (boundary-based tubule /
-  glomerulus panoptic segmentation, package `kidney_panoptic`).
-- Python 3.11 + Scanpy/AnnData for analysis; R `harmony` **2.0.5** via rpy2 (the workflow refuses
-  older user-level R installs). The `segmentation/` project has its own, deliberately separate
-  Python 3.10 / Torch environment.
-- **No private data in Git.** No slides, Visium matrices, H5AD, GeoJSON, checkpoints, or executed
-  notebooks — enforced by `tools/check_repository_hygiene.py`. Real data lives outside the repo and
-  is passed in by path; see [data/README.md](data/README.md) and [docs/data/access.md](docs/data/access.md).
-- Entry points: the notebooks in `analysis/notebooks/`, with generated `.py` mirrors at
-  `analysis/mouse_only_pseudospace.py` (active mouse-only workflow),
-  `analysis/human_vs_healthy_mouse.py` (cross-species),
-  `analysis/minimal_pt_scfates.py` (13: notebook-03-style two-pass Harmony, reviewed nephron
-  filtering and PT subsetting, with nonbranching scFates versus DPT on both scopes; its PT
-  scFates coordinate feeds notebook 12),
-  `analysis/gam_human_vs_mouse.py` (GAM-only companion to 03: reads its PT pseudospace, recomputes
-  no coordinate), and `analysis/human_mouse_spatial_rewiring.py` (06: continuous PT conservation and
-  spatial rewiring — reads 03's PT object, caches its own per-specimen fits, and cross-checks against
-  05's saved curves and atlas rather than consuming them). 06 is the **frozen discovery notebook** for
-  the human vs healthy-mouse PT spatial analysis: it runs on 03's shared PT DPT exactly as 03 oriented
-  it (no cross-species re-registration), a displacement is reported as a supporting measurement rather
-  than as a phenotype class, and the external validation of its leading pathway candidates belongs in a
-  separate analysis, not in it. `analysis/pt_gam_clustering.py` (07: gene-level unsupervised
-  discovery of normal-positional modules and human-vs-mouse response modules — reads 03's PT object
-  and ortholog map, clusters the fitted GAM curves, and loads pathway annotations only after every
-  cluster assignment and cluster-number decision is frozen).
-- **Cohort**: 2 control mouse specimens, 2 AKI mouse specimens, and 2 human kidney slices. The two
-  human slices are *named* cortex and medulla, but **both are in reality healthy human cortex** —
-  do not treat the medulla-labelled slice as medullary tissue in any analysis or write-up.
-- Scientific status: the 2-vs-2 mouse comparison is descriptive, **not** confirmatory. Read
-  [docs/results/current-mouse-run.md](docs/results/current-mouse-run.md) before quoting any ranked
-  gene/pathway list.
+- Analysis uses Python 3.11, Scanpy/AnnData, and R `harmony` **2.0.5** via rpy2; older user-level R
+  installs are refused. Segmentation has a separate Python 3.10/Torch environment.
+- **Never put private data in Git** (slides, Visium matrices, H5AD, GeoJSON, checkpoints, or executed
+  notebooks). Data stays outside the repo and is passed by path; see [data/README.md](data/README.md)
+  and [docs/data/access.md](docs/data/access.md). `tools/check_repository_hygiene.py` enforces this.
+- Canonical workflows are notebooks in `analysis/notebooks/`; generated mirrors include mouse-only
+  (`analysis/mouse_only_pseudospace.py`), cross-species 03, GAM 05, spatial rewiring 06, gene modules
+  07, scFates 13, and pathway remodeling 12. Notebook 13 compares nonbranching scFates and DPT on
+  nephron and PT scopes; its PT scFates coordinate feeds 12. GAM 05 reads 03's PT pseudospace and
+  recomputes no coordinate. Notebook 12 uses gene-first nested models on 13's PT scFates coordinate.
+- **Cohort:** 2 control mouse, 2 AKI mouse, and 2 human kidney slices. The human slices are named
+  cortex and medulla, but **both are healthy human cortex**; never treat the medulla-labelled slice
+  as medullary tissue.
+- The 2-vs-2 mouse comparison is descriptive, **not confirmatory**. Read
+  [docs/results/current-mouse-run.md](docs/results/current-mouse-run.md) before quoting ranked
+  genes or pathways.
 
-## Commands
+## Commands and architecture
+
+Create the analysis environment with `conda env create -f environment.yml`; activate
+`kidney-pseudospace`. Run synthetic tests with `pytest tests`. Before commits, run the repository
+hygiene check and stage output-free notebook copies with `python tools/stage_notebooks_without_outputs.py`;
+after notebook edits, run `python tools/check_notebook_stage_order.py analysis/notebooks/*.ipynb`.
+Workflow scripts accept `--data-root` and `--results-root` (CLI flags override
+`PSEUDOSPACE_DATA_ROOT` and `PSEUDOSPACE_RESULTS_ROOT`). Segmentation uses
+`conda env create -f segmentation/environment.yml`, then
+`PYTHONPATH=segmentation/src pytest segmentation/tests -m "not slow"`. CI runs hygiene, synthetic
+pseudospace, and CPU segmentation-unit jobs.
+
+`pseudospace/` contains reusable marker, Harmony, trajectory, GAM/statistics, module, enrichment,
+pathway, specimen, cross-species, heatmap, QC, cache, and scPrisma logic. `analysis/` holds workflow
+notebooks/mirrors and QuPath/spatial-validation scripts. `segmentation/` is the self-contained
+`kidney_panoptic` package. `docs/` holds architecture decisions, workflow guides, results, and
+publication readiness. `legacy/` is provenance only; never mix it with current results.
+
+## Conventions and scientific guardrails
+
+- Never hardcode machine-specific paths. Scripts use the root flags/env vars above; hygiene rejects
+  tracked machine-local absolute home paths.
+- Notebooks are canonical and `.py` files are generated, one-way mirrors. Make durable code changes
+  in `.ipynb`, then regenerate the mirror; `.py`-only changes are discarded. `comment_magics = true`
+  in `jupytext.toml` keeps mirrors parseable while restoring magics in notebooks.
+- Run the notebook stage-order gate before mirror regeneration. It catches use-before-definition and
+  names assigned only in a conditional branch then read later (a latent `NameError`).
+- Committed notebooks must be output-free, but never clear a working notebook to achieve that.
+  `stage_notebooks_without_outputs.py` stages a cleaned copy without changing the working file; do
+  not `git add` those notebook paths afterward. Check the index with
+  `python tools/check_repository_hygiene.py --staged`. Clearing a live notebook in place destroys
+  outputs that cannot be recovered.
+- Tests must not need private data; use synthetic fixtures and `pytest.importorskip(...)` for heavy
+  imports.
+- Cross-species shared space contains only genes measured in every input. The accepted ortholog map
+  creates a target column for every pair, so an unfed column is a structural zero, not an observation
+  of zero expression; a measured zero stays. `combine_cross_species` records
+  `measured_in_both_inputs` and `uns['cross_species_availability']` (03 also writes
+  `diagnostics/cross_species_*.csv`). Notebook 03 keeps every gene in the object
+  (`require_measured_in_both=False`) and masks the analysis gene set instead: removing genes changes
+  Scanpy seurat-flavour HVG binning by mean expression, which changes PCA/Harmony, moves the Leiden
+  partition, and invalidates the hand-reviewed cluster labels.
+- Set-level enrichment is exploratory, never confirmatory. `camera_like_enrichment` contrasts a
+  set's mean statistic with the background mean, corrects across all tested pairs (pooled and
+  specimen-balanced rankings together), and estimates variance inflation from residual correlations
+  given the fitted design. With two mice and one human donor, specimens are the replication units.
+- Only `*_kept_tubules_labeled_fine.geojson` mouse segmentations are valid. They are quality
+  controlled upstream, so mouse workflows do no tubule-level **gene-count** QC. They apply a
+  structure filter: a per-species `n_spots` quantile floor (`MIN_SPOTS_PER_SPECIES_QUANTILE = 0.05`
+  in 03, `MIN_SPOTS_QUANTILE` in 02). Use the quantile floor, not an absolute threshold, to preserve
+  species balance and nephron ordering. Centroid verification is mandatory; see
+  `docs/workflows/pseudospace.md`.
+- Coarse-label checkpoint requires explicit per-cluster confirmation; update the reference
+  13-cluster fingerprint with the labels. Never bypass the stop before DPT if it drifts.
+- Original 02/03 coordinate is Scanpy DPT on pass-2 Harmony, rooted in PT and oriented by the
+  early→late marker axis. Notebook 13 repeats two-pass integration and compares nonbranching scFates
+  with DPT on nephron and PT subsets; its separate PT scFates coordinate feeds 12.
+- Notebook 06 is the **frozen discovery notebook** for human vs healthy-mouse PT spatial analysis. It
+  uses 03's shared PT DPT exactly as 03 oriented it (no cross-species re-registration); displacement
+  is a supporting measurement, not a phenotype class. Validate leading pathway candidates in a
+  separate analysis. It caches its own per-specimen fits and cross-checks against 05's saved curves
+  and atlas without consuming them. Notebook 07 discovers gene-level normal-positional and human-vs-mouse response
+  modules from 03's PT object and ortholog map; load pathway annotations only after cluster assignments
+  and cluster-number decisions are frozen.
+- In `segmentation/`, select models by pooled class-agnostic PQ (not validation loss); D4 TTA is
+  required for reported inference.
+- Public `obs` label contract: `segment_class` (fine), `coarse_class` (rollup),
+  `broad_tubule_marker_call` (downstream alias). Keep scientific caveats beside result summaries.
+- Prefer reusable logic in `pseudospace/` with thin orchestration in `analysis/`.
+- Expensive stages cache by parameters, inputs, and code in `results/<workflow>/stage_cache/`.
+  Unchanged notebooks print `[stage cache] hit`; `PSEUDOSPACE_STAGE_CACHE=0` forces rebuild, and
+  `pseudospace.stage_cache.cache_status(...)` / `purge_stage_cache(...)` inspect or clear cache.
+  Bump `NOTEBOOK_LOGIC_VERSION` in the config cell when a cached cell changes. Never cache validation
+  or guard cells (Harmony version, input existence, fingerprint checks).
+- **Commit and push every verified change to `origin/main`**; never push private data or executed
+  notebooks. Follow the output-free notebook convention above.
+
+## Mirror regeneration
+
+Pairs are manual: for notebook IDs 02–09, 12, and 13, remove the `NN_` prefix and change `.ipynb`
+to `.py` under `analysis/`. `jupytext --sync` cannot infer these partners. Regenerate explicitly:
 
 ```bash
-# Analysis environment (repo root)
-conda env create -f environment.yml && conda activate kidney-pseudospace
-
-# Synthetic regression tests (no private data; needs anndata/scanpy/matplotlib)
-pytest tests
-
-# Repository hygiene gate (requires nbformat) — run before every commit
-python tools/check_repository_hygiene.py            # inspects the working tree
-python tools/check_repository_hygiene.py --staged   # inspects the index (what a commit would record)
-
-# Stage output-free copies of tracked notebooks WITHOUT touching the working files
-python tools/stage_notebooks_without_outputs.py [--list]
-
-# Notebook ordering gate — run after editing a notebook, before regenerating its mirror
-python tools/check_notebook_stage_order.py analysis/notebooks/*.ipynb
-
-# Active workflows (flags win over env vars)
-python analysis/mouse_only_pseudospace.py   --data-root <dir> --results-root <dir>
-python analysis/human_vs_healthy_mouse.py   --data-root <dir> --results-root <dir>
-python analysis/gam_human_vs_mouse.py       --data-root <dir> --results-root <dir>   # needs 03's outputs
-python analysis/pt_gam_clustering.py        --data-root <dir> --results-root <dir>   # needs 03's outputs
-python analysis/pt_genes2genes.py           --data-root <dir> --results-root <dir>   # needs 03's outputs; 07 atlas optional
-python analysis/minimal_pt_scfates.py       --data-root <dir> --results-root <dir>   # 13: run before 12; scFates primary, DPT comparator
-python analysis/pt_pathway_remodeling.py    --data-root <dir> --results-root <dir>   # 12: gene-first nested models on 13's scFates coordinate
-# env-var equivalents: PSEUDOSPACE_DATA_ROOT, PSEUDOSPACE_RESULTS_ROOT
-
-# QuPath export / spatial validation
-python analysis/scripts/export_kept_tubules_to_qupath_geojson.py --data-root <dir> --results-root <dir> [--dry-run]
-python analysis/scripts/spatial_validation_of_pseudospace.py      --data-root <dir> --results-root <dir> [--dry-run]
-
-# Segmentation subproject (independent env)
-conda env create -f segmentation/environment.yml && conda activate kidney-panoptic
-PYTHONPATH=segmentation/src pytest segmentation/tests -m "not slow"
+jupytext --to py:percent --output <mirror> analysis/notebooks/<notebook>
+python -m py_compile <mirror>
 ```
 
-CI (`.github/workflows/ci.yml`) runs three jobs: `hygiene`, `pseudospace-synthetic`
-(`pip install -e . && pytest tests`), and `segmentation-unit` (CPU-only, `-m "not slow"`).
+Set `JUPYTER_DATA_DIR=/tmp/jupyter-data` if nbformat cannot write its signature secret file.
+Notebook 01 (`01_segmentation_to_gene_matrix.ipynb`) has no mirror. Notebook 02 owns
+`_workflow_roots` (`argparse` plus `PSEUDOSPACE_*` fallback); restore it in the notebook, never the
+generated `.py`, or regenerated mouse script root flags disappear.
 
-## Architecture
+<!-- Keep the repository root free of scratch files, temp scripts, and vendored archives. -->
 
-| Path | Role |
-| --- | --- |
-| `pseudospace/` | Reusable, data-location-agnostic analysis logic: `markers` (alias resolution, marker axis, DE cluster annotation), `harmony` (R integration + version guard), `trajectory` (DPT root/orientation), `levelshape` + `stats_gam` (level/shape GAM decomposition, inclusive-tail permutation p-values, LOSO stability, dominant-difference and pattern-status split), `modules` (positional and response curve modules + module enrichment), `enrichment` (signed rankings, competitive set tests with residual-correlation variance inflation, signed signatures), `pathways` (ortholog-aware membership, coverage stages, redundancy, member evidence), `specimen` (balanced curves, pseudobulk, coordinate agreement), `cross_species`, `heatmaps`, `io_qc`, `scprisma_pseudospace`. |
-| `analysis/` | Canonical `notebooks/*.ipynb` workflows plus their generated `.py` mirrors and the study-specific data contract. |
-| `analysis/scripts/` | QuPath label export and spatial validation of the pseudospace. |
-| `segmentation/` | Self-contained `kidney_panoptic` project (`src/kidney_panoptic/{data,models,losses,postprocess,eval,utils,infer}`, `scripts/`, `configs/`). Frozen encoder + native-resolution decoder + watershed decode. |
-| `docs/` | `architecture/000N-*.md` decision records, `workflows/` run guides, `results/` curated tables, `publication-readiness.md`. |
-| `tools/` | `check_repository_hygiene.py` — the pre-commit gate. |
-| `legacy/` | Superseded notebooks, provenance only. Unsupported; never mix with current results. |
+## Implementation discipline
 
-Data flow: private Visium HD + mouse fine-classification GeoJSON → `notebooks/01_segmentation_to_gene_matrix.ipynb` →
-private tubule-by-gene H5AD → the mouse-only workflow → private Harmony/DPT outputs + curated
-tables under `docs/results/`.
-
-## Conventions
-
-- **Never hardcode user-specific paths.** Scripts take `--data-root` / `--results-root` and fall back
-  to the `PSEUDOSPACE_*` env vars; CLI arguments win. The hygiene checker rejects any tracked file
-  containing a machine-local absolute home directory (never spell one out in tracked text — that is
-  what makes the checker fail).
-- **Check the notebook's name order before regenerating its mirror.**
-  `tools/check_notebook_stage_order.py` flags (a) names used before any cell defines them and
-  (b) names assigned only inside a conditional branch of an earlier cell and then read later — the
-  second class is a latent `NameError` that only fires on the branch you did not test (a cache miss,
-  an empty result, a skipped sensitivity analysis). It has already caught three such defects.
-- **Notebooks are the canonical artifact; the `.py` files are generated mirrors.** You (the human)
-  execute `analysis/notebooks/*.ipynb` — that is where the workflow lives, and running cells is
-  always fine. The `.py` exists as a token-efficient plain-text surface for agents to read and
-  propose edits in. Regeneration is one-way, notebook → script (see ## Notes), so a **`.py`-only edit
-  is discarded by the next regeneration: durable code changes belong in the `.ipynb`**. After
-  changing a notebook, regenerate its mirror so the two never diverge.
-- **`comment_magics = true`** (`jupytext.toml`): IPython magics appear as comments
-  (`# %load_ext autoreload`) in the mirror, keeping the `.py` valid, parseable Python that agents can
-  syntax-check. jupytext restores them as live magics in the notebook, so the notebook is unaffected.
-- **Committed notebooks must be output-free, and a working notebook is never cleared to achieve
-  that.** Notebooks live in git *and* they are run interactively, so a tracked notebook usually holds
-  a contributor's live outputs. Stage an output-free copy instead of editing the file
-  (`python tools/stage_notebooks_without_outputs.py`, which hashes a cleaned copy into the index and
-  leaves the working file alone), do not `git add` those paths afterwards, and check the result with
-  `python tools/check_repository_hygiene.py --staged`. `nbconvert --clear-output --inplace` is only
-  for a notebook nobody is working in — running it on a live notebook destroys outputs that cannot be
-  recovered.
-- **Tests must not need private data.** Use synthetic fixtures; gate heavy imports with
-  `pytest.importorskip(...)` (see `tests/test_pseudospace_synthetic.py`).
-- **Scientific guardrails** (do not bypass):
-  - **The cross-species shared space contains only genes measured in every input.** The accepted
-    ortholog map creates a target column for every pair, so an unfed column is a structural zero, not
-    an observation of zero expression. `combine_cross_species` flags `measured_in_both_inputs` per gene
-    and records the audit in `uns['cross_species_availability']` (notebook 03 also writes
-    `diagnostics/cross_species_*.csv`); a measured zero stays. Notebook 03 keeps every gene in the
-    object (`require_measured_in_both=False`) and masks the **analysis** gene set instead: the HVG
-    selection that feeds PCA/Harmony is sensitive to the gene set (Scanpy's seurat flavour bins genes
-    by mean expression), so removing genes from the object moves the Leiden partition and invalidates
-    the hand-reviewed cluster labels in notebook 03.
-  - **Set-level enrichment is exploratory, never confirmatory.** `camera_like_enrichment` contrasts a
-    set's mean statistic with the background mean, corrects across the whole family of tested pairs
-    (pooled and specimen-balanced rankings together),
-    and estimates the variance inflation from residual correlations given the fitted design. With two
-    mice and one human donor the units of replication are specimens.
-  - Only the `*_kept_tubules_labeled_fine.geojson` mouse segmentations are valid; they are
-    already quality controlled upstream, so the mouse workflows apply no tubule-level
-    **gene-count** QC of their own. They do apply one structure filter: a quantile floor on
-    `n_spots` (`MIN_SPOTS_PER_SPECIES_QUANTILE = 0.05` in notebook 03, `MIN_SPOTS_QUANTILE` in
-    notebook 02). The two species differ ~2.2x in supporting spots (median 261 mouse against 585
-    human), and the low-spot tail is what stops the global DPT ordering the nephron — measured,
-    a per-species p5 floor restores the monotone segment order at 95% retention, while an
-    absolute threshold unbalances the species and leaves the order inverted. Centroid
-    verification is still mandatory (`analysis/`, `docs/workflows/pseudospace.md`).
-  - The coarse-label checkpoint requires explicit per-cluster confirmation, and the reference
-    13-cluster fingerprint must be updated together with the labels. The workflow stops before DPT
-    if it drifts — never bypass the guard.
-  - The original 02/03 pseudospace coordinate is Scanpy DPT on the pass-2 Harmony embedding,
-    rooted in PT and oriented by the early→late marker axis. Notebook 13 repeats the two-pass
-    integration and compares nonbranching scFates with DPT on the nephron and PT subset. Its
-    separate PT scFates coordinate feeds notebook 12.
-  - Model selection in `segmentation/` is pooled class-agnostic PQ (not validation loss); D4 TTA is
-    required for reported inference.
-- **The public `obs` label contract** consumed by the package, QuPath export, and spatial
-  validation: `segment_class` (fine), `coarse_class` (rollup), `broad_tubule_marker_call` (alias
-  expected downstream).
-- Keep scientific caveats beside result summaries, not in a separate file.
-- `pseudospace/` modules are extracted from the notebooks and keep notebook-equivalent code;
-  prefer adding reusable logic there and thin orchestration in `analysis/`.
-- **Expensive stages are cached, keyed by parameters + inputs + code** (`pseudospace/stage_cache.py`,
-  stored under `results/<workflow>/stage_cache/`). A rerun of an unchanged notebook reloads them and
-  prints `[stage cache] hit ...` for each; `PSEUDOSPACE_STAGE_CACHE=0` forces a full rebuild, and
-  `pseudospace.stage_cache.cache_status(...)`/`purge_stage_cache(...)` inspect or clear it. Cached
-  cells carry a `NOTEBOOK_LOGIC_VERSION` in their key: bump it in the config cell whenever you change
-  the body of a cached cell, so a stale payload cannot outlive the code that produced it. Never put
-  validation or guard cells behind the cache (Harmony version, input existence, fingerprint checks).
-- **Commit and push after every change** (never re-add a notebook whose working copy carries live
-  outputs — see the notebook-output convention above). Version control is the safety net here: once an edit is
-  verified, commit it and push to `origin/main`
-  (`https://github.com/edmund-code/pseudostructure-reconstruction.git`) rather than leaving work
-  uncommitted — and never push private data or executed notebooks.
-
-## Notes
-
-- **Regenerating the mirrors is a manual, one-way step — the pairs are not auto-wired.** `jupytext.toml`
-  declares a default `ipynb,py:percent` pair, but `jupytext --paired-paths` resolves to files that do
-  not exist (the notebooks sit in `analysis/notebooks/` behind a `NN_` prefix; the scripts are
-  `analysis/<name>.py`), so jupytext cannot infer the pairs and `jupytext --sync` has no partner.
-  Pairing:
-  `02_mouse_only_pseudospace.ipynb → analysis/mouse_only_pseudospace.py`,
-  `03_human_vs_healthy_mouse.ipynb → analysis/human_vs_healthy_mouse.py`,
-  `04_mouse_workflow_comparison.ipynb → analysis/mouse_workflow_comparison.py`,
-  `05_gam_human_vs_mouse.ipynb → analysis/gam_human_vs_mouse.py`,
-  `06_human_mouse_spatial_rewiring.ipynb → analysis/human_mouse_spatial_rewiring.py`,
-  `07_pt_gam_clustering.ipynb → analysis/pt_gam_clustering.py`, and
-  `08_pt_cross_species_validation.ipynb → analysis/pt_cross_species_validation.py`, and
-  `09_pt_genes2genes.ipynb → analysis/pt_genes2genes.py`, and
-  `12_pt_pathway_remodeling.ipynb → analysis/pt_pathway_remodeling.py`, and
-  `13_minimal_pt_scfates.ipynb → analysis/minimal_pt_scfates.py`.
-  (`01_segmentation_to_gene_matrix.ipynb` is notebook-only — it has no mirror.)
-
-  ```bash
-  jupytext --to py:percent --output analysis/mouse_only_pseudospace.py \
-    analysis/notebooks/02_mouse_only_pseudospace.ipynb
-  jupytext --to py:percent --output analysis/human_vs_healthy_mouse.py \
-    analysis/notebooks/03_human_vs_healthy_mouse.ipynb
-  jupytext --to py:percent --output analysis/mouse_workflow_comparison.py \
-    analysis/notebooks/04_mouse_workflow_comparison.ipynb
-  jupytext --to py:percent --output analysis/gam_human_vs_mouse.py \
-    analysis/notebooks/05_gam_human_vs_mouse.ipynb
-  jupytext --to py:percent --output analysis/human_mouse_spatial_rewiring.py \
-    analysis/notebooks/06_human_mouse_spatial_rewiring.ipynb
-  jupytext --to py:percent --output analysis/pt_gam_clustering.py \
-    analysis/notebooks/07_pt_gam_clustering.ipynb
-  jupytext --to py:percent --output analysis/pt_cross_species_validation.py \
-    analysis/notebooks/08_pt_cross_species_validation.ipynb
-  jupytext --to py:percent --output analysis/pt_genes2genes.py \
-    analysis/notebooks/09_pt_genes2genes.ipynb
-  jupytext --to py:percent --output analysis/pt_pathway_remodeling.py \
-    analysis/notebooks/12_pt_pathway_remodeling.ipynb
-  jupytext --to py:percent --output analysis/minimal_pt_scfates.py \
-    analysis/notebooks/13_minimal_pt_scfates.ipynb
-  ```
-
-  Add `JUPYTER_DATA_DIR=/tmp/jupyter-data` when nbformat cannot write its signature secret file.
-  Then confirm both compile: `python -m py_compile <script>`.
-- **Notebook 02 owns the `_workflow_roots` helper** (`argparse` + `PSEUDOSPACE_*` fallback) that keeps
-  `--data-root` / `--results-root` working in the regenerated mouse script. Restore it in the
-  notebook, never in the generated `.py`, or those flags silently disappear from the script.
-
-<!-- Leave a clean house: no stray scratch files, temp scripts, or vendored archives at the repo
-     root. Anything that isn't project source belongs outside the workspace. -->
-
-You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
-
-Before writing any code, stop at the first rung that holds:
-
-Does this need to be built at all? (YAGNI)
-Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't re-write it.
-Does the standard library already do this? Use it.
-Does a native platform feature cover it? Use it.
-Does an already-installed dependency solve it? Use it.
-Can this be one line? Make it one line.
-Only then: write the minimum code that works.
-The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
-
-Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
-
-Rules:
-
-No abstractions that weren't explicitly requested.
-No new dependency if it can be avoided.
-No boilerplate nobody asked for.
-Deletion over addition. Boring over clever. Fewest files possible.
-Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
-Question complex requests: "Do you actually need X, or does Y cover it?"
-Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
-Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a ponytail: comment naming the ceiling and upgrade path.
-Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
-
-(Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
+Trace the real flow and callers before editing; fix shared root causes. Prefer no new code,
+existing helpers, stdlib, native features, installed dependencies, then the smallest working change.
+Avoid unrequested abstractions, boilerplate, and dependencies. Question unnecessary complexity;
+prefer deletion and edge-case-correct solutions. Do not cut corners on required behavior, trust-boundary
+validation, data-loss prevention, security, accessibility, or hardware calibration. Comment deliberate
+simplifications with their ceiling and upgrade path (a "ponytail"). Nontrivial logic needs one small
+runnable regression check; trivial one-liners need none.

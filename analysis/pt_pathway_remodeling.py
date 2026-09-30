@@ -1643,6 +1643,410 @@ display(signed_comparison.loc[signed_comparison.signed_gsea_group.eq(
 
 
 # %% [markdown]
+# ## 9c · Benchmark total human–mouse differences with shared models
+#
+# This benchmark asks the **same biological question** in each model: do human and mouse differ anywhere among the measured structures? Every method gets one ranking opportunity per gene, and each pathway family is tested once per method. There is no threshold tuning or second pass over a selected pathway list.
+#
+# The controlled expression comparison uses shared expression and the same within-species, sum-to-zero specimen intercepts throughout. The discrete model adds human-by-segment steps to that common baseline; the smooth model uses the existing position-dependent species model. The augmented model contains both sets of terms, so its increment asks what position adds after segment-level species differences are represented. This controlled WLS benchmark is a descriptive sensitivity analysis, not the standard pseudobulk test. The absolute maximum DESeq2 Wald score is a magnitude companion to signed GSEA, not a replacement for it; selecting the largest of three segment Wald magnitudes is included in the matched competitive null. The count and structure models retain different noise assumptions.
+#
+# The matched null controls pathway size and the existing expression, detection, and coverage strata. The incremental position result is secondary explanatory support: it does not establish a direction or prove within-segment biology, and it is not a primary discovery filter. With two mouse specimens and one human donor, all results remain descriptive and structure uncertainty is substantial. A benchmark screen need not contain every hit from another model.
+#
+# **Read the comparisons separately.** The primary controlled screen holds the expression scale, Gaussian noise model, shared spline baseline, specimen adjustment, gene/pathway universe, enrichment test, and correction rule fixed; only the representation of species differences changes (segment steps versus smooth position). It tests competitive enrichment of conditional gene scores, not whether a pathway has a donor-level species effect. The native max-Wald comparison aligns magnitude and the pathway test but keeps DESeq2's different count noise model. The signed-GSEA reference retains its directional question and is reported separately; its recovery fraction cannot be substituted with controlled-model retention.
+#
+# Primary calls use positive AUC effect and method-specific BH q ≤ 0.05, each over the identical pathway family. Joint BH across both controlled methods is a reported sensitivity analysis. Incremental position support has its own full-pathway correction and can occur even without a total-screen call; do not add that count to the continuous discovery count. No original-universe confirmation is required here because both sides use the same shared universe.
+#
+
+# %%
+from scipy import sparse
+from pseudospace.levelshape import build_ls_designs
+import inspect
+
+BENCHMARK_LOGIC_VERSION = '12-total-difference-benchmark-v3'
+
+def benchmark_nested_gene_scores(expression, base, discrete, smooth, weights, block_size=256):
+    """Blockwise partial-F scores from explicitly nested weighted least-squares designs."""
+    if getattr(expression, 'ndim', None) != 2:
+        raise ValueError('Expression must be a two-dimensional matrix.')
+    n = expression.shape[0]
+    if not sparse.issparse(expression):
+        expression = np.asarray(expression, dtype=float)
+    matrices = [np.asarray(x, dtype=float) for x in (base, discrete, smooth)]
+    base, discrete, smooth = matrices
+    weights = np.asarray(weights, dtype=float)
+    if any(x.ndim != 2 or x.shape[0] != n for x in matrices):
+        raise ValueError('Every design must be a matrix with the expression row count.')
+    if any(x.shape[1] == 0 or not np.isfinite(x).all() for x in matrices):
+        raise ValueError('Design matrices must have columns and finite values.')
+    if weights.shape != (n,) or not np.isfinite(weights).all() or (weights <= 0).any():
+        raise ValueError('Weights must be finite, positive, and match expression rows.')
+    if expression.shape[1] == 0 or block_size < 1:
+        raise ValueError('Expression needs genes and block_size must be positive.')
+    if sparse.issparse(expression):
+        if not np.isfinite(expression.data).all():
+            raise ValueError('Sparse expression contains nonfinite values.')
+    elif not np.isfinite(expression).all():
+        raise ValueError('Expression contains nonfinite values.')
+
+    def orthobasis(design):
+        weighted = np.sqrt(weights)[:, None] * design
+        u, singular, _ = np.linalg.svd(weighted, full_matrices=False)
+        tol = np.finfo(float).eps * max(weighted.shape) * (singular[0] if len(singular) else 0.)
+        rank = int(np.sum(singular > tol))
+        return u[:, :rank], rank, tol
+
+    q0, r0, _ = orthobasis(base)
+    qd, rd, _ = orthobasis(discrete)
+    qs, rs, _ = orthobasis(smooth)
+    union = np.column_stack([discrete, smooth])
+    qu, ru, _ = orthobasis(union)
+    nesting_tol = 1e-8
+    for name, q in [('discrete', qd), ('smooth', qs), ('union', qu)]:
+        if np.linalg.norm(q0 - q @ (q.T @ q0)) > nesting_tol * max(1., np.sqrt(r0)):
+            raise ValueError(f'Base design is not nested in {name} design.')
+    for name, q in [('discrete', qd), ('smooth', qs)]:
+        if np.linalg.norm(q - qu @ (qu.T @ q)) > nesting_tol * max(1., np.sqrt(q.shape[1])):
+            raise ValueError(f'{name} design is not nested in the augmented design.')
+    if n <= ru + 2:
+        raise ValueError('Augmented design leaves too few residual degrees of freedom.')
+    df_d, df_s, df_pos = rd-r0, rs-r0, ru-rd
+    if min(df_d, df_s, df_pos) <= 0:
+        raise ValueError('Each requested comparison must add positive design degrees of freedom.')
+    sse0 = np.zeros(expression.shape[1]); ssed = np.zeros_like(sse0)
+    sses = np.zeros_like(sse0); sseu = np.zeros_like(sse0)
+    sqrtw = np.sqrt(weights)
+    for start in range(0, expression.shape[1], block_size):
+        stop = min(start + block_size, expression.shape[1])
+        block = expression[:, start:stop]
+        block = block.toarray() if sparse.issparse(block) else np.asarray(block)
+        if not np.isfinite(block).all():
+            raise ValueError('Expression block contains nonfinite values.')
+        yw = sqrtw[:, None] * block
+        for target, q in [(sse0, q0), (ssed, qd), (sses, qs), (sseu, qu)]:
+            resid = yw - q @ (q.T @ yw)
+            target[start:stop] = np.einsum('ij,ij->j', resid, resid)
+    def partial_f(reduced, full, df_added, rank_full):
+        improvement = reduced - full
+        tol = 1e-10 * np.maximum(1., reduced)
+        if np.any(improvement < -tol):
+            raise ValueError('Nested-model SSE materially increased in the larger model.')
+        improvement = np.maximum(improvement, 0.)
+        if np.any(full <= 0):
+            raise ValueError('A full-model residual SSE is nonpositive.')
+        return (improvement / df_added) / (full / (n-rank_full))
+    return {'T_discrete_total': partial_f(sse0, ssed, df_d, rd),
+            'T_continuous_total': partial_f(sse0, sses, df_s, rs),
+            'T_position_given_segments': partial_f(ssed, sseu, df_pos, ru),
+            'design_df': np.array([n, r0, rd, rs, ru, df_d, df_s, df_pos, n-ru], dtype=np.int64)}
+
+def regression_check_benchmark_nested_gene_scores():
+    """Small data-free check against independent weighted least-squares projections."""
+    rng = np.random.default_rng(1209)
+    n = 84
+    position_check = np.linspace(0., 1., n)
+    human_check = np.tile([0., 1.], n // 2)
+    baseline = np.column_stack([np.ones(n), position_check])
+    step = human_check[:, None]
+    curve = (human_check * position_check)[:, None]
+    base = baseline
+    discrete = np.column_stack([base, step])
+    smooth = np.column_stack([base, curve])
+    values = np.column_stack([
+        baseline @ np.array([1.2, -.3]) + .7 * human_check,
+        baseline @ np.array([-.2, .9]) + .4 * human_check * position_check,
+    ]) + rng.normal(0, .15, size=(n, 2))
+    weights = rng.uniform(.5, 1.5, size=n)
+    expression = sparse.csr_matrix(values)
+    got = benchmark_nested_gene_scores(expression, base, discrete, smooth, weights)
+    union = np.column_stack([discrete, smooth])
+    def independent_f(reduced, full, added_df, rank_full):
+        scores = []
+        for j in range(values.shape[1]):
+            def sse(design):
+                root = np.sqrt(weights)
+                beta = np.linalg.lstsq(root[:, None] * design,
+                    root * values[:, j], rcond=None)[0]
+                residual = root * (values[:, j] - design @ beta)
+                return residual @ residual
+            scores.append(((sse(reduced) - sse(full)) / added_df)
+                          / (sse(full) / (n - rank_full)))
+        return np.asarray(scores)
+    rank_d = np.linalg.matrix_rank(np.sqrt(weights)[:, None] * discrete)
+    rank_s = np.linalg.matrix_rank(np.sqrt(weights)[:, None] * smooth)
+    rank_u = np.linalg.matrix_rank(np.sqrt(weights)[:, None] * union)
+    np.testing.assert_allclose(got['T_discrete_total'],
+        independent_f(base, discrete, rank_d - np.linalg.matrix_rank(np.sqrt(weights)[:, None] * base), rank_d))
+    np.testing.assert_allclose(got['T_continuous_total'],
+        independent_f(base, smooth, rank_s - np.linalg.matrix_rank(np.sqrt(weights)[:, None] * base), rank_s))
+    np.testing.assert_allclose(got['T_position_given_segments'],
+        independent_f(discrete, union, rank_u-rank_d, rank_u))
+    redundant = benchmark_nested_gene_scores(expression,
+        np.column_stack([base, base[:, 0]]), np.column_stack([discrete, base[:, 0]]),
+        np.column_stack([smooth, base[:, 0]]), weights)
+    np.testing.assert_allclose(redundant['T_discrete_total'], got['T_discrete_total'])
+    np.testing.assert_allclose(redundant['T_continuous_total'], got['T_continuous_total'])
+    try:
+        benchmark_nested_gene_scores(expression, np.column_stack([base, curve]),
+                                     discrete, smooth, weights)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('A nonnested reduced design must be rejected.')
+    for bad_weights in (weights[:-1], np.r_[weights[:-1], 0.], np.r_[weights[:-1], np.nan]):
+        try:
+            benchmark_nested_gene_scores(expression, base, discrete, smooth, bad_weights)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Mismatched or invalid weights must be rejected.')
+    return 'projection regression checks passed'
+
+assert regression_check_benchmark_nested_gene_scores() == 'projection regression checks passed'
+
+# The baseline and nuisance terms are rebuilt from the same specimens and weights as the original fits.
+model_weights = np.zeros(len(position), dtype=float)
+model_nuisance = []
+for group in (False, True):
+    names = np.unique(specimen[human == group])
+    if len(names) != 2:
+        raise ValueError('The benchmark expects two specimens within each species.')
+    for name in names:
+        mask = specimen == name
+        model_weights[mask] = len(position) / (2 * len(names) * mask.sum())
+    model_nuisance.extend((specimen == name).astype(float) - (specimen == names[-1]).astype(float)
+                          for name in names[:-1])
+base_design, _, smooth_design = build_ls_designs(
+    position, human.astype(float), fit['knots'])[:3]
+base_design = np.column_stack([base_design, *model_nuisance])
+smooth_design = np.column_stack([smooth_design, *model_nuisance])
+segment_levels = ('PT-S1', 'PT-S2', 'PT-S3')
+if set(labels) != set(segment_levels):
+    raise ValueError('Unexpected reviewed PT segment labels in the benchmark.')
+segment_steps = np.column_stack([
+    human.astype(float) * (labels == segment).astype(float) for segment in segment_levels])
+discrete_design = np.column_stack([base_design, segment_steps])
+benchmark_gene_columns = pd.Index(genes).get_indexer(conventional_genes)
+if (benchmark_gene_columns < 0).any():
+    raise ValueError('Count-supported genes could not be aligned to expression.')
+benchmark_Y = Y[:, benchmark_gene_columns]
+if benchmark_Y.shape[1] != len(conventional_genes):
+    raise ValueError('Count-supported gene columns could not be aligned to expression.')
+
+benchmark_inputs = {'expression': digest(benchmark_Y), 'designs': [base_design, discrete_design,
+    smooth_design], 'weights': model_weights, 'genes': conventional_genes.tolist()}
+benchmark_code = digest([BENCHMARK_LOGIC_VERSION, inspect.getsource(benchmark_nested_gene_scores)])
+benchmark_scores = cached_payload('total_difference_gene_scores',
+    lambda: benchmark_nested_gene_scores(benchmark_Y, base_design, discrete_design,
+                                         smooth_design, model_weights),
+    root=output / 'stage_cache', params={'logic': BENCHMARK_LOGIC_VERSION},
+    inputs=benchmark_inputs, code=benchmark_code)
+# Validate the cached or freshly calculated result against the original total score on every run.
+np.testing.assert_allclose(benchmark_scores['T_continuous_total'],
+    gene_stats.loc[conventional_genes, 'T_total'].to_numpy(float), rtol=1e-6, atol=1e-8)
+design_audit = pd.Series(benchmark_scores['design_df'], name='value', index=[
+    'n', 'base_rank', 'discrete_rank', 'smooth_rank', 'augmented_rank',
+    'discrete_added', 'smooth_added', 'position_given_segments_added', 'augmented_residual'])
+design_audit.to_csv(output / 'total_difference_design_audit.csv')
+
+
+# %%
+# One ranking per method, with the maximum absolute segment Wald included as its own method.
+native_max_wald = absolute_segment_scores.max(axis=1).rename('T_deseq2_any_segment')
+score_frame = pd.DataFrame({name: benchmark_scores[name] for name in (
+    'T_discrete_total', 'T_continuous_total', 'T_position_given_segments')}, index=conventional_genes)
+score_frame.index.name = 'gene'
+all_benchmark_rankings = score_frame.join(native_max_wald, validate='one_to_one')
+all_benchmark_rankings.to_csv(output / 'total_difference_gene_rankings.csv')
+
+benchmark_pathway_tests = cached_frame('total_difference_matched_pathways',
+    lambda: matched_pathway_tests(all_benchmark_rankings, conventional_gene_sets, shared_strata,
+                                  n_null=n_null, seed=seed),
+    root=output / 'stage_cache', params={'n_null': n_null, 'seed': seed,
+        'methods': list(all_benchmark_rankings.columns)},
+    inputs={'rankings': all_benchmark_rankings, 'sets': conventional_gene_sets,
+            'strata': shared_strata}, code=digest([BENCHMARK_LOGIC_VERSION,
+                Path(remodeling.__file__), 'matched-pathways-v1']))
+benchmark_pathway_tests['q_method'] = benchmark_pathway_tests.groupby(
+    'statistic').p_empirical.transform(lambda values: multipletests(values, method='fdr_bh')[1])
+controlled_mask = benchmark_pathway_tests.statistic.isin(
+    ['T_discrete_total', 'T_continuous_total'])
+benchmark_pathway_tests['q_controlled_pooled'] = np.nan
+benchmark_pathway_tests.loc[controlled_mask, 'q_controlled_pooled'] = multipletests(
+    benchmark_pathway_tests.loc[controlled_mask, 'p_empirical'], method='fdr_bh')[1]
+benchmark_pathway_tests.to_csv(output / 'total_difference_all_pathway_tests.csv', index=False)
+benchmark_manifest = {
+    'logic_version': BENCHMARK_LOGIC_VERSION,
+    'n_null': int(n_null), 'seed': int(seed), 'alpha': .05,
+    'pathway_family': 'all common-count-supported pathways tested once per ranking method',
+    'method_q_family': 'BH across all tested pathways separately within each method',
+    'controlled_pooled_q_family': 'BH across discrete-total and continuous-total tests jointly',
+    'incremental_q_family': 'BH across all pathways for position-given-segments; secondary support',
+    'ranking_methods': list(all_benchmark_rankings.columns),
+    'native_magnitude_method': 'maximum absolute DESeq2 Wald statistic across PT-S1/S2/S3 per gene',
+    'expression_shape': [int(benchmark_Y.shape[0]), int(benchmark_Y.shape[1])],
+    'n_genes': int(len(conventional_genes)), 'n_pathways': int(len(conventional_gene_sets)),
+    'design_df': {key: int(value) for key, value in design_audit.items()},
+    'gene_score_digest': digest(all_benchmark_rankings),
+    'matched_test_cache_key': digest([BENCHMARK_LOGIC_VERSION, n_null, seed,
+        all_benchmark_rankings, conventional_gene_sets, shared_strata]),
+    'gene_score_cache_code': benchmark_code,
+}
+with (output / 'total_difference_benchmark_manifest.json').open('w') as handle:
+    json.dump(benchmark_manifest, handle, indent=2, sort_keys=True)
+
+# Wide pathway comparison preserves effect and both method-specific and pooled controlled q-values.
+benchmark_comparison = benchmark_pathway_tests.pivot(index='pathway_id', columns='statistic',
+    values=['effect', 'p_empirical', 'q_method', 'q_controlled_pooled'])
+benchmark_comparison.columns = ['_'.join(map(str, column)).rstrip('_')
+                                for column in benchmark_comparison.columns]
+benchmark_comparison = benchmark_comparison.reset_index()
+native_hits = signed_comparison[['pathway_id', 'cluster_signed_hit', 'cluster_best_q']].rename(
+    columns={'cluster_signed_hit': 'native_signed_gsea_hit',
+             'cluster_best_q': 'native_signed_gsea_best_q'})
+benchmark_comparison = benchmark_comparison.merge(native_hits, on='pathway_id',
+                                                    validate='one_to_one')
+benchmark_comparison['controlled_discrete_hit'] = (
+    benchmark_comparison.effect_T_discrete_total.gt(0)
+    & benchmark_comparison.q_method_T_discrete_total.le(.05))
+benchmark_comparison['controlled_continuous_hit'] = (
+    benchmark_comparison.effect_T_continuous_total.gt(0)
+    & benchmark_comparison.q_method_T_continuous_total.le(.05))
+benchmark_comparison['controlled_discrete_hit_pooled'] = (
+    benchmark_comparison.effect_T_discrete_total.gt(0)
+    & benchmark_comparison.q_controlled_pooled_T_discrete_total.le(.05))
+benchmark_comparison['controlled_continuous_hit_pooled'] = (
+    benchmark_comparison.effect_T_continuous_total.gt(0)
+    & benchmark_comparison.q_controlled_pooled_T_continuous_total.le(.05))
+benchmark_comparison['incremental_position_support'] = (
+    benchmark_comparison.effect_T_position_given_segments.gt(0)
+    & benchmark_comparison.q_method_T_position_given_segments.le(.05))
+benchmark_comparison['native_magnitude_hit'] = (
+    benchmark_comparison.effect_T_deseq2_any_segment.gt(0)
+    & benchmark_comparison.q_method_T_deseq2_any_segment.le(.05))
+benchmark_comparison['controlled_group'] = np.select(
+    [benchmark_comparison.controlled_discrete_hit & benchmark_comparison.controlled_continuous_hit,
+     benchmark_comparison.controlled_discrete_hit, benchmark_comparison.controlled_continuous_hit],
+    ['both', 'discrete only', 'continuous only'], default='neither')
+benchmark_comparison['native_magnitude_group'] = np.select(
+    [benchmark_comparison.native_magnitude_hit & benchmark_comparison.controlled_continuous_hit,
+     benchmark_comparison.native_magnitude_hit, benchmark_comparison.controlled_continuous_hit],
+    ['both', 'native magnitude only', 'continuous only'], default='neither')
+benchmark_comparison.to_csv(output / 'total_difference_pathway_comparison.csv', index=False)
+
+controlled_discrete = benchmark_comparison.controlled_discrete_hit
+controlled_continuous = benchmark_comparison.controlled_continuous_hit
+native_magnitude = benchmark_comparison.native_magnitude_hit
+native_signed = benchmark_comparison.native_signed_gsea_hit.fillna(False)
+controlled_overlap = pd.crosstab(controlled_discrete, controlled_continuous).reindex(
+    index=[False, True], columns=[False, True], fill_value=0)
+native_overlap = pd.crosstab(native_magnitude, benchmark_comparison.controlled_continuous_hit).reindex(
+    index=[False, True], columns=[False, True], fill_value=0)
+summary_rows = []
+for name, baseline, added in [
+    ('controlled_discrete_to_continuous', controlled_discrete, controlled_continuous),
+    ('native_signed_to_controlled_continuous', native_signed, controlled_continuous),
+    ('controlled_pooled_BH', benchmark_comparison.controlled_discrete_hit_pooled,
+     benchmark_comparison.controlled_continuous_hit_pooled)]:
+    nbase = int(baseline.sum())
+    retained = int((baseline & added).sum())
+    summary_rows.append({'comparison': name, 'baseline_hits': nbase,
+        'continuous_hits': int(added.sum()), 'overlap': retained,
+        'baseline_retention_fraction': retained / nbase if nbase else np.nan,
+        'continuous_added': int((added & ~baseline).sum()),
+        'incremental_position_support': int(benchmark_comparison.incremental_position_support.sum())})
+summary_rows.append({'comparison': 'native_magnitude_vs_controlled_continuous',
+    'baseline_hits': int(native_magnitude.sum()), 'continuous_hits': int(controlled_continuous.sum()),
+    'overlap': int((native_magnitude & controlled_continuous).sum()),
+    'baseline_retention_fraction': ((native_magnitude & controlled_continuous).sum()
+        / native_magnitude.sum() if native_magnitude.sum() else np.nan),
+    'continuous_added': int((controlled_continuous & ~native_magnitude).sum()),
+    'incremental_position_support': int(benchmark_comparison.incremental_position_support.sum())})
+incremental_by_category = (benchmark_comparison.groupby('controlled_group')
+    .incremental_position_support.sum().rename('incremental_position_support').reset_index())
+benchmark_summary = pd.DataFrame(summary_rows)
+benchmark_summary.to_csv(output / 'total_difference_summary.csv', index=False)
+incremental_by_category.to_csv(output / 'total_difference_incremental_by_category.csv', index=False)
+controlled_overlap.to_csv(output / 'total_difference_controlled_overlap.csv')
+native_overlap.to_csv(output / 'total_difference_native_magnitude_overlap.csv')
+
+
+# %%
+# Two overlap views keep controlled and native count-model comparisons distinct.
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), layout='constrained')
+for ax, table, xlabel, ylabel, title in [
+    (axes[0], controlled_overlap, 'Controlled continuous hit', 'Controlled discrete hit',
+     'Controlled model overlap'),
+    (axes[1], native_overlap, 'Controlled continuous hit', 'Native max-Wald hit',
+     'Native magnitude overlap')]:
+    values = table.to_numpy()
+    ax.imshow(values, cmap='Blues', aspect='equal')
+    ax.set(xticks=[0, 1], xticklabels=['No', 'Yes'], yticks=[0, 1], yticklabels=['No', 'Yes'],
+           xlabel=xlabel, ylabel=ylabel, title=title)
+    for (i, j), count in np.ndenumerate(values):
+        ax.text(j, i, str(count), ha='center', va='center',
+                color='white' if count > values.max() / 2 else 'black')
+fig.savefig(output / 'total_difference_overlap_heatmaps.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+benchmark_colors = {'neither': '0.75', 'discrete only': '#009E73',
+                    'continuous only': '#D55E00', 'both': '#0072B2'}
+fig, ax = plt.subplots(figsize=(7, 5.5), layout='constrained')
+for group, color in benchmark_colors.items():
+    rows = benchmark_comparison.loc[benchmark_comparison.controlled_group.eq(group)]
+    ax.scatter(rows.effect_T_discrete_total, rows.effect_T_continuous_total,
+        s=22 if group != 'neither' else 14, alpha=.8 if group != 'neither' else .45,
+        color=color, label=f'{group} (n={len(rows)})')
+ax.axhline(0, color='0.5', lw=.7); ax.axvline(0, color='0.5', lw=.7)
+ax.set(xlabel='Controlled discrete total-difference effect (AUC − 0.5)',
+       ylabel='Controlled continuous total-difference effect (AUC − 0.5)',
+       title='Matched pathway effects: discrete and continuous models')
+ax.legend(frameon=False, fontsize=8)
+fig.savefig(output / 'total_difference_controlled_effects.pdf', bbox_inches='tight')
+plt.show()
+plt.close(fig)
+
+# Concise discrepancy table: strongest q/effect evidence from each total-difference ranking.
+show_cols = ['pathway_id', 'effect_T_discrete_total', 'q_method_T_discrete_total',
+    'effect_T_continuous_total', 'q_method_T_continuous_total',
+    'effect_T_position_given_segments', 'q_method_T_position_given_segments',
+    'effect_T_deseq2_any_segment', 'q_method_T_deseq2_any_segment',
+    'native_signed_gsea_hit', 'native_signed_gsea_best_q']
+top_discrete = benchmark_comparison.loc[benchmark_comparison.controlled_group.eq('discrete only')].sort_values(
+    ['q_method_T_discrete_total', 'effect_T_discrete_total', 'pathway_id'],
+    ascending=[True, False, True]).head(10)
+top_continuous = benchmark_comparison.loc[benchmark_comparison.controlled_group.eq('continuous only')].sort_values(
+    ['q_method_T_continuous_total', 'effect_T_continuous_total', 'pathway_id'],
+    ascending=[True, False, True]).head(10)
+top_discrepancy = pd.concat([top_discrete.assign(top_method='controlled discrete only'),
+    top_continuous.assign(top_method='controlled continuous only')], ignore_index=True)
+top_discrepancy = top_discrepancy[['top_method', *show_cols]]
+top_discrepancy.to_csv(output / 'total_difference_top_discrepancies.csv', index=False)
+for group in ('both', 'continuous only', 'discrete only'):
+    benchmark_comparison.loc[benchmark_comparison.controlled_group.eq(group)].to_csv(
+        output / ('total_difference_' + group.replace(' ', '_') + '.csv'), index=False)
+display(benchmark_summary)
+display(top_discrepancy.round(4))
+
+# Report retention without substituting one comparator for another.
+from IPython.display import Markdown
+controlled_report = benchmark_summary.set_index('comparison').loc['controlled_discrete_to_continuous']
+native_report = benchmark_summary.set_index('comparison').loc['native_magnitude_vs_controlled_continuous']
+signed_report = benchmark_summary.set_index('comparison').loc['native_signed_to_controlled_continuous']
+display(Markdown(
+    f"**Controlled detection:** continuous retains {int(controlled_report.overlap)} of "
+    f"{int(controlled_report.baseline_hits)} step-model hits and adds "
+    f"{int(controlled_report.continuous_added)} pathways. "
+    f"**Native magnitude companion:** it retains {int(native_report.overlap)} of "
+    f"{int(native_report.baseline_hits)} max-Wald hits and adds "
+    f"{int(native_report.continuous_added)} pathways. "
+    f"**Conventional signed GSEA reference:** it detects {int(signed_report.overlap)} of "
+    f"{int(signed_report.baseline_hits)} directional hits. These are different comparisons; "
+    "the controlled overlap does not establish complete recovery of conventional signed GSEA. "
+    "Additional screen calls need member-gene and specimen-level review before claiming "
+    "that within-segment or boundary-spanning patterns caused their detection."))
+
+
+# %% [markdown]
 # ## 10 · Inspect the genes behind each pathway
 #
 # These roles can overlap; they are explanations, not new discovery filters:

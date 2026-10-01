@@ -14,19 +14,26 @@ precedence table. The review is not an exhaustive absence-of-precedent proof.
 
 Use the `kidney-pseudospace` environment and run the notebook from the repository
 or one of its subdirectories. CLI root flags override `PSEUDOSPACE_DATA_ROOT`
-and `PSEUDOSPACE_RESULTS_ROOT`, as in the existing workflows. Notebook 15 reads:
+and `PSEUDOSPACE_RESULTS_ROOT`, as in the existing workflows.
 
-```
-<results-root>/mouse_only_v6/all_mouse_tubules_scanpy_dpt.h5ad
-```
+The required inputs are the four measured matrices under
+`<data-root>/tubule_by_gene/` and their matching
+`*_kept_tubules_labeled_fine.geojson` files under `<data-root>`. No prior DPT,
+Harmony, or scFates export is required.
 
-This must be the reviewed notebook 02 export from current QC segmentations,
-with its centroid verification and coarse-label checkpoint completed upstream.
-Notebook 15 consumes `layers['lognorm']`, selects the existing PT cohort, and
-retains all profiles. It does not rerun integration, reapply count QC, infer
-new labels, or fall back to v5. Unknown PT intervals or incomplete specimen
-contracts fail explicitly. If the export is absent, real analyses are marked
-pending and execution stops with a missing-input error. No substitute dataset is used.
+The loader verifies every structure's feature index and centroid against its
+current segmentation, attaches upstream anatomy, and applies the pooled mouse
+5th-percentile `n_spots` filter. It retains all common measured genes and normalizes
+total counts to 10,000 followed by log1p before selecting PT. There is no tubule
+gene-count filter. Feature selection happens inside folds. This differs from
+02's gene-filter-before-normalization sequence; all notebook 15 comparisons use
+the same newly prepared input, and incompatible saved coordinates are excluded.
+
+An optional saved DPT can be supplied using `PSEUDOSPACE_15_DPT_REFERENCE`. The
+notebook checks structure IDs, gene universe and expression values before using
+it as a transductive diagnostic. It never initializes the main estimator or gates
+execution. Without it, the initial diagnostic starts from PCA within anatomy;
+new PCA/DPT baselines are fitted on the measured data inside training folds.
 
 Outputs go to `<results-root>/novel_repeated_structure_pseudospace/real_data/`; none are
 committed. The canonical notebook is output-free. There is no generated mirror
@@ -46,14 +53,15 @@ A smoke run with fewer repetitions or disabled DPT is not the complete benchmark
 ## Estimator and validation boundaries
 
 Reusable helpers live in `pseudospace/repeated_structure.py` and
-`pseudospace/repeated_baselines.py`. The prototype combines conventional
+`pseudospace/repeated_baselines.py`; validated measured inputs are loaded by
+`pseudospace/repeated_inputs.py`. The prototype combines conventional
 specimen-balanced P-spline regression, local grid projection, training-only
 feature selection, and anatomy interval constraints. The optional graph is a
 standard harmonic coordinate, not a novelty claim. Disconnected DPT graphs
 are recorded as failed baselines; no edges are invented to make them run.
 
-The saved Harmony/DPT coordinate is a transductive reference. The initial
-healthy DPT perturbation diagnostic uses both controls in selection/refinement;
+An explicitly supplied, exactly matched saved Harmony/DPT is an optional
+transductive reference. The initial healthy perturbation diagnostic uses both controls in selection/refinement;
 its leave-one-control-out expression fit is not independent coordinate validation.
 The strict outer experiment initializes from reconstruction-gene PCA and anatomy,
 refines only training profiles, and maps untouched test profiles to a frozen atlas.
@@ -113,6 +121,6 @@ attempted before that gate. The fixed 5% exploratory improvement threshold is
 not statistical significance. A failed gate means retaining conventional DPT,
 not adding a foundation model to rescue the story.
 
-All execution requires the current real-data export. A/B illustrate the problem
+All execution requires the measured matrices and current segmentations. A/B illustrate the problem
 and estimator; C/D/F/G use the measured profiles. All are exploratory panels with source tables for quantitative outputs;
 publication assembly and final journal QA remain separate.

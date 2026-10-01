@@ -5,10 +5,17 @@ benchmark, generator, simulation-specific tests and simulation-derived verdicts
 have been removed. Method conclusions must come from held-out specimen/gene
 prediction and robustness on the measured tubule profiles.
 
-The required current `mouse_only_v6` export was unavailable during the initial
-implementation. No v5 results are substituted. The notebook now stops explicitly
-if that export is missing. Real-data reconstruction comparisons and biological
-conclusions remain pending; no superiority or novelty is claimed.
+The old requirement for a `mouse_only_v6` DPT export has been removed. Notebook 15
+loads measured counts and segmentation annotations directly. The primary estimator
+initializes independently of DPT. Newly fitted PCA/DPT methods are comparators;
+a saved DPT coordinate is only an optional, input-matched diagnostic.
+
+Actual input verification succeeded: 35,581 mouse structures matched their current
+segmentation feature indices and centroids (maximum deviation 0 pixels). The pooled
+5th-percentile spot floor was 74, leaving 33,834 structures before PT selection and
+14,861 PT profiles with 19,059 common measured genes. All methods within 15 share
+this newly normalized universe. No method superiority or novelty follows from
+this input verification; the full reconstruction comparisons remain to be run.
 
 Two healthy mice cannot support replicate-informed training plus an independent
 healthy test specimen. Four-mouse LOSO remains an AKI invariance stress test.

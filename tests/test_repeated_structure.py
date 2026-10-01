@@ -7,7 +7,6 @@ from pseudospace.repeated_structure import (
     map_atlas,
     refine_coordinate,
     select_panel,
-    simulate_repeated,
 )
 
 
@@ -61,18 +60,6 @@ def test_heldout_prediction_reports_baseline_comparison():
     assert result["mean_mse"] < result["mean_baseline_mse"]
 
 
-@pytest.mark.parametrize("scenario", ["smooth", "missing_region", "sharp", "symmetric", "no_shared_signal", "specimen_warp"])
-def test_simulation_is_deterministic_and_has_documented_failure_case(scenario):
-    first = simulate_repeated(31, n_specimens=4, n_per_specimen=20, n_genes=12, nuisance=2, scenario=scenario)
-    second = simulate_repeated(31, n_specimens=4, n_per_specimen=20, n_genes=12, nuisance=2, scenario=scenario)
-    for left, right in zip(first, second):
-        assert np.array_equal(left, right)
-    x, z, specimen, anatomy = first
-    assert x.shape[1] == 12
-    assert len(z) == len(specimen) == len(anatomy) == x.shape[0]
-    if scenario == "no_shared_signal":
-        corr = np.corrcoef(z, x[:, 0])[0, 1]
-        assert abs(corr) < .25
 
 
 def test_invalid_inputs_fail_early():
@@ -110,39 +97,8 @@ def test_panel_signed_agreement_downgrades_reversed_replicate_curve():
     assert score[0] > score[1]
 
 
-def test_symmetric_simulation_does_not_encode_axis_orientation():
-    x, z, specimens, _ = simulate_repeated(92, n_specimens=6, n_per_specimen=500, n_genes=40,
-                                            nuisance=.1, scenario="symmetric")
-    # Within each replicate, mirrored canonical positions have matching
-    # expected profiles; the shared molecular programs cannot orient the axis.
-    for gene in range(24):
-        for lo in (0.0, 0.1, 0.2, 0.3, 0.4):
-            d = np.abs(z - .5)
-            left = (z < .5) & (d >= lo) & (d < lo + .08)
-            right = (z > .5) & (d >= lo) & (d < lo + .08)
-            diffs = []
-            for lab in np.unique(specimens):
-                a, b = left & (specimens == lab), right & (specimens == lab)
-                if a.sum() >= 3 and b.sum() >= 3:
-                    diffs.append(abs(x[a, gene].mean() - x[b, gene].mean()))
-            assert np.mean(diffs) < .22
 
 
-def test_nuisance_strength_scales_correlated_specimen_program_not_independent_noise():
-    low = simulate_repeated(103, n_specimens=5, n_per_specimen=300, n_genes=80,
-                            nuisance=.1, scenario="smooth")
-    high = simulate_repeated(103, n_specimens=5, n_per_specimen=300, n_genes=80,
-                             nuisance=6, scenario="smooth")
-    x_low, _, specimens, _ = low
-    x_high = high[0]
-    nuisance_start = 80 - max(1, round(80 * .25)) - max(1, round(80 * .15))
-    assert np.allclose(x_low[:, :nuisance_start], x_high[:, :nuisance_start])
-    block_corrs = []
-    for lab in np.unique(specimens):
-        block = x_high[specimens == lab, nuisance_start:nuisance_start + 20]
-        block_corrs.append(np.corrcoef(block, rowvar=False))
-    offdiag = np.concatenate([m[np.triu_indices_from(m, k=1)] for m in block_corrs])
-    assert np.mean(np.abs(offdiag)) > .35
 
 
 def test_mapping_rejects_anatomy_interval_absent_from_custom_grid():

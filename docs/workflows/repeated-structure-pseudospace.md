@@ -26,9 +26,9 @@ Notebook 15 consumes `layers['lognorm']`, selects the existing PT cohort, and
 retains all profiles. It does not rerun integration, reapply count QC, infer
 new labels, or fall back to v5. Unknown PT intervals or incomplete specimen
 contracts fail explicitly. If the export is absent, real analyses are marked
-pending and synthetic experiments still run.
+pending and execution stops with a missing-input error. No substitute dataset is used.
 
-Outputs go to `<results-root>/novel_repeated_structure_pseudospace/`; none are
+Outputs go to `<results-root>/novel_repeated_structure_pseudospace/real_data/`; none are
 committed. The canonical notebook is output-free. There is no generated mirror
 for notebook 15. Do not clear live notebook outputs when staging.
 
@@ -38,7 +38,6 @@ It caches fold fits by expression, labels, settings, source metadata and code.
 Bootstrap fits are deliberately separate. Smoke-run controls are:
 
 - `PSEUDOSPACE_15_BOOTSTRAPS` (default 20 per resampling scheme per outer fold).
-- `PSEUDOSPACE_15_SIM_SEEDS` (default 3; increase for robust synthetic inference).
 - `PSEUDOSPACE_15_PANEL_DPT=0` to omit optional Scanpy DPT baselines.
 - `PSEUDOSPACE_STAGE_CACHE=0` to rebuild cached fits.
 
@@ -103,18 +102,17 @@ Perturbation sensitivities and TF prediction do not establish causal regulation.
 
 Inspect `go_no_go_transductive.csv`, `heldout_gene_metrics.csv`,
 `specimen_metrics.csv`, `selected_gene_panels.csv`, `heldout_positions.csv`,
-`baseline_failures.csv`, `synthetic_metrics.csv` and
-`synthetic_paired_ordering_gains.csv`. Conditional bootstrap artifacts cover
+`baseline_failures.csv`. Conditional bootstrap artifacts cover
 positions, fixed-pair ranks, fixed evaluation-gene curves and transition/peak
 locations. The final verdict answers all twelve methodological questions and
 keeps missing biological evidence explicitly pending.
 
 Biological GAM examples are gated on excluded-gene/within-segment prediction
-and synthetic fine-order improvement. No pathway or cross-species discovery is
+and within-segment shape improvement on measured data. No pathway or cross-species discovery is
 attempted before that gate. The fixed 5% exploratory improvement threshold is
 not statistical significance. A failed gate means retaining conventional DPT,
-not tuning the simulation or adding a foundation model to rescue the story.
+not adding a foundation model to rescue the story.
 
-Figures A/B/E run without private inputs; C/D/F/G require the current real-data
-export. All are exploratory panels with source tables for quantitative outputs;
+All execution requires the current real-data export. A/B illustrate the problem
+and estimator; C/D/F/G use the measured profiles. All are exploratory panels with source tables for quantitative outputs;
 publication assembly and final journal QA remain separate.

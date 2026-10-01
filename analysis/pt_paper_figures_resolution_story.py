@@ -26,8 +26,7 @@ from IPython.display import display
 start = Path(__file__).resolve().parent if '__file__' in globals() else Path.cwd()
 project = next(path for path in (start, *start.parents) if (path / 'pseudospace').is_dir())
 sys.path.insert(0, str(project))
-from pseudospace.stage_cache import cached_frame, digest
-from pseudospace import resolution_story
+from pseudospace.pathway_remodeling import rank_auc
 
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--data-root', type=Path)
@@ -41,7 +40,6 @@ output = results_root / 'pt_paper_figures_resolution_story'
 output.mkdir(parents=True, exist_ok=True)
 source_data = output / 'source_data'
 source_data.mkdir(exist_ok=True)
-FIGURE_LOGIC_VERSION = '14-resolution-story-v1'  # Pathway-mean calculation and cache are unchanged.
 ALPHA = .05
 MIN_RETENTION = .75  # Retained / ALL planned runs; unavailable runs do not improve this fraction.
 segments = ('PT-S1', 'PT-S2', 'PT-S3')
@@ -72,7 +70,7 @@ import anndata as ad
 
 required_files = ('integrated_pathway_classification.csv', 'pathway_evidence_atlas.csv',
     'pathway_coverage.csv', 'gene_trajectories.npz', 'structure_expression_audit.csv',
-    'conventional_gene_universe.csv', 'conventional_pt_ora.csv', 'pathway_local_curves.csv',
+    'conventional_gene_universe.csv', 'conventional_pt_ora.csv',
     'whole_pt_vs_gam_level_genes.csv', 'whole_pt_vs_gam_level_summary.csv',
     'cluster_signed_only_framework_review.csv', 'total_difference_summary.csv', 'run_manifest.json', 'gene_statistics.csv')
 for filename in required_files:
@@ -87,7 +85,6 @@ coverage = pd.read_csv(source / 'pathway_coverage.csv')
 gene_comparison = pd.read_csv(source / 'whole_pt_vs_gam_level_genes.csv', index_col=0)
 gene_comparison.index.name = 'gene'
 global_summary = pd.read_csv(source / 'whole_pt_vs_gam_level_summary.csv')
-local_curves = pd.read_csv(source / 'pathway_local_curves.csv')
 ora = pd.read_csv(source / 'conventional_pt_ora.csv')
 controlled_summary = pd.read_csv(source / 'total_difference_summary.csv')
 cluster_review = pd.read_csv(source / 'cluster_signed_only_framework_review.csv')
@@ -183,9 +180,8 @@ for row in candidates.itertuples():
     idx = fit_gene_index.get_indexer(gene_sets[row.pathway_id])
     member_delta = fit['delta'][idx]
     mean_delta = member_delta.mean(axis=0)
-    member_variation = member_delta.std(axis=1)
-    driver_indices = idx[np.argsort(-member_variation, kind='stable')[:3]]
-    driver_map[row.pathway_id] = fit_gene_index[driver_indices].tolist()
+    member_scores = saved_gene_stats.loc[gene_sets[row.pathway_id], 'T_spatial']
+    driver_map[row.pathway_id] = member_scores.sort_values(ascending=False, kind='stable').head(3).index.tolist()
     averages = {label: float(mean_delta @ weights) for label, weights in position_weights.items()}
     whole = averages['whole_PT']
     departure = mean_delta - whole
@@ -211,16 +207,15 @@ for row in candidates.itertuples():
         'spatial_departure_peak': grid[peak], 'spatial_departure_interval_left': grid[left],
         'spatial_departure_interval_right': grid[right], 'spatial_departure_width': (right-left)/max(len(grid)-1, 1),
         'peak_interval_crosses_guide': bool(np.any((transition_guides > grid[left]) & (transition_guides < grid[right]))),
-        'major_driver_genes': ';'.join(driver_map[row.pathway_id]), 'n_major_driver_genes': len(driver_indices)})
+        'major_driver_genes': ';'.join(driver_map[row.pathway_id]), 'n_major_driver_genes': len(driver_map[row.pathway_id])})
     candidate_curve_parts.append(pd.DataFrame({'pathway_id': row.pathway_id, 'position': grid,
         'original_position': original_grid, 'mean_delta': mean_delta, 'departure_from_whole_PT': departure}))
 candidates = candidates.merge(pd.DataFrame(shape_records), on='pathway_id', validate='one_to_one')
-candidates['resolution_usefulness_score'] = (.5 * candidates.mean_delta_range.rank(pct=True)
-    + .3 * candidates.within_segment_rms.rank(pct=True)
-    + .2 * candidates.n_member_direction_reversals.rank(pct=True))
+# Exploratory ordering by observed common-universe spatial AUC effect; no new test is performed.
+candidates['resolution_usefulness_score'] = candidates.common_effect_T_spatial.abs().rank(pct=True)
 candidates['pt_relevance'] = 'Unreviewed: inspect measured member genes; pathway title alone is insufficient.'
 candidates['example_class'] = np.select([candidates.class_A_eligible, candidates.class_B_eligible],
-    ['A: shared; finer resolution', 'B: native-screen-negative; spatial'], default='not eligible for examples')
+    ['Conventional evidence + spatial remodeling', 'Spatial evidence without native signed-GSEA significance'], default='not eligible for examples')
 candidates = candidates.sort_values(['resolution_usefulness_score', 'pathway_id'], ascending=[False, True])
 candidates['manuscript_rank_within_class'] = candidates.groupby('example_class').cumcount() + 1
 candidate_curves = pd.concat(candidate_curve_parts, ignore_index=True)
@@ -228,7 +223,8 @@ candidate_curves.to_csv(source_data / 'candidate_mean_difference_curves.csv', in
 display(candidates.loc[candidates.class_A_eligible | candidates.class_B_eligible,
     ['pathway_name', 'example_class', 'resolution_usefulness_score', 'q_family_DESeq2',
      'cluster_best_q', 'common_q_empirical_T_spatial', 'robust_fraction_all_planned',
-     'mean_curve_direction_reversal', 'within_segment_rms', 'major_driver_genes']].head(18))
+     'common_auc_T_spatial', 'common_effect_T_spatial', 'common_q_empirical_T_spatial',
+     'robust_fraction_all_planned', 'major_driver_genes']].head(18))
 
 # %% [markdown]
 # ## Freeze five illustrative examples
@@ -239,19 +235,19 @@ display(candidates.loc[candidates.class_A_eligible | candidates.class_B_eligible
 selection_review = [
     ('A', 'KEGG_2019_Mouse::Drug metabolism', 'Drug metabolism',
      'Xenobiotic-handling annotation; Cyp2e1/Ces1d/Adh1 measured in PT.',
-     'Native segment finding with a changing and sign-reversing member-average profile.'),
+     'Native segment finding; the enrichment rank statistic independently supports position-dependent pathway remodeling.'),
     ('A', 'KEGG_2019_Mouse::Citrate cycle (TCA cycle)', 'Citrate cycle',
      'Mitochondrial carbon metabolism; Pck1/Idh1/Pcx measured in PT.',
-     'Broad conventional finding with a mid-PT trough and within-segment variation.'),
+     'Broad conventional finding with additional evidence for position-dependent remodeling.'),
     ('B', 'Reactome_2022::Transport Of Bile Salts And Organic Acids, Metal Ions And Amine Compounds R-HSA-425366',
      'Organic-acid / bile-salt transport', 'Measured Slc22a6/Slc13a3/Slc6a18 support a PT transport annotation.',
-     'Opposing fitted effects along position; averaging dilutes the signed mean.'),
+     'Robust spatial enrichment without native bulk or segment signed-GSEA significance.'),
     ('B', 'Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289',
      'Mitochondrial fatty-acid oxidation', 'PT metabolic annotation; Acsm3/Acadm/Acaa2 are measured members.',
-     'Gradually emerging difference with heterogeneous member directions.'),
+     'Robust spatial enrichment without native bulk or segment signed-GSEA significance.'),
     ('B', 'Reactome_2022::Retinoid Metabolism And Transport R-HSA-975634',
      'Retinoid metabolism / transport', 'Measured Rbp4/Lpl/Akr1c18 members; hypothesis-generating retinoid/lipid annotation.',
-     'A changing signed mean and mixed gene trajectories are hidden by a small number of summaries.')]
+     'Robust spatial enrichment without native bulk or segment signed-GSEA significance.')]
 canonical_ids = {pathway.strip(): pathway for pathway in candidates.pathway_id}
 if len(canonical_ids) != len(candidates):
     raise ValueError('Whitespace normalization collides across pathway IDs.')
@@ -284,58 +280,37 @@ display(selection[['figure_class', 'display_name', 'q_family_DESeq2', 'cluster_b
     'common_q_empirical_T_level', 'common_q_empirical_T_spatial', 'common_q_empirical_T_total',
     'robust_fraction_all_planned', 'q_corr', 'selection_rationale']])
 
-
 # %% [markdown]
-# ## Summarize saved pathway fits
+# ## Selected pathway evidence
 #
-# Average saved member-gene trajectories with pointwise HC3 bands. Bands retain cross-gene residual covariance but are conditional on observed structures and coordinate, not donor-level confidence intervals.
+# Signed GSEA NES summarizes directional gene-set association for the native whole-PT or segment analysis. `T_spatial` pathway enrichment is an unsigned rank-AUC test of gene-level spatial statistics against a covariate-matched null. Their effects and null distributions differ, so a fitted mean curve or nonsignificant signed NES does not explain a matched-null spatial result. The right-hand plot shows the actual gene ranks used by spatial enrichment; its q-value is the saved matched-null result, not a test derived from the ECDF.
+#
+# The separate member-gene curves use ±1.96 gene-level HC3 standard errors and are conditional on the observed structures and coordinate; the cohort has one human donor.
 
 # %%
-def summarize_selected_pathways():
-    with np.load(source / 'gene_trajectories.npz', allow_pickle=False) as archive:
-        saved = {**fit, 'residuals': archive['residuals']}
-        return resolution_story.aggregate_saved_trajectories(saved,
-            obs.shared_pseudospace.to_numpy(float),
-            obs.comparison_species.astype(str).eq('human').to_numpy(),
-            obs['sample'].astype(str).to_numpy(),
-            {p: gene_sets[p] for p in selection.pathway_id})
-
-pathway_curves = cached_frame('selected_pathway_mean_hc3', summarize_selected_pathways,
-    root=output / 'stage_cache', params={'figure_logic': FIGURE_LOGIC_VERSION},
-    inputs={'fit': source / 'gene_trajectories.npz', 'obs': obs,
-            'members': {p: gene_sets[p] for p in selection.pathway_id}},
-    code=digest([Path(resolution_story.__file__), FIGURE_LOGIC_VERSION]))
-pathway_curves.to_csv(source_data / 'selected_pathway_mean_curves.csv', index=False)
-conventional_parts, gene_curve_parts, projection_parts = [], [], []
-for row in selection.itertuples():
+conventional_parts, gene_curve_parts = [], []
+for _, row in selection.iterrows():
     conventional_parts.append(pd.DataFrame({
-            'pathway_id': row.pathway_id, 'scope': ['whole_PT', *segments],
-            'NES': [row.NES_DESeq2, *[selection.loc[selection.pathway_id.eq(row.pathway_id), 'cluster_NES_' + s].iloc[0] for s in segments]],
-            'q': [row.q_family_DESeq2, *[selection.loc[selection.pathway_id.eq(row.pathway_id), 'cluster_q_family_' + s].iloc[0] for s in segments]]}))
-    curve = pathway_curves.loc[pathway_curves.pathway_id.eq(row.pathway_id)]
-    for label, weights in position_weights.items():
-        projection_parts.append({'pathway_id': row.pathway_id, 'scope': label,
-            'fitted_mean_delta': float(curve.delta.to_numpy() @ weights),
-            'position_median': .5 if label == 'whole_PT' else segment_medians[label],
-            'meaning': 'compression of same fitted curve, not DESeq2 estimate'})
-    for gene in gene_sets[row.pathway_id]:
+        'pathway_id': row['pathway_id'], 'scope': ['whole_PT', *segments],
+        'NES': [row['NES_DESeq2'], *[row['cluster_NES_' + s] for s in segments]],
+        'q': [row['q_family_DESeq2'], *[row['cluster_q_family_' + s] for s in segments]]}))
+    for gene in gene_sets[row['pathway_id']]:
         i = fit_gene_index.get_loc(gene)
-        gene_curve_parts.append(pd.DataFrame({'pathway_id': row.pathway_id, 'gene': gene,
+        gene_curve_parts.append(pd.DataFrame({'pathway_id': row['pathway_id'], 'gene': gene,
             'position': grid, 'original_position': original_grid,
             'mouse': fit['mouse'][i], 'human': fit['human'][i],
             'delta': fit['delta'][i], 'se_delta': fit['se'][i],
-            'working_z': fit['z'][i], 'plotted_driver': gene in driver_map[row.pathway_id]}))
+            'working_z': fit['z'][i], 'spatial_enrichment_driver': gene in driver_map[row['pathway_id']]}))
 conventional_values = pd.concat(conventional_parts, ignore_index=True)
 conventional_values['significant'] = conventional_values.q.le(ALPHA)
 conventional_values.to_csv(source_data / 'selected_native_conventional_GSEA.csv', index=False)
 gene_curves = pd.concat(gene_curve_parts, ignore_index=True)
 gene_curves.to_csv(source_data / 'selected_member_gene_curves.csv', index=False)
-projections = pd.DataFrame(projection_parts)
-projections.to_csv(source_data / 'selected_same_curve_compression.csv', index=False)
-selected_local = local_curves.loc[local_curves.pathway_id.isin(selection.pathway_id)].copy()
-selected_local['original_position'] = selected_local.position
-selected_local['position'] = (selected_local.position - lo) / (hi - lo)
-selected_local.to_csv(source_data / 'selected_local_rank_divergence.csv', index=False)
+gene_membership = pd.DataFrame([
+    {'pathway_id': pathway, 'gene': gene, 'common_universe_member': True,
+     'T_spatial': saved_gene_stats.loc[gene, 'T_spatial']}
+    for pathway in selection.pathway_id for gene in gene_sets[pathway]])
+gene_membership.to_csv(source_data / 'selected_full_gene_membership.csv', index=False)
 gene_comparison.reset_index().to_csv(source_data / 'whole_PT_vs_GAM_level_genes.csv', index=False)
 common_unsigned = classification[['pathway_id', 'common_effect_T_whole_pt_deseq2_abs',
     'common_effect_T_level', 'common_q_empirical_T_whole_pt_deseq2_abs', 'common_q_empirical_T_level']]
@@ -439,37 +414,57 @@ save_plot(fig, 'level_spatial_pathway_classes')
 # %% [markdown]
 # ## Drug metabolism
 #
-# Shared native segment evidence; changing and sign-reversing mean pathway profile. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+# Native segment evidence and spatial rank evidence are both present; they use different statistics and nulls. The comparison table retains whole-PT, segment, and smooth segment q-values beside level, spatial, and total matched-AUC effects and q-values.
 
 # %%
 pathway_id = canonical_ids['KEGG_2019_Mouse::Drug metabolism']
-curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
-fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+example = selection.loc[selection.pathway_id.eq(pathway_id)].iloc[0]
+evidence_rows = [
+    {'evidence': 'GAM T_level', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_level,
+     'q': example.common_q_empirical_T_level},
+    {'evidence': 'GAM T_spatial', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_spatial,
+     'q': example.common_q_empirical_T_spatial},
+    {'evidence': 'GAM T_total', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_total,
+     'q': example.common_q_empirical_T_total},
+    {'evidence': 'Whole-PT DESeq2', 'statistic': 'signed NES', 'effect': example.NES_DESeq2,
+     'q': example.q_family_DESeq2},
+]
+for segment in segments:
+    evidence_rows.append({'evidence': f'{segment} conventional', 'statistic': 'signed NES',
+        'effect': example['cluster_NES_' + segment], 'q': example['cluster_q_family_' + segment]})
+    evidence_rows.append({'evidence': f'{segment} smooth segment', 'statistic': 'signed NES',
+        'effect': example['smooth_NES_' + segment], 'q': example['smooth_q_family_' + segment]})
+print(example.display_name)
+display(pd.DataFrame(evidence_rows))
+spatial_scores = saved_gene_stats.loc[common_genes, 'T_spatial']
+spatial_percentile = spatial_scores.rank(method='average') / len(spatial_scores)
+is_member = common_genes.isin(gene_sets[pathway_id])
+rank_data = pd.DataFrame({'gene': common_genes, 'T_spatial': spatial_scores.to_numpy(),
+    'percentile_rank': spatial_percentile.to_numpy(), 'pathway_member': is_member})
+member_indices = common_genes.get_indexer(gene_sets[pathway_id])
+observed_auc = rank_auc(spatial_scores.to_numpy(), member_indices)
+if not np.isclose(observed_auc, example.common_auc_T_spatial, atol=1e-12, rtol=0):
+    raise ValueError('Member set and common T_spatial ranks do not reproduce the saved enrichment AUC.')
+rank_data.to_csv(source_data / 'drug_metabolism_spatial_gene_ranks.csv', index=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout='constrained')
 plot_native_pathway_evidence(axes[0], pathway_id)
-axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
-axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
-                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
-axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
-axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
-                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
-axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+for member_flag, label, color in [(False, 'Nonmembers', '0.55'), (True, 'Pathway members', '#6A51A3')]:
+    values = np.sort(rank_data.loc[rank_data.pathway_member.eq(member_flag), 'percentile_rank'].to_numpy())
+    axes[1].step(values, np.arange(1, len(values)+1) / len(values), where='post',
+                 label=label, color=color)
+axes[1].set(xlim=(0, 1), ylim=(0, 1), xlabel='Common-universe T_spatial percentile rank',
+    ylabel='Empirical cumulative fraction', title='Gene ranks used in spatial enrichment')
 axes[1].legend(frameon=False)
-axes[2].plot(curve.position, curve.delta, color='0.15')
-axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
-                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
-axes[2].axhline(0, color='0.5', lw=.8)
-axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
-for ax in axes[1:]:
-    for guide in transition_guides:
-        ax.axvline(guide, color='0.8', ls='--', lw=.8)
-    ax.set_xlim(0, 1)
+axes[1].text(.03, .97, f'AUC − 0.5 = {observed_auc - .5:.3f}\nSaved matched-null q = {example.common_q_empirical_T_spatial:.3g}',
+    transform=axes[1].transAxes, va='top')
 fig.suptitle('Drug metabolism')
-save_plot(fig, 'pathway_drug_metabolism')
+save_plot(fig, 'pathway_drug_metabolism_native_and_spatial_ranks')
 
 # %% [markdown]
 # ### Member-gene trajectories: Drug metabolism
 #
-# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+# Curves show three genes selected by their observed common-universe `T_spatial` scores. These fitted gene trajectories are illustrative conditional fits, not pathway enrichment evidence and not proof that aggregation caused a nonsignificant native GSEA result.
 
 # %%
 pathway_id = canonical_ids['KEGG_2019_Mouse::Drug metabolism']
@@ -483,44 +478,64 @@ ax.axhline(0, color='0.5', lw=.8)
 for guide in transition_guides:
     ax.axvline(guide, color='0.8', ls='--', lw=.8)
 ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
-       title='Drug metabolism' + ': selected member genes')
+       title='Top common-universe T_spatial member genes (illustrative)')
 ax.legend(frameon=False)
 save_plot(fig, 'drivers_drug_metabolism')
 
 # %% [markdown]
 # ## Citrate cycle
 #
-# Broad conventional finding with a mid-PT trough and within-segment variation. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+# Broad conventional finding with additional spatial rank evidence; the two tests ask different questions. The comparison table retains whole-PT, segment, and smooth segment q-values beside level, spatial, and total matched-AUC effects and q-values.
 
 # %%
 pathway_id = canonical_ids['KEGG_2019_Mouse::Citrate cycle (TCA cycle)']
-curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
-fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+example = selection.loc[selection.pathway_id.eq(pathway_id)].iloc[0]
+evidence_rows = [
+    {'evidence': 'GAM T_level', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_level,
+     'q': example.common_q_empirical_T_level},
+    {'evidence': 'GAM T_spatial', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_spatial,
+     'q': example.common_q_empirical_T_spatial},
+    {'evidence': 'GAM T_total', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_total,
+     'q': example.common_q_empirical_T_total},
+    {'evidence': 'Whole-PT DESeq2', 'statistic': 'signed NES', 'effect': example.NES_DESeq2,
+     'q': example.q_family_DESeq2},
+]
+for segment in segments:
+    evidence_rows.append({'evidence': f'{segment} conventional', 'statistic': 'signed NES',
+        'effect': example['cluster_NES_' + segment], 'q': example['cluster_q_family_' + segment]})
+    evidence_rows.append({'evidence': f'{segment} smooth segment', 'statistic': 'signed NES',
+        'effect': example['smooth_NES_' + segment], 'q': example['smooth_q_family_' + segment]})
+print(example.display_name)
+display(pd.DataFrame(evidence_rows))
+spatial_scores = saved_gene_stats.loc[common_genes, 'T_spatial']
+spatial_percentile = spatial_scores.rank(method='average') / len(spatial_scores)
+is_member = common_genes.isin(gene_sets[pathway_id])
+rank_data = pd.DataFrame({'gene': common_genes, 'T_spatial': spatial_scores.to_numpy(),
+    'percentile_rank': spatial_percentile.to_numpy(), 'pathway_member': is_member})
+member_indices = common_genes.get_indexer(gene_sets[pathway_id])
+observed_auc = rank_auc(spatial_scores.to_numpy(), member_indices)
+if not np.isclose(observed_auc, example.common_auc_T_spatial, atol=1e-12, rtol=0):
+    raise ValueError('Member set and common T_spatial ranks do not reproduce the saved enrichment AUC.')
+rank_data.to_csv(source_data / 'citrate_cycle_spatial_gene_ranks.csv', index=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout='constrained')
 plot_native_pathway_evidence(axes[0], pathway_id)
-axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
-axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
-                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
-axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
-axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
-                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
-axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+for member_flag, label, color in [(False, 'Nonmembers', '0.55'), (True, 'Pathway members', '#6A51A3')]:
+    values = np.sort(rank_data.loc[rank_data.pathway_member.eq(member_flag), 'percentile_rank'].to_numpy())
+    axes[1].step(values, np.arange(1, len(values)+1) / len(values), where='post',
+                 label=label, color=color)
+axes[1].set(xlim=(0, 1), ylim=(0, 1), xlabel='Common-universe T_spatial percentile rank',
+    ylabel='Empirical cumulative fraction', title='Gene ranks used in spatial enrichment')
 axes[1].legend(frameon=False)
-axes[2].plot(curve.position, curve.delta, color='0.15')
-axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
-                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
-axes[2].axhline(0, color='0.5', lw=.8)
-axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
-for ax in axes[1:]:
-    for guide in transition_guides:
-        ax.axvline(guide, color='0.8', ls='--', lw=.8)
-    ax.set_xlim(0, 1)
+axes[1].text(.03, .97, f'AUC − 0.5 = {observed_auc - .5:.3f}\nSaved matched-null q = {example.common_q_empirical_T_spatial:.3g}',
+    transform=axes[1].transAxes, va='top')
 fig.suptitle('Citrate cycle')
-save_plot(fig, 'pathway_citrate_cycle')
+save_plot(fig, 'pathway_citrate_cycle_native_and_spatial_ranks')
 
 # %% [markdown]
 # ### Member-gene trajectories: Citrate cycle
 #
-# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+# Curves show three genes selected by their observed common-universe `T_spatial` scores. These fitted gene trajectories are illustrative conditional fits, not pathway enrichment evidence and not proof that aggregation caused a nonsignificant native GSEA result.
 
 # %%
 pathway_id = canonical_ids['KEGG_2019_Mouse::Citrate cycle (TCA cycle)']
@@ -534,44 +549,64 @@ ax.axhline(0, color='0.5', lw=.8)
 for guide in transition_guides:
     ax.axvline(guide, color='0.8', ls='--', lw=.8)
 ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
-       title='Citrate cycle' + ': selected member genes')
+       title='Top common-universe T_spatial member genes (illustrative)')
 ax.legend(frameon=False)
 save_plot(fig, 'drivers_citrate_cycle')
 
 # %% [markdown]
 # ## Organic-acid / bile-salt transport
 #
-# Robust spatial call without native bulk or segment signed-GSEA evidence. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+# Robust spatial rank evidence without native whole-PT or segment signed-GSEA significance. The comparison table retains whole-PT, segment, and smooth segment q-values beside level, spatial, and total matched-AUC effects and q-values.
 
 # %%
 pathway_id = canonical_ids['Reactome_2022::Transport Of Bile Salts And Organic Acids, Metal Ions And Amine Compounds R-HSA-425366']
-curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
-fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+example = selection.loc[selection.pathway_id.eq(pathway_id)].iloc[0]
+evidence_rows = [
+    {'evidence': 'GAM T_level', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_level,
+     'q': example.common_q_empirical_T_level},
+    {'evidence': 'GAM T_spatial', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_spatial,
+     'q': example.common_q_empirical_T_spatial},
+    {'evidence': 'GAM T_total', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_total,
+     'q': example.common_q_empirical_T_total},
+    {'evidence': 'Whole-PT DESeq2', 'statistic': 'signed NES', 'effect': example.NES_DESeq2,
+     'q': example.q_family_DESeq2},
+]
+for segment in segments:
+    evidence_rows.append({'evidence': f'{segment} conventional', 'statistic': 'signed NES',
+        'effect': example['cluster_NES_' + segment], 'q': example['cluster_q_family_' + segment]})
+    evidence_rows.append({'evidence': f'{segment} smooth segment', 'statistic': 'signed NES',
+        'effect': example['smooth_NES_' + segment], 'q': example['smooth_q_family_' + segment]})
+print(example.display_name)
+display(pd.DataFrame(evidence_rows))
+spatial_scores = saved_gene_stats.loc[common_genes, 'T_spatial']
+spatial_percentile = spatial_scores.rank(method='average') / len(spatial_scores)
+is_member = common_genes.isin(gene_sets[pathway_id])
+rank_data = pd.DataFrame({'gene': common_genes, 'T_spatial': spatial_scores.to_numpy(),
+    'percentile_rank': spatial_percentile.to_numpy(), 'pathway_member': is_member})
+member_indices = common_genes.get_indexer(gene_sets[pathway_id])
+observed_auc = rank_auc(spatial_scores.to_numpy(), member_indices)
+if not np.isclose(observed_auc, example.common_auc_T_spatial, atol=1e-12, rtol=0):
+    raise ValueError('Member set and common T_spatial ranks do not reproduce the saved enrichment AUC.')
+rank_data.to_csv(source_data / 'organic_acid_transport_spatial_gene_ranks.csv', index=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout='constrained')
 plot_native_pathway_evidence(axes[0], pathway_id)
-axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
-axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
-                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
-axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
-axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
-                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
-axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+for member_flag, label, color in [(False, 'Nonmembers', '0.55'), (True, 'Pathway members', '#6A51A3')]:
+    values = np.sort(rank_data.loc[rank_data.pathway_member.eq(member_flag), 'percentile_rank'].to_numpy())
+    axes[1].step(values, np.arange(1, len(values)+1) / len(values), where='post',
+                 label=label, color=color)
+axes[1].set(xlim=(0, 1), ylim=(0, 1), xlabel='Common-universe T_spatial percentile rank',
+    ylabel='Empirical cumulative fraction', title='Gene ranks used in spatial enrichment')
 axes[1].legend(frameon=False)
-axes[2].plot(curve.position, curve.delta, color='0.15')
-axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
-                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
-axes[2].axhline(0, color='0.5', lw=.8)
-axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
-for ax in axes[1:]:
-    for guide in transition_guides:
-        ax.axvline(guide, color='0.8', ls='--', lw=.8)
-    ax.set_xlim(0, 1)
+axes[1].text(.03, .97, f'AUC − 0.5 = {observed_auc - .5:.3f}\nSaved matched-null q = {example.common_q_empirical_T_spatial:.3g}',
+    transform=axes[1].transAxes, va='top')
 fig.suptitle('Organic-acid / bile-salt transport')
-save_plot(fig, 'pathway_organic-acid___bile-salt_transport')
+save_plot(fig, 'pathway_organic_acid_transport_native_and_spatial_ranks')
 
 # %% [markdown]
 # ### Member-gene trajectories: Organic-acid / bile-salt transport
 #
-# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+# Curves show three genes selected by their observed common-universe `T_spatial` scores. These fitted gene trajectories are illustrative conditional fits, not pathway enrichment evidence and not proof that aggregation caused a nonsignificant native GSEA result.
 
 # %%
 pathway_id = canonical_ids['Reactome_2022::Transport Of Bile Salts And Organic Acids, Metal Ions And Amine Compounds R-HSA-425366']
@@ -585,44 +620,64 @@ ax.axhline(0, color='0.5', lw=.8)
 for guide in transition_guides:
     ax.axvline(guide, color='0.8', ls='--', lw=.8)
 ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
-       title='Organic-acid / bile-salt transport' + ': selected member genes')
+       title='Top common-universe T_spatial member genes (illustrative)')
 ax.legend(frameon=False)
 save_plot(fig, 'drivers_organic-acid___bile-salt_transport')
 
 # %% [markdown]
 # ## Mitochondrial fatty-acid oxidation
 #
-# A gradual positional difference with heterogeneous member directions. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+# A robust position-dependent pathway result without native whole-PT or segment signed-GSEA significance. Native whole-PT and segment signed GSEA results are shown beside the actual common-universe gene ranks used in spatial enrichment. The comparison table retains whole-PT, segment, and smooth segment q-values beside level, spatial, and total matched-AUC effects and q-values.
 
 # %%
 pathway_id = canonical_ids['Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289']
-curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
-fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+example = selection.loc[selection.pathway_id.eq(pathway_id)].iloc[0]
+evidence_rows = [
+    {'evidence': 'GAM T_level', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_level,
+     'q': example.common_q_empirical_T_level},
+    {'evidence': 'GAM T_spatial', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_spatial,
+     'q': example.common_q_empirical_T_spatial},
+    {'evidence': 'GAM T_total', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_total,
+     'q': example.common_q_empirical_T_total},
+    {'evidence': 'Whole-PT DESeq2', 'statistic': 'signed NES', 'effect': example.NES_DESeq2,
+     'q': example.q_family_DESeq2},
+]
+for segment in segments:
+    evidence_rows.append({'evidence': f'{segment} conventional', 'statistic': 'signed NES',
+        'effect': example['cluster_NES_' + segment], 'q': example['cluster_q_family_' + segment]})
+    evidence_rows.append({'evidence': f'{segment} smooth segment', 'statistic': 'signed NES',
+        'effect': example['smooth_NES_' + segment], 'q': example['smooth_q_family_' + segment]})
+print(example.display_name)
+display(pd.DataFrame(evidence_rows))
+spatial_scores = saved_gene_stats.loc[common_genes, 'T_spatial']
+spatial_percentile = spatial_scores.rank(method='average') / len(spatial_scores)
+is_member = common_genes.isin(gene_sets[pathway_id])
+rank_data = pd.DataFrame({'gene': common_genes, 'T_spatial': spatial_scores.to_numpy(),
+    'percentile_rank': spatial_percentile.to_numpy(), 'pathway_member': is_member})
+member_indices = common_genes.get_indexer(gene_sets[pathway_id])
+observed_auc = rank_auc(spatial_scores.to_numpy(), member_indices)
+if not np.isclose(observed_auc, example.common_auc_T_spatial, atol=1e-12, rtol=0):
+    raise ValueError('Member set and common T_spatial ranks do not reproduce the saved enrichment AUC.')
+rank_data.to_csv(source_data / 'mitochondrial_fatty_acid_oxidation_spatial_gene_ranks.csv', index=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout='constrained')
 plot_native_pathway_evidence(axes[0], pathway_id)
-axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
-axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
-                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
-axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
-axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
-                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
-axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+for member_flag, label, color in [(False, 'Nonmembers', '0.55'), (True, 'Pathway members', '#6A51A3')]:
+    values = np.sort(rank_data.loc[rank_data.pathway_member.eq(member_flag), 'percentile_rank'].to_numpy())
+    axes[1].step(values, np.arange(1, len(values)+1) / len(values), where='post',
+                 label=label, color=color)
+axes[1].set(xlim=(0, 1), ylim=(0, 1), xlabel='Common-universe T_spatial percentile rank',
+    ylabel='Empirical cumulative fraction', title='Gene ranks used in spatial enrichment')
 axes[1].legend(frameon=False)
-axes[2].plot(curve.position, curve.delta, color='0.15')
-axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
-                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
-axes[2].axhline(0, color='0.5', lw=.8)
-axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
-for ax in axes[1:]:
-    for guide in transition_guides:
-        ax.axvline(guide, color='0.8', ls='--', lw=.8)
-    ax.set_xlim(0, 1)
+axes[1].text(.03, .97, f'AUC − 0.5 = {observed_auc - .5:.3f}\nSaved matched-null q = {example.common_q_empirical_T_spatial:.3g}',
+    transform=axes[1].transAxes, va='top')
 fig.suptitle('Mitochondrial fatty-acid oxidation')
-save_plot(fig, 'pathway_mitochondrial_fatty-acid_oxidation')
+save_plot(fig, 'pathway_mitochondrial_fatty_acid_oxidation_native_and_spatial_ranks')
 
 # %% [markdown]
 # ### Member-gene trajectories: Mitochondrial fatty-acid oxidation
 #
-# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+# Curves show three genes selected by their observed common-universe `T_spatial` scores. These fitted gene trajectories are illustrative conditional fits, not pathway enrichment evidence and not proof that aggregation caused a nonsignificant native GSEA result.
 
 # %%
 pathway_id = canonical_ids['Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289']
@@ -636,44 +691,64 @@ ax.axhline(0, color='0.5', lw=.8)
 for guide in transition_guides:
     ax.axvline(guide, color='0.8', ls='--', lw=.8)
 ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
-       title='Mitochondrial fatty-acid oxidation' + ': selected member genes')
+       title='Top common-universe T_spatial member genes (illustrative)')
 ax.legend(frameon=False)
 save_plot(fig, 'drivers_mitochondrial_fatty-acid_oxidation')
 
 # %% [markdown]
 # ## Retinoid metabolism / transport
 #
-# Changing mean difference with mixed gene trajectories. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+# A robust position-dependent pathway result without native whole-PT or segment signed-GSEA significance. Native whole-PT and segment signed GSEA results are shown beside the actual common-universe gene ranks used in spatial enrichment. The comparison table retains whole-PT, segment, and smooth segment q-values beside level, spatial, and total matched-AUC effects and q-values.
 
 # %%
 pathway_id = canonical_ids['Reactome_2022::Retinoid Metabolism And Transport R-HSA-975634']
-curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
-fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+example = selection.loc[selection.pathway_id.eq(pathway_id)].iloc[0]
+evidence_rows = [
+    {'evidence': 'GAM T_level', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_level,
+     'q': example.common_q_empirical_T_level},
+    {'evidence': 'GAM T_spatial', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_spatial,
+     'q': example.common_q_empirical_T_spatial},
+    {'evidence': 'GAM T_total', 'statistic': 'unsigned AUC − 0.5', 'effect': example.common_effect_T_total,
+     'q': example.common_q_empirical_T_total},
+    {'evidence': 'Whole-PT DESeq2', 'statistic': 'signed NES', 'effect': example.NES_DESeq2,
+     'q': example.q_family_DESeq2},
+]
+for segment in segments:
+    evidence_rows.append({'evidence': f'{segment} conventional', 'statistic': 'signed NES',
+        'effect': example['cluster_NES_' + segment], 'q': example['cluster_q_family_' + segment]})
+    evidence_rows.append({'evidence': f'{segment} smooth segment', 'statistic': 'signed NES',
+        'effect': example['smooth_NES_' + segment], 'q': example['smooth_q_family_' + segment]})
+print(example.display_name)
+display(pd.DataFrame(evidence_rows))
+spatial_scores = saved_gene_stats.loc[common_genes, 'T_spatial']
+spatial_percentile = spatial_scores.rank(method='average') / len(spatial_scores)
+is_member = common_genes.isin(gene_sets[pathway_id])
+rank_data = pd.DataFrame({'gene': common_genes, 'T_spatial': spatial_scores.to_numpy(),
+    'percentile_rank': spatial_percentile.to_numpy(), 'pathway_member': is_member})
+member_indices = common_genes.get_indexer(gene_sets[pathway_id])
+observed_auc = rank_auc(spatial_scores.to_numpy(), member_indices)
+if not np.isclose(observed_auc, example.common_auc_T_spatial, atol=1e-12, rtol=0):
+    raise ValueError('Member set and common T_spatial ranks do not reproduce the saved enrichment AUC.')
+rank_data.to_csv(source_data / 'retinoid_metabolism_transport_spatial_gene_ranks.csv', index=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout='constrained')
 plot_native_pathway_evidence(axes[0], pathway_id)
-axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
-axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
-                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
-axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
-axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
-                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
-axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+for member_flag, label, color in [(False, 'Nonmembers', '0.55'), (True, 'Pathway members', '#6A51A3')]:
+    values = np.sort(rank_data.loc[rank_data.pathway_member.eq(member_flag), 'percentile_rank'].to_numpy())
+    axes[1].step(values, np.arange(1, len(values)+1) / len(values), where='post',
+                 label=label, color=color)
+axes[1].set(xlim=(0, 1), ylim=(0, 1), xlabel='Common-universe T_spatial percentile rank',
+    ylabel='Empirical cumulative fraction', title='Gene ranks used in spatial enrichment')
 axes[1].legend(frameon=False)
-axes[2].plot(curve.position, curve.delta, color='0.15')
-axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
-                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
-axes[2].axhline(0, color='0.5', lw=.8)
-axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
-for ax in axes[1:]:
-    for guide in transition_guides:
-        ax.axvline(guide, color='0.8', ls='--', lw=.8)
-    ax.set_xlim(0, 1)
+axes[1].text(.03, .97, f'AUC − 0.5 = {observed_auc - .5:.3f}\nSaved matched-null q = {example.common_q_empirical_T_spatial:.3g}',
+    transform=axes[1].transAxes, va='top')
 fig.suptitle('Retinoid metabolism / transport')
-save_plot(fig, 'pathway_retinoid_metabolism___transport')
+save_plot(fig, 'pathway_retinoid_metabolism_transport_native_and_spatial_ranks')
 
 # %% [markdown]
 # ### Member-gene trajectories: Retinoid metabolism / transport
 #
-# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+# Curves show three genes selected by their observed common-universe `T_spatial` scores. These fitted gene trajectories are illustrative conditional fits, not pathway enrichment evidence and not proof that aggregation caused a nonsignificant native GSEA result.
 
 # %%
 pathway_id = canonical_ids['Reactome_2022::Retinoid Metabolism And Transport R-HSA-975634']
@@ -687,7 +762,7 @@ ax.axhline(0, color='0.5', lw=.8)
 for guide in transition_guides:
     ax.axvline(guide, color='0.8', ls='--', lw=.8)
 ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
-       title='Retinoid metabolism / transport' + ': selected member genes')
+       title='Top common-universe T_spatial member genes (illustrative)')
 ax.legend(frameon=False)
 save_plot(fig, 'drivers_retinoid_metabolism___transport')
 
@@ -732,7 +807,7 @@ save_plot(fig, 'controlled_discrete_continuous')
 # %% [markdown]
 # ## Manuscript-oriented interpretation
 #
-# Whole-PT and S1/S2/S3 analyses recover many strong species differences. The GAM/pseudostructure framework retains broad differences through level and total-difference tests, even when a pathway has no spatial-remodeling call. Its added positional question is whether species differences change along PT, including localized, changing, or direction-reversing patterns that aggregation can obscure. These analyses use two mouse specimens and two human cortex sections from one donor and remain exploratory.
+# Whole-PT and S1/S2/S3 analyses recover many strong species differences. The GAM/pseudostructure framework retains broad differences through level and total-difference tests. Its added spatial test uses gene-level `T_spatial` ranks and an unsigned, covariate-matched pathway null to test position-dependent remodeling. Native signed GSEA and spatial rank-AUC evidence target different alternatives and need not agree pathway by pathway. Example gene curves are descriptive fitted trajectories, not pathway enrichment results and not proof that aggregation caused a particular native GSEA result.
 
 # %%
 signed = global_summary.set_index('comparison').loc['signed GSEA']
@@ -742,6 +817,6 @@ print(f'Unsigned matched pathway comparison: {int(unsigned.shared)}/{int(unsigne
 print('Level/spatial classes:', counts.to_dict())
 print(f'Cluster signed-GSEA-only fates: {dict(zip(fate_labels, fate_counts))}')
 print(f'Controlled discrete-to-continuous comparison: {int(control.overlap)}/{int(control.baseline_hits)} shared; {int(control.continuous_added)} additional.')
-summary = ('Conventional aggregation recovers broad species differences. The trajectory framework also represents broad/global shifts through T_level and T_total. T_spatial adds tests for position-dependent remodeling; these evidence sets address different alternatives and need not nest.\n')
+summary = ('Conventional aggregation recovers broad species differences. The trajectory framework represents broad/global shifts through T_level and T_total, while T_spatial tests position-dependent remodeling using an unsigned matched-null rank statistic. Native signed GSEA and spatial rank-AUC evidence address different alternatives and need not nest.\n')
 (output / 'exploratory_manuscript_interpretation.txt').write_text(summary)
 print(summary)

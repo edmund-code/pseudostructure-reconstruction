@@ -1,28 +1,14 @@
 # %% [markdown]
-# # 14 · The PT resolution story: manuscript figures from saved results
+# # PT resolution story: broad signal and positional detail
 #
-# **Question:** what biological information is retained, localized, and exposed as PT representation progresses from whole-PT aggregation to S1/S2/S3 and reconstructed pseudospace?
+# This notebook reuses saved results from notebooks 12 and 13. It asks what broad species differences are retained and what additional positional patterns remain visible in reconstructed PT pseudospace.
 #
-# This is a figure-generation notebook. It reads notebook 12's saved fits, pathway tests and robustness annotations, plus notebook 13's saved metadata. It does not estimate a coordinate, refit gene models, rerun DESeq2/GSEA, or introduce a new statistical benchmark.
-#
-# The paper contribution is **fine-grained pseudostructure**: conventional biology remains accessible while position-dependent modeling reveals organization that averages cannot display. `T_level`, `T_spatial`, and `T_total` jointly describe the framework. FDR-thresholded hit sets from different tests need not nest. All findings are exploratory: two healthy mouse specimens and two healthy **cortex** sections from one human donor; the medulla-labelled human section is also cortex.
-#
-# | Figure | Claim and evidence role | Destination |
-# |---|---|---|
-# | 1 | Information compression and preservation of broad gene signal | Main text; schematic-led comparison |
-# | 2 | Shared conventional pathways acquire finer positional detail | Main text; representative examples |
-# | 3 | Robust native-screen-negative pathways have structured fitted effects | Main text; decomposition of aggregation |
-# | 4 | Information profiles overlap without requiring nested hit sets | Main text; full common-universe summary |
-# | 5 | Recovery, screen discordances, and deliberately matched benchmark | Supplement; validation controls |
-#
-# Figures use Python/matplotlib, editable PDF/SVG and 600-dpi PNG, with tidy source data and legends. Selection is descriptive and transparent, **not an additional discovery test**.
+# `T_level` tests a broad species shift, `T_spatial` tests how that difference changes along PT, and `T_total` tests any trajectory difference. A constant species shift can be strong for level and weak for spatial; that is expected.
 
 # %% [markdown]
-# ## 1 · Locate saved results and set the figure contract
+# ## Load and validate saved results
 #
-# CLI flags override `PSEUDOSPACE_*` roots. Outputs remain under the configured results root, outside Git. The selected examples are reviewed pathway IDs, not an automatic list of the smallest q-values. Each run rechecks their native-screen status, robustness, and nonredundancy.
-#
-# The figure contract is 180 mm width, ≥5 pt glyphs, consistent human-orange/mouse-blue encoding, early→late PT orientation, and the saved common-support grid only. Pointwise HC3 bands describe conditional structure uncertainty, not independent-donor or simultaneous confidence intervals. The figure auditors use an optional configurable scripts directory; exports explicitly report when those auditors are unavailable.
+# Set workflow paths and plotting defaults.
 
 # %%
 import argparse
@@ -55,32 +41,31 @@ output = results_root / 'pt_paper_figures_resolution_story'
 output.mkdir(parents=True, exist_ok=True)
 source_data = output / 'source_data'
 source_data.mkdir(exist_ok=True)
-FIGURE_LOGIC_VERSION = '14-resolution-story-v1'
-FIGURE_WIDTH_IN = 180 / 25.4
+FIGURE_LOGIC_VERSION = '14-resolution-story-v1'  # Pathway-mean calculation and cache are unchanged.
 ALPHA = .05
 MIN_RETENTION = .75  # Retained / ALL planned runs; unavailable runs do not improve this fraction.
 segments = ('PT-S1', 'PT-S2', 'PT-S3')
 HUMAN_COLOR, MOUSE_COLOR = '#D55E00', '#0072B2'
 plt.rcParams.update({'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sans'],
-    'font.size': 7, 'axes.labelsize': 7, 'axes.titlesize': 8, 'legend.fontsize': 6,
-    'axes.spines.top': False, 'axes.spines.right': False, 'axes.linewidth': .7,
-    'lines.linewidth': 1.3, 'pdf.fonttype': 42, 'svg.fonttype': 'none'})
-qa_scripts = Path(os.environ.get('PSEUDOSPACE_FIGURE_QA_SCRIPTS') or
-    Path.home() / '.codex' / 'skills' / 'nature-figure' / 'scripts')
-require_matplotlib_panel_alignment = None
-qa_available = (qa_scripts / 'audit_panel_alignment.py').is_file()
-if qa_available:
-    sys.path.insert(0, str(qa_scripts))
-    from audit_panel_alignment import require_matplotlib_panel_alignment
-print('Read-only figure source:', source)
-print('Figure output:', output)
+    'font.size': 10, 'axes.labelsize': 10, 'axes.titlesize': 11, 'legend.fontsize': 9,
+    'axes.spines.top': False, 'axes.spines.right': False, 'lines.linewidth': 1.6})
+
+
+def save_plot(fig, stem):
+    """Save ordinary exploratory plot formats and display the notebook PNG."""
+    for suffix in ('pdf', 'svg', 'png'):
+        fig.savefig(output / f'exploratory_{stem}.{suffix}', dpi=200 if suffix == 'png' else None)
+    plt.show()
+    plt.close(fig)
+
+print('Saved results:', source)
+print('Exploratory plots and tables:', output)
+
 
 # %% [markdown]
-# ## 2 · Bind tables, fits, and metadata to the same run
+# ## Bind tables, fits, and metadata
 #
-# The common count-supported gene/pathway universe is notebook 12's conventional comparison universe. Pathway-mean and gene curves use its members consistently; notebook 12's local rank-divergence curve retains its original all-eligible-gene background and is labelled accordingly. Raw original and common q-values are preserved. A missing or mismatched artifact stops figure generation rather than silently filling in evidence.
-#
-# Normalize **only the display axis** so the saved common-support grid spans [0,1]. This does not change the coordinate or any fit. The reviewed labels overlap along position; midpoint guides between equal-specimen segment medians are descriptive transitions, not newly imposed bins or anatomical boundaries. Observed segment distributions are exported beside the guides.
+# Validate that the saved statistics, common gene universe, structure positions, and reviewed segment labels refer to the same analysis run.
 
 # %%
 import anndata as ad
@@ -170,13 +155,9 @@ print(f'{len(common_genes):,} common genes, {len(gene_sets):,} pathways, {len(ob
 print('Transition guides:', np.round(transition_guides, 3), '(labels overlap; descriptive only)')
 
 # %% [markdown]
-# ## 3 · Rank manuscript candidates before choosing examples
+# ## Rank and review example pathways
 #
-# A shared example must pass native conventional **species-within-segment signed GSEA** and spatial modeling. A conventionally undetected example must fail whole-PT and all three native segment signed GSEA calls; we additionally exclude positive unsigned whole-PT/segment magnitude calls and native species ORA hits. Neither absence nor nonsignificance proves no effect. This conservative Class B rule uses the **native conventional pipeline**, never Section 9c's artificial matched benchmark.
-#
-# Both example classes require original and common positive spatial enrichment, residual-correlation support q ≤ 0.05, and retention in ≥75% of **all planned** sensitivity runs. The complete candidate table preserves failed gates, pathway size/program, driver identities, peak/width, sign reversals, boundary-spanning intervals, and native evidence. The manuscript-usefulness rank combines fitted positional variation, departure from segment averages, and reversals; it is a presentation aid, not a new statistical score. PT relevance is reviewed from actual member genes for selected examples and left explicitly unreviewed elsewhere.
-#
-# A **compression diagnostic** averages each fixed fitted difference over the observed specimen-balanced position distributions. Peak attenuation and cancellation quantify what these summaries discard while holding the curve fixed. They do not establish the cause of native GSEA's different q-values, which also depend on estimators and pathway nulls.
+# Apply the prespecified evidence and sensitivity gates, then check that the five named examples remain eligible and nonredundant.
 
 # %%
 atlas_columns = ['pathway_id', 'program', 'representative', 'n_testable', 'n_retained',
@@ -250,15 +231,9 @@ display(candidates.loc[candidates.class_A_eligible | candidates.class_B_eligible
      'mean_curve_direction_reversal', 'within_segment_rms', 'major_driver_genes']].head(18))
 
 # %% [markdown]
-# ## 4 · Freeze a small, nonredundant example set
+# ## Freeze five illustrative examples
 #
-# **Class A:** drug metabolism and the citrate cycle. The former shows changing and reversing average effects and the latter resolves a broad mitochondrial metabolic difference into a position-dependent profile. These are distinct gene sets/programs.
-#
-# **Class B:** organic-acid/bile-salt transport, mitochondrial fatty-acid beta-oxidation, and retinoid metabolism/transport. These give a reversal/transport example, a gradually emerging metabolic difference, and heterogeneous lipid/retinoid member trajectories. Native conventional evidence is inspected for every chosen term; a title such as “bile salts” is not treated as proof of bile-acid flux or kidney mechanism.
-#
-# PT metabolic and organic-anion handling relevance is supported by primary experimental studies of [tubular fatty-acid oxidation](https://www.nature.com/articles/nm.3762) and [OAT1-linked transport/metabolism](https://pmc.ncbi.nlm.nih.gov/articles/PMC3173137/). These references support biological relevance, not validation of this cohort's species differences. The retinoid example is a hypothesis-generating annotation based on measured PT members and requires biological review.
-#
-# Selected IDs and rationale are editable below. Every selected term must still pass its class gate. A duplicate program or Jaccard overlap >0.35 stops the figure rather than silently accepting redundant examples.
+# Two examples have conventional evidence; three are robust spatial calls without native conventional signed-GSEA calls.
 
 # %%
 selection_review = [
@@ -311,13 +286,9 @@ display(selection[['figure_class', 'display_name', 'q_family_DESeq2', 'cluster_b
 
 
 # %% [markdown]
-# ## 5 · Summarize saved pathway fits and export the plotted measurements
+# ## Summarize saved pathway fits
 #
-# Each pathway trajectory is the **equal-gene mean of saved log-normalized fits** over the common pathway membership. This abundance summary is not GSEA NES or local rank-divergence. The separate `D(s)` trace is notebook 12's competitive, unsigned local divergence in its original background.
-#
-# For pathway-mean uncertainty, average the saved residuals **before** forming the HC3 sandwich. This retains cross-gene residual covariance; averaging independent gene SEs would give an invalidly narrow band. The saved weighted full-model design is reconstructed algebraically, with equal species/specimen weights and within-species sum-to-zero specimen offsets. No expression model is refitted. Large residual arrays are read only on a cache miss and then released.
-#
-# The driver panels show the three member genes with largest fitted spatial SD, selected before drawing. All selected-member curves are exported, including undisplayed members. Driver roles explain the curve and are not extra significance calls.
+# Average saved member-gene trajectories with pointwise HC3 bands. Bands retain cross-gene residual covariance but are conditional on observed structures and coordinate, not donor-level confidence intervals.
 
 # %%
 def summarize_selected_pathways():
@@ -370,415 +341,407 @@ common_unsigned = classification[['pathway_id', 'common_effect_T_whole_pt_deseq2
     'common_effect_T_level', 'common_q_empirical_T_whole_pt_deseq2_abs', 'common_q_empirical_T_level']]
 common_unsigned.to_csv(source_data / 'unsigned_whole_PT_vs_level.csv', index=False)
 
-# %% [markdown]
-# ## 6 · Shared drawing/export helpers and final rendered QA
-#
-# Every figure has labelled panels, a legend file specifying the biological unit, score and uncertainty, and matching source-data files. Frame counts and set calls are descriptive summaries, so their bars have no artificial sampling error bars. Numerical scatter panels retain all paired observations and use rasterized marks in otherwise editable vector figures.
-#
-# The alignment gate checks final axes rectangles after layout. When auditor scripts are present, PDF glyph and collision audits run after every export. A failure stops the notebook; warnings remain visible for final-size review. Conceptual diagrams have no measured uncertainty. Reported screen unions are descriptive and are not a joint error-controlled claim across different test families.
 
 # %%
-import subprocess
-from textwrap import fill
-
-figure_records = []
-
-def panel_label(ax, label):
-    ax.annotate(label, xy=(0, 1), xycoords='axes fraction', xytext=(-12, 8),
-        textcoords='offset points', fontsize=8, fontweight='bold', ha='left', va='bottom')
-
-def export_figure(fig, stem, caption, *, exclude_axes=None, exemptions=None):
-    if qa_available:
-        require_matplotlib_panel_alignment(fig, json_out=str(output / (stem + '.alignment.json')),
-            exclude_axes=exclude_axes or (), exemptions=exemptions or (), strict=True)
-    else:
-        (output / (stem + '.alignment.json')).write_text(json.dumps(
-            {'status': 'NOT AUDITED', 'reason': 'figure auditor scripts unavailable'}))
-    fig.savefig(output / (stem + '.pdf'))
-    fig.savefig(output / (stem + '.svg'))
-    fig.savefig(output / (stem + '.png'), dpi=600)
-    (output / (stem + '_legend.md')).write_text(caption + '\n')
-    audits = []
-    if qa_available:
-        for script, extra in [('audit_pdf_text.py', []), ('audit_figure_collisions.py',
-            ['--json-out', str(output / (stem + '.collision.json'))])]:
-            result = subprocess.run([sys.executable, str(qa_scripts / script), str(output / (stem + '.pdf')), *extra],
-                capture_output=True, text=True)
-            (output / (stem + '.' + script.removesuffix('.py') + '.txt')).write_text(result.stdout + result.stderr)
-            if result.returncode:
-                raise RuntimeError(f'Figure QA requires repair: {stem}, {script}. Read its saved report.')
-            audits.append(script)
-    figure_records.append({'figure': stem, 'formats': 'PDF; SVG; PNG 600 dpi',
-        'audits': ';'.join(audits) if audits else 'not run', 'caption': caption})
-    plt.show()
-    plt.close(fig)
-
-def broad_gene_scatter(ax, *, annotation=True):
-    x, y = gene_comparison.stat.to_numpy(), gene_comparison.Z_level.to_numpy()
-    agree = np.sign(x) == np.sign(y)
-    colors = np.where(agree, np.where(x > 0, HUMAN_COLOR, MOUSE_COLOR), '0.6')
-    ax.scatter(x, y, s=1.8, c=colors, alpha=.25, rasterized=True, linewidths=0)
-    ax.axhline(0, color='0.6', lw=.5)
-    ax.axvline(0, color='0.6', lw=.5)
-    ax.set(xlabel='Whole-PT DESeq2 statistic', ylabel='Signed GAM level Z')
+def plot_global_gene_agreement(ax):
+    x = gene_comparison.stat.to_numpy()
+    y = gene_comparison.Z_level.to_numpy()
+    same_direction = np.sign(x) == np.sign(y)
+    colors = np.where(same_direction, np.where(x > 0, HUMAN_COLOR, MOUSE_COLOR), '0.65')
+    ax.scatter(x, y, s=5, c=colors, alpha=.35, rasterized=True)
+    ax.axhline(0, color='0.5', lw=.8)
+    ax.axvline(0, color='0.5', lw=.8)
+    ax.set(xlabel='Whole-PT DESeq2 Wald statistic', ylabel='GAM-level signed Z',
+           title='Broad species signal across common genes')
     rho = gene_comparison.stat.corr(gene_comparison.Z_level, method='spearman')
-    direction = agree.mean()
-    if annotation:
-        ax.set_title(f'Spearman ρ = {rho:.3f}\nDirection agreement = {direction:.1%}', fontsize=7)
-    return rho, direction
+    agreement = same_direction.mean()
+    ax.text(.02, .98, f'Spearman ρ = {rho:.3f}\nDirection agreement = {agreement:.1%}',
+            transform=ax.transAxes, va='top')
+    return rho, agreement
 
-def conventional_panel(ax, pathway):
-    values = conventional_values.loc[conventional_values.pathway_id.eq(pathway)]
-    for x, row in enumerate(values.itertuples()):
-        color = HUMAN_COLOR if row.NES > 0 else MOUSE_COLOR
-        ax.plot([x, x], [0, row.NES], color=color, lw=1)
-        ax.scatter([x], [row.NES], s=22, edgecolors=color,
-            facecolors=color if row.significant else 'white', linewidths=.8, zorder=3)
-    ax.axhline(0, color='0.6', lw=.5)
-    ax.set(xticks=range(4), xticklabels=['PT', 'S1', 'S2', 'S3'], ylim=(-3, 3), ylabel='Signed GSEA NES')
 
-def positional_guides(ax):
+def plot_native_pathway_evidence(ax, pathway_id):
+    rows = conventional_values.loc[conventional_values.pathway_id.eq(pathway_id)]
+    colors = np.where(rows.NES > 0, HUMAN_COLOR, MOUSE_COLOR)
+    ax.bar(rows.scope, rows.NES, color=colors, alpha=.8)
+    ax.margins(y=.2)  # Leave room for the q-value labels above and below bars.
+    ax.axhline(0, color='0.4', lw=.8)
+    ax.set(ylabel='Signed GSEA NES', title='Native pathway evidence')
+    for x, row in enumerate(rows.itertuples()):
+        ax.text(x, row.NES + (.08 if row.NES >= 0 else -.12),
+                f'q={row.q:.2g}', ha='center', va='bottom' if row.NES >= 0 else 'top', fontsize=8)
+    ax.tick_params(axis='x', rotation=20)
+
+
+
+# %% [markdown]
+# ## Whole-PT broad signal
+#
+# Compare signed whole-PT DESeq2 statistics with the identifiable signed GAM-level coefficient statistic across the common genes.
+
+# %%
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+rho, direction_agreement = plot_global_gene_agreement(ax)
+save_plot(fig, 'whole_pt_vs_gam_level')
+print(f'Signed-statistic rank correlation: {rho:.3f}; direction agreement: {direction_agreement:.1%}.')
+
+# %% [markdown]
+# ## Where the coarse segment labels fall
+#
+# Show the equal-specimen segment position distributions; transition guides are descriptive and segment labels overlap.
+
+# %%
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+for label in segments:
+    ax.step(grid, position_weights[label], where='mid', linewidth=1.8, label=label)
+ax.set(xlabel='Normalized PT position', ylabel='Specimen-balanced fraction per grid cell',
+       title='Reviewed coarse segment labels overlap along pseudospace')
+ax.legend(frameon=False)
+pd.DataFrame(position_weights, index=grid).rename_axis('position').reset_index().to_csv(
+    source_data / 'exploratory_segment_position_weights.csv', index=False)
+save_plot(fig, 'segment_position_distributions')
+
+# %% [markdown]
+# ## Pathway information profiles
+#
+# These evidence sets test different alternatives; significance is not expected to nest. The counts use notebook 12 pathway calls and their original FDR conventions.
+
+# %%
+information = classification[['pathway_id', 'pathway_name', 'bulk_hit', 'cluster_hit',
+    'level_hit', 'spatial_hit', 'total_hit', 'GAM_level_hit', 'smooth_hit']].copy()
+information['framework_hit_common'] = information[
+    ['level_hit', 'spatial_hit', 'total_hit', 'GAM_level_hit', 'smooth_hit']].any(axis=1)
+profiles = (information.groupby(['bulk_hit', 'cluster_hit', 'framework_hit_common'])
+    .size().rename('pathways').reset_index().sort_values('pathways', ascending=False))
+level_spatial_class = np.select(
+    [information.level_hit & information.spatial_hit, information.level_hit, information.spatial_hit],
+    ['Level + spatial', 'Level only', 'Spatial only'], default='Neither')
+information['level_spatial_class'] = level_spatial_class
+class_counts = (information.groupby(['level_spatial_class', 'total_hit']).size()
+    .rename('pathways').reset_index())
+information.to_csv(source_data / 'exploratory_pathway_calls.csv', index=False)
+profiles.to_csv(source_data / 'exploratory_exact_information_profiles.csv', index=False)
+class_counts.to_csv(source_data / 'exploratory_level_spatial_classes.csv', index=False)
+print('Whole-PT / coarse-segment / continuous-framework evidence profiles:')
+display(profiles)
+print('Level and spatial classes, with total-test evidence shown separately:')
+display(class_counts.pivot(index='level_spatial_class', columns='total_hit', values='pathways').fillna(0).astype(int))
+
+
+# %%
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+counts = information['level_spatial_class'].value_counts().reindex(['Level only', 'Level + spatial', 'Spatial only', 'Neither'], fill_value=0)
+counts.plot.bar(ax=ax, color=['#4C78A8', '#72B7B2', '#F58518', '0.75'])
+ax.set(xlabel='', ylabel='Pathways', title='Global level and position-dependent pathway calls')
+ax.tick_params(axis='x', rotation=15)
+save_plot(fig, 'level_spatial_pathway_classes')
+
+# %% [markdown]
+# ## Drug metabolism
+#
+# Shared native segment evidence; changing and sign-reversing mean pathway profile. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+
+# %%
+pathway_id = canonical_ids['KEGG_2019_Mouse::Drug metabolism']
+curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
+fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+plot_native_pathway_evidence(axes[0], pathway_id)
+axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
+axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
+                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
+axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
+axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
+                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
+axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+axes[1].legend(frameon=False)
+axes[2].plot(curve.position, curve.delta, color='0.15')
+axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
+                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
+axes[2].axhline(0, color='0.5', lw=.8)
+axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
+for ax in axes[1:]:
     for guide in transition_guides:
-        ax.axvline(guide, color='0.75', lw=.6, ls='--', zorder=0)
-    ax.set(xlim=(0, 1), xticks=[0, .5, 1])
-
-def pathway_difference_panel(ax, pathway, *, projection=False):
-    curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway)]
-    ax.fill_between(curve.position, curve.delta - 1.96 * curve.se_delta,
-        curve.delta + 1.96 * curve.se_delta, color='0.8', linewidth=0, alpha=.8)
-    ax.plot(curve.position, curve.delta, color='0.15')
-    ax.axhline(0, color='0.55', lw=.6)
-    local = selected_local.loc[selected_local.pathway_id.eq(pathway)].sort_values('position')
-    peak = local.loc[local.divergence.idxmax(), 'position']
-    ax.axvline(peak, color='#8C6BB1', lw=.8, ls=':', label='Peak local divergence')
-    if projection:
-        rows = projections.loc[projections.pathway_id.eq(pathway) & projections.scope.ne('whole_PT')]
-        ax.scatter(rows.position_median, rows.fitted_mean_delta, marker='s', facecolors='white',
-            edgecolors='0.35', s=20, zorder=4)
-    positional_guides(ax)
-    ax.set(ylabel='Mean H−M log expression')
-
-def species_curve_panel(ax, pathway):
-    curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway)]
-    for species, color in [('human', HUMAN_COLOR), ('mouse', MOUSE_COLOR)]:
-        ax.plot(curve.position, curve[species], color=color, label=species.capitalize())
-        ax.fill_between(curve.position, curve[species] - 1.96 * curve['se_' + species],
-            curve[species] + 1.96 * curve['se_' + species], color=color, alpha=.15, linewidth=0)
-    positional_guides(ax)
-    ax.set(ylabel='Mean log expression')
-    ax.legend(loc='lower left', bbox_to_anchor=(0, 1.16), ncol=2, frameon=False,
-              fontsize=5, handlelength=.8, columnspacing=.6, handletextpad=.4, borderaxespad=0)
-
-def gene_driver_panel(ax, pathway):
-    driver_colors = ('#1B9E77', '#7570B3', '#A6761D')
-    for gene, color in zip(driver_map[pathway], driver_colors):
-        curve = gene_curves.loc[gene_curves.pathway_id.eq(pathway) & gene_curves.gene.eq(gene)]
-        ax.plot(curve.position, curve.delta, color=color, label=gene)
-        ax.fill_between(curve.position, curve.delta - 1.96 * curve.se_delta,
-            curve.delta + 1.96 * curve.se_delta, color=color, alpha=.10, linewidth=0)
-    ax.axhline(0, color='0.6', lw=.5)
-    positional_guides(ax)
-    ax.set(ylabel='Gene H−M difference')
-    ax.legend(loc='lower right', bbox_to_anchor=(1, 1.26), ncol=3, frameon=False,
-              fontsize=5, handlelength=.8, columnspacing=.6, handletextpad=.4, borderaxespad=0)
-
-def position_density_panel(ax):
-    for i, label in enumerate(segments):
-        weights = position_weights[label]
-        ax.fill_between(grid, i, i + .7 * weights / weights.max(), color='0.72', linewidth=0)
-    positional_guides(ax)
-    ax.set(yticks=[.3, 1.3, 2.3], yticklabels=['S1', 'S2', 'S3'], ylim=(-.1, 3),
-           xlabel='Normalized PT position')
-    ax.tick_params(axis='y', length=0, labelsize=5.5)
-    ax.spines['left'].set_visible(False)
-
+        ax.axvline(guide, color='0.8', ls='--', lw=.8)
+    ax.set_xlim(0, 1)
+fig.suptitle('Drug metabolism')
+save_plot(fig, 'pathway_drug_metabolism')
 
 # %% [markdown]
-# ## Figure 1 · Reconstructing position retains broad conventional signal
+# ### Member-gene trajectories: Drug metabolism
 #
-# The left panel shows within-specimen compression into one or three profiles versus retaining each structure's continuous coordinate. The right panel compares all common genes' signed whole-PT and level statistics. These different noise-scaled quantities are not expected to have equal numerical values; no identity line or cross-model superiority test is implied. The recovery result is computed from the saved data, not hardcoded.
+# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
 
 # %%
-fig, axes = plt.subplots(1, 2, figsize=(FIGURE_WIDTH_IN, 82/25.4), gridspec_kw={'width_ratios': [1.7, 1]})
-fig.subplots_adjust(left=.04, right=.98, bottom=.18, top=.86, wspace=.42)
-ax = axes[0]
-ax.set(xlim=(0, 1), ylim=(0, 1))
-ax.axis('off')
-for y, label, question, analysis, count in (
-    (.82, 'Whole PT', 'Overall species difference?', 'DESeq2 / pathway GSEA', 1),
-    (.49, 'S1 / S2 / S3', 'Within a coarse PT region?', 'Segment DESeq2 / GSEA', 3),
-    (.16, 'Pseudospace', 'How does difference vary with position?', 'GAM: level · spatial · total', 9)):
-    xx = np.tile(np.linspace(.02, .15, 4), 3)
-    yy = np.repeat([y-.045, y, y+.045], 4)
-    ax.scatter(xx, yy, color='0.7', s=9, linewidths=0)
-    ax.annotate('', xy=(.29, y), xytext=(.19, y), arrowprops={'arrowstyle': '->', 'lw': .8})
-    target_x = np.linspace(.33, .47, count) if count > 1 else [.40]
-    ax.scatter(target_x, np.full(count, y), color='0.35', s=24 if count < 4 else 8, linewidths=0)
-    ax.text(.54, y+.07, label, fontsize=8, fontweight='bold', va='center')
-    ax.text(.54, y-.01, analysis, fontsize=6.5, va='center')
-    ax.text(.02, y-.12, question, fontsize=6.5)
-ax.text(.02, .98, 'Structures within each specimen', fontsize=6.5)
-ax.text(.32, -.06, 'Continuous coordinate retained →', fontsize=6)
-for i, axis in enumerate(axes):
-    panel_label(axis, chr(97+i))
-rho, direction_agreement = broad_gene_scatter(axes[1])
-unsigned_row = global_summary.set_index('comparison').loc['unsigned matched AUC']
-fig.text(.56, .04, f'Unsigned pathway recovery: {int(unsigned_row.shared)}/{int(unsigned_row.DESeq2_hits)} bulk calls', fontsize=6.5)
-export_figure(fig, 'figure_1_resolution_progression',
-    'Figure 1 | Reconstructing PT position retains broad species signal. '
-    'a, Conceptual within-specimen aggregation: all PT structures → one profile; reviewed labels → three profiles; '
-    'pseudospace retains a continuous coordinate. Dot counts are illustrative. '
-    'b, All common count-supported genes, whole-PT DESeq2 Wald statistic versus Mlevel human-minus-mouse coefficient / HC3 SE. '
-    f'Spearman rho={rho:.3f}; direction agreement={direction_agreement:.1%}. Orange/blue denote human-high/mouse-high concordant directions; gray denotes disagreement. '
-    'Statistics have different noise models and structure-level Z is conditional, not donor-calibrated. '
-    f'Unsigned matched pathway comparison recovers {int(unsigned_row.shared)}/{int(unsigned_row.DESeq2_hits)} conventional magnitude calls. '
-    'Two mouse specimens and two human cortex sections from one donor; exploratory.')
-
+pathway_id = canonical_ids['KEGG_2019_Mouse::Drug metabolism']
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+for gene in driver_map[pathway_id]:
+    gene_curve = gene_curves.loc[gene_curves.pathway_id.eq(pathway_id) & gene_curves.gene.eq(gene)]
+    ax.plot(gene_curve.position, gene_curve.delta, label=gene)
+    ax.fill_between(gene_curve.position, gene_curve.delta - 1.96*gene_curve.se_delta,
+                    gene_curve.delta + 1.96*gene_curve.se_delta, alpha=.12)
+ax.axhline(0, color='0.5', lw=.8)
+for guide in transition_guides:
+    ax.axvline(guide, color='0.8', ls='--', lw=.8)
+ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
+       title='Drug metabolism' + ': selected member genes')
+ax.legend(frameon=False)
+save_plot(fig, 'drivers_drug_metabolism')
 
 # %% [markdown]
-# ## Figure 2 · Shared biological findings, finer positional resolution
+# ## Citrate cycle
 #
-# Each row is a shared pathway. Left: native whole-PT/S1/S2/S3 signed GSEA, with filled markers at the corresponding full-family q ≤ 0.05 and open markers otherwise. Center: the fixed member-average human-minus-mouse trajectory, with pointwise HC3 uncertainty; the purple dotted guide marks notebook 12's strongest local rank-divergence position. Right: major driver-gene differences, showing variation beyond a segment label. The small density strips show the actual overlap of reviewed segment position distributions.
-#
-# These are different summaries of the same biological example, not interchangeable estimators. NES has no valid confidence band in the saved results. Gene and pathway bands are conditional on observed structures and the saved coordinate.
+# Broad conventional finding with a mid-PT trough and within-segment variation. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
 
 # %%
-def make_example_figure(example_class, stem):
-    examples = selection.loc[selection.figure_class.eq(example_class)].reset_index(drop=True)
-    n = len(examples)
-    ncols = 3 if example_class == 'A' else 4
-    fig, axes = plt.subplots(n+1, ncols,
-        figsize=(FIGURE_WIDTH_IN, (140 if example_class == 'A' else 190)/25.4),
-        gridspec_kw={'height_ratios': [1]*n + [.28]})
-    fig.subplots_adjust(left=.09, right=.98, bottom=.11, top=.89, wspace=.78, hspace=.82)
-    headings = ['Native aggregation', 'Continuous H−M', 'Driver genes'] if example_class == 'A' else [
-        'Native aggregation', 'Human / mouse', 'Continuous H−M', 'Driver genes']
-    for j, heading in enumerate(headings):
-        fig.text((axes[0, j].get_position().x0 + axes[0, j].get_position().x1)/2,
-                 .97, heading, ha='center', fontsize=8, fontweight='bold')
-    letter = 0
-    for i, row in enumerate(examples.itertuples()):
-        conventional_panel(axes[i, 0], row.pathway_id)
-        axes[i, 0].set_title(fill(row.display_name, width=21), fontsize=7, pad=12)
-        if example_class == 'A':
-            pathway_difference_panel(axes[i, 1], row.pathway_id)
-            gene_driver_panel(axes[i, 2], row.pathway_id)
-        else:
-            species_curve_panel(axes[i, 1], row.pathway_id)
-            pathway_difference_panel(axes[i, 2], row.pathway_id, projection=True)
-            gene_driver_panel(axes[i, 3], row.pathway_id)
-        for ax in axes[i]:
-            panel_label(ax, chr(97+letter))
-            letter += 1
-    axes[-1, 0].axis('off')
-    axes[-1, 0].text(0, .88, 'Filled: native q ≤ 0.05\nOpen: q > 0.05\nPT = whole PT', fontsize=6, va='top')
-    for ax in axes[-1, 1:]:
-        position_density_panel(ax)
-    caption = ('Figure 2 | Shared pathways resolved continuously. ' if example_class == 'A' else
-               'Figure 3 | Robust spatial pathway calls absent from the native conventional screens. ')
-    caption += ('Rows: ' + '; '.join(examples.display_name) + '. '
-        'Native signed NES: whole-PT BH across the full pathway family; segment BH pooled across all pathway×segment tests. '
-        'Filled markers pass q≤0.05; open markers do not. Positive NES means human-high. '
-        'Pathway curves average all common-membership gene fits, not GSEA NES or a pathway activation assay. '
-        'Bands are mean ±1.96 pointwise structure-conditional HC3 SE, including cross-gene residual covariance for pathway means; '
-        'they ignore independent-donor replication, spatial correlation and coordinate uncertainty. '
-        'Driver panels show the three member genes with largest fitted spatial SD; gene colors identify genes, not species. '
-        'Purple dotted lines mark maximum original-background D(s), not peak mean expression or a confidence interval. '
-        'Gray dashed guides are midpoints of equal-specimen segment medians; reviewed labels overlap. '
-        'Density strips are equal-specimen nearest-grid position distributions; tiny tails use end grid cells. '
-        'Early→late display is normalized to saved common support; no extrapolation. ')
-    if example_class == 'B':
-        caption += ('Orange/blue species curves are human/mouse. Open squares in difference panels are the same fitted curve '
-            'averaged over each observed segment distribution, plotted at the equal-specimen segment median. '
-            'They are compression measurements, not DESeq2 estimates. '
-            'All selected terms fail native whole-PT and segment signed GSEA, native segment ORA and the unsigned magnitude companions. '
-            'Structured attenuation/cancellation is visible, but this does not establish that aggregation uniquely caused the native q-value discrepancy. ')
-    caption += 'Two mouse specimens and two cortex sections from one human donor; exploratory.'
-    export_figure(fig, stem, caption, exclude_axes=[axes[-1, 0]])
-
-make_example_figure('A', 'figure_2_shared_pathways_finer_resolution')
+pathway_id = canonical_ids['KEGG_2019_Mouse::Citrate cycle (TCA cycle)']
+curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
+fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+plot_native_pathway_evidence(axes[0], pathway_id)
+axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
+axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
+                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
+axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
+axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
+                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
+axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+axes[1].legend(frameon=False)
+axes[2].plot(curve.position, curve.delta, color='0.15')
+axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
+                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
+axes[2].axhline(0, color='0.5', lw=.8)
+axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
+for ax in axes[1:]:
+    for guide in transition_guides:
+        ax.axvline(guide, color='0.8', ls='--', lw=.8)
+    ax.set_xlim(0, 1)
+fig.suptitle('Citrate cycle')
+save_plot(fig, 'pathway_citrate_cycle')
 
 # %% [markdown]
-# ## Figure 3 · Native-screen-negative pathways with spatially structured signals
+# ### Member-gene trajectories: Citrate cycle
 #
-# Each example passes the robust spatial gates and fails the actual conventional pathway screens. Human/mouse curves, their difference, and major member trajectories expose signed cancellation, gradual emergence, and heterogeneous directions. The open squares summarize the **same fitted curve** over each segment's observed position distribution; the exported compression table quantifies attenuation without switching estimators.
-#
-# This figure supports “aggregation cannot describe the resolved pattern.” It does **not** prove that model differences played no role in the native screen discrepancy, or that every negative conventional result was caused by averaging. Retain the native q-values, correlation and sensitivity annotations alongside the examples.
+# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
 
 # %%
-make_example_figure('B', 'figure_3_spatial_native_screen_negative')
+pathway_id = canonical_ids['KEGG_2019_Mouse::Citrate cycle (TCA cycle)']
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+for gene in driver_map[pathway_id]:
+    gene_curve = gene_curves.loc[gene_curves.pathway_id.eq(pathway_id) & gene_curves.gene.eq(gene)]
+    ax.plot(gene_curve.position, gene_curve.delta, label=gene)
+    ax.fill_between(gene_curve.position, gene_curve.delta - 1.96*gene_curve.se_delta,
+                    gene_curve.delta + 1.96*gene_curve.se_delta, alpha=.12)
+ax.axhline(0, color='0.5', lw=.8)
+for guide in transition_guides:
+    ax.axvline(guide, color='0.8', ls='--', lw=.8)
+ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
+       title='Citrate cycle' + ': selected member genes')
+ax.legend(frameon=False)
+save_plot(fig, 'drivers_citrate_cycle')
 
 # %% [markdown]
-# ## Figure 4 · Information profiles at progressively finer representation
+# ## Organic-acid / bile-salt transport
 #
-# An UpSet-style view shows exact combinations of native whole-PT calls, native coarse calls, and **any common-universe framework call**. Framework support includes positive matched level/spatial/total evidence, signed level GSEA or smooth segment GSEA. These screen unions are descriptive and have different test opportunities; no joint FDR or perfect nesting is claimed.
-#
-# The separate level/spatial breakdown makes the added positional dimension visible while retaining omnibus total support. The large neither-level-nor-spatial background remains in a printed count, including total-only terms. All eight detection profiles and all eight level/spatial/total intersections are exported; no pathway is omitted from the underlying universe.
+# Robust spatial call without native bulk or segment signed-GSEA evidence. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
 
 # %%
-information = classification[['pathway_id', 'bulk_hit', 'cluster_hit', 'level_hit', 'spatial_hit',
-    'total_hit', 'GAM_level_hit', 'smooth_hit']].copy()
-information['framework_hit_common'] = information[['level_hit', 'spatial_hit', 'total_hit', 'GAM_level_hit', 'smooth_hit']].any(axis=1)
-profile_names = ['bulk_hit', 'cluster_hit', 'framework_hit_common']
-profiles = information.groupby(profile_names).size().rename('pathways').reindex(
-    pd.MultiIndex.from_product([[False, True]]*3, names=profile_names), fill_value=0).reset_index()
-profiles['n_representations'] = profiles[profile_names].sum(axis=1)
-profiles = profiles.sort_values(['n_representations', 'pathways'], ascending=[False, False]).reset_index(drop=True)
-profiles.to_csv(source_data / 'figure_4_exact_information_profiles.csv', index=False)
-information.to_csv(source_data / 'figure_4_pathway_calls.csv', index=False)
-intersections = information.groupby(['level_hit', 'spatial_hit', 'total_hit']).size().rename('pathways').reindex(
-    pd.MultiIndex.from_product([[False, True]]*3, names=['level_hit', 'spatial_hit', 'total_hit']), fill_value=0)
-intersections.to_csv(source_data / 'figure_4_framework_exact_intersections.csv')
-level_class = np.select([information.level_hit & information.spatial_hit,
-    information.level_hit, information.spatial_hit], ['Level + spatial', 'Level only', 'Spatial only'], default='Neither')
-class_counts = pd.crosstab(level_class, information.total_hit).reindex(
-    index=['Level only', 'Level + spatial', 'Spatial only', 'Neither'], columns=[False, True], fill_value=0)
-class_counts.to_csv(source_data / 'figure_4_level_spatial_classes.csv')
-fig = plt.figure(figsize=(FIGURE_WIDTH_IN, 105/25.4))
-gs = fig.add_gridspec(2, 2, width_ratios=[1.65, 1], height_ratios=[2.3, 1],
-    left=.14, right=.98, bottom=.17, top=.85, hspace=.3, wspace=.58)
-counts_ax = fig.add_subplot(gs[0, 0])
-matrix_ax = fig.add_subplot(gs[1, 0], sharex=counts_ax)
-framework_ax = fig.add_subplot(gs[:, 1])
-x = np.arange(len(profiles))
-counts_ax.bar(x, profiles.pathways, color=np.where(profiles.framework_hit_common, '#8DA0CB', '0.75'))
-counts_ax.set_yscale('symlog', linthresh=10)
-counts_ax.tick_params(axis='y', labelsize=8)
-counts_ax.set(ylabel='Pathway terms', title='Exact detection profiles')
-counts_ax.tick_params(axis='x', bottom=False, labelbottom=False)
-counts_ax.set_ylim(0, max(profiles.pathways.max()*2, 20))
-for i, count in enumerate(profiles.pathways):
-    counts_ax.annotate(str(count), (i, count), xytext=(0, 4), textcoords='offset points',
-        ha='center', fontsize=6)
-for i, row in enumerate(profiles.itertuples()):
-    flags = [row.bulk_hit, row.cluster_hit, row.framework_hit_common]
-    for j, flag in enumerate(flags):
-        matrix_ax.scatter(i, 2-j, s=18, color='0.2' if flag else '0.85', linewidths=0)
-    on = np.flatnonzero(flags)
-    if len(on) > 1:
-        matrix_ax.plot([i, i], [2-on.max(), 2-on.min()], color='0.3', lw=.7, zorder=0)
-matrix_ax.set(yticks=[2,1,0], yticklabels=['Whole PT', 'S1/S2/S3', 'Framework'],
-    xticks=[], ylim=(-.5, 2.5))
-for spine in matrix_ax.spines.values():
-    spine.set_visible(False)
-for i, label in enumerate(['Level only', 'Level + spatial', 'Spatial only']):
-    framework_ax.barh(i, class_counts.loc[label, True], color='#8DA0CB')
-    framework_ax.barh(i, class_counts.loc[label, False], left=class_counts.loc[label, True], color='0.8')
-    framework_ax.text(class_counts.loc[label].sum()+2, i, str(class_counts.loc[label].sum()), va='center', fontsize=6)
-framework_ax.set(yticks=[0,1,2], yticklabels=['Level only', 'Level + spatial', 'Spatial only'],
-    xlabel='Pathway terms', title='Global and spatial calls')
-framework_ax.invert_yaxis()
-framework_ax.set_xlim(0, max(class_counts.iloc[:3].sum(axis=1))*1.25)
-framework_ax.text(.5, -.19, f'Neither: {int(class_counts.loc["Neither"].sum())}; total-only: {int(class_counts.loc["Neither", True])}',
-    transform=framework_ax.transAxes, fontsize=6, ha='center')
-fig.text(.66, .93, 'Blue: total supported   Gray: no total call', fontsize=6)
-for ax, letter in [(counts_ax,'a'), (matrix_ax,'b'), (framework_ax,'c')]:
-    panel_label(ax, letter)
-export_figure(fig, 'figure_4_information_profiles',
-    'Figure 4 | Progressively finer representation enables overlapping information profiles. '
-    'a,b, Exact UpSet intersections for native whole-PT signed GSEA, any native segment signed GSEA, '
-    'and any common-universe framework evidence (positive matched level/spatial/total, signed level GSEA or smooth segment GSEA). '
-    'Counts include all common pathways; the count axis is symlog to retain both the background and small profiles. '
-    'Each component retains notebook 12\'s own full-family q≤0.05 convention; this union is descriptive, not jointly FDR-controlled. '
-    'c, Positive matched level/spatial classes, with total support shown independently; neither and total-only counts are printed. '
-    'Detection profiles do not imply nested significance sets or universal power superiority. '
-    'Pathway terms overlap in genes and are not independent programs. One human donor; exploratory.')
+pathway_id = canonical_ids['Reactome_2022::Transport Of Bile Salts And Organic Acids, Metal Ions And Amine Compounds R-HSA-425366']
+curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
+fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+plot_native_pathway_evidence(axes[0], pathway_id)
+axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
+axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
+                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
+axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
+axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
+                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
+axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+axes[1].legend(frameon=False)
+axes[2].plot(curve.position, curve.delta, color='0.15')
+axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
+                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
+axes[2].axhline(0, color='0.5', lw=.8)
+axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
+for ax in axes[1:]:
+    for guide in transition_guides:
+        ax.axvline(guide, color='0.8', ls='--', lw=.8)
+    ax.set_xlim(0, 1)
+fig.suptitle('Organic-acid / bile-salt transport')
+save_plot(fig, 'pathway_organic-acid___bile-salt_transport')
 
 # %% [markdown]
-# ## Figure 5 · Supplementary validation controls
+# ### Member-gene trajectories: Organic-acid / bile-salt transport
 #
-# These panels reassure reviewers without replacing the biological narrative. Signed level agreement and unsigned pathway recovery assess retention of conventional signal. The cluster-only diagnostic separates support elsewhere from thresholds close to 0.05. The controlled benchmark is **deliberately matched**, with 66/66 discrete hits retained plus 23 additional calls in the saved run; it is not the native conventional comparator used to choose Figures 2–3. Numbers are recomputed from saved source tables.
+# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
 
 # %%
-fig, axes = plt.subplots(2, 2, figsize=(FIGURE_WIDTH_IN, 140/25.4))
-fig.subplots_adjust(left=.22, right=.97, bottom=.11, top=.9, wspace=.9, hspace=.65)
-broad_gene_scatter(axes[0,0])
-axes[0,0].set_title(f'Signed broad-signal agreement\nρ = {rho:.3f}; directions = {direction_agreement:.1%}', fontsize=7, pad=14)
-signed_row = global_summary.set_index('comparison').loc['signed GSEA']
-x = classification.common_effect_T_whole_pt_deseq2_abs
-y = classification.common_effect_T_level
-bulk_unsigned = classification.common_effect_T_whole_pt_deseq2_abs.gt(0) & classification.common_q_empirical_T_whole_pt_deseq2_abs.le(ALPHA)
-level_unsigned = classification.common_effect_T_level.gt(0) & classification.common_q_empirical_T_level.le(ALPHA)
-axes[0,1].scatter(x, y, s=4, color='0.75', alpha=.4, rasterized=True, linewidths=0)
-axes[0,1].scatter(x[bulk_unsigned], y[bulk_unsigned], s=16,
-    color=np.where(level_unsigned[bulk_unsigned], '#0072B2', '#D55E00'), linewidths=0)
-axes[0,1].set(xlabel='Bulk magnitude AUC effect', ylabel='GAM-level AUC effect',
-    title=f'Unsigned recovery: {int((bulk_unsigned & level_unsigned).sum())}/{int(bulk_unsigned.sum())}\nEffect-rank ρ = {x.corr(y, method="spearman"):.3f}')
+pathway_id = canonical_ids['Reactome_2022::Transport Of Bile Salts And Organic Acids, Metal Ions And Amine Compounds R-HSA-425366']
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+for gene in driver_map[pathway_id]:
+    gene_curve = gene_curves.loc[gene_curves.pathway_id.eq(pathway_id) & gene_curves.gene.eq(gene)]
+    ax.plot(gene_curve.position, gene_curve.delta, label=gene)
+    ax.fill_between(gene_curve.position, gene_curve.delta - 1.96*gene_curve.se_delta,
+                    gene_curve.delta + 1.96*gene_curve.se_delta, alpha=.12)
+ax.axhline(0, color='0.5', lw=.8)
+for guide in transition_guides:
+    ax.axvline(guide, color='0.8', ls='--', lw=.8)
+ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
+       title='Organic-acid / bile-salt transport' + ': selected member genes')
+ax.legend(frameon=False)
+save_plot(fig, 'drivers_organic-acid___bile-salt_transport')
+
+# %% [markdown]
+# ## Mitochondrial fatty-acid oxidation
+#
+# A gradual positional difference with heterogeneous member directions. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+
+# %%
+pathway_id = canonical_ids['Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289']
+curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
+fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+plot_native_pathway_evidence(axes[0], pathway_id)
+axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
+axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
+                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
+axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
+axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
+                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
+axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+axes[1].legend(frameon=False)
+axes[2].plot(curve.position, curve.delta, color='0.15')
+axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
+                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
+axes[2].axhline(0, color='0.5', lw=.8)
+axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
+for ax in axes[1:]:
+    for guide in transition_guides:
+        ax.axvline(guide, color='0.8', ls='--', lw=.8)
+    ax.set_xlim(0, 1)
+fig.suptitle('Mitochondrial fatty-acid oxidation')
+save_plot(fig, 'pathway_mitochondrial_fatty-acid_oxidation')
+
+# %% [markdown]
+# ### Member-gene trajectories: Mitochondrial fatty-acid oxidation
+#
+# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+
+# %%
+pathway_id = canonical_ids['Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289']
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+for gene in driver_map[pathway_id]:
+    gene_curve = gene_curves.loc[gene_curves.pathway_id.eq(pathway_id) & gene_curves.gene.eq(gene)]
+    ax.plot(gene_curve.position, gene_curve.delta, label=gene)
+    ax.fill_between(gene_curve.position, gene_curve.delta - 1.96*gene_curve.se_delta,
+                    gene_curve.delta + 1.96*gene_curve.se_delta, alpha=.12)
+ax.axhline(0, color='0.5', lw=.8)
+for guide in transition_guides:
+    ax.axvline(guide, color='0.8', ls='--', lw=.8)
+ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
+       title='Mitochondrial fatty-acid oxidation' + ': selected member genes')
+ax.legend(frameon=False)
+save_plot(fig, 'drivers_mitochondrial_fatty-acid_oxidation')
+
+# %% [markdown]
+# ## Retinoid metabolism / transport
+#
+# Changing mean difference with mixed gene trajectories. Native whole-PT and S1/S2/S3 signed GSEA evidence is shown beside the fitted mean human/mouse and human-minus-mouse trajectories. Pointwise HC3 bands summarize structure-conditional uncertainty.
+
+# %%
+pathway_id = canonical_ids['Reactome_2022::Retinoid Metabolism And Transport R-HSA-975634']
+curve = pathway_curves.loc[pathway_curves.pathway_id.eq(pathway_id)].sort_values('position')
+fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
+plot_native_pathway_evidence(axes[0], pathway_id)
+axes[1].plot(curve.position, curve.mouse, color=MOUSE_COLOR, label='Mouse')
+axes[1].fill_between(curve.position, curve.mouse - 1.96*curve.se_mouse,
+                     curve.mouse + 1.96*curve.se_mouse, color=MOUSE_COLOR, alpha=.15)
+axes[1].plot(curve.position, curve.human, color=HUMAN_COLOR, label='Human')
+axes[1].fill_between(curve.position, curve.human - 1.96*curve.se_human,
+                     curve.human + 1.96*curve.se_human, color=HUMAN_COLOR, alpha=.15)
+axes[1].set(title='Mean pathway expression', ylabel='Mean log expression', xlabel='PT position')
+axes[1].legend(frameon=False)
+axes[2].plot(curve.position, curve.delta, color='0.15')
+axes[2].fill_between(curve.position, curve.delta - 1.96*curve.se_delta,
+                     curve.delta + 1.96*curve.se_delta, color='0.75', alpha=.45)
+axes[2].axhline(0, color='0.5', lw=.8)
+axes[2].set(title='Human − mouse trajectory', ylabel='Mean difference', xlabel='PT position')
+for ax in axes[1:]:
+    for guide in transition_guides:
+        ax.axvline(guide, color='0.8', ls='--', lw=.8)
+    ax.set_xlim(0, 1)
+fig.suptitle('Retinoid metabolism / transport')
+save_plot(fig, 'pathway_retinoid_metabolism___transport')
+
+# %% [markdown]
+# ### Member-gene trajectories: Retinoid metabolism / transport
+#
+# The displayed drivers are the three pathway members with the largest fitted spatial variation; they are descriptive examples, not independent pathway tests.
+
+# %%
+pathway_id = canonical_ids['Reactome_2022::Retinoid Metabolism And Transport R-HSA-975634']
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+for gene in driver_map[pathway_id]:
+    gene_curve = gene_curves.loc[gene_curves.pathway_id.eq(pathway_id) & gene_curves.gene.eq(gene)]
+    ax.plot(gene_curve.position, gene_curve.delta, label=gene)
+    ax.fill_between(gene_curve.position, gene_curve.delta - 1.96*gene_curve.se_delta,
+                    gene_curve.delta + 1.96*gene_curve.se_delta, alpha=.12)
+ax.axhline(0, color='0.5', lw=.8)
+for guide in transition_guides:
+    ax.axvline(guide, color='0.8', ls='--', lw=.8)
+ax.set(xlim=(0, 1), xlabel='PT position', ylabel='Gene H − M difference',
+       title='Retinoid metabolism / transport' + ': selected member genes')
+ax.legend(frameon=False)
+save_plot(fig, 'drivers_retinoid_metabolism___transport')
+
+# %% [markdown]
+# ## Cluster signed-GSEA-only diagnostic
+#
+# The diagnostic asks whether pathways called only in the conventional cluster-versus-smooth signed-GSEA comparison have support in any other continuous-framework test or are near its threshold.
+
+# %%
 fate_labels = ['Significant elsewhere', 'Near: q < 0.10', 'Near: 0.10 ≤ q < 0.15', 'No q < 0.15']
 fate_counts = [int(cluster_review.any_framework_hit.sum()), int(cluster_review.near_threshold_010.sum()),
     int((~cluster_review.any_framework_hit & cluster_review.framework_q_lt_015 & ~cluster_review.framework_q_lt_010).sum()),
     int((~cluster_review.any_framework_hit & ~cluster_review.framework_q_lt_015).sum())]
-axes[1,0].barh(range(4), fate_counts, color=['#8DA0CB', '#E5C494', '#E69F00', '0.75'])
-axes[1,0].set(yticks=range(4), yticklabels=fate_labels, xlabel='Pathway terms',
-    title=f'{len(cluster_review)} cluster signed-GSEA-only terms')
-axes[1,0].invert_yaxis()
-axes[1,0].set_xlim(0, max(fate_counts)*1.2)
-for i, count in enumerate(fate_counts):
-    axes[1,0].text(count+.7, i, str(count), va='center', fontsize=6)
-control = controlled_summary.set_index('comparison').loc['controlled_discrete_to_continuous']
-axes[1,1].barh([0,1], [control.baseline_hits, control.overlap], color=['0.7', '#8DA0CB'])
-axes[1,1].barh(1, control.continuous_added, left=control.overlap, color='#D55E00')
-axes[1,1].set(yticks=[0,1], yticklabels=['Matched discrete', 'Matched continuous'], xlabel='Pathway terms',
-    title='Controlled model benchmark')
-axes[1,1].invert_yaxis()
-axes[1,1].text(.5, .5, f'{int(control.overlap)}/{int(control.baseline_hits)} retained + {int(control.continuous_added)}',
-    transform=axes[1,1].transAxes, ha='center', va='center', fontsize=6)
-axes[1,1].text(.5, -.29, 'Matched control; not the native baseline',
-    transform=axes[1,1].transAxes, ha='center', fontsize=6)
-for ax, letter in zip(axes.flat, 'abcd'):
-    panel_label(ax, letter)
-pd.DataFrame({'fate':fate_labels, 'pathways':fate_counts}).to_csv(source_data / 'figure_5_cluster_only_fate.csv', index=False)
-controlled_summary.to_csv(source_data / 'figure_5_controlled_benchmark.csv', index=False)
-global_summary.to_csv(source_data / 'figure_5_global_agreement.csv', index=False)
-export_figure(fig, 'figure_5_supporting_validation',
-    'Figure 5 | Supporting validation, not the central biological comparison. '
-    'a, Common-gene signed agreement (same source as Figure 1); HC3 Z remains structure-conditional. '
-    f'Signed pathway GSEA overlap: {int(signed_row.shared)} shared, {int(signed_row.DESeq2_only)} DESeq2-only, {int(signed_row.GAM_level_only)} GAM-level-only. '
-    'b, Whole-PT absolute DESeq2 Wald matched-AUC effects versus unsigned T_level effects, same common genes/sets/null; '
-    'blue denotes conventional magnitude calls recovered by level, orange denotes conventional-only. '
-    'c, Cluster-only in the specific cluster-versus-smooth signed segment screen; support elsewhere uses original/common matched tests, signed GAM level and smooth segment screens. '
-    'Near q<0.10/q<0.15 categories are exclusive and require no significant framework call. '
-    'd, Section 9c deliberately matched discrete/continuous WLS total-difference enrichment, with the same expression and statistical machinery. '
-    'This benchmark is a robustness check, not the conventional baseline for biological examples. '
-    'All q conventions are inherited unchanged from notebook 12; no intervals are added to descriptive term counts. One human donor; exploratory.')
+fate_table = pd.DataFrame({'fate': fate_labels, 'pathways': fate_counts})
+fate_table.to_csv(source_data / 'exploratory_cluster_only_fate.csv', index=False)
+display(fate_table)
+fig, ax = plt.subplots(figsize=(10, 4), layout='constrained')
+ax.barh(fate_table.fate, fate_table.pathways, color=['#72B7B2', '#E5C494', '#F58518', '0.75'])
+ax.set(xlabel='Pathways', title=f'{len(cluster_review)} cluster signed-GSEA-only pathways')
+ax.invert_yaxis()
+save_plot(fig, 'cluster_signed_only_fate')
 
 # %% [markdown]
-# ## 7 · Manuscript-ready interpretation and reproducibility record
+# ## Controlled discrete-versus-continuous benchmark
 #
-# Report recovery, shared localization examples, and spatially structured native-screen-negative examples separately. “Missed” below means not passing the saved conventional pathway screens, not a demonstrated absence of a conventional gene effect. Compression measurements support attenuation/cancellation descriptions while differing estimators remain a possible source of screen discordance. The single human donor limits population inference.
-#
-# The record binds candidate decisions, exact inputs and figure code to exports. All plotted measurements are in tidy source-data tables, including undisplayed members and all pathway information profiles. Figure legends accompany each PDF/SVG/PNG. Before submission, biologically review the annotations, gene directions, support, cohort caveats and final-size panel readability.
+# Section 9c holds much of the statistical machinery constant. Treat it as a robustness/control analysis, separate from the native conventional-versus-pseudostructure comparison.
 
 # %%
-figure_index = pd.DataFrame(figure_records)
-figure_index.to_csv(output / 'figure_index.csv', index=False)
-input_files = [source / name for name in required_files] + [coordinate_path]
-record = {'figure_logic': FIGURE_LOGIC_VERSION, 'notebook12_logic': manifest12['logic_version'],
-    'fit_input_fingerprint': manifest12['fit_input_fingerprint'],
-    'inputs': {path.name: digest(path) for path in input_files},
-    'helper_code': digest(Path(resolution_story.__file__)),
-    'figure_notebook_code': digest(project / 'analysis' / 'notebooks' / '14_pt_paper_figures_resolution_story.ipynb'),
-    'common_support': [float(lo), float(hi)], 'axis': 'saved support mapped to [0,1] for display only',
-    'q_threshold': ALPHA, 'minimum_all_planned_retention': MIN_RETENTION,
-    'selected': selection[['pathway_id', 'figure_class', 'selection_rationale']].to_dict('records'),
-    'native_baseline': 'whole-PT and reviewed-segment DESeq2 signed GSEA; extra magnitude/ORA exclusions for Class B',
-    'uncertainty': 'pointwise HC3; averaged residuals retain cross-gene covariance; conditional on structures and coordinate',
-    'guides': 'midpoints of equal-specimen segment median positions; labels overlap',
-    'qa_available': qa_available, 'n_common_genes': len(common_genes), 'n_common_pathways': len(classification)}
-(output / 'figure_manifest.json').write_text(json.dumps(record, indent=2))
-print('MANUSCRIPT SUMMARY — exploratory, one human donor')
-print(f'Broad gene signal retained: Spearman ρ={rho:.3f}; direction agreement={direction_agreement:.1%}; '
-      f'unsigned pathway recovery={int(unsigned_row.shared)}/{int(unsigned_row.DESeq2_hits)}.')
-for row in selection.itertuples():
-    print(f'Class {row.figure_class}: {row.display_name}; native bulk q={row.q_family_DESeq2:.3g}, '
-          f'best segment q={row.cluster_best_q:.3g}, spatial q={row.common_q_empirical_T_spatial:.3g}, '
-          f'all-planned retention={row.robust_fraction_all_planned:.0%}. {row.selection_rationale}')
-print('Produced: Figure 1 a–b; Figure 2 a–f + densities; Figure 3 a–l + densities; '
-      'Figure 4 a–c; Figure 5 a–d. PDF, SVG, PNG and tidy source data accompany every figure.')
-manuscript_text = ('Whole-PT and S1/S2/S3 analyses captured broad and coarse regional species differences, '
-    'while pseudostructure reconstruction retained broad signals and resolved their continuous spatial organization. '
-    'Robust spatial pathway calls absent from the native conventional screens showed changing, heterogeneous or '
-    'opposing fitted effects that coarse anatomical averages could not describe; estimator differences and limited '
-    'donor replication remain relevant to interpretation.')
-print(manuscript_text)
-(output / 'manuscript_interpretation.txt').write_text(manuscript_text + '\n')
+control = controlled_summary.set_index('comparison').loc['controlled_discrete_to_continuous']
+control_table = pd.DataFrame([{'discrete_hits': int(control.baseline_hits), 'shared': int(control.overlap),
+    'continuous_added': int(control.continuous_added)}])
+control_table.to_csv(source_data / 'exploratory_controlled_benchmark.csv', index=False)
+display(control_table)
+fig, ax = plt.subplots(figsize=(10, 3.5), layout='constrained')
+ax.barh(['Discrete hits'], [control.baseline_hits], color='0.7', label='Discrete significant')
+ax.barh(['Continuous total-difference'], [control.overlap], color='#72B7B2', label='Shared')
+ax.barh(['Continuous total-difference'], [control.continuous_added], left=[control.overlap], color='#F58518', label='Additional')
+ax.set(xlabel='Pathways', title='Controlled matched-model comparison')
+ax.legend(frameon=False)
+save_plot(fig, 'controlled_discrete_continuous')
+
+# %% [markdown]
+# ## Manuscript-oriented interpretation
+#
+# Whole-PT and S1/S2/S3 analyses recover many strong species differences. The GAM/pseudostructure framework retains broad differences through level and total-difference tests, even when a pathway has no spatial-remodeling call. Its added positional question is whether species differences change along PT, including localized, changing, or direction-reversing patterns that aggregation can obscure. These analyses use two mouse specimens and two human cortex sections from one donor and remain exploratory.
+
+# %%
+signed = global_summary.set_index('comparison').loc['signed GSEA']
+unsigned = global_summary.set_index('comparison').loc['unsigned matched AUC']
+print(f'Whole-PT DESeq2 versus GAM-level signed GSEA: {int(signed.shared)} shared, {int(signed.DESeq2_only)} DESeq2-only, {int(signed.GAM_level_only)} GAM-level-only; gene-statistic Spearman ρ={rho:.3f}.')
+print(f'Unsigned matched pathway comparison: {int(unsigned.shared)}/{int(unsigned.DESeq2_hits)} bulk calls shared.')
+print('Level/spatial classes:', counts.to_dict())
+print(f'Cluster signed-GSEA-only fates: {dict(zip(fate_labels, fate_counts))}')
+print(f'Controlled discrete-to-continuous comparison: {int(control.overlap)}/{int(control.baseline_hits)} shared; {int(control.continuous_added)} additional.')
+summary = ('Conventional aggregation recovers broad species differences. The trajectory framework also represents broad/global shifts through T_level and T_total. T_spatial adds tests for position-dependent remodeling; these evidence sets address different alternatives and need not nest.\n')
+(output / 'exploratory_manuscript_interpretation.txt').write_text(summary)
+print(summary)

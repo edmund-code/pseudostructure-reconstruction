@@ -1,9 +1,11 @@
 # %% [markdown]
-# # PT resolution story: broad signal and positional detail
+# # Whole PT → S1/S2/S3 → continuous pseudospace
 #
-# This notebook reuses saved results from notebooks 12 and 13. It asks what broad species differences are retained and what additional positional patterns remain visible in reconstructed PT pseudospace.
+# **Question:** does increasing positional resolution preserve broad species differences while revealing additional positional remodeling?
 #
-# `T_level` tests a broad species shift, `T_spatial` tests how that difference changes along PT, and `T_total` tests any trajectory difference. A constant species shift can be strong for level and weak for spatial; that is expected.
+# The main evidence chain is broad gene-statistic agreement → controlled discrete/continuous pathway benchmark → pathway localization, signed member-gene heatmaps, and fitted expression curves. Native DESeq2/signed GSEA comparisons are context; they use different statistics and null hypotheses.
+#
+# This notebook consumes notebook 12's saved fits and inference and notebook 13's reviewed PT metadata. It does not refit models or recompute coordinates. All results are exploratory: two healthy mouse specimens and two healthy cortex sections from **one human donor**. Structural HC3 uncertainty is conditional on this cohort and coordinate, not donor-level uncertainty.
 
 # %% [markdown]
 # ## Load and validate saved results
@@ -26,7 +28,8 @@ from IPython.display import display
 start = Path(__file__).resolve().parent if '__file__' in globals() else Path.cwd()
 project = next(path for path in (start, *start.parents) if (path / 'pseudospace').is_dir())
 sys.path.insert(0, str(project))
-from pseudospace.pathway_remodeling import rank_auc
+from pseudospace.pathway_remodeling import rank_auc, local_pathway_curves
+from pseudospace.resolution_story import controlled_resolution_calls, signed_gene_heatmap
 
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--data-root', type=Path)
@@ -45,14 +48,29 @@ MIN_RETENTION = .75  # Retained / ALL planned runs; unavailable runs do not impr
 segments = ('PT-S1', 'PT-S2', 'PT-S3')
 HUMAN_COLOR, MOUSE_COLOR = '#D55E00', '#0072B2'
 plt.rcParams.update({'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sans'],
-    'font.size': 10, 'axes.labelsize': 10, 'axes.titlesize': 11, 'legend.fontsize': 9,
-    'axes.spines.top': False, 'axes.spines.right': False, 'lines.linewidth': 1.6})
+    'font.size': 10, 'axes.labelsize': 10, 'axes.titlesize': 11, 'legend.fontsize': 9, 'legend.frameon': False,
+    'axes.spines.top': False, 'axes.spines.right': False, 'lines.linewidth': 1.6, 'pdf.fonttype': 42, 'svg.fonttype': 'none'})
 
 
 def save_plot(fig, stem):
-    """Save ordinary exploratory plot formats and display the notebook PNG."""
-    for suffix in ('pdf', 'svg', 'png'):
-        fig.savefig(output / f'exploratory_{stem}.{suffix}', dpi=200 if suffix == 'png' else None)
+    """Save exploratory plots; enable rendered QA with NATURE_FIGURE_QA_DIR."""
+    qa_dir = os.environ.get('NATURE_FIGURE_QA_DIR')
+    if qa_dir:
+        sys.path.insert(0, qa_dir)
+        from audit_panel_alignment import require_matplotlib_panel_alignment
+        require_matplotlib_panel_alignment(fig,
+            json_out=output / f'exploratory_{stem}.alignment.json', strict=True)
+    fig.savefig(output / f'exploratory_{stem}.pdf')
+    fig.savefig(output / f'exploratory_{stem}.svg')
+    fig.savefig(output / f'exploratory_{stem}.png', dpi=300)
+    if qa_dir:
+        import subprocess
+        for script, extra in (
+            ('audit_pdf_text.py', []),
+            ('audit_figure_collisions.py', ['--json-out', str(output / f'exploratory_{stem}.collision.json')])):
+            subprocess.run([sys.executable, str(Path(qa_dir) / script),
+                str(output / f'exploratory_{stem}.pdf'), *extra], check=True,
+                stdout=subprocess.DEVNULL)
     plt.show()
     plt.close(fig)
 
@@ -72,7 +90,9 @@ required_files = ('integrated_pathway_classification.csv', 'pathway_evidence_atl
     'pathway_coverage.csv', 'gene_trajectories.npz', 'structure_expression_audit.csv',
     'conventional_gene_universe.csv', 'conventional_pt_ora.csv',
     'whole_pt_vs_gam_level_genes.csv', 'whole_pt_vs_gam_level_summary.csv',
-    'cluster_signed_only_framework_review.csv', 'total_difference_summary.csv', 'run_manifest.json', 'gene_statistics.csv')
+    'cluster_signed_only_framework_review.csv', 'total_difference_summary.csv', 'total_difference_pathway_comparison.csv',
+    'total_difference_continuous_only.csv', 'total_difference_benchmark_manifest.json',
+    'pathway_local_curves.csv', 'pathway_program_membership.csv', 'run_manifest.json', 'gene_statistics.csv')
 for filename in required_files:
     if not (source / filename).is_file():
         raise FileNotFoundError(f'Run notebook 12 first; missing {filename}')
@@ -88,6 +108,26 @@ global_summary = pd.read_csv(source / 'whole_pt_vs_gam_level_summary.csv')
 ora = pd.read_csv(source / 'conventional_pt_ora.csv')
 controlled_summary = pd.read_csv(source / 'total_difference_summary.csv')
 cluster_review = pd.read_csv(source / 'cluster_signed_only_framework_review.csv')
+controlled = controlled_resolution_calls(pd.read_csv(source / 'total_difference_pathway_comparison.csv'), ALPHA)
+program_membership = pd.read_csv(source / 'pathway_program_membership.csv')
+if set(controlled.pathway_id) != set(classification.pathway_id):
+    raise ValueError('Controlled benchmark and common pathway universe differ.')
+added_saved = pd.read_csv(source / 'total_difference_continuous_only.csv')
+if set(added_saved.pathway_id) != set(controlled.loc[controlled.controlled_added, 'pathway_id']):
+    raise ValueError('Saved continuous-added list disagrees with controlled calls.')
+control = controlled_summary.set_index('comparison').loc['controlled_discrete_to_continuous']
+for key, observed in {'baseline_hits': controlled.controlled_discrete_hit.sum(),
+        'continuous_hits': controlled.controlled_continuous_hit.sum(),
+        'overlap': controlled.controlled_retained.sum(),
+        'continuous_added': controlled.controlled_added.sum()}.items():
+    if int(control[key]) != int(observed):
+        raise ValueError(f'Saved controlled summary disagrees for {key}.')
+benchmark_manifest = json.loads((source / 'total_difference_benchmark_manifest.json').read_text())
+if benchmark_manifest['alpha'] != ALPHA or benchmark_manifest['n_pathways'] != len(controlled):
+    raise ValueError('Controlled benchmark manifest has incompatible threshold/pathway family.')
+controlled = controlled.merge(classification[['pathway_id', 'pathway_name']], on='pathway_id', validate='one_to_one')
+controlled.to_csv(source_data / 'controlled_pathway_calls.csv', index=False)
+controlled.loc[controlled.controlled_added].to_csv(source_data / 'controlled_continuous_added.csv', index=False)
 with np.load(source / 'gene_trajectories.npz', allow_pickle=False) as archive:
     fit = {key: archive[key] for key in ('genes', 'structures', 'specimen', 'grid', 'knots',
         'mouse', 'human', 'delta', 'se', 'z', 'T_level', 'T_spatial', 'T_total')}
@@ -101,6 +141,8 @@ common_genes = pd.Index(pd.read_csv(source / 'conventional_gene_universe.csv')
     .query('common_count_support').gene)
 if set(common_genes) != set(gene_comparison.index) or not np.isfinite(gene_comparison[['stat', 'Z_level']]).all().all():
     raise ValueError('Paired gene statistics must have exactly the common tested universe.')
+if benchmark_manifest['n_genes'] != len(common_genes):
+    raise ValueError('Controlled benchmark gene universe differs from displayed common universe.')
 all_sets = {row.pathway_id: ast.literal_eval(row.genes_present)
     for row in coverage.loc[coverage.tested_here].itertuples()}
 gene_sets = {pathway: [gene for gene in all_sets[pathway] if gene in common_genes]
@@ -330,8 +372,7 @@ def plot_global_gene_agreement(ax):
            title='Broad species signal across common genes')
     rho = gene_comparison.stat.corr(gene_comparison.Z_level, method='spearman')
     agreement = same_direction.mean()
-    ax.text(.02, .98, f'Spearman ρ = {rho:.3f}\nDirection agreement = {agreement:.1%}',
-            transform=ax.transAxes, va='top')
+    ax.set_title(f'Broad species signal across common genes\nSpearman ρ = {rho:.3f}; direction agreement = {agreement:.1%}', fontsize=10)
     return rho, agreement
 
 
@@ -377,9 +418,245 @@ pd.DataFrame(position_weights, index=grid).rename_axis('position').reset_index()
 save_plot(fig, 'segment_position_distributions')
 
 # %% [markdown]
+# ## Main result: controlled positional-resolution benchmark
+#
+# The discrete and continuous models share the measured common universe, pathway family, specimens, specimen weights, baseline/nuisance terms, and matched rank-AUC null machinery. The added species terms are respectively S1/S2/S3 steps and a smooth positional function. Calls require positive enrichment and **per-method BH q ≤ 0.05**, matching notebook 12's headline benchmark. Pooled-BH calls are a separate saved sensitivity result.
+#
+# The count and added list below are recomputed from saved pathway calls and checked against notebook 12. The paired q-value panel identifies **every** continuous-added pathway; q > 0.05 is absence of a discovery at this threshold, not proof of no biological difference.
+
+# %%
+control_table = pd.DataFrame([{'discrete_hits': int(control.baseline_hits),
+    'shared': int(control.overlap), 'continuous_added': int(control.continuous_added)}])
+display(control_table)
+added = controlled.loc[controlled.controlled_added].sort_values(
+    ['q_method_T_continuous_total', 'pathway_id']).copy()
+display(added[['pathway_name', 'effect_T_discrete_total', 'effect_T_continuous_total',
+    'q_method_T_discrete_total', 'q_method_T_continuous_total', 'incremental_position_support']])
+fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+fig.subplots_adjust(left=.055, right=.97, bottom=.25, top=.79, wspace=.48)
+axes[0].set_axis_off()
+for y, label in zip((.82, .5, .18), ('Whole PT', 'S1 / S2 / S3', 'Continuous position s')):
+    axes[0].text(.5, y, label, ha='center', va='center', transform=axes[0].transAxes)
+for y in (.72, .4):
+    axes[0].annotate('', xy=(.5, y-.12), xytext=(.5, y), xycoords='axes fraction',
+        arrowprops={'arrowstyle': '->', 'color': '0.4'})
+axes[0].set_title('A  Increasing positional resolution')
+rho, direction_agreement = plot_global_gene_agreement(axes[1])
+axes[1].set_title(f'B  Broad signal is preserved\nρ = {rho:.3f}; direction agreement = {direction_agreement:.1%}', fontsize=10)
+axes[2].barh(['Discrete', 'Continuous'], [control.baseline_hits, control.overlap], color='#72B7B2', label='Retained')
+axes[2].barh(['Continuous'], [control.continuous_added], left=[control.overlap], color='#F58518', label='Additional')
+axes[2].set(xlabel='Pathway discoveries', title='C  Controlled resolution benchmark')
+axes[2].legend(loc='upper left', bbox_to_anchor=(0, -.17), ncol=2)
+fig.suptitle(f'{int(control.overlap)}/{int(control.baseline_hits)} discrete discoveries retained; {int(control.continuous_added)} additional continuous discoveries')
+save_plot(fig, 'main_resolution_evidence')
+
+# Exactly the saved continuous-added set; do not substitute spatial-only/native-negative sets.
+import textwrap
+fig, ax = plt.subplots(figsize=(12, 10), layout='constrained')
+y = np.arange(len(added))
+qd = -np.log10(added.q_method_T_discrete_total.clip(lower=np.finfo(float).tiny))
+qc = -np.log10(added.q_method_T_continuous_total.clip(lower=np.finfo(float).tiny))
+for i, left, right in zip(y, qd, qc):
+    ax.plot([left, right], [i, i], color='0.7', lw=1)
+ax.scatter(qd, y, color='0.5', label='Discrete total difference', zorder=3)
+ax.scatter(qc, y, color='#D55E00', label='Continuous total difference', zorder=3)
+ax.axvline(-np.log10(ALPHA), color='0.65', ls='--', lw=1)
+labels = [textwrap.shorten(str(label).split(' R-HSA-')[0], width=62, placeholder='…') for label in added.pathway_name]
+ax.set_yticks(y, labels=labels, fontsize=8)
+ax.invert_yaxis()
+ax.set(xlabel='−log10(per-method BH q)', title=f'All {len(added)} controlled continuous-added pathways')
+ax.legend(loc='upper left', bbox_to_anchor=(0, -.08), ncol=2)
+save_plot(fig, 'all_controlled_added_pathways')
+
+# %% [markdown]
+# ## Flagship examples and positional evidence contract
+#
+# Citrate cycle illustrates conventional evidence with finer positional detail. Three controlled-added examples are chosen from the exact benchmark list: **glycolysis/gluconeogenesis, amino-acid transport, and mitochondrial fatty-acid oxidation**. They must pass the existing spatial, residual-correlation, and planned-sensitivity gates and occupy distinct saved programs; the notebook stops if these gates drift. Their biological labels are annotations, supported by measured members, rather than claims of pathway activation.
+#
+# For each important example, D(s) = AUC(|Z(s)|) − 0.5 and S(s) = 2[AUC(Z(s)) − 0.5] use **all common measured genes as the background** and all common pathway members. S is relative to background, not absolute expression direction. The median member Z and human-high member fraction are exported alongside these curves. Curves are descriptive, with no gridwise significance claim.
+#
+# Heatmaps display up to 15 common members ranked by T_spatial, ordered by the position of peak |Z|. Color saturates at ±6; untruncated Z values, full membership, exclusion counts, and selection order are exported. Z is the saved HC3 human-minus-mouse difference statistic, not a row-standardized expression score. Dotted S1/S2/S3 guides are midpoint summaries of overlapping labels, not anatomical boundaries. Three fitted expression curves beneath each heatmap show what the member differences mean; ribbons are not available for individual species fits in the saved artifact.
+
+# %%
+flagship_review = [
+    ('KEGG_2019_Mouse::Glycolysis / Gluconeogenesis', 'Glycolysis / gluconeogenesis'),
+    ('Reactome_2022::Amino Acid Transport Across Plasma Membrane R-HSA-352230', 'Amino-acid transport'),
+    ('Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289', 'Mitochondrial fatty-acid oxidation')]
+flagships = pd.DataFrame(flagship_review, columns=['requested_id', 'display_name'])
+flagships['pathway_id'] = flagships.requested_id.map(canonical_ids)
+flagships = flagships.merge(candidates, on='pathway_id', validate='one_to_one').merge(
+    controlled[['pathway_id', 'controlled_added', 'q_method_T_discrete_total',
+        'q_method_T_continuous_total', 'incremental_position_support']], on='pathway_id', validate='one_to_one')
+if len(flagships) != 3 or not flagships.controlled_added.all() or not flagships.robust_spatial.all():
+    raise ValueError('Review changed controlled-added flagship evidence before plotting.')
+if flagships.program.isna().any() or flagships.program.duplicated().any():
+    raise ValueError('Controlled-added flagship examples need distinct saved programs.')
+for i, first in enumerate(flagships.pathway_id):
+    for second in flagships.pathway_id.iloc[:i]:
+        a, b = set(gene_sets[first]), set(gene_sets[second])
+        if len(a & b) / len(a | b) > .35:
+            raise ValueError('Controlled-added flagships are redundant; review selection.')
+flagships.to_csv(output / 'controlled_added_flagships.csv', index=False)
+display(flagships[['display_name', 'program', 'q_method_T_discrete_total',
+    'q_method_T_continuous_total', 'incremental_position_support', 'robust_fraction_all_planned']])
+
+# Bind notebook 12's original D/S artifact before making a common-background display adaptation.
+saved_local = pd.read_csv(source / 'pathway_local_curves.csv')
+if saved_local.duplicated(['pathway_id', 'position']).any():
+    raise ValueError('Saved local curves have duplicate pathway-position rows.')
+original_local = local_pathway_curves(fit['z'], fit_gene_index,
+    {p: all_sets[p] for p in saved_local.pathway_id.unique()}, original_grid)
+local_keys = ['pathway_id', 'position']
+local_values = ['divergence', 'direction', 'median_member_z', 'human_high_fraction']
+np.testing.assert_allclose(saved_local.sort_values(local_keys)[local_values],
+    original_local.sort_values(local_keys)[local_values], rtol=1e-9, atol=1e-9)
+if not program_membership.pathway_id.is_unique or not program_membership.pathway_id.isin(all_sets).all():
+    raise ValueError('Saved programs must contain unique measured pathway IDs.')
+representatives = program_membership.loc[program_membership.representative].copy()
+if representatives.program.duplicated().any() or set(representatives.program) != set(program_membership.program):
+    raise ValueError('Expected one saved representative for every saved program.')
+detail_examples = pd.concat([
+    selection.loc[selection.display_name.eq('Citrate cycle'), ['pathway_id', 'display_name']],
+    flagships[['pathway_id', 'display_name']], selection[['pathway_id', 'display_name']]
+    ]).drop_duplicates('pathway_id').reset_index(drop=True)
+detail_examples['plot_stem'] = ['positional_' + str(i+1) for i in range(len(detail_examples))]
+detail_examples.to_csv(source_data / 'positional_example_index.csv', index=False)
+pd.DataFrame([{'pathway_id': p, 'gene': g} for p in detail_examples.pathway_id
+    for g in gene_sets[p]]).to_csv(source_data / 'positional_example_full_membership.csv', index=False)
+local_ids = list(dict.fromkeys(representatives.pathway_id.tolist() + detail_examples.pathway_id.tolist()))
+common_idx = fit_gene_index.get_indexer(common_genes)
+local = local_pathway_curves(fit['z'][common_idx], common_genes,
+    {p: [g for g in all_sets[p] if g in common_genes] for p in local_ids}, grid)
+local.rename(columns={'position': 'normalized_position'}).to_csv(source_data / 'common_background_pathway_DS.csv', index=False)
+
+heatmap_parts, heatmap_selection_rows = [], []
+heatmaps = {}
+for row in detail_examples.itertuples():
+    genes_shown, z_shown = signed_gene_heatmap(fit, gene_sets[row.pathway_id], max_genes=15)
+    heatmaps[row.pathway_id] = (genes_shown, z_shown)
+    for order, gene in enumerate(genes_shown):
+        i = fit_gene_index.get_loc(gene)
+        heatmap_parts.append(pd.DataFrame({'pathway_id': row.pathway_id, 'gene': gene,
+            'display_order': order, 'position': grid, 'z': fit['z'][i],
+            'human': fit['human'][i], 'mouse': fit['mouse'][i], 'delta': fit['delta'][i], 'se_delta': fit['se'][i]}))
+    heatmap_selection_rows.append({'pathway_id': row.pathway_id,
+        'n_common_members': len(gene_sets[row.pathway_id]), 'n_shown': len(genes_shown),
+        'n_not_shown': len(gene_sets[row.pathway_id])-len(genes_shown),
+        'rule': 'top 15 T_spatial; order by peak absolute Z position; ties by gene', 'z_saturation': 6})
+pd.concat(heatmap_parts).to_csv(source_data / 'signed_heatmap_and_fit_values.csv', index=False)
+pd.DataFrame(heatmap_selection_rows).to_csv(source_data / 'heatmap_selection_audit.csv', index=False)
+
+# %% [markdown]
+# ## Broader saved pathway programs
+#
+# The overview uses notebook 12's frozen program assignments and representatives; it does not recluster pathways or infer new themes. Show the 12 largest programs plus the programs containing the main examples, ordered by peak D(s). All saved programs, their member annotations, and representative curves are exported; the displayed subset and selection rule are recorded. Markers describe the **representative term's** evidence: + = controlled-added, ● = native whole-PT/S1/S2/S3 signed-GSEA evidence, ○ = neither. These categories can overlap. A program number is a descriptive group identifier, not a biological conclusion.
+#
+# ? = representative outside the controlled test family (common membership below its size cutoff). It remains in the descriptive program table and D/S source data. No benchmark discovery claim is assigned to it.
+
+# %%
+program_sizes = program_membership.groupby('program').size().rename('n_terms')
+program_overview = representatives.merge(candidates[['pathway_id', 'pathway_name',
+    'native_bulk_hit', 'native_segment_hit']], on='pathway_id', how='left', validate='one_to_one').merge(
+    controlled[['pathway_id', 'controlled_added']], on='pathway_id', how='left', validate='one_to_one')
+program_overview['in_controlled_family'] = program_overview.pathway_id.isin(controlled.pathway_id)
+program_overview['pathway_name'] = program_overview.pathway_name.fillna(program_overview.pathway_id.str.split('::').str[-1])
+program_overview['n_common_members'] = program_overview.pathway_id.map(lambda p: len([g for g in all_sets[p] if g in common_genes]))
+program_overview['n_terms'] = program_overview.program.map(program_sizes)
+program_overview['native_supported'] = program_overview.native_bulk_hit | program_overview.native_segment_hit
+main_ids = [canonical_ids['KEGG_2019_Mouse::Citrate cycle (TCA cycle)'], *flagships.pathway_id]
+main_programs = set(candidates.loc[candidates.pathway_id.isin(main_ids), 'program'])
+shown_programs = set(program_sizes.sort_values(ascending=False, kind='stable').head(12).index) | main_programs
+program_overview['shown'] = program_overview.program.isin(shown_programs)
+program_overview['overview_rule'] = '12 largest saved programs plus all main-example programs'
+program_overview.to_csv(source_data / 'all_saved_programs_overview.csv', index=False)
+pd.merge(program_membership, controlled[['pathway_id', 'controlled_added']],
+    on='pathway_id', how='left', validate='one_to_one').to_csv(source_data / 'all_saved_program_membership.csv', index=False)
+program_display = program_overview.loc[program_overview.shown].copy()
+peak_positions = local.loc[local.groupby('pathway_id').divergence.idxmax()].set_index('pathway_id').position
+program_display['common_peak'] = program_display.pathway_id.map(peak_positions)
+program_display = program_display.sort_values(['common_peak', 'program'])
+program_matrix = np.vstack([local.loc[local.pathway_id.eq(p)].divergence for p in program_display.pathway_id])
+fig, ax = plt.subplots(figsize=(12, max(5, len(program_display)*.32)), layout='constrained')
+im = ax.imshow(program_matrix, aspect='auto', origin='upper', extent=(0, 1, len(program_display)-.5, -.5),
+    cmap='RdBu_r', vmin=-.5, vmax=.5, interpolation='nearest')
+program_labels = [f"P{int(r.program)} ({r.n_terms}) {'?' if not r.in_controlled_family else ('+' if r.controlled_added else '') + ('●' if r.native_supported else '○')} "
+    + textwrap.shorten(r.pathway_name.split(' R-HSA-')[0], width=55, placeholder='…') for r in program_display.itertuples()]
+ax.set_yticks(range(len(program_display)), labels=program_labels, fontsize=8)
+for guide in transition_guides:
+    ax.axvline(guide, color='0.2', ls=':', lw=.7)
+ax.set(xlabel='Normalized PT position', title='Representative saved programs: local divergence D(s)')
+fig.colorbar(im, ax=ax, label='D(s): local |Z| AUC − 0.5', shrink=.6)
+save_plot(fig, 'saved_program_divergence_overview')
+
+# %% [markdown]
+# ## See the positional biology: D/S → signed genes → expression fits
+#
+# Every original reviewed example and every controlled-added flagship receives this same panel structure. Benchmark q-values belong to the controlled total-difference comparison; native signed-GSEA q-values are separate contextual evidence. The top 15 genes illustrate localization; the pathway D/S curves still use **all** measured common members. The fitted species curves use the three highest-T_spatial members, with species color fixed throughout.
+#
+# A missing discrete discovery is not a claim that every segment gene effect vanishes. Smooth fitted differences can remain heterogeneous within overlapping S1/S2/S3 regions. The displayed patterns show where and which genes differ; they do not by themselves establish that averaging caused the discovery difference.
+
+# %%
+for row in detail_examples.itertuples():
+    pathway_id = row.pathway_id
+    benchmark_row = controlled.set_index('pathway_id').loc[pathway_id]
+    candidate_row = candidates.set_index('pathway_id').loc[pathway_id]
+    trace = local.loc[local.pathway_id.eq(pathway_id)]
+    genes_shown, z_shown = heatmaps[pathway_id]
+    fig = plt.figure(figsize=(11, 10))
+    gs = fig.add_gridspec(3, 3, height_ratios=[1, 2.6, 1.3], hspace=.65, wspace=.5,
+        left=.11, right=.88, bottom=.1, top=.89)
+    ds_ax = fig.add_subplot(gs[0, :])
+    ds_ax.plot(trace.position, trace.divergence, color='0.2', label='D: relative divergence')
+    ds_ax.plot(trace.position, trace.direction, color='#009E73', label='S: relative signed direction')
+    ds_ax.axhline(0, color='0.7', lw=.7)
+    ds_limit = max(.1, float(np.abs(trace[['divergence', 'direction']]).to_numpy().max())) * 1.25
+    ds_ax.set(xlim=(0, 1), ylim=(-ds_limit, ds_limit), ylabel='Local rank summary')
+    ds_ax.legend(loc='upper left', bbox_to_anchor=(0, 1.32), ncol=2, fontsize=8)
+    heat_ax = fig.add_subplot(gs[1, :])
+    image = heat_ax.imshow(z_shown, aspect='auto', origin='upper', cmap='RdBu_r',
+        vmin=-6, vmax=6, extent=(0, 1, len(genes_shown)-.5, -.5), interpolation='nearest')
+    heat_ax.set_yticks(range(len(genes_shown)), labels=genes_shown, fontsize=9)
+    heat_ax.set(xlabel='Normalized PT position', ylabel='Top spatial members; peak-ordered')
+    for segment in segments:
+        heat_ax.text(segment_medians[segment], 1.025, segment,
+            transform=heat_ax.get_xaxis_transform(), ha='center', fontsize=8)
+    cax = fig.add_axes([.91, .36, .016, .27])
+    fig.colorbar(image, cax=cax, label='Signed Z: human − mouse')
+    # Each expression panel is a different gene; do not compare y units across genes.
+    driver_axes = []
+    for col, gene in enumerate(driver_map[pathway_id]):
+        ax = fig.add_subplot(gs[2, col])
+        i = fit_gene_index.get_loc(gene)
+        ax.plot(grid, fit['human'][i], color=HUMAN_COLOR, label='Human')
+        ax.plot(grid, fit['mouse'][i], color=MOUSE_COLOR, ls='--', label='Mouse')
+        ax.set(xlim=(0, 1), xlabel='PT position', title=gene)
+        if col == 0:
+            ax.set_ylabel('Fitted log expression')
+        driver_axes.append(ax)
+    fig.legend(*driver_axes[-1].get_legend_handles_labels(), loc='lower center',
+        bbox_to_anchor=(.5, .002), ncol=2, fontsize=9)
+    for ax in [ds_ax, heat_ax, *driver_axes]:
+        for guide in transition_guides:
+            ax.axvline(guide, color='0.6', ls=':', lw=.7)
+    status = 'Controlled continuous-added' if benchmark_row.controlled_added else 'Contextual spatial-detail example'
+    fig.suptitle(f'{row.display_name} | {status}', y=.99, fontsize=12)
+    fig.text(.11, .945, f'Controlled total q: discrete {benchmark_row.q_method_T_discrete_total:.3g}; '
+        f'continuous {benchmark_row.q_method_T_continuous_total:.3g}. '
+        f'Native signed GSEA q: whole PT {candidate_row.q_family_DESeq2:.3g}; best segment {candidate_row.cluster_best_q:.3g}.', fontsize=8)
+    save_plot(fig, row.plot_stem)
+
+
+# %% [markdown]
+# ## Supplement: native-method diagnostics and original examples
+#
+# Native signed-GSEA and matched spatial enrichment test different alternatives. The ECDFs, detailed smooth/segment tables, level/spatial counts, and discrepancy review below support method interpretation; they are not the resolution benchmark.
+
+# %% [markdown]
 # ## Pathway information profiles
 #
 # These evidence sets test different alternatives; significance is not expected to nest. The counts use notebook 12 pathway calls and their original FDR conventions.
+#
+# **“Spatial only” = level-negative / spatial-positive within the continuous framework. It is not a count of pathways missed by S1/S2/S3.** Only the controlled benchmark supports the resolution-specific discovery comparison.
 
 # %%
 information = classification[['pathway_id', 'pathway_name', 'bulk_hit', 'cluster_hit',
@@ -767,7 +1044,7 @@ ax.legend(frameon=False)
 save_plot(fig, 'drivers_retinoid_metabolism___transport')
 
 # %% [markdown]
-# ## Cluster signed-GSEA-only diagnostic
+# ## Supplement: Cluster signed-GSEA-only diagnostic
 #
 # The diagnostic asks whether pathways called only in the conventional cluster-versus-smooth signed-GSEA comparison have support in any other continuous-framework test or are near its threshold.
 
@@ -786,9 +1063,9 @@ ax.invert_yaxis()
 save_plot(fig, 'cluster_signed_only_fate')
 
 # %% [markdown]
-# ## Controlled discrete-versus-continuous benchmark
+# ## Supplement: benchmark count summary
 #
-# Section 9c holds much of the statistical machinery constant. Treat it as a robustness/control analysis, separate from the native conventional-versus-pseudostructure comparison.
+# The main benchmark above identifies every additional term and pairs its discrete and continuous evidence. This compact count plot is retained for reference.
 
 # %%
 control = controlled_summary.set_index('comparison').loc['controlled_discrete_to_continuous']
@@ -807,7 +1084,9 @@ save_plot(fig, 'controlled_discrete_continuous')
 # %% [markdown]
 # ## Manuscript-oriented interpretation
 #
-# Whole-PT and S1/S2/S3 analyses recover many strong species differences. The GAM/pseudostructure framework retains broad differences through level and total-difference tests. Its added spatial test uses gene-level `T_spatial` ranks and an unsigned, covariate-matched pathway null to test position-dependent remodeling. Native signed GSEA and spatial rank-AUC evidence target different alternatives and need not agree pathway by pathway. Example gene curves are descriptive fitted trajectories, not pathway enrichment results and not proof that aggregation caused a particular native GSEA result.
+# Whole-PT broad species differences remain accessible to the continuous framework. Under the controlled benchmark's common genes, pathways, specimens, weights, baseline, and matched-null machinery, continuous modeling retains the observed discrete discoveries and adds further discoveries. Different model terms and degrees of freedom remain; this cohort comparison does not establish universal power superiority.
+#
+# D(s) localizes relative divergence, S(s) summarizes relative signed rank direction, and gene Z(s)/expression fits show the actual member differences. These are discovery-selected descriptive summaries, with no local significance or pathway activation claims. “Spatial only” within the continuous model must not be described as “missed by S1/S2/S3.”
 
 # %%
 signed = global_summary.set_index('comparison').loc['signed GSEA']
@@ -817,6 +1096,7 @@ print(f'Unsigned matched pathway comparison: {int(unsigned.shared)}/{int(unsigne
 print('Level/spatial classes:', counts.to_dict())
 print(f'Cluster signed-GSEA-only fates: {dict(zip(fate_labels, fate_counts))}')
 print(f'Controlled discrete-to-continuous comparison: {int(control.overlap)}/{int(control.baseline_hits)} shared; {int(control.continuous_added)} additional.')
-summary = ('Conventional aggregation recovers broad species differences. The trajectory framework represents broad/global shifts through T_level and T_total, while T_spatial tests position-dependent remodeling using an unsigned matched-null rank statistic. Native signed GSEA and spatial rank-AUC evidence address different alternatives and need not nest.\n')
+summary = (f'Controlled benchmark: {int(control.overlap)}/{int(control.baseline_hits)} discrete discoveries retained and {int(control.continuous_added)} continuous-added discoveries at per-method BH q ≤ {ALPHA}. These are exploratory results from one human donor. Spatial-only level/shape classes are not a count of discrete misses.\n'
+    'Conventional aggregation recovers broad species differences. The trajectory framework represents broad/global shifts through T_level and T_total, while T_spatial tests position-dependent remodeling using an unsigned matched-null rank statistic. Native signed GSEA and spatial rank-AUC evidence address different alternatives and need not nest.\n')
 (output / 'exploratory_manuscript_interpretation.txt').write_text(summary)
 print(summary)

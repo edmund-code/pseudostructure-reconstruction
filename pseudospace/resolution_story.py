@@ -112,3 +112,82 @@ def aggregate_saved_trajectories(fit, position, human, specimen, gene_sets):
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=[
         'pathway_id', 'original_position', 'position', 'mouse', 'human', 'delta',
         'se_mouse', 'se_human', 'se_delta', 'n_genes'])
+
+
+def controlled_resolution_calls(comparison, alpha=.05):
+    """Derive method-specific controlled hit sets for discrete and continuous tests.
+
+    This uses each representation's own positive effect and adjusted q-value;
+    pooled q-values are deliberately not part of this comparison. Saved call
+    columns, when present, are treated as integrity checks rather than inputs.
+    """
+    required = {'pathway_id', 'effect_T_discrete_total', 'q_method_T_discrete_total',
+                'effect_T_continuous_total', 'q_method_T_continuous_total'}
+    if not isinstance(comparison, pd.DataFrame) or not required.issubset(comparison.columns):
+        raise ValueError(f'comparison must contain {sorted(required)}.')
+    if not np.isfinite(alpha) or not 0 <= alpha <= 1:
+        raise ValueError('alpha must be finite and between 0 and 1.')
+    out = comparison.copy()
+    ids = out['pathway_id']
+    if ids.isna().any() or ids.astype(str).str.strip().eq('').any():
+        raise ValueError('pathway_id values must be present.')
+    if ids.duplicated().any():
+        raise ValueError('pathway_id values must be unique.')
+    for method in ('discrete', 'continuous'):
+        effect = pd.to_numeric(out[f'effect_T_{method}_total'], errors='coerce').to_numpy(float)
+        q = pd.to_numeric(out[f'q_method_T_{method}_total'], errors='coerce').to_numpy(float)
+        if not np.isfinite(effect).all() or not np.isfinite(q).all() or np.any((q < 0) | (q > 1)):
+            raise ValueError(f'{method} effect and q-values must be finite; q-values must lie in [0, 1].')
+        out[f'_derived_{method}'] = (effect > 0) & (q <= alpha)
+    for method, saved in (('discrete', 'controlled_discrete_hit'),
+                          ('continuous', 'controlled_continuous_hit')):
+        if saved in out:
+            values = out[saved]
+            if values.isna().any() or not values.isin([True, False, 0, 1]).all():
+                raise ValueError(f'{saved} must contain boolean calls.')
+            if not np.array_equal(values.to_numpy(dtype=bool), out[f'_derived_{method}'].to_numpy()):
+                raise ValueError(f'{saved} disagrees with method-specific effect/q calls.')
+    discrete, continuous = out.pop('_derived_discrete'), out.pop('_derived_continuous')
+    out['controlled_discrete_hit'] = discrete
+    out['controlled_continuous_hit'] = continuous
+    out['controlled_added'] = continuous & ~discrete
+    out['controlled_retained'] = continuous & discrete
+    return out
+
+
+def signed_gene_heatmap(fit, members, max_genes=15):
+    """Select and order genes for a signed gene-level spatial-Z heatmap.
+
+    Genes are prioritized by descending spatial statistic, then displayed by
+    increasing position of their largest absolute Z score.
+    """
+    if not isinstance(fit, Mapping) or not {'genes', 'grid', 'z', 'T_spatial'}.issubset(fit):
+        raise ValueError('fit must contain genes, grid, z, and T_spatial.')
+    if isinstance(max_genes, bool) or not isinstance(max_genes, (int, np.integer)) or max_genes < 1:
+        raise ValueError('max_genes must be a positive integer.')
+    raw_genes = np.asarray(fit['genes'])
+    if raw_genes.ndim != 1 or pd.isna(raw_genes).any():
+        raise ValueError('fit gene IDs must be present in a one-dimensional array.')
+    genes = raw_genes.astype(str)
+    if np.any(np.char.strip(genes) == ''):
+        raise ValueError('fit gene IDs must be present.')
+    grid = np.asarray(fit['grid'], dtype=float)
+    z = np.asarray(fit['z'], dtype=float)
+    spatial = np.asarray(fit['T_spatial'], dtype=float)
+    if (genes.ndim != 1 or len(np.unique(genes)) != len(genes) or not len(genes)
+            or grid.ndim != 1 or len(grid) < 2 or np.any(np.diff(grid) <= 0)
+            or z.shape != (len(genes), len(grid))
+            or spatial.shape != (len(genes),) or not np.isfinite(grid).all()
+            or not np.isfinite(z).all() or not np.isfinite(spatial).all()):
+        raise ValueError('fit genes, spatial statistics, grid, and Z matrix must align and be finite.')
+    members = list(members)
+    if not members or len(set(members)) != len(members):
+        raise ValueError('members must be nonempty and unique.')
+    index = pd.Index(genes)
+    locations = index.get_indexer(members)
+    if np.any(locations < 0):
+        raise ValueError('members contain unknown genes.')
+    # Stable deterministic ranking: statistic descending, gene ascending, then input order.
+    ranked = sorted(locations, key=lambda i: (-spatial[i], genes[i], i))[:max_genes]
+    ordered = sorted(ranked, key=lambda i: (int(np.argmax(np.abs(z[i]))), genes[i], i))
+    return genes[ordered].copy(), z[ordered].copy()

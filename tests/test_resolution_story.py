@@ -8,7 +8,11 @@ pytest.importorskip('patsy')
 pytest.importorskip('statsmodels')
 
 from pseudospace.pathway_remodeling import fit_nested_trajectories
-from pseudospace.resolution_story import aggregate_saved_trajectories
+from pseudospace.resolution_story import (
+    aggregate_saved_trajectories,
+    controlled_resolution_calls,
+    signed_gene_heatmap,
+)
 
 
 def test_pathway_mean_curves_and_hc3_match_fit_of_mean_and_preserve_covariance():
@@ -55,3 +59,76 @@ def test_pathway_summary_rejects_unknown_or_duplicate_members():
         aggregate_saved_trajectories(fit, position, human, specimen, {'bad': ['c']})
     with pytest.raises(ValueError, match='unique'):
         aggregate_saved_trajectories(fit, position, human, specimen, {'bad': ['a', 'a']})
+
+
+def test_controlled_resolution_calls_uses_positive_method_specific_q_and_checks_saved_calls():
+    comparison = pd.DataFrame({
+        'pathway_id': ['retained', 'added', 'discrete_only', 'negative', 'pooled_only'],
+        'effect_T_discrete_total': [1, 0, 1, -1, 0],
+        'q_method_T_discrete_total': [.01, .01, .01, .01, .9],
+        'effect_T_continuous_total': [1, 1, 0, -1, 1],
+        'q_method_T_continuous_total': [.02, .03, .01, .01, .9],
+        # Pooled calls intentionally disagree: this helper must ignore them.
+        'controlled_discrete_hit_pooled': [False] * 5,
+        'controlled_continuous_hit_pooled': [False] * 5,
+        'controlled_discrete_hit': [True, False, True, False, False],
+        'controlled_continuous_hit': [True, True, False, False, False],
+    })
+    got = controlled_resolution_calls(comparison)
+    assert got.pathway_id.tolist() == comparison.pathway_id.tolist()
+    assert got.controlled_added.tolist() == [False, True, False, False, False]
+    assert got.controlled_retained.tolist() == [True, False, False, False, False]
+    assert 'controlled_added' not in comparison
+    with pytest.raises(ValueError, match='disagrees'):
+        controlled_resolution_calls(comparison.assign(controlled_continuous_hit=False))
+    derived = controlled_resolution_calls(comparison.drop(
+        columns=['controlled_discrete_hit', 'controlled_continuous_hit']))
+    assert derived.controlled_discrete_hit.tolist() == [True, False, True, False, False]
+    assert derived.controlled_continuous_hit.tolist() == [True, True, False, False, False]
+
+
+@pytest.mark.parametrize('change, message', [
+    ({'pathway_id': ['p', 'p']}, 'unique'),
+    ({'pathway_id': ['p', None]}, 'present'),
+    ({'effect_T_discrete_total': [1, np.nan]}, 'finite'),
+    ({'q_method_T_continuous_total': [.1, 1.1]}, 'finite'),
+])
+def test_controlled_resolution_calls_rejects_invalid_rows(change, message):
+    base = pd.DataFrame({
+        'pathway_id': ['p1', 'p2'], 'effect_T_discrete_total': [1, 1],
+        'q_method_T_discrete_total': [.01, .02],
+        'effect_T_continuous_total': [1, 1], 'q_method_T_continuous_total': [.01, .02],
+    })
+    with pytest.raises(ValueError, match=message):
+        controlled_resolution_calls(base.assign(**change))
+
+
+def test_signed_gene_heatmap_prioritizes_spatial_statistic_then_orders_peak_position():
+    fit = {
+        'genes': np.array(['z_gene', 'b_gene', 'a_gene', 'low']),
+        'grid': np.linspace(0, 1, 4),
+        'T_spatial': np.array([3., 5., 5., 1.]),
+        'z': np.array([[0, 4, 1, 0], [0, 0, -3, 0], [0, 3, 0, 0], [9, 0, 0, 0.]]),
+    }
+    genes, z = signed_gene_heatmap(fit, ['z_gene', 'b_gene', 'a_gene', 'low'], max_genes=3)
+    assert genes.tolist() == ['a_gene', 'z_gene', 'b_gene']
+    np.testing.assert_array_equal(z, fit['z'][[2, 0, 1]])
+    with pytest.raises(ValueError, match='unique'):
+        signed_gene_heatmap(fit, ['a_gene', 'a_gene'])
+    with pytest.raises(ValueError, match='unknown'):
+        signed_gene_heatmap(fit, ['missing'])
+
+
+def test_signed_gene_heatmap_rejects_misaligned_or_nonfinite_fit():
+    fit = {'genes': np.array(['a', 'b']), 'grid': np.array([0., 1.]),
+           'T_spatial': np.array([1., 2.]), 'z': np.ones((2, 2))}
+    with pytest.raises(ValueError, match='align'):
+        signed_gene_heatmap({**fit, 'z': np.ones((1, 2))}, ['a'])
+    with pytest.raises(ValueError, match='finite'):
+        signed_gene_heatmap({**fit, 'T_spatial': np.array([1., np.nan])}, ['a'])
+    with pytest.raises(ValueError, match='present'):
+        signed_gene_heatmap({**fit, 'genes': np.array(['a', None], dtype=object)}, ['a'])
+    with pytest.raises(ValueError, match='align'):
+        signed_gene_heatmap({**fit, 'grid': np.array([0., 0.])}, ['a'])
+    with pytest.raises(ValueError, match='align'):
+        signed_gene_heatmap({**fit, 'grid': np.array([0.])}, ['a'])

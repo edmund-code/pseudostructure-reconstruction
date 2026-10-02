@@ -9,6 +9,96 @@ import pandas as pd
 from .levelshape import build_ls_designs
 
 
+def pathway_method_membership(classification, alpha=.05):
+    """Assemble saved pathway significance calls into a validated membership table.
+
+    The function only combines existing q-values and calls; it does not fit or
+    test pathways. Native signed GSEA permits either NES direction, while GAM
+    calls retain their saved positive-effect criterion.
+    """
+    if not isinstance(classification, pd.DataFrame):
+        raise ValueError('classification must be a DataFrame.')
+    if not np.isfinite(alpha) or not 0 <= alpha <= 1:
+        raise ValueError('alpha must be finite and between 0 and 1.')
+    required = {'pathway_id', 'DESeq2_hit', 'bulk_hit', 'q_family_DESeq2',
+                'cluster_hit', 'common_effect_T_level', 'common_q_empirical_T_level',
+                'level_hit', 'common_effect_T_spatial', 'common_q_empirical_T_spatial',
+                'spatial_hit', 'common_effect_T_total', 'common_q_empirical_T_total',
+                'total_hit'}
+    required.update(f'cluster_q_family_PT-S{i}' for i in (1, 2, 3))
+    missing = required - set(classification.columns)
+    if missing:
+        raise ValueError(f'classification missing required columns: {sorted(missing)}.')
+    ids = classification['pathway_id']
+    if ids.isna().any() or ids.astype(str).str.strip().eq('').any():
+        raise ValueError('pathway_id values must be present.')
+    if ids.duplicated().any():
+        raise ValueError('pathway_id values must be unique.')
+
+    def q_values(column):
+        values = pd.to_numeric(classification[column], errors='coerce').to_numpy(float)
+        if not np.isfinite(values).all() or np.any((values < 0) | (values > 1)):
+            raise ValueError(f'{column} must contain finite q-values in [0, 1].')
+        return values
+
+    def effect_values(column):
+        values = pd.to_numeric(classification[column], errors='coerce').to_numpy(float)
+        if not np.isfinite(values).all():
+            raise ValueError(f'{column} must contain finite effects.')
+        return values
+
+    def saved_calls(column):
+        values = classification[column]
+        if values.isna().any() or not values.isin([True, False, 0, 1]).all():
+            raise ValueError(f'{column} must contain boolean calls.')
+        return values.to_numpy(dtype=bool)
+
+    def check_saved(column, derived):
+        if not np.array_equal(saved_calls(column), derived):
+            raise ValueError(f'{column} disagrees with its saved q/effect calls.')
+
+    out = pd.DataFrame({'pathway_id': ids.to_numpy()})
+    if 'pathway_name' in classification:
+        out['pathway_name'] = classification['pathway_name'].to_numpy()
+    out['whole_PT_DESeq2_GSEA'] = q_values('q_family_DESeq2') <= alpha
+    check_saved('DESeq2_hit', out['whole_PT_DESeq2_GSEA'].to_numpy())
+    check_saved('bulk_hit', out['whole_PT_DESeq2_GSEA'].to_numpy())
+    for i in (1, 2, 3):
+        out[f'S{i}_GSEA'] = q_values(f'cluster_q_family_PT-S{i}') <= alpha
+    out['any_segment'] = out[['S1_GSEA', 'S2_GSEA', 'S3_GSEA']].any(axis=1)
+    check_saved('cluster_hit', out['any_segment'].to_numpy())
+
+    for method, hit in (('T_level', 'level_hit'), ('T_spatial', 'spatial_hit'),
+                        ('T_total', 'total_hit')):
+        effect = effect_values(f'common_effect_{method}')
+        q = q_values(f'common_q_empirical_{method}')
+        derived = (effect > 0) & (q <= alpha)
+        check_saved(hit, derived)
+        out[method] = saved_calls(hit)
+    optional = {'common_effect_T_whole_pt_deseq2_abs',
+                'common_q_empirical_T_whole_pt_deseq2_abs'}
+    present = optional & set(classification.columns)
+    if present and present != optional:
+        raise ValueError('whole-PT matched-AUC effect and q-value columns must be available together.')
+    if present:
+        effect = effect_values('common_effect_T_whole_pt_deseq2_abs')
+        q = q_values('common_q_empirical_T_whole_pt_deseq2_abs')
+        out['whole_PT_matched_AUC'] = (effect > 0) & (q <= alpha)
+
+    out['any_conventional'] = out[['whole_PT_DESeq2_GSEA', 'S1_GSEA', 'S2_GSEA', 'S3_GSEA']].any(axis=1)
+    out['any_continuous'] = out[['T_level', 'T_spatial', 'T_total']].any(axis=1)
+    out['conventional_and_spatial'] = out['any_conventional'] & out['T_spatial']
+    out['spatial_only'] = out['T_spatial'] & ~out['any_conventional']
+    out['conventional_only'] = out['any_conventional'] & ~out['any_continuous']
+    out['discovery_category'] = np.select(
+        [out['spatial_only'], out['conventional_and_spatial'], out['conventional_only']],
+        ['Spatial only', 'Conventional + spatial', 'Conventional only'],
+        default='Other/shared')
+    out['common_spatial_effect'] = effect_values('common_effect_T_spatial')
+    out['common_spatial_q'] = q_values('common_q_empirical_T_spatial')
+    return out
+
+
 def aggregate_saved_trajectories(fit, position, human, specimen, gene_sets):
     """Average saved gene trajectories and compute pathway-mean HC3 bands.
 

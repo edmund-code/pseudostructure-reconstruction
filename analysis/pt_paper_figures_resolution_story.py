@@ -52,7 +52,7 @@ plt.rcParams.update({'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sa
     'axes.spines.top': False, 'axes.spines.right': False, 'lines.linewidth': 1.6, 'pdf.fonttype': 42, 'svg.fonttype': 'none'})
 
 
-def save_plot(fig, stem):
+def save_plot(fig, stem, *, show=True):
     """Save exploratory plots; enable rendered QA with NATURE_FIGURE_QA_DIR."""
     qa_dir = os.environ.get('NATURE_FIGURE_QA_DIR')
     if qa_dir:
@@ -71,7 +71,8 @@ def save_plot(fig, stem):
             subprocess.run([sys.executable, str(Path(qa_dir) / script),
                 str(output / f'exploratory_{stem}.pdf'), *extra], check=True,
                 stdout=subprocess.DEVNULL)
-    plt.show()
+    if show:
+        plt.show()
     plt.close(fig)
 
 print('Saved results:', source)
@@ -545,6 +546,213 @@ for row in detail_examples.itertuples():
         'rule': 'top 15 T_spatial; order by peak absolute Z position; ties by gene', 'z_saturation': 6})
 pd.concat(heatmap_parts).to_csv(source_data / 'signed_heatmap_and_fit_values.csv', index=False)
 pd.DataFrame(heatmap_selection_rows).to_csv(source_data / 'heatmap_selection_audit.csv', index=False)
+
+# %% [markdown]
+# ## Discovery sets across whole PT, S1/S2/S3, and continuous GAM
+#
+# These figures answer **which pathway terms are detected**, retaining the common measured-gene pathway universe and the saved significance calls. Native whole-PT and S1/S2/S3 signed GSEA accepts either NES direction at the existing family q ≤ `ALPHA`; matched rank-AUC calls require positive enrichment and the existing empirical q ≤ `ALPHA`. Segment q-values retain the saved pooled three-segment correction. “Cluster” here means S1/S2/S3 segment analysis, never pathway-program clustering.
+#
+# The UpSet uses five major sets; the discovery matrix and Jaccard matrix retain all individual segments and the distinct unsigned whole-PT matched-AUC control. Matrix classes use **native conventional** = whole-PT signed GSEA or any S1/S2/S3 signed GSEA, and **continuous** = any of the three common-universe GAM matched-AUC tests. **Spatial only** means T_spatial-positive with no native conventional hit; **Conventional only** means native conventional-positive with none of these three GAM hits. These labels differ from the later level-versus-spatial classes and do not include signed GAM-level or smooth-segment GSEA diagnostics.
+#
+# The compact matrix includes up to six terms per class ranked by saved spatial q (ascending), spatial effect (descending), then pathway ID, plus every selected manuscript example (★). The complete detected union is exported in readable supplementary pages; every tested term, including no-hit terms, remains in the membership CSV. Colors identify classes; filled versus empty cells encode detection independently of color.
+#
+# The controlled resolution comparison receives its own panel and source table. It is not a native-method discovery set.
+
+# %%
+from pseudospace.resolution_story import pathway_method_membership
+from matplotlib.colors import ListedColormap
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import Patch
+import textwrap
+
+membership = pathway_method_membership(classification, ALPHA)
+method_columns = ['whole_PT_DESeq2_GSEA', 'S1_GSEA', 'S2_GSEA', 'S3_GSEA',
+                  'T_level', 'T_spatial', 'T_total']
+if 'whole_PT_matched_AUC' in membership:
+    method_columns.append('whole_PT_matched_AUC')
+method_labels = ['Whole PT', 'S1', 'S2', 'S3', 'T_level', 'T_spatial', 'T_total']
+if 'whole_PT_matched_AUC' in membership:
+    method_labels.append('Whole PT\nmatched AUC')
+
+# Fail before export if a saved global summary and its detailed calls disagree.
+summary_pairs = [('signed GSEA', membership.whole_PT_DESeq2_GSEA, classification.GAM_level_hit)]
+if 'whole_PT_matched_AUC' in membership:
+    summary_pairs.append(('unsigned matched AUC', membership.whole_PT_matched_AUC, membership.T_level))
+for comparison, left, right in summary_pairs:
+    saved = global_summary.set_index('comparison').loc[comparison]
+    observed = {'DESeq2_hits': left.sum(), 'GAM_level_hits': right.sum(),
+                'shared': (left & right).sum(), 'DESeq2_only': (left & ~right).sum(),
+                'GAM_level_only': (right & ~left).sum()}
+    for key, value in observed.items():
+        if int(saved[key]) != int(value):
+            raise ValueError(f'Discovery membership disagrees with {comparison}: {key}')
+
+membership.to_csv(source_data / 'pathway_method_membership.csv', index=False)
+summary_columns = method_columns + ['any_segment', 'any_conventional', 'any_continuous',
+    'spatial_only', 'conventional_and_spatial', 'conventional_only']
+discovery_counts = membership[summary_columns].sum().astype(int).rename('pathways')
+discovery_counts.to_csv(source_data / 'pathway_method_counts.csv', index_label='set')
+print('Discovery-set counts (common universe; native conventional versus GAM):')
+display(discovery_counts.to_frame())
+class_order = ['Spatial only', 'Conventional + spatial', 'Conventional only', 'Other/shared']
+class_colors = dict(zip(class_order, ['#D55E00', '#009E73', '#737373', '#0072B2']))
+
+# Exact intersections: all nonempty patterns are retained (no top-N truncation).
+upset_columns = ['whole_PT_DESeq2_GSEA', 'any_segment', 'T_level', 'T_spatial', 'T_total']
+upset_labels = ['Whole PT signed GSEA', 'Any S1/S2/S3 signed GSEA', 'GAM T_level',
+                'GAM T_spatial', 'GAM T_total']
+intersections = (membership.groupby(upset_columns).size().rename('pathways').reset_index())
+intersections = intersections.loc[intersections[upset_columns].any(axis=1)].sort_values(
+    ['pathways', *upset_columns], ascending=False).reset_index(drop=True)
+intersections.to_csv(source_data / 'pathway_method_intersections.csv', index=False)
+
+fig = plt.figure(figsize=(7.2, 5.0))
+gs = fig.add_gridspec(2, 2, width_ratios=[1.3, 4], height_ratios=[2, 1.4],
+                     left=.30, right=.98, bottom=.25, top=.90, wspace=.22, hspace=.10)
+intersection_ax = fig.add_subplot(gs[0, 1])
+pattern_ax = fig.add_subplot(gs[1, 1], sharex=intersection_ax)
+size_ax = fig.add_subplot(gs[1, 0], sharey=pattern_ax)
+x_pattern = np.arange(len(intersections))
+intersection_ax.bar(x_pattern, intersections.pathways, color='#737373')
+for x, count in zip(x_pattern, intersections.pathways):
+    intersection_ax.text(x, count + max(intersections.pathways.max(), 1)*.025,
+                         str(count), ha='center', va='bottom', fontsize=6)
+intersection_ax.set(ylabel='Pathways in exact intersection',
+                    ylim=(0, max(intersections.pathways.max(), 1)*1.22))
+intersection_ax.tick_params(axis='x', bottom=False, labelbottom=False)
+for x, row in intersections.iterrows():
+    active = np.flatnonzero(row[upset_columns].to_numpy(dtype=bool))
+    pattern_ax.scatter(np.repeat(x, 5), np.arange(5), color='0.88', s=12, edgecolors='none')
+    pattern_ax.plot(np.repeat(x, len(active)), active, color='0.25', lw=1)
+    pattern_ax.scatter(np.repeat(x, len(active)), active, color='0.25', s=16, edgecolors='none')
+pattern_ax.set(xlim=(-.7, len(intersections)-.3), ylim=(4.5, -.5),
+               xticks=x_pattern, xticklabels=[str(i+1) for i in x_pattern])
+pattern_ax.tick_params(axis='y', left=False, labelleft=False)
+pattern_ax.tick_params(axis='x', labelsize=6)
+pattern_ax.set_xlabel('Exact intersection (source-data row order)', fontsize=7)
+set_sizes = membership[upset_columns].sum().to_numpy()
+size_ax.barh(np.arange(5), set_sizes, color=['0.5', '0.5', '#0072B2', '#0072B2', '#0072B2'])
+size_ax.set(yticks=np.arange(5), yticklabels=upset_labels,
+            xlim=(max(set_sizes.max(), 1)*1.25, 0))
+size_ax.tick_params(axis='both', labelsize=6)
+size_ax.set_xlabel('Set size', fontsize=7)
+for y, count in enumerate(set_sizes):
+    size_ax.text(count + max(set_sizes.max(), 1)*.04, y, str(count), ha='right', va='center', fontsize=6)
+fig.suptitle('Pathway discovery intersections', fontsize=10)
+segment_only = membership.any_segment & ~membership.whole_PT_DESeq2_GSEA & ~membership.any_continuous
+all_major = membership[upset_columns].all(axis=1)
+fig.text(.02, .06, f'Native conventional only: {discovery_counts.conventional_only}   |   '
+         f'Native conventional + spatial: {discovery_counts.conventional_and_spatial}\n'
+         f'Spatial without native conventional: {discovery_counts.spatial_only}   |   '
+         f'All five sets: {all_major.sum()}   |   Segment only: {segment_only.sum()}', fontsize=7)
+save_plot(fig, 'pathway_method_upset')
+
+# Fixed methodological column order; spatial evidence orders rows within classes.
+detected = membership.loc[membership[method_columns].any(axis=1)].copy()
+detected['class_order'] = detected.discovery_category.map(dict(zip(class_order, range(4))))
+detected = detected.sort_values(['class_order', 'common_spatial_q',
+    'common_spatial_effect', 'pathway_id'], ascending=[True, True, False, True])
+selected_ids = set(selection.pathway_id) | set(flagships.pathway_id)
+compact_ids = set(detected.groupby('discovery_category', sort=False).head(6).pathway_id) | selected_ids
+compact = detected.loc[detected.pathway_id.isin(compact_ids)]
+displayed_rows = detected[['pathway_id', 'discovery_category']].copy()
+displayed_rows['compact_display'] = displayed_rows.pathway_id.isin(compact_ids)
+displayed_rows['selected_manuscript'] = displayed_rows.pathway_id.isin(selected_ids)
+displayed_rows['supplement_page'] = np.arange(len(detected)) // 24 + 1
+displayed_rows.to_csv(source_data / 'pathway_method_matrix_display.csv', index=False)
+
+
+def discovery_matrix(rows, title):
+    # One plot area; colored left-edge tiles carry the class annotation.
+    fig, ax = plt.subplots(figsize=(7.2, max(4, 1.7 + len(rows)*.32)))
+    fig.subplots_adjust(left=.53, right=.98, bottom=.12, top=.80)
+    values = rows[method_columns].to_numpy(dtype=int)
+    ax.imshow(values, cmap=ListedColormap(['#FFFFFF', '#3F4C5A']), vmin=0, vmax=1,
+              aspect='auto', interpolation='nearest')
+    names = [textwrap.fill(('★ ' if r.pathway_id in selected_ids else '') +
+             r.pathway_name + ' [' + r.pathway_id.split('::')[0] + ']', 59)
+             for r in rows.itertuples()]
+    ax.set(yticks=np.arange(len(rows)), yticklabels=names,
+           xticks=np.arange(len(method_columns)), xticklabels=method_labels)
+    ax.tick_params(axis='y', labelsize=5.5, length=0)
+    ax.tick_params(axis='x', labelsize=6, length=0)
+    ax.set_xticks(np.arange(-.5, len(method_columns), 1), minor=True)
+    ax.set_yticks(np.arange(-.5, len(rows), 1), minor=True)
+    ax.grid(which='minor', color='0.85', linewidth=.3)
+    ax.tick_params(which='minor', bottom=False, left=False)
+    for y, category in enumerate(rows.discovery_category):
+        ax.scatter(-.78, y, marker='s', s=12, color=class_colors[category], clip_on=False,
+                   edgecolors='none')
+    for boundary in [3.5, 6.5]:
+        if boundary < len(method_columns)-.5:
+            ax.axvline(boundary, color='0.3', lw=1)
+    for center, label in [(1.5, 'Conventional'), (5, 'Continuous GAM')]:
+        ax.text(center, 1.03, label, transform=ax.get_xaxis_transform(), ha='center', fontsize=7)
+    if len(method_columns) == 8:
+        ax.text(7, 1.03, 'Matched\ncontrol', transform=ax.get_xaxis_transform(), ha='center', fontsize=6)
+    fig.suptitle(title, fontsize=10, y=.97)
+    fig.legend(handles=[Patch(color=class_colors[c], label=c) for c in class_order],
+               loc='upper center', bbox_to_anchor=(.5, .935), ncol=2, fontsize=7)
+    return fig
+
+fig = discovery_matrix(compact, f'Pathway discoveries: compact selection ({len(compact)}/{len(detected)} detected terms)')
+save_plot(fig, 'pathway_method_matrix')
+# The complete union is paginated rather than shrinking hundreds of labels.
+with PdfPages(output / 'exploratory_pathway_method_matrix_complete.pdf') as complete_pdf:
+    for start_row in range(0, len(detected), 24):
+        page = start_row // 24 + 1
+        fig = discovery_matrix(detected.iloc[start_row:start_row+24],
+            f'All detected pathways: page {page} ({len(detected)} terms total)')
+        complete_pdf.savefig(fig)
+        save_plot(fig, f'pathway_method_matrix_complete_{page:02d}', show=False)
+
+# Jaccard is undefined for two empty sets; render those cells as unavailable.
+shared_counts = pd.DataFrame(0, index=method_columns, columns=method_columns)
+union_counts = shared_counts.copy()
+for left in method_columns:
+    for right in method_columns:
+        shared_counts.loc[left, right] = (membership[left] & membership[right]).sum()
+        union_counts.loc[left, right] = (membership[left] | membership[right]).sum()
+jaccard = shared_counts / union_counts.replace(0, np.nan)
+for table, stem in [(shared_counts, 'shared_counts'), (union_counts, 'union_counts'), (jaccard, 'jaccard')]:
+    table.to_csv(source_data / f'pathway_method_{stem}.csv', index_label='method')
+fig, ax = plt.subplots(figsize=(7.2, 6.0), layout='constrained')
+image = ax.imshow(jaccard, cmap='Blues', vmin=0, vmax=1)
+ax.set(xticks=np.arange(len(method_columns)),
+       xticklabels=method_labels,
+       yticks=np.arange(len(method_columns)), yticklabels=method_labels,
+       title='Discovery-set Jaccard overlap (shared / union)')
+ax.tick_params(axis='both', labelsize=7)
+plt.setp(ax.get_xticklabels(), rotation=0, ha='center')
+for i in range(len(method_columns)):
+    for j in range(len(method_columns)):
+        value = jaccard.iloc[i, j]
+        label = f'{shared_counts.iloc[i,j]} / {union_counts.iloc[i,j]}' if pd.notna(value) else 'NA'
+        ax.text(j, i, label, ha='center', va='center', fontsize=6,
+                color='white' if value > .55 else 'black')
+fig.colorbar(image, ax=ax, label='Jaccard', fraction=.045, pad=.03)
+save_plot(fig, 'pathway_method_overlap')
+
+# Keep the controlled total-difference comparison in a separate figure.
+controlled_counts = pd.Series({
+    'Discrete hits': int(controlled.controlled_discrete_hit.sum()),
+    'Shared with continuous': int(controlled.controlled_retained.sum()),
+    'Continuous-added': int(controlled.controlled_added.sum())}, name='pathways')
+controlled_counts.to_csv(source_data / 'controlled_resolution_discovery_counts.csv', index_label='set')
+fig, ax = plt.subplots(figsize=(7.2, 2.8), layout='constrained')
+ax.barh(controlled_counts.index, controlled_counts, color=['0.6', '#009E73', '#D55E00'])
+for y, count in enumerate(controlled_counts):
+    ax.text(count + max(controlled_counts.max(), 1)*.02, y, str(count), va='center', fontsize=8)
+ax.invert_yaxis()
+ax.set(xlabel='Pathways', xlim=(0, max(controlled_counts.max(), 1)*1.15),
+       title='Controlled discrete → continuous total-difference benchmark')
+save_plot(fig, 'controlled_resolution_discovery_counts')
+
+
+# %% [markdown]
+# **Interpretation:** this is a discovery-set comparison, not a comparison of identical hypotheses or a ranking of method quality. Native DESeq2/S1/S2/S3 signed GSEA is directional; T_spatial matched rank-AUC is unsigned enrichment for position-dependent remodeling; T_level tests constant species-level differences; T_total captures level and/or spatial species differences. Low overlap does not mean a method failed. Pathway terms overlap biologically and are not independent programs.
+#
+# Only the separate **controlled** discrete-versus-continuous total-difference benchmark supports the resolution-specific statement about additional discoveries with much of the testing machinery held constant; species terms and degrees of freedom still differ. The native UpSet's spatial-only category does not establish a causal resolution gain. All counts are exploratory within two mouse specimens and two healthy cortex sections from one human donor.
 
 # %% [markdown]
 # ## Broader saved pathway programs

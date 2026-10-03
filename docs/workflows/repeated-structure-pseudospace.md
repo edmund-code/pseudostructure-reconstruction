@@ -1,4 +1,4 @@
-# Notebook 15: healthy canonical atlas first
+# Notebook 15: repeated-structure reconstruction
 
 The canonical notebook is
 `analysis/notebooks/15_spatial_probability_flow_proof_of_concept.ipynb`.
@@ -6,10 +6,97 @@ It tests healthy cross-specimen molecular position mapping independently of
 probability-flow success. The earlier OT-distilled flow result remains a historical
 transport diagnostic. There is no notebook 15 mirror.
 
+## Repeated-structure prior and umbrella model
+
+Every observed section is a partial observation of a physical realization of the
+same ordered anatomical object. Let $r$ index physical nephron, $s$ specimen,
+$d$ an observed species/condition domain, and $z$ canonical position:
+
+$$
+x_{d,s,i}=X_{r_i,s,d}(z_{d,s,i}), \qquad
+X_{r,s,d}(z)=\mu(z)+\alpha_d(z)+b_s(z)+u_{r,s,d}(z)+\epsilon.
+$$
+
+The common program is $\mu$; domain biology is $\alpha_d$; restricted specimen
+variation is $b_s$; realization-level variation is $u$. Unknown nephron identities
+and absent linked longitudinal profiles prevent fitting individual nephron
+functions or their across-position covariance. Integrating that variation out
+produces the canonical distributional object:
+
+$$
+x_{d,s,i}\mid z_{d,s,i}\sim\rho_z^{d,s}, \qquad
+\rho_z^{d,s}=(T_{d,s,z})_\#\rho_z.
+$$
+
+$T$ is a restricted domain/specimen deviation model. A translation by
+$\alpha_d(z)+b_s$ is one special case; position-dependent covariance is another
+model component. The prototype does not currently fit these hierarchical
+transformations jointly or shrink specimen distributions toward a pooled latent
+canonical distribution. A shared ordered coordinate is the prior; identical
+molecular states, equal section sampling density, and complete axis coverage
+are not required.
+
+Healthy mouse, AKI mouse and healthy human are molecular realizations of homologous
+structure under this framework. Domain-specific biology can differ at the same
+position without defining a separate disease/species trajectory. Both human-labeled
+slices are healthy cortex from one donor; they are not independent human donors.
+The available domains do not support extrapolating human AKI or identifying an
+unobserved species-by-injury interaction.
+
+The hierarchy is **prior → inference → variation → discovery**: posit a shared
+ordered physical object; reconstruct position from repeated cross-sections; allow
+restricted specimen and domain deviations; then investigate conserved programs,
+injury deviations, species differences and candidate regulators. This is a
+problem formulation and estimator design, not an established novelty claim.
+
+## What the current prototype estimates
+
+Notebook 15 models the PT substructure; its numerical [0,1] gauge is not a
+whole-nephron coordinate. It fixes domain to healthy mouse and fits a mean or Gaussian reference
+from one specimen's supplied DPT coordinate. Unknown realization variation is
+absorbed into residual density. The unadjusted reference sets specimen offset to
+zero; calibration adds the special case $b_s(z)=b_s$. Gaussian covariance also
+contains measurement and finite-window positional variation, so it cannot be
+interpreted as an estimated nephron-specific random process.
+
+The exchanged training/test controls are a validation experiment for shared
+structure, not the final estimator. The intended full model jointly estimates a
+specimen-balanced canonical object with restricted nuisance/deviation terms.
+A joint fit on both controls would use both specimens for estimation; the same
+specimens cannot then be advertised as an independent held-out assessment of
+that joint estimator. Future joint latent fitting needs its own validation.
+
+## Identification and replication limits
+
+A healthy-mouse reference can define $\alpha_{healthy\ mouse}=0$, with an explicitly
+chosen coordinate gauge and restricted/centered specimen deviations. Such
+constraints distinguish the canonical object from nuisance terms by convention;
+they do not prove that biological structural position is uniquely identified.
+Orientation and monotone spatial reparameterization remain ambiguous without
+anchors, and the inferred coordinate is not calibrated physical length.
+
+Domain expression changes parallel to the canonical mean-path tangent can mimic
+position shifts. Injury is not guaranteed to be geometrically orthogonal to the
+axis. Freezing a reference or assigning a high residual density score does not
+establish correct injured/human location. Restricted deviations, common measured
+features, appropriate anatomical anchors, and independent validation must support
+that separation; unrestricted domain functions or spatial warps could absorb
+any alignment. Do not force partially sampled domains to occupy the entire axis.
+Cross-species modeling must retain the existing measured-gene/ortholog-availability
+contract and cannot treat structural-zero columns as expression observations.
+
+Unknown nephron membership can induce dependence between sections. Treating
+realizations as exchangeable is a modeling assumption, not proof that every
+section is from a different nephron. Specimen/donor remains the biological
+replication unit; thousands of sections do not create additional independent
+mice or human donors. Current atlas transfer supports a limited reproducible
+reference mapping, not estimation of all hierarchy levels or separation of
+structural and disease/species variation.
+
 ## Hypotheses and model hierarchy
 
-The primary hypothesis is that one healthy PT realization teaches a canonical
-mean molecular atlas that locates profiles from another realization using
+The primary hypothesis is that one healthy specimen containing many PT realizations
+teaches a canonical mean molecular atlas that locates profiles from another realization using
 expression alone. The secondary hypothesis is that spatial covariance evolution
 adds held-out distributional predictive value beyond the same mean path.
 

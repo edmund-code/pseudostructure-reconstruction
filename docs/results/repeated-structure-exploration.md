@@ -1,4 +1,4 @@
-# Notebook 15: healthy canonical atlas first
+# Notebook 15: repeated-structure reconstruction — prototype evidence
 
 Notebook 15 now separates healthy molecular atlas mapping from the probability-flow
 hypothesis. Its canonical source remains
@@ -7,6 +7,14 @@ The October 2 OT-distilled affine flow lost to centroid displacement in both
 specimen directions and both window schemes. That result no longer gates the
 atlas experiment. The superseded spline-atlas verification numbers are not results
 for this protocol.
+
+The umbrella prior is that sections are unordered partial observations of many
+physical realizations of one ordered anatomical structure. The shared object is
+canonical position and its molecular-state distributions, allowing restricted
+specimen and domain deviations. The current healthy reference experiment is a
+special case and validation step; it does not implement joint hierarchical
+reconstruction, estimate unknown nephron effects, or separate AKI/human biology
+from position. Its numerical results are unchanged by this clarified framing.
 
 ## Measured atlas-first run, 2026-10-03
 

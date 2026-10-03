@@ -372,3 +372,20 @@ nuisance coupling yields wrong ordering even when the two model estimates agree.
 These are identification limits to address before disease/species mapping, not
 additional biological validation. See the research ledger for the fixed design,
 measured results and the next training-only initialization ablation.
+
+## Training-only initialization ablation (notebook 20)
+
+`20_repeated_structure_initialization_ablation.ipynb` holds the model objective
+and convergence settings fixed while comparing PC1, specimen-balanced S3-minus-S1
+endpoint contrast and a soft predicted ordinal code. The reusable
+`initialize_atlas_positions` helper uses training expression, original specimen
+IDs and coarse labels only; it does not accept true fine positions or query data.
+The public estimator retains its original default. The notebook exposes failed
+solver histories and never projects a nonconverged fit as an accepted atlas.
+
+Endpoint contrast makes the tested synthetic references converge, but the
+independent-nuisance reconstruction remains weaker than the soft segment
+baseline. Soft-start summaries include only their explicitly reported converged
+seeds. Better starting coordinates and solver convergence are therefore useful
+numerical results, not sufficient evidence for an improved anatomical method.
+The existing reversed-domain-coupling limitation remains.

@@ -21,6 +21,10 @@ primary-source pages instead. No private profiles were sent to an external servi
 | [Alpert et al., cellAlign (2018)](https://www.nature.com/articles/nmeth.4628), DOI 10.1038/nmeth.4628; [author implementation](https://github.com/shenorrLabTRDF/cellAlign) | Dynamic-time-warping alignment of interpolated expression trajectories; local and global alignment differ. | Canonical reconstruction can use registration, but complete global alignment may force missing states to match. |
 | [Sumanaweera et al., Genes2Genes (online 2024; issue 2025)](https://www.nature.com/articles/s41592-024-02378-4), DOI 10.1038/s41592-024-02378-4 | Distribution-aware gene alignments include matches, warps and mismatches. | Preserve molecular divergence rather than converting every disease/species change into positional warping; infer structure before downstream gene-specific comparisons. |
 
+
+| [Chakraborty and Panaretos, functional registration (accepted author version)](https://arxiv.org/abs/1702.03556) | Identifiability of amplitude versus coordinate warping depends on structural conditions; roughness penalties alone can fail. | A smooth fitted atlas is not evidence that specimen shifts and position have been identified. Restrict nuisance variation and test ordering separately from numerical gauge. |
+| [Panaretos and Zemel, point-process registration (2016)](https://arxiv.org/abs/1603.08691), DOI 10.1214/15-AOS1387 | Links repeated point-process registration, amplitude/phase variation and Wasserstein geometry, including over-registration. | Relevant precedent for repeated-object registration and a reason to inspect forced matching. Their observed point-process coordinate is not our unknown longitudinal coordinate, so the theory is not an identification guarantee here. |
+
 Publisher/author abstracts, indexed primary-source excerpts and official method
 APIs were checked across these entries. Accessible full text was read for
 Slingshot and Genes2Genes; several publisher/PMC pages blocked full-text retrieval.
@@ -63,3 +67,20 @@ molecular coordinate. Existing coarse labels retain upstream marker information;
 withheld markers are not completely independent of that annotation. With two
 healthy mice all comparisons remain descriptive. Continued use of the same
 cohort for method development must be stated; it is not a new external test set.
+
+## Follow-up after actual-data reference tests
+
+The functional-registration abstracts above were retrieved from the authors'
+arXiv records; their formal conditions and proofs have not been audited for this
+application. They motivate a caution, not a theorem about our estimator. Large
+numerical shifts across gene panels can coexist with similar global ordering;
+within-segment ordering must also be checked. Subsequent specimen calibration
+should freeze its learned parameters before evaluation, explicitly restrict which
+molecular directions it can remove, and test uneven coverage. Smoothness or
+transport alone must not turn molecular differences into apparent position.
+
+The [PhenoPath primary article](https://pmc.ncbi.nlm.nih.gov/articles/PMC6015076/)
+is also available in full text. Its introduction and model overview confirm the
+shared latent axis with covariate effects/interactions; that is relevant precedent
+for the umbrella formulation, not evidence that our repeated PT coordinate is
+anatomically identifiable.

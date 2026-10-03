@@ -407,3 +407,52 @@ replication. Physical depth is excluded. The real-control result does not justif
 replacing scFates with the current latent optimizer; the next hypothesis tests
 conditional count references on a conventional backbone. Literature rationale and
 limits are recorded in `docs/research/pseudostructure-methods-survey.md`.
+
+## Fixed-backbone reference ablation (notebook 22)
+
+`22_scfates_repeated_count_reference.ipynb` holds the training scFates coordinate
+and response-gene decoder fixed. Its three frozen query projectors are neighbor
+interpolation, a kernel mean reference in count PCs and a conditional NB
+count-rate reference. It checks reproduction of notebook 21, paired quarter-read
+perturbations and gene-panel coordinate sensitivity. Raw-library exposure is
+computed over all measured genes; positional markers are excluded from modeling.
+This is a single-source validation of a repeated-object reference, not the final
+joint multispecimen estimator or a demonstration of reconstructed nephrons.
+
+The NB projector improves read robustness but worsens all-gene transfer error in
+every fold. No alternative is adopted from this experiment. Cross-panel ranges
+include differences in numerical parametrization; inspect ranks as well as
+coordinate differences, and never interpret conditional entropy as calibrated
+anatomical precision. Its separate focused-program check keeps notebook 18's
+training-selected panels frozen and compares all projectors against the
+privileged quadratic segment-plus-coverage oracle. Those panels were selected
+using the earlier atlas, so this is development-informed evidence rather than a
+neutral method ranking or independent validation. Depth does not enter any score
+or selection decision.
+
+## Training-residual metric (notebook 23)
+
+`23_repeated_structure_residual_metric.ipynb` tests one global covariance around
+the same frozen scFates mean path using actual control transfers. The reusable
+`residual_metric_atlas` helper interpolates that mean at the supplied training
+positions, fits a zero-mean Ledoit–Wolf residual covariance and floors singular
+eigenvalues numerically. It returns frozen Gaussian grid probabilities and
+conditional/marginal log densities. This integrates observed variation; without
+nephron membership it does not estimate a nephron-specific random trajectory or
+separate technical and biological variance.
+
+A matched spherical control uses the covariance trace to separate directional
+geometry from residual scale. It was specified after the first covariance run,
+with no query parameter tuning; notebook logic was bumped for this added arm.
+The notebook reproduces saved positions and response scores, retains the
+previous NB/coverage comparators and frozen gene panels, and repeats paired read
+thinning. The first covariance result does not improve the neighbor reference;
+neither more flexible covariance nor flow follows automatically from this test.
+
+For these count-reference benchmarks, held-out genes and markers are excluded as
+individual modeling features, but raw-library exposure uses all measured genes,
+including those panels. Response normalization shares that exposure. The tests
+therefore retain aggregate compositional dependence and are not fully independent
+of held-out measurements. Query labels also inherit upstream molecular annotation;
+source anatomical orientation and frozen-panel selection limit claims of
+independent anatomical validation. These limits apply to both notebooks 22 and 23.

@@ -267,3 +267,21 @@ Keep depth associations subordinate to these molecular/stability/measurement che
 winding anatomy and unknown nephron identity make cortical distance an especially
 imperfect supporting proxy. Stage-specific logic versions retain unchanged caches;
 new/changed stages have their own bumped notebook version and full input/code keys.
+
+## Notebook 17: conditional-count projection pilot
+
+`analysis/notebooks/17_exposure_conditioned_count_atlas.ipynb` tests a frozen gene-rate
+atlas from the training-only count-Gaussian coordinate. It requires no DPT or physical
+proxy exports. `pseudospace/count_rate_atlas.py` estimates exposure-normalized rates
+separately in each original specimen and averages them equally at every position;
+projection evaluates a full NB count likelihood conditional on query library size.
+This is a projection/decoder upgrade, not a fully joint latent-count estimator.
+Independent genes and fixed dispersion are approximations; posterior precision is
+not calibrated anatomical uncertainty.
+
+The notebook repeats fold-0 joint/profile and independent-specimen validation, strong
+PC1/soft-segment/oracle comparisons, and same-section thinning. Outputs are under
+`<results-root>/count_rate_projection_pilot/`, with the same content-addressed fit cache
+and uncached input/guard validation. It has no generated mirror. Inference does not
+consume private outputs of notebook 16: the reference is recomputed from validated
+inputs and fixed settings. Keep the working notebook outputs and stage a cleaned copy.

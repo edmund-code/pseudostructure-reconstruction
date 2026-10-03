@@ -354,3 +354,21 @@ feature choice, fit multiple references with aligned profile order and apply
 summary, not an uncertainty interval. Changes to an unmodeled domain, injury
 state, or tissue composition remain unresolved by this wrapper and require
 separate validation rather than being treated as known spatial displacement.
+
+## Identification stress tests (notebook 19)
+
+`19_repeated_structure_identification_stress.ipynb` generates unordered, independent
+count observations with known simulated position, variable library exposure and
+an orthogonal nuisance program. It freezes the current public estimator and
+compares full/partial query coverage, paired read thinning and reversed nuisance
+coupling. It preserves failed convergence cases and diagnoses their original
+solver history; they are not accepted projections. An explicit same-profile
+subset guard checks that changing query population composition cannot rescale
+coordinates. The notebook is synthetic-only and needs no private input data.
+
+The independent-nuisance scenario exposes the current PC1 initialization's
+failure; the soft segment baseline still recovers simulated ordering. Reversed
+nuisance coupling yields wrong ordering even when the two model estimates agree.
+These are identification limits to address before disease/species mapping, not
+additional biological validation. See the research ledger for the fixed design,
+measured results and the next training-only initialization ablation.

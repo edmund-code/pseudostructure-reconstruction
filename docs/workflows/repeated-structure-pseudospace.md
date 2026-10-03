@@ -321,3 +321,36 @@ and fold for supplementary transfer tests. Shared all-gene exposure preserves
 compositional dependence. Profile splits, genes, null draws and folds do not
 create independent biological replication. Inspect all-gene and selected-program
 results together and retain the ambiguity limitations from notebook 17.
+
+## Frozen pseudostructure atlas API
+
+`pseudospace/pseudostructure_atlas.py` exposes a wrapper for fitting and
+projecting a frozen repeated-structure reference. It encodes repeated physical
+objects as a shared ordered-position prior while integrating unknown nephron
+identity out; it does not recover linked nephron trajectories. The caller must
+provide an explicit boolean `model_gene_mask`. Only those genes enter the count
+residual representation and rate atlas. `library` remains the raw exposure summed
+over **all measured genes**, including excluded genes, so this contract retains
+the documented compositional dependence. Sparse count matrices are densified
+inside the wrapper; use filtered structure aggregates whose dimensions fit memory.
+
+Fit on training structures with `fit_pseudostructure_atlas(counts, library,
+specimens, anatomy, gene_names, model_gene_mask, ...)`. The three ordered anatomy
+codes are weak supervision during training only (S1=0, S2=1, S3=2); marker-derived
+label provenance remains. The fitted Gaussian mean atlas and NB rate atlas are
+frozen. Project new structures with `project_pseudostructure_atlas(reference,
+counts, library, gene_names, structure_ids, specimens=None)`: query counts must
+have exactly the same measured gene names in exactly the same order as training,
+even when some genes were excluded from modeling. Projection does not accept
+query segment labels or refit either model. Supplying query specimen names only
+selects a learned constant training offset where available; an unseen specimen
+uses zero offset.
+
+Gaussian and conditional-count outputs include model-conditional position
+posteriors and entropy, not calibrated confidence intervals. Agreement or
+disagreement between the two frozen decoders is descriptive. For sensitivity to
+feature choice, fit multiple references with aligned profile order and apply
+`summarize_panel_sensitivity`; its across-panel coordinate range is a sensitivity
+summary, not an uncertainty interval. Changes to an unmodeled domain, injury
+state, or tissue composition remain unresolved by this wrapper and require
+separate validation rather than being treated as known spatial displacement.

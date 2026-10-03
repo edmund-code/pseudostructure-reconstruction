@@ -57,13 +57,15 @@ def permute_positions_within_segments(z, specimens, anatomy, seed):
 
 
 def fit_segment_covariate_oracle(expression, covariates, anatomy, specimens,
-                                 ridge=.01):
+                                 ridge=.01, degree=1):
     """Fit specimen-balanced ridge predictions separately within segments.
 
     Covariates are centered and scaled within each segment using equal total
     mass per original specimen. The gene-response intercept is the weighted
     segment mean and is not penalized. This is a privileged diagnostic oracle:
-    prediction requires the query's supplied segment label.
+    prediction requires the query's supplied segment label. Degree two adds
+    squares and pairwise interactions, with expanded-basis scaling frozen
+    from the original-specimen-weighted training observations.
     """
     expression = _matrix(expression, 'expression', min_rows=2)
     covariates = _matrix(covariates, 'covariates', min_rows=2)
@@ -79,6 +81,9 @@ def fit_segment_covariate_oracle(expression, covariates, anatomy, specimens,
         raise ValueError('ridge must be finite and nonnegative') from exc
     if not np.isfinite(ridge) or ridge < 0:
         raise ValueError('ridge must be finite and nonnegative')
+    if (not isinstance(degree, (int, np.integer)) or isinstance(degree, (bool, np.bool_))
+            or degree not in (1, 2)):
+        raise ValueError('degree must be integer 1 or 2')
 
     segments = {}
     for segment in (0, 1, 2):
@@ -97,14 +102,31 @@ def fit_segment_covariate_oracle(expression, covariates, anatomy, specimens,
         scale[scale < 1e-8] = 1.
         standardized = (X - center) / scale
         intercept = local_weights @ R
-        lhs = standardized.T @ (local_weights[:, None] * standardized)
-        rhs = standardized.T @ (local_weights[:, None] * (R - intercept))
-        beta = np.linalg.solve(lhs + ridge*np.eye(X.shape[1]) + 1e-10*np.eye(X.shape[1]), rhs)
-        segments[segment] = {'covariate_mean': center, 'covariate_scale': scale,
-                             'intercept': intercept, 'beta': beta,
-                             'training_specimens': segment_specimens}
+        attrs = {'covariate_mean': center, 'covariate_scale': scale,
+                 'intercept': intercept, 'training_specimens': segment_specimens}
+        if degree == 1:
+            design = standardized
+        else:
+            poly_rows, poly_cols = np.triu_indices(X.shape[1])
+            polynomial = np.column_stack(
+                [standardized[:, i] * standardized[:, j]
+                 for i, j in zip(poly_rows, poly_cols)])
+            basis = np.column_stack([standardized, polynomial])
+            basis_mean = local_weights @ basis
+            basis_scale = np.sqrt(local_weights @ ((basis - basis_mean) ** 2))
+            basis_scale[basis_scale < 1e-8] = 1.
+            design = (basis - basis_mean) / basis_scale
+            attrs.update(polynomial_rows=poly_rows, polynomial_cols=poly_cols,
+                         basis_mean=basis_mean, basis_scale=basis_scale)
+        lhs = design.T @ (local_weights[:, None] * design)
+        rhs = design.T @ (local_weights[:, None] * (R - intercept))
+        beta = np.linalg.solve(lhs + ridge*np.eye(design.shape[1])
+                               + 1e-10*np.eye(design.shape[1]), rhs)
+        attrs['beta'] = beta
+        segments[segment] = attrs
     return {'segments': segments, 'covariate_count': covariates.shape[1],
-            'expression_count': expression.shape[1], 'ridge': ridge}
+            'expression_count': expression.shape[1], 'ridge': ridge,
+            'degree': int(degree)}
 
 
 def predict_segment_covariate_oracle(model, covariates, anatomy):
@@ -114,11 +136,22 @@ def predict_segment_covariate_oracle(model, covariates, anatomy):
         raise ValueError('covariate feature count does not match fitted oracle')
     anatomy = _anatomy(anatomy, len(covariates))
     prediction = np.empty((len(covariates), model['expression_count']), dtype=float)
+    degree = model.get('degree', 1)
     for segment in (0, 1, 2):
         use = anatomy == segment
         if not use.any():
             continue
         params = model['segments'][segment]
         scaled = (covariates[use] - params['covariate_mean']) / params['covariate_scale']
-        prediction[use] = params['intercept'] + scaled @ params['beta']
+        if degree == 1:
+            design = scaled
+        elif degree == 2:
+            polynomial = np.column_stack(
+                [scaled[:, i] * scaled[:, j]
+                 for i, j in zip(params['polynomial_rows'], params['polynomial_cols'])])
+            basis = np.column_stack([scaled, polynomial])
+            design = (basis - params['basis_mean']) / params['basis_scale']
+        else:
+            raise ValueError('fitted oracle degree must be 1 or 2')
+        prediction[use] = params['intercept'] + design @ params['beta']
     return prediction

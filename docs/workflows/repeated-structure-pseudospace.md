@@ -299,3 +299,25 @@ ranges beside conditional entropy. Large panel-dependent shifts are retained in
 benchmarks and reported as ambiguity; a sharp likelihood posterior alone is not
 a trustworthy location confidence score. Private CSVs retain section IDs; committed
 notebooks remain output-free.
+
+## Notebook 18: continuous programs within coarse PT segments
+
+`analysis/notebooks/18_within_segment_repeated_structure_validation.ipynb`
+validates the count-Gaussian mean atlas on both independent-control transfer
+directions and all three gene folds. Its `18.within_segment.1` cache is separate
+from earlier workflows, and outputs reside in
+`<results-root>/within_segment_repeated_structure_validation/`. No DPT, depth,
+AKI or human exports are required, and no mirror is generated.
+
+`pseudospace/within_segment_validation.py` provides an exact specimen×segment
+coordinate-shuffle null and a privileged segment-plus-covariate oracle. The
+null retains coarse coordinate distributions but removes fine training response
+ordering. The oracle explicitly receives query segment labels and coverage
+metadata; these labels never enter query atlas or soft-segment inference.
+
+All withheld genes remain the primary prediction endpoint. Training-only
+two-way profile cross-fitting selects at most 50 positive-gain genes per segment
+and fold for supplementary transfer tests. Shared all-gene exposure preserves
+compositional dependence. Profile splits, genes, null draws and folds do not
+create independent biological replication. Inspect all-gene and selected-program
+results together and retain the ambiguity limitations from notebook 17.

@@ -8,7 +8,7 @@ uncertainty or anatomical ground truth.
 from __future__ import annotations
 
 import numpy as np
-from scipy.special import gammaln, logsumexp
+from scipy.special import gammaln, logsumexp, xlogy
 
 from pseudospace.canonical_mean_atlas import (
     _bandwidth, _coordinates, _grid, _kernel_weights,
@@ -131,10 +131,11 @@ def project_count_rate_atlas(atlas, counts, library, block_size=128):
         normalizer = logsumexp(logp, axis=1)
         log_post = logp - normalizer[:, None]
         p = np.exp(log_post)
+        p /= p.sum(axis=1, keepdims=True)
         posterior[start:stop] = p
         log_density[start:stop] = normalizer - log_prior
-        z_mean[start:stop] = p @ atlas['grid']
+        z_mean[start:stop] = np.clip(p @ atlas['grid'], atlas['grid'][0], atlas['grid'][-1])
         z_map[start:stop] = atlas['grid'][np.argmax(logp, axis=1)]
-        entropy[start:stop] = -np.sum(p * log_post, axis=1)
+        entropy[start:stop] = -np.sum(xlogy(p, p), axis=1)
     return {'posterior': posterior, 'z_mean': z_mean, 'z_MAP': z_map,
             'entropy': entropy, 'log_density': log_density}

@@ -285,3 +285,17 @@ PC1/soft-segment/oracle comparisons, and same-section thinning. Outputs are unde
 and uncached input/guard validation. It has no generated mirror. Inference does not
 consume private outputs of notebook 16: the reference is recomputed from validated
 inputs and fixed settings. Keep the working notebook outputs and stage a cleaned copy.
+
+A separate `17.count_rate_dispersion_sensitivity.1` stage rotates all three gene
+folds for joint profile holdout and scores the frozen rate path at NB shape 10,
+100 and 1000 plus the Poisson limit. It reuses each fold's identical all-gene
+quarter-read thinning draw across observation settings, keeps PC1/soft-segment
+baselines, and exports within-segment dispersion and gene-fold coordinate agreement.
+Completeness guards run outside the cache; partial failures are not a completed
+benchmark. These diagnostics do not choose a setting from query outcomes or depth.
+
+The sensitivity report includes all gene-fold pair plots and per-section coordinate
+ranges beside conditional entropy. Large panel-dependent shifts are retained in
+benchmarks and reported as ambiguity; a sharp likelihood posterior alone is not
+a trustworthy location confidence score. Private CSVs retain section IDs; committed
+notebooks remain output-free.

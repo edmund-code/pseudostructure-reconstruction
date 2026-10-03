@@ -7,8 +7,9 @@ from scipy.special import logsumexp
 from scipy.stats import nbinom, spearmanr
 
 from pseudospace.count_rate_atlas import (
-    fit_count_rate_atlas, project_count_rate_atlas,
+    _nb_log_density, fit_count_rate_atlas, project_count_rate_atlas,
 )
+from pseudospace.canonical_mean_atlas import _coordinates
 
 
 def _draw_nb(rng, library, rates, theta=100.):
@@ -108,3 +109,34 @@ def test_atlas_refuses_sparse_support_and_invalid_exposure():
                              min_effective=12.)
     with pytest.raises(ValueError, match='positive finite exposure'):
         fit_count_rate_atlas(counts, np.zeros(60), z, np.repeat('s', 60))
+
+
+def test_high_magnitude_endpoint_likelihood_cannot_push_mean_past_grid():
+    grid = np.linspace(0, 1, 101)
+    count, exposure = 1_000_000, 10_000_000.
+    endpoint_rate = count / exposure
+    target_gap = 32.4
+    adjacent_rate = endpoint_rate * (1 + np.sqrt(2 * target_gap / count))
+    rates = np.full((len(grid), 1), .5)
+    rates[-2, 0] = adjacent_rate
+    rates[-1, 0] = endpoint_rate
+    atlas = {'grid': grid, 'rates': rates, 'theta': np.inf,
+             'feature_count': 1}
+    query = np.array([[count]], dtype=np.int64)
+    library = np.array([exposure])
+
+    # Preserve a deterministic reproduction of the former normalization path:
+    # the terminal mass rounds to one and the adjacent endpoint keeps ~1e-14.
+    old_logp = _nb_log_density(query, library, rates, np.inf)[0]
+    old_p = np.exp(old_logp - logsumexp(old_logp))
+    old_mean = old_p @ grid
+    assert old_p[-2] == pytest.approx(1e-14, rel=.1)
+    assert old_p.sum() > 1.
+    assert old_mean > 1.
+
+    result = project_count_rate_atlas(atlas, query, library)
+    assert np.isfinite(result['posterior']).all()
+    np.testing.assert_allclose(result['posterior'].sum(axis=1), 1., atol=1e-14)
+    assert np.all((result['z_mean'] >= 0.) & (result['z_mean'] <= 1.))
+    assert np.isfinite(result['entropy']).all() and np.all(result['entropy'] >= 0.)
+    _coordinates(result['z_mean'], len(query))

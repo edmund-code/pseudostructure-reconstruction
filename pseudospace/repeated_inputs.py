@@ -100,17 +100,40 @@ def _read_and_validate_segmentation(data_root: Path, sample: str, obs: pd.DataFr
     }
 
 
-def load_repeated_mouse_inputs(data_root: str | Path) -> ad.AnnData:
-    """Return PT structures from the four current mouse count matrices.
+def load_repeated_mouse_inputs(
+    data_root: str | Path,
+    samples: tuple[str, ...] = MOUSE_SAMPLES,
+) -> ad.AnnData:
+    """Return PT structures from the selected current mouse count matrices.
 
     ``layers['counts']`` contains raw aggregated counts and ``layers['lognorm']`` contains
     Scanpy total-count normalization to 10,000 followed by natural log1p. ``X`` is lognorm.
-    All genes shared by the four inputs are retained; no HVG or tubule gene-count filter runs.
-    The notebook 02 pooled mouse p5 ``n_spots`` structural floor is applied before PT selection.
+    All genes shared by the selected inputs are retained; no HVG or tubule gene-count filter runs.
+    The notebook 02 pooled mouse p5 ``n_spots`` structural floor is pooled over the selected
+    sample cohort and applied before PT selection.
     """
+    if isinstance(samples, str):
+        raise ValueError("samples must be a nonempty unique subset of known mouse sample names")
+    try:
+        selected_samples = tuple(samples)
+    except TypeError as exc:
+        raise ValueError(
+            "samples must be a nonempty unique subset of known mouse sample names"
+        ) from exc
+    if (
+        not selected_samples
+        or not all(isinstance(sample, str) for sample in selected_samples)
+        or len(set(selected_samples)) != len(selected_samples)
+        or not set(selected_samples).issubset(MOUSE_SAMPLES)
+    ):
+        raise ValueError(
+            "samples must be a nonempty unique subset of known mouse sample names "
+            f"{MOUSE_SAMPLES}; got {selected_samples!r}"
+        )
+
     root = Path(data_root).expanduser().resolve()
     matrix_dir = root / "tubule_by_gene"
-    files = [f"{sample}_tubule_by_gene_caleb.h5ad" for sample in MOUSE_SAMPLES]
+    files = [f"{sample}_tubule_by_gene_caleb.h5ad" for sample in selected_samples]
     absent = [str(matrix_dir / f) for f in files if not (matrix_dir / f).is_file()]
     if absent:
         raise FileNotFoundError("Missing mouse tubule count matrices: " + ", ".join(absent))
@@ -119,7 +142,7 @@ def load_repeated_mouse_inputs(data_root: str | Path) -> ad.AnnData:
     # Attach current labels only after validating every source observation against its exact
     # feature index and centroid.  The whole current input set is required to pass.
     validation = {}
-    for sample in MOUSE_SAMPLES:
+    for sample in selected_samples:
         a = sample_adatas[sample]
         # load_and_process_mouse_samples materializes layers['counts'] into X when present.
         # Validate before combine_adatas can make duplicate feature names unique.
@@ -167,21 +190,23 @@ def load_repeated_mouse_inputs(data_root: str | Path) -> ad.AnnData:
     if not combined.obs.structure_id.is_unique:
         raise ValueError("sample|feature_index structure IDs are not unique")
     combined.uns["repeated_mouse_input_manifest"] = {
-        "samples": list(MOUSE_SAMPLES),
+        "samples": list(selected_samples),
         "source_matrices": {
             s: {
                 "path": f"tubule_by_gene/{s}_tubule_by_gene_caleb.h5ad",
                 "size_bytes": (matrix_dir / f"{s}_tubule_by_gene_caleb.h5ad").stat().st_size,
                 "mtime_ns": (matrix_dir / f"{s}_tubule_by_gene_caleb.h5ad").stat().st_mtime_ns,
             }
-            for s in MOUSE_SAMPLES
+            for s in selected_samples
         },
         "segmentation_validation": validation,
         "centroid_validation": "all matrix observations checked against GeoJSON feature_index",
         "counts_layer": "raw structure-aggregated X from input matrices",
         "normalization": "after p5 spot floor and before PT selection: Scanpy normalize_total(target_sum=10000) across all common measured genes, then natural log1p",
-        "genes": "inner intersection across four samples; no HVG selection",
+        "genes": "inner intersection across selected samples; no HVG selection",
         "n_spots_quantile": SPOT_QUANTILE,
+        "n_spots_cohort": list(selected_samples),
+        "n_spots_floor_scope": "pooled across selected mouse samples",
         "n_spots_floor": floor,
         "structures_before_floor": before,
         "structures_after_floor_all_classes": after_spot_floor,

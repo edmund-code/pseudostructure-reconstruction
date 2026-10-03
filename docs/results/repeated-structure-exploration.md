@@ -1,39 +1,31 @@
-# Notebook 15: measured-data exploration
+# Notebook 15: spatial probability-flow experiment status
 
-Notebook 15 now uses only the existing project measurements. The simulation
-benchmark, generator, simulation-specific tests and simulation-derived verdicts
-have been removed. Method conclusions must come from held-out specimen/gene
-prediction and robustness on the measured tubule profiles.
+Notebook 15 has been replaced from scratch by
+`analysis/notebooks/15_spatial_probability_flow_proof_of_concept.ipynb`.
+The previous spline-atlas design and its input-verification numbers are not
+results for this new experiment.
 
-The old requirement for a `mouse_only_v6` DPT export has been removed. Notebook 15
-loads measured counts and segmentation annotations directly. The primary estimator
-initializes independently of DPT. Newly fitted PCA/DPT methods are comparators;
-a saved DPT coordinate is only an optional, input-matched diagnostic.
+The current protocol first tests cross-specimen distribution prediction on the
+existing PT DPT scaffold using healthy controls Ctrl1A2 and Ctrl1A4. Latent-position
+inference is gated on beating identity, centroid and DPT-local baselines in both
+specimen directions, including non-overlapping windows. Atlas-only versus
+flow-smoothed density, rotated held-out genes, uncertainty and stability are
+separate tests. Physical glomerular-depth proxies enter only after inference.
 
-Actual input verification succeeded: 35,581 mouse structures matched their current
-segmentation feature indices and centroids (maximum deviation 0 pixels). The pooled
-5th-percentile spot floor was 74, leaving 33,834 structures before PT selection and
-14,861 PT profiles with 19,059 common measured genes. All methods within 15 share
-this newly normalized universe. No method superiority or novelty follows from
-this input verification; the full reconstruction comparisons remain to be run.
+A measured source-cell run on 2026-10-02 completed the fixed-axis experiment and
+physical-depth diagnostics. The affine flow did not pass the prespecified gate:
+training-centroid displacement had lower held-out energy distance in both
+specimen directions and both window schemes. Latent fitting, bootstrap fitting,
+AKI projection and TF analysis were therefore skipped. This rejects advancement
+of this particular approximation; it does not rule out every probability-flow
+model. Detailed scores and manifests remain private results artifacts.
 
-Two healthy mice cannot support replicate-informed training plus an independent
-healthy test specimen. Four-mouse LOSO remains an AKI invariance stress test.
-Gene/marker holdout, anatomy ablation, reflected initialization, shuffled controls
-and bootstrap resampling operate on the measured data. These checks do not supply
-exact fine spatial ground truth or establish physical coordinate calibration.
+A successful numerical or input check does not establish biological validity,
+method superiority, causality or novelty. With two controls, all comparisons are
+descriptive. AKI frozen-reference projection and TF sensitivity are optional
+extensions requiring additional validation; neither defines the healthy axis.
 
-The estimator combines standard spline regression, replicate-based feature
-scoring, local projection and frozen-atlas mapping. The focused literature review
-does not prove absence of an earlier equivalent objective. Geneformer representation
-inference remains deferred until defensible cell-level inputs are available; its
-optional external gene-prior branch stays separate.
-
-New artifacts are written beneath `novel_repeated_structure_pseudospace/real_data/`
-to keep them separate from superseded experiment artifacts. Previous working
-notebook contents were preserved in an ignored local backup before replacement
-of obsolete experiment/verdict cells. Unaffected live outputs were retained.
-
-See the [workflow guide](../workflows/repeated-structure-pseudospace.md) for inputs,
-execution and interpretation limits. Unit tests use small numerical fixtures to
-verify implementation; they are not biological experiments or method evidence.
+The committed notebook carries no executed outputs. Measured results and run
+manifests belong under the configured results root, outside Git. See the
+[workflow guide](../workflows/repeated-structure-pseudospace.md) for the complete
+input contract, gates and interpretation limits.

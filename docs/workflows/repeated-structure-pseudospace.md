@@ -1,126 +1,123 @@
-# Notebook 15: repeated-structure pseudospace exploration
+# Notebook 15: latent spatial probability-flow proof of concept
 
-`analysis/notebooks/15_novel_repeated_structure_pseudospace.ipynb` asks whether
-cross-specimen molecular prediction improves a canonical order of independent
-segmented profiles. It does not interpret nephron position as time or assert a
-novel method. Existing notebooks are unchanged.
+The canonical notebook is
+`analysis/notebooks/15_spatial_probability_flow_proof_of_concept.ipynb`.
+It replaces the previous repeated-structure spline exploration. There is no
+notebook 15 mirror. Reusable numerical logic lives in
+`pseudospace/spatial_probability_flow.py`; the measured-input loader is
+`pseudospace/repeated_inputs.py`.
 
-The supplied probability-flow reference is Maddu, Chardès and Shelley,
-[PNAS 2025](https://doi.org/10.1073/pnas.2420621122). The notebook also discusses
-[Pheno-GS](https://arxiv.org/abs/2609.27633) as a preprint and includes a focused
-precedence table. The review is not an exhaustive absence-of-precedent proof.
+The decisive experiment is whether a smooth molecular velocity fitted on one
+healthy PT specimen predicts adjacent molecular distributions in the other.
+Ctrl1A2 and Ctrl1A4 exchange training/test roles. Two controls provide descriptive
+evidence, not confirmatory inference or calibrated longitudinal position.
 
 ## Inputs and execution
 
-Use the `kidney-pseudospace` environment and run the notebook from the repository
-or one of its subdirectories. CLI root flags override `PSEUDOSPACE_DATA_ROOT`
-and `PSEUDOSPACE_RESULTS_ROOT`, as in the existing workflows.
+Use `kidney-pseudospace` and run cells top to bottom. Root flags `--data-root` and
+`--results-root` override `PSEUDOSPACE_DATA_ROOT` and `PSEUDOSPACE_RESULTS_ROOT`.
+Required measured inputs are the two control matrices under
+`<data-root>/tubule_by_gene/{sample}_tubule_by_gene_caleb.h5ad` and matching
+`<data-root>/{sample}_kept_tubules_labeled_fine.geojson` files. AKI is optional.
+The loader verifies segmentation joins and centroids, retains all measured common
+genes, applies a pooled healthy-cohort p5 spot-count floor, normalizes to 10,000
+counts and log1p, and selects upstream PT. There is no tubule gene-count QC.
+Its structural-floor cohort differs from the default four-mouse loader and is
+recorded in the input manifest.
 
-The required inputs are the four measured matrices under
-`<data-root>/tubule_by_gene/` and their matching
-`*_kept_tubules_labeled_fine.geojson` files under `<data-root>`. No prior DPT,
-Harmony, or scFates export is required.
+The default temporary coordinate is
+`<results-root>/human_vs_healthy_mouse/cross_species_pt_dpt.h5ad`, column
+`total_scanpy_dpt`. Override it with `PSEUDOSPACE_15_DPT_REFERENCE` and
+`PSEUDOSPACE_15_DPT_COLUMN` (for example a mouse-only export's
+`pt_subset_scanpy_dpt`). This requires the existing upstream reviewed coordinate;
+15 does not recompute DPT or bypass label checkpoints. A strict unique centroid
+join within one pixel links the saved axis to current validated PT. Feature IDs
+must also agree if available. Structures absent from that export are reported in
+`scaffold_ineligible_structures.csv`; the fixed-axis experiment uses only the
+explicit scaffold-eligible intersection. Healthy DPT is scaled jointly, never
+independently by specimen. The default 03 scaffold has cross-species origins;
+only control molecular profiles enter this experiment.
 
-The loader verifies every structure's feature index and centroid against its
-current segmentation, attaches upstream anatomy, and applies the pooled mouse
-5th-percentile `n_spots` filter. It retains all common measured genes and normalizes
-total counts to 10,000 followed by log1p before selecting PT. There is no tubule
-gene-count filter. Feature selection happens inside folds. This differs from
-02's gene-filter-before-normalization sequence; all notebook 15 comparisons use
-the same newly prepared input, and incompatible saved coordinates are excluded.
+Physical evaluation requires the reviewed pass-1 glomerular export, default
+`<results-root>/human_vs_healthy_mouse/cross_species_harmony_pass1.h5ad`.
+Override with `PSEUDOSPACE_15_GLOMERULI`. Glomerular feature IDs and centroids are
+verified against current segmentation. Nearest and mean-three-glomeruli distances
+are computed after molecular fitting, never supplied to reconstruction. They are
+2D depth proxies, not longitudinal ground truth. Both human-labeled slices are
+healthy cortex; neither enters the molecular fits.
 
-An optional saved DPT can be supplied using `PSEUDOSPACE_15_DPT_REFERENCE`. The
-notebook checks structure IDs, gene universe and expression values before using
-it as a transductive diagnostic. It never initializes the main estimator or gates
-execution. Without it, the initial diagnostic starts from PCA within anatomy;
-new PCA/DPT baselines are fitted on the measured data inside training folds.
+## Experiments and gates
 
-Outputs go to `<results-root>/novel_repeated_structure_pseudospace/real_data/`; none are
-committed. The canonical notebook is output-free. There is no generated mirror
-for notebook 15. Do not clear live notebook outputs when staging.
+1. Exclude canonical positional markers; rotate deterministic reconstruction and
+   evaluation gene folds. Fit scaler/PCA only on the training control (15 PCs).
+2. Inspect 12 overlapping DPT windows and a non-overlapping sensitivity. Unsupported
+   windows stop the fixed-axis experiment. Bounded clouds use at most 128 structures.
+3. Fit entropic-OT barycentric displacements between training windows, then distill
+   them into a ridge-regularized affine velocity with smooth position dependence.
+   Entropy is relative to each pair's median positive squared distance. Integrate
+   with RK4 and score held-out distributions with multivariate energy distance.
+4. Compare identity, training centroid displacement, and training DPT-local kNN
+   mean displacement. Flow must strictly beat all three baselines, averaged across
+   transitions, in both directions and both window schemes. The gate is descriptive.
+5. Only after that gate, alternate density-atlas estimation and posterior position
+   reassignment. Compare empirical Gaussian atlas moments against moments blended
+   with one-step flow predictions. Ordered anatomical transition cutpoints are
+   learned; no fixed segment thirds or expected marker curves. Compare ordinal,
+   endpoint-only, and unsupervised label settings, and DPT/PCA1/random ordinal starts.
+   Test-specimen projection uses neither labels nor its DPT.
+6. Score held-out gene curves across three gene folds, initialization agreement,
+   tubule/gene/both bootstraps, half-sampling, posterior uncertainty, excluded
+   markers, and specimen-specific physical depth. Failures remain explicit.
 
-The full run evaluates every available reconstruction gene plus panels of
-10/20/50/100 genes. It can require several GB of RAM and substantial CPU time.
-It caches fold fits by expression, labels, settings, source metadata and code.
-Bootstrap fits are deliberately separate. Smoke-run controls are:
+The latent screen requires the prespecified DPT-initialized ordinal flow atlas
+to beat atlas-only and supplied DPT on held-out genes in every fold and direction.
+Endpoint-only PCA/random initializations omit S2 information; no-anatomy
+PCA/random starts omit all labels. DPT initialization retains upstream information
+in all ablations. Gene holdouts retain compositional dependence through the common
+total-count normalization denominator.
+This does not replace scientific review of support, stability or physical depth.
+No specimen offsets are learned from held-out controls. A distributional source
+window is observed in the test specimen in Experiment 1; its successful transport
+is not itself de novo coordinate reconstruction.
 
-- `PSEUDOSPACE_15_BOOTSTRAPS` (default 20 per resampling scheme per outer fold).
-- `PSEUDOSPACE_15_PANEL_DPT=0` to omit optional Scanpy DPT baselines.
-- `PSEUDOSPACE_STAGE_CACHE=0` to rebuild cached fits.
+## Optional extensions and artifacts
 
-A smoke run with fewer repetitions or disabled DPT is not the complete benchmark.
+Outputs go to `<results-root>/spatial_probability_flow_proof_of_concept/`.
+Manifests, per-transition scores, window support, gates, coordinate/posterior
+probabilities, failed fits, bootstrap positions, marker curves, physical scores
+and diagnostic PDFs remain private, untracked artifacts. Expensive stages cache
+by actual inputs, parameters and code under `stage_cache/`.
+`PSEUDOSPACE_STAGE_CACHE=0` rebuilds them. Validation is never cached.
+`PSEUDOSPACE_15_BOOTSTRAPS` defaults to 10 and must be at least two; reducing it
+is a smoke-run choice, not stronger evidence.
 
-## Estimator and validation boundaries
+`PSEUDOSPACE_15_AKI=1` enables a gated frozen-healthy-reference projection of
+IR2A2/IR2A4, using the healthy measured-gene normalization denominator.
+The pooled healthy atlas uses exactly balanced specimen clouds at every window
+and refuses sparse per-specimen support. Injury
+never changes the axis. Position, posterior entropy and negative healthy mixture
+log-density are separate exploratory outputs; the density score is not calibrated
+injury severity. Injury's own cohort structure floor is recorded.
 
-Reusable helpers live in `pseudospace/repeated_structure.py` and
-`pseudospace/repeated_baselines.py`; validated measured inputs are loaded by
-`pseudospace/repeated_inputs.py`. The prototype combines conventional
-specimen-balanced P-spline regression, local grid projection, training-only
-feature selection, and anatomy interval constraints. The optional graph is a
-standard harmonic coordinate, not a novelty claim. Disconnected DPT graphs
-are recorded as failed baselines; no edges are invented to make them run.
+`PSEUDOSPACE_15_TF=1`, `PSEUDOSPACE_15_TF_LIST` (curated mouse CSV with unique
+`gene`) and `PSEUDOSPACE_15_VALIDATION_REVIEWED=1` enable a gated TF feasibility
+panel after reviewing validation. A chain-rule Jacobian measures low-dimensional
+velocity sensitivity to modeling-gene log-expression, not causality or TF activity.
+For this affine field it is position-dependent but state-independent. Geneformer
+may later prioritize an external TF panel; it never creates the coordinate.
 
-An explicitly supplied, exactly matched saved Harmony/DPT is an optional
-transductive reference. The initial healthy perturbation diagnostic uses both controls in selection/refinement;
-its leave-one-control-out expression fit is not independent coordinate validation.
-The strict outer experiment initializes from reconstruction-gene PCA and anatomy,
-refines only training profiles, and maps untouched test profiles to a frozen atlas.
-The training graph baseline uses PCA/DPT and nearest-neighbor projection, without
-claiming to implement a frozen out-of-sample Harmony transform.
+## Interpretation ceiling
 
-Two healthy specimens cannot support replicate-informed training plus an
-independent healthy specimen holdout. Four-mouse LOSO is an AKI invariance stress
-test. Agreement across injured and healthy mice can suppress real biology or
-confound injury with position. No confirmatory significance is reported.
+This is finite-step OT distillation and a flow-smoothed Gaussian-density pilot,
+not a reproduction of PFI, exact EM, or enforcement of the continuous continuity
+PDE. Affine fields cannot represent arbitrary multimodal trajectories and
+barycentric transport can contract variance. No drift/diffusion decomposition is
+attempted. Metric coordinate, sampling density, and biological dynamics remain
+unidentified. DPT and upstream annotations retain indirect marker information;
+marker exclusion does not make those diagnostics independent. Overlapping windows
+share observations, which motivates the non-overlap sensitivity. Synthetic tests
+verify implementation only. No superiority or novelty follows from writing or
+successfully executing the notebook.
 
-Gene and marker exclusion protect direct use of evaluation expression, but
-anatomy and the saved DPT inherit marker information. Random gene holdout also
-leaves correlated-gene dependence. Independent anatomy and module/block gene
-holdout are required before a strong independence claim. Iterative training
-updates feed back across specimens; only the untouched outer holdout supplies
-prospective separation.
-
-Replication cannot distinguish a coordinate from any monotone reparameterization.
-Anatomy thirds are a gauge, not physical lengths. Hard intervals are a prototype
-ceiling; the unconstrained test mapping is an anatomy ablation. Shared nuisance,
-symmetric programs, missing overlap and biological warping are explicit failures.
-Bootstrap ranges describe conditional stability, not calibrated spatial uncertainty.
-
-## Geneformer branch
-
-Direct V2-104M inference on aggregated mouse profiles is deferred: the documented
-input is raw human single-cell expression with version-specific rank encoding,
-medians, token dictionary and Ensembl IDs. Ortholog conversion does not validate
-aggregated profiles. Underlying 2µm bins are not automatically single cells.
-
-A documented external single-cell-derived gene prior can be supplied with:
-
-- `PSEUDOSPACE_15_GF_PRIOR`: CSV with unique `gene` and finite `score` columns.
-- `PSEUDOSPACE_15_GF_MANIFEST`: JSON with `scope="external"`, `model_revision`,
-  `dataset_accession`, `tokenizer`, `importance_procedure`, `ortholog_version`.
-- `PSEUDOSPACE_15_TF_LIST`: optional curated, versioned mouse TF CSV with `gene`.
-
-Dataset-dependent priors are refused by this external-prior route; they require
-fold-specific computation. A gene-prior panel is compared separately with
-Geneformer-ranked genes plus DPT. Cell embedding plus DPT remains an explicitly
-deferred representation baseline until defensible cell-level input is available.
-Perturbation sensitivities and TF prediction do not establish causal regulation.
-
-## Artifacts and interpretation
-
-Inspect `go_no_go_transductive.csv`, `heldout_gene_metrics.csv`,
-`specimen_metrics.csv`, `selected_gene_panels.csv`, `heldout_positions.csv`,
-`baseline_failures.csv`. Conditional bootstrap artifacts cover
-positions, fixed-pair ranks, fixed evaluation-gene curves and transition/peak
-locations. The final verdict answers all twelve methodological questions and
-keeps missing biological evidence explicitly pending.
-
-Biological GAM examples are gated on excluded-gene/within-segment prediction
-and within-segment shape improvement on measured data. No pathway or cross-species discovery is
-attempted before that gate. The fixed 5% exploratory improvement threshold is
-not statistical significance. A failed gate means retaining conventional DPT,
-not adding a foundation model to rescue the story.
-
-All execution requires the measured matrices and current segmentations. A/B illustrate the problem
-and estimator; C/D/F/G use the measured profiles. All are exploratory panels with source tables for quantitative outputs;
-publication assembly and final journal QA remain separate.
+Before commits run synthetic tests, the notebook stage-order gate and repository
+hygiene. Stage output-free notebook copies without clearing a live notebook.

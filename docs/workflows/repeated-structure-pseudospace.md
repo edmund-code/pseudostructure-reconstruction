@@ -389,3 +389,21 @@ baseline. Soft-start summaries include only their explicitly reported converged
 seeds. Better starting coordinates and solver convergence are therefore useful
 numerical results, not sufficient evidence for an improved anatomical method.
 The existing reversed-domain-coupling limitation remains.
+
+## Actual-data trajectory comparison (notebook 21)
+
+`21_healthy_reconstruction_trajectory_benchmark.ipynb` compares the three current
+atlas initializations with DPT and nonbranching scFates in both healthy-control
+transfer directions and all three gene folds. Each method uses the same
+training-only, marker-excluded count representation. DPT/scFates receive coarse
+endpoint orientation; the atlas additionally uses weak ordinal labels in fitting.
+These refits are distinct from historical pooled Harmony/marker coordinates.
+
+The primary comparison uses an identical frozen 15-neighbor query extension;
+native Gaussian atlas projection is a named secondary comparison. Response
+splines and variance-normalized errors are identical. Coarse-label and privileged
+coverage baselines remain. Failed fits are visible; gene folds are not biological
+replication. Physical depth is excluded. The real-control result does not justify
+replacing scFates with the current latent optimizer; the next hypothesis tests
+conditional count references on a conventional backbone. Literature rationale and
+limits are recorded in `docs/research/pseudostructure-methods-survey.md`.

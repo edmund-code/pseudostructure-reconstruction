@@ -216,3 +216,38 @@ Do not infer superiority, correct injured location, regulator activity or causal
 from a smooth curve. Stage output-free notebook copies without clearing live
 outputs, run the notebook stage-order and staged hygiene gates, and keep private
 matrices, segmentations and result artifacts out of Git.
+
+## Notebook 16: jointly latent repeated-structure atlas
+
+`analysis/notebooks/16_joint_repeated_structure_atlas.ipynb` develops the next
+estimator independently of notebook 15's DPT reference. Its shared B-spline mean,
+isotropic residual distribution, constant shrunken specimen offsets and learned
+smooth ordinal probabilities are fitted using `pseudospace/joint_repeated_atlas.py`.
+Equal specimen mass is used in both the modeling representation and latent
+likelihood. Unknown physical nephron identities are marginalized; the objective
+is a descriptive specimen-balanced marginal fit, not evidence of thousands of
+independent biological replicates. The discrete uniform coordinate prior is a
+computational gauge, not physical distance or a claim of uniform observed sampling.
+
+Two protocols are kept separate: joint registration of 80% of profiles in both
+controls followed by expression-only projection of the remaining sections, and
+one-control training followed by frozen projection of the other. Three withheld
+gene folds are rotated. The reconstruction never receives DPT, x/y or glomerular
+depth. Training segment labels are weak supervision with learned transition
+cutpoints; their marker-derived provenance remains explicit. Query labels are
+consumed only by the reported segment-oracle predictor and evaluation.
+
+Fixed profile/gene splits, same-reference segment means, random initialization
+checks and anatomy/offset ablations test whether continuous positions earn their
+complexity. Physical depth and coverage diagnostics are evaluated after inference;
+DPT comparisons use matching eligible query profiles. Posterior assignments are
+conditional model quantities, not calibrated anatomical confidence intervals.
+
+Results are written to `<results-root>/joint_repeated_structure_atlas/`, including
+input manifest, coordinates, held-out gene scores, objective histories, failures,
+initialization stability, matched physical validation and coverage diagnostics.
+Expensive fits are content-addressed caches; validation cells always run. The
+notebook has no generated mirror. Follow the same output-free staging convention
+as notebook 15. Decisions and sources accumulate in
+`docs/results/pseudostructure-research-ledger.md` rather than replacing earlier
+measured evidence.

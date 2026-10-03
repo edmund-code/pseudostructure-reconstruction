@@ -1,123 +1,131 @@
-# Notebook 15: latent spatial probability-flow proof of concept
+# Notebook 15: healthy canonical atlas first
 
 The canonical notebook is
 `analysis/notebooks/15_spatial_probability_flow_proof_of_concept.ipynb`.
-It replaces the previous repeated-structure spline exploration. There is no
-notebook 15 mirror. Reusable numerical logic lives in
-`pseudospace/spatial_probability_flow.py`; the measured-input loader is
-`pseudospace/repeated_inputs.py`.
+It tests healthy cross-specimen molecular position mapping independently of
+probability-flow success. The earlier OT-distilled flow result remains a historical
+transport diagnostic. There is no notebook 15 mirror.
 
-The decisive experiment is whether a smooth molecular velocity fitted on one
-healthy PT specimen predicts adjacent molecular distributions in the other.
-Ctrl1A2 and Ctrl1A4 exchange training/test roles. Two controls provide descriptive
-evidence, not confirmatory inference or calibrated longitudinal position.
+## Hypotheses and model hierarchy
+
+The primary hypothesis is that one healthy PT realization teaches a canonical
+mean molecular atlas that locates profiles from another realization using
+expression alone. The secondary hypothesis is that spatial covariance evolution
+adds held-out distributional predictive value beyond the same mean path.
+
+Fit training-only PCA and a kernel-smoothed mean curve on training DPT. Project
+held-out profiles by nearest molecular mean, without their DPT or S1/S2/S3 labels.
+Compare with full-covariance Gaussian likelihood mapping on the same grid and mean
+estimator. The Gaussian path also defines an affine probability-flow field through
+the symmetric Lyapunov equation. Its flow and density atlas share the same
+marginals: an exact marginal-preserving field does not independently change the
+position likelihood. Therefore coordinate mapping compares mean versus Gaussian
+atlas; transport compares mean motion versus mean-plus-covariance evolution.
+
+The training axis is still upstream DPT. This is an inductive reference-atlas test,
+not a wholly DPT-free joint reconstruction of training locations. Two controls
+support descriptive comparisons only. No true longitudinal spatial metric or
+biological dynamical mechanism is identified.
 
 ## Inputs and execution
 
-Use `kidney-pseudospace` and run cells top to bottom. Root flags `--data-root` and
-`--results-root` override `PSEUDOSPACE_DATA_ROOT` and `PSEUDOSPACE_RESULTS_ROOT`.
-Required measured inputs are the two control matrices under
-`<data-root>/tubule_by_gene/{sample}_tubule_by_gene_caleb.h5ad` and matching
-`<data-root>/{sample}_kept_tubules_labeled_fine.geojson` files. AKI is optional.
-The loader verifies segmentation joins and centroids, retains all measured common
-genes, applies a pooled healthy-cohort p5 spot-count floor, normalizes to 10,000
-counts and log1p, and selects upstream PT. There is no tubule gene-count QC.
-Its structural-floor cohort differs from the default four-mouse loader and is
-recorded in the input manifest.
+Use `kidney-pseudospace`, run cells top to bottom, and provide roots through
+`--data-root` / `--results-root` or `PSEUDOSPACE_DATA_ROOT` /
+`PSEUDOSPACE_RESULTS_ROOT` (flags take precedence). Only Ctrl1A2 and Ctrl1A4 count
+matrices under `tubule_by_gene/` and their matching
+`*_kept_tubules_labeled_fine.geojson` segmentations are required. AKI is deferred.
+The loader validates IDs and centroids, applies the pooled healthy-cohort mouse p5
+spot-count structural floor, retains all common measured genes, normalizes total
+counts to 10,000 + log1p before PT selection, and performs no tubule gene-count QC.
 
-The default temporary coordinate is
+The default training-coordinate reference is
 `<results-root>/human_vs_healthy_mouse/cross_species_pt_dpt.h5ad`, column
-`total_scanpy_dpt`. Override it with `PSEUDOSPACE_15_DPT_REFERENCE` and
-`PSEUDOSPACE_15_DPT_COLUMN` (for example a mouse-only export's
-`pt_subset_scanpy_dpt`). This requires the existing upstream reviewed coordinate;
-15 does not recompute DPT or bypass label checkpoints. A strict unique centroid
-join within one pixel links the saved axis to current validated PT. Feature IDs
-must also agree if available. Structures absent from that export are reported in
-`scaffold_ineligible_structures.csv`; the fixed-axis experiment uses only the
-explicit scaffold-eligible intersection. Healthy DPT is scaled jointly, never
-independently by specimen. The default 03 scaffold has cross-species origins;
-only control molecular profiles enter this experiment.
+`total_scanpy_dpt`. Override via `PSEUDOSPACE_15_DPT_REFERENCE` and
+`PSEUDOSPACE_15_DPT_COLUMN`. A strict unique within-specimen centroid join within
+one pixel links current validated PT to the export; feature indices must agree
+when available. DPT availability is recorded, but profiles absent from it remain
+held-out projection targets. Only DPT-available training profiles fit the atlas.
+Training DPT is scaled using that specimen alone, not the other control.
 
-Physical evaluation requires the reviewed pass-1 glomerular export, default
-`<results-root>/human_vs_healthy_mouse/cross_species_harmony_pass1.h5ad`.
-Override with `PSEUDOSPACE_15_GLOMERULI`. Glomerular feature IDs and centroids are
-verified against current segmentation. Nearest and mean-three-glomeruli distances
-are computed after molecular fitting, never supplied to reconstruction. They are
-2D depth proxies, not longitudinal ground truth. Both human-labeled slices are
-healthy cortex; neither enters the molecular fits.
+The historical fixed-axis transport diagnostic still uses a common supplied DPT
+window grid; this is explicitly distinct from expression-only projection. Both
+human-labeled sections in 03 are healthy cortex; neither contributes molecular
+profiles to notebook 15's fits.
 
-## Experiments and gates
+Physical validation uses the reviewed glomerular pass-1 export, default
+`<results-root>/human_vs_healthy_mouse/cross_species_harmony_pass1.h5ad`, overridden
+with `PSEUDOSPACE_15_GLOMERULI`. Anchor centroids/IDs are validated against current
+segmentations. Nearest and mean-three-glomeruli distances enter only after
+projection. They are cortical-depth proxies, not longitudinal nephron ground truth.
 
-1. Exclude canonical positional markers; rotate deterministic reconstruction and
-   evaluation gene folds. Fit scaler/PCA only on the training control (15 PCs).
-2. Inspect 12 overlapping DPT windows and a non-overlapping sensitivity. Unsupported
-   windows stop the fixed-axis experiment. Bounded clouds use at most 128 structures.
-3. Fit entropic-OT barycentric displacements between training windows, then distill
-   them into a ridge-regularized affine velocity with smooth position dependence.
-   Entropy is relative to each pair's median positive squared distance. Integrate
-   with RK4 and score held-out distributions with multivariate energy distance.
-4. Compare identity, training centroid displacement, and training DPT-local kNN
-   mean displacement. Flow must strictly beat all three baselines, averaged across
-   transitions, in both directions and both window schemes. The gate is descriptive.
-5. Only after that gate, alternate density-atlas estimation and posterior position
-   reassignment. Compare empirical Gaussian atlas moments against moments blended
-   with one-step flow predictions. Ordered anatomical transition cutpoints are
-   learned; no fixed segment thirds or expected marker curves. Compare ordinal,
-   endpoint-only, and unsupervised label settings, and DPT/PCA1/random ordinal starts.
-   Test-specimen projection uses neither labels nor its DPT.
-6. Score held-out gene curves across three gene folds, initialization agreement,
-   tubule/gene/both bootstraps, half-sampling, posterior uncertainty, excluded
-   markers, and specimen-specific physical depth. Failures remain explicit.
+## Primary atlas comparison
 
-The latent screen requires the prespecified DPT-initialized ordinal flow atlas
-to beat atlas-only and supplied DPT on held-out genes in every fold and direction.
-Endpoint-only PCA/random initializations omit S2 information; no-anatomy
-PCA/random starts omit all labels. DPT initialization retains upstream information
-in all ablations. Gene holdouts retain compositional dependence through the common
-total-count normalization denominator.
-This does not replace scientific review of support, stability or physical depth.
-No specimen offsets are learned from held-out controls. A distributional source
-window is observed in the test specimen in Experiment 1; its successful transport
-is not itself de novo coordinate reconstruction.
+- Exchange training and held-out specimens and rotate three deterministic gene
+  folds. Canonical PT markers and evaluation genes are excluded before training
+  scaler/PCA (15 PCs). All training observations enter kernel curve estimation;
+  effective kernel support is checked at every point on a 101-point grid.
+- Fit the mean atlas with fixed bandwidth 0.08. Use Euclidean nearest-mean MAP
+  projection as primary; retain the isotropic model posterior, entropy and residual.
+  Fit a Gaussian atlas with identical kernel means, full covariance, 25% diagonal
+  shrinkage and a global variance floor, and retain its posterior separately.
+- Estimate an optional single global specimen intercept from a deterministic half
+  of held-out modeling-feature profiles. Penalize it by factor 4 and freeze it
+  before projecting the disjoint validation half. Unadjusted projection is primary.
+  This is transductive nuisance calibration, not zero-shot mapping or an evaluation
+  gene offset. Sampling composition and intercept/location confounding remain.
+- Fit held-out-gene mean curves on the training coordinate and interpolate at
+  projected positions; scale MSE by training gene variance. Compare to literal
+  training S1/S2/S3 gene means, using test labels only for this explicit oracle
+  anatomy baseline. Also compare supplied DPT on a common available-profile subset.
+  Report all-segment and within-segment errors, all test profiles, and the disjoint
+  offset-validation subset separately. No test centering or hyperparameter tuning.
+- After projection evaluate withheld segment rank/order, segment median positions,
+  physical depth, excluded marker curves, and training-versus-held-out gene curve
+  agreement. Label-derived anatomy and inherited training DPT retain indirect
+  marker information; gene holdouts retain compositional normalization dependence.
 
-## Optional extensions and artifacts
+## Gaussian covariance-flow ablation
 
-Outputs go to `<results-root>/spatial_probability_flow_proof_of_concept/`.
-Manifests, per-transition scores, window support, gates, coordinate/posterior
-probabilities, failed fits, bootstrap positions, marker curves, physical scores
-and diagnostic PDFs remain private, untracked artifacts. Expensive stages cache
-by actual inputs, parameters and code under `stage_cache/`.
-`PSEUDOSPACE_STAGE_CACHE=0` rebuilds them. Validation is never cached.
-`PSEUDOSPACE_15_BOOTSTRAPS` defaults to 10 and must be at least two; reducing it
-is a smoke-run choice, not stronger evidence.
+Compare identity, raw training centroid increments, smooth mean-only increments,
+and Gaussian affine flow on identical held-out source/target clouds. Use overlapping
+and non-overlapping windows in both specimen directions. The field uses a cubic
+mean interpolation and piecewise-linear positive-definite covariance interpolation;
+the symmetric Lyapunov solution matches covariance derivatives within each interval.
+RK4 integrates the field. Score energy distance, mean error, covariance Frobenius
+error and centered-cloud energy. A smooth Gaussian atlas can reproduce an estimated
+marginal path without establishing a unique particle mechanism.
 
-`PSEUDOSPACE_15_AKI=1` enables a gated frozen-healthy-reference projection of
-IR2A2/IR2A4, using the healthy measured-gene normalization denominator.
-The pooled healthy atlas uses exactly balanced specimen clouds at every window
-and refuses sparse per-specimen support. Injury
-never changes the axis. Position, posterior entropy and negative healthy mixture
-log-density are separate exploratory outputs; the density score is not calibrated
-injury severity. Injury's own cohort structure floor is recorded.
+Flow failure never gates mean-atlas fitting or validation. A descriptive flow screen
+requires better energy distance than the same smooth mean path in both directions
+and both window schemes. A separate gene-prediction screen asks whether the mean
+atlas beats the strong segment oracle in every gene fold and direction, and whether
+Gaussian likelihood beats the mean atlas. These screens do not substitute for
+scientific review of depth, ordering, uncertainty and stability.
 
-`PSEUDOSPACE_15_TF=1`, `PSEUDOSPACE_15_TF_LIST` (curated mouse CSV with unique
-`gene`) and `PSEUDOSPACE_15_VALIDATION_REVIEWED=1` enable a gated TF feasibility
-panel after reviewing validation. A chain-rule Jacobian measures low-dimensional
-velocity sensitivity to modeling-gene log-expression, not causality or TF activity.
-For this affine field it is position-dependent but state-independent. Geneformer
-may later prioritize an external TF panel; it never creates the coordinate.
+## Stability, outputs and reproducibility
 
-## Interpretation ceiling
+Bootstrap training tubules, modeling genes, and both; refit PCA and the mean atlas
+and reproject the untouched test profiles without test coordinates, labels or
+intercept fitting. Sparse-support failures remain explicit. Posterior uncertainty
+and bootstrap position variation are distinct conditional quantities, not calibrated
+spatial credible intervals. Fully latent training-coordinate refinement is deferred
+until this simpler atlas test establishes its value.
 
-This is finite-step OT distillation and a flow-smoothed Gaussian-density pilot,
-not a reproduction of PFI, exact EM, or enforcement of the continuous continuity
-PDE. Affine fields cannot represent arbitrary multimodal trajectories and
-barycentric transport can contract variance. No drift/diffusion decomposition is
-attempted. Metric coordinate, sampling density, and biological dynamics remain
-unidentified. DPT and upstream annotations retain indirect marker information;
-marker exclusion does not make those diagnostics independent. Overlapping windows
-share observations, which motivates the non-overlap sensitivity. Synthetic tests
-verify implementation only. No superiority or novelty follows from writing or
-successfully executing the notebook.
+Outputs live under
+`<results-root>/spatial_probability_flow_proof_of_concept/`: per-fold gene errors,
+positions/full posteriors, nuisance offsets, failed fits, segment/depth validation,
+marker/gene curves, distribution transport ablations, bootstrap positions, diagnostic
+PDFs and decision JSONs. Expensive stages cache by actual inputs, parameters and
+implementation under `stage_cache/`. `PSEUDOSPACE_STAGE_CACHE=0` rebuilds; validation
+is never cached. `PSEUDOSPACE_15_BOOTSTRAPS` defaults to 10 and must be at least two.
 
-Before commits run synthetic tests, the notebook stage-order gate and repository
-hygiene. Stage output-free notebook copies without clearing a live notebook.
+Reusable implementations are `pseudospace/canonical_mean_atlas.py`,
+`pseudospace/gaussian_spatial_flow.py`, and the historical
+`pseudospace/spatial_probability_flow.py`; measured loading is unchanged in
+`pseudospace/repeated_inputs.py`. Tests use only synthetic fixtures.
+
+AKI projection and TF Jacobian interpretation are deferred in this version.
+Do not infer superiority, correct injured location, regulator activity or causality
+from a smooth curve. Stage output-free notebook copies without clearing live
+outputs, run the notebook stage-order and staged hygiene gates, and keep private
+matrices, segmentations and result artifacts out of Git.

@@ -251,3 +251,19 @@ notebook has no generated mirror. Follow the same output-free staging convention
 as notebook 15. Decisions and sources accumulate in
 `docs/results/pseudostructure-research-ledger.md` rather than replacing earlier
 measured evidence.
+
+The notebook now also retains an exposure-aware representation pilot:
+`pseudospace/count_representation.py` learns reference-only, specimen-balanced gene
+probabilities and frozen NB Pearson residual PCs from raw counts. Total all-gene
+library exposure is supplied as observation normalization, preserving the disclosed
+compositional dependence of gene holdouts. This is an approximate representation,
+not a full count likelihood. Rotated gene folds and an endpoint-orientation-only
+ablation preserve the original validation boundaries.
+
+Same-section binomial thinning directly tests read-depth robustness with frozen
+references; it changes observed counts, not physical section identity. Strong PC1
+and soft segment-mixture comparators use `pseudospace/repeated_atlas_baselines.py`.
+Keep depth associations subordinate to these molecular/stability/measurement checks:
+winding anatomy and unknown nephron identity make cortical distance an especially
+imperfect supporting proxy. Stage-specific logic versions retain unchanged caches;
+new/changed stages have their own bumped notebook version and full input/code keys.

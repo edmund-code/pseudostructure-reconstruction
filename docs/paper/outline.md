@@ -9,12 +9,15 @@ changes.
 Reconstructing a continuous proximal-tubule (PT) coordinate from segmented Visium HD tubules lets a
 human–mouse comparison ask *where* along the tubule a program differs. With two specimens per
 species, average-level pathway comparisons (whole-PT or S1/S2/S3 pseudobulk) cannot be separated
-from specimen variation; position-dependent comparisons can (split-plot argument, relabeling
-control). Applied to human and mouse PT, they show that **beyond a conserved core of canonical
-transport markers, axial zonation programs are largely species-specific.** Mouse zonates
-metabolic, xenobiotic and sterol programs (several androgen-linked in male mice) that are flat in
-human. Human zonates a different, smaller set. A few genes reverse direction. Overall human
-amplitude is only moderately lower (notebook 39; `docs/results/pt-zonation-amplitude.md`).
+from specimen variation; position-dependent comparisons can (relabeling control, split-plot
+rationale; many-draw null pending, workstream 5). Applied to human and mouse PT, they show that
+**axial zonation is largely species-specific beyond a conserved core of strong markers**: against
+same-species reliability ceilings, the human–mouse correlation of gene gradients is only 0.17
+(S1→S2) and 0.28 (S3) of the ceiling (notebook 43). Confidently species-only genes are few and not
+skewed toward mouse (41 mouse-only, 76 human-only); human amplitudes are also lower overall. The
+pathway screen mainly summarizes mouse zonation that human PT does not share (26 of 36 robust
+pathways). The earlier "mouse zonates more programs" reading was a threshold artefact and is
+withdrawn; rat data fail the reliability rule and are not used.
 
 > **Status after internal referee review (v0.1):** major revision. The central claim is under test
 > (`docs/paper/referee_report_v01.md`, issues M1–M8): human segment labels need anatomical validation,

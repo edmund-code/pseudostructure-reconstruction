@@ -104,3 +104,25 @@ This observation-scale experiment was prepared but not run. It is deferred after
 the project goal checkpoint: a preprocessing improvement alone would not establish
 repeated-structure reconstruction. The next specified test concerns groupwise
 canonical inference with matched pooled trajectory baselines.
+
+## Partial path-registration follow-up (2026-10-04)
+
+The author repository's [cellAlign vignette](https://github.com/shenorrLabTRDF/cellAlign)
+provides global and local alignment precedent using interpolated molecular paths.
+The [Genes2Genes primary article](https://www.nature.com/articles/s41592-024-02378-4)
+(published online 2024; volume 22, 2025) explicitly distinguishes matches, warps
+and missing/divergent states. Its introduction and framework overview were read;
+this is not a full methods audit. Those limitations motivate allowing partial
+reference coverage rather than forcing endpoint or occupancy correspondence.
+A healthy-only mean-path pilot may still force every calibration knot to match,
+so collapsed mappings and matching costs must remain visible. It is not a
+Genes2Genes implementation and does not identify disease or species homology.
+
+A reconstruction-specific pilot can estimate each specimen's path separately,
+register local modeling-expression means monotonically to a canonical reference,
+and preserve frozen reference assignments outside calibration support. This
+makes ordered repeated-object correspondence enter inference itself, while a
+same-support neighbor-transfer control tests whether extra query smoothing alone
+explains apparent gains. Mean-only partial registration should precede any
+covariance, unbalanced OT, nonlinear specimen offset or flow extension. Neither
+monotonicity nor a support radius proves longitudinal anatomical correctness.

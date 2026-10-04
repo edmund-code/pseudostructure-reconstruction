@@ -4,7 +4,8 @@ pytest.importorskip("scipy")
 pytest.importorskip("sklearn")
 
 from pseudospace.trajectory_benchmark import (
-    fit_dpt_axis, fit_scfates_axis, project_neighbor_axis, _trajectory_anatomy, _orient,
+    fit_dpt_axis, fit_scfates_axis, fit_unoriented_scfates_axis,
+    project_neighbor_axis, _trajectory_anatomy, _orient,
     _anatomy_curve_initialization,
 )
 
@@ -134,6 +135,24 @@ def test_scfates_rejects_invalid_initialization_before_import(initialization):
                          initialization=initialization)
 
 
+@pytest.mark.parametrize('Y', [np.empty((0, 2)), np.ones(3), np.array([[np.nan]])])
+def test_unoriented_scfates_rejects_invalid_matrix(Y):
+    with pytest.raises(ValueError):
+        fit_unoriented_scfates_axis(Y)
+
+
+@pytest.mark.parametrize('seed', [True, 1.5, -1])
+def test_unoriented_scfates_rejects_invalid_seed(seed):
+    with pytest.raises(ValueError, match='seed'):
+        fit_unoriented_scfates_axis(np.ones((5, 2)), seed=seed)
+
+
+@pytest.mark.parametrize('nodes', [0, 2, 3.5, True])
+def test_unoriented_scfates_rejects_invalid_nodes(nodes):
+    with pytest.raises(ValueError, match='nodes'):
+        fit_unoriented_scfates_axis(np.ones((5, 2)), nodes=nodes)
+
+
 @pytest.mark.parametrize('use_mask', [False, True])
 def test_scanpy_dpt_smoke_when_installed(use_mask):
     pytest.importorskip('anndata')
@@ -172,6 +191,18 @@ def test_scfates_smoke_when_installed(use_mask, initialization):
     assert meta['anchor_count'] == (int(anchor_mask.sum()) if use_mask else len(Y))
     assert meta['unlabeled_count'] == (int((~anchor_mask).sum()) if use_mask else 0)
     assert meta['initialization'] == initialization
+
+
+def test_unoriented_scfates_smoke_when_installed():
+    pytest.importorskip('anndata')
+    pytest.importorskip('scFates')
+    t = np.linspace(0, 1, 60)
+    Y = np.column_stack([t, t**2, np.sin(t * np.pi)])
+    z, meta = fit_unoriented_scfates_axis(Y, nodes=10, seed=2)
+    assert np.isfinite(z).all() and np.ptp(z) == pytest.approx(1.)
+    assert meta['tips'] == 2 and meta['forks'] == 0
+    assert meta['root_tip'] >= 0
+    assert 'arbitrary orientation' in meta['root_rule']
 
 
 

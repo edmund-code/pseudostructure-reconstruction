@@ -668,3 +668,164 @@ fitting and how canonical position can be kept separate from sampling density.
 A new hypothesis must identify a reconstruction failure it changes and state a
 matched measurable retention criterion before fitting; improving generic curve
 appearance or prediction reduction alone will not satisfy the project goal.
+
+## 2026-10-04 — Goal check and partial ordered-registration hypothesis
+
+The next experiment changes shared-object inference rather than its initialization
+or response reduction. Pooled curves can move when the query covers a different
+part of the structure. Instead, estimate the source and unlabeled query-calibration
+paths separately, then register their molecular means under a shared ordered-object
+constraint. Source anatomy only identifies/orients the reference. Query order is
+learned from modeling expression, and registration chooses either orientation
+without query labels. Unknown nephron memberships remain integrated into local
+mean variation; this is a mean-path special case, not a complete distributional
+hierarchy or individual-nephron reconstruction.
+
+CellAlign and Genes2Genes provide trajectory-alignment precedent, with important
+cautions about forced matches and missing states. The pilot does not implement
+either published algorithm. All query knots must map to the healthy reference,
+but any reference prefix, suffix or interior knots may remain unobserved. There
+is no uniform occupancy/quantile constraint, full-axis endpoint requirement,
+specimen offset, biological flow or disease/species alignment. Forced healthy
+query matching remains an assumption, and poor costs or collapsed mappings must
+be reported rather than interpreted as confident anatomy.
+
+### Notebook 29 protocol fixed before actual-data outputs
+
+Keep source-only count PCs (theta 100, 15 components, seed 15), marker exclusion,
+three existing gene folds, source scFates/DPT axes, source-only response splines,
+frozen development programs, same evaluation halves, full/S3-only calibration,
+15-neighbor extensions and paired quarter-read draws unchanged. Reproduce source
+references against notebook 28. Reuse its already computed pooled comparators
+and their exact evaluation IDs; do not recompute expensive identical baselines.
+
+Fit a generic nonbranching 30-node elastic curve to query calibration expression
+alone (same backend parameters), with an arbitrary deterministic tip root and no
+labels or biological orientation. Estimate query means at 31 equally spaced
+query-curve coordinates with Gaussian bandwidth 0.08. Require effective local
+sample size at least 12 at every knot; report rejected attempts with diagnostics.
+Fit the source modeling-feature spline on original source scFates coordinates
+and evaluate its means on the existing 101-point reference grid.
+
+For every query knot, the cost of a reference knot is squared Euclidean molecular
+distance divided by PC dimension. Select one reference knot per query knot by
+dynamic programming, requiring nondecreasing reference indices; compare both
+query orientations using mean matching cost. Reference start/end and index jumps
+are free, and repeated reference indices are allowed. No transition/sampling
+penalty or tuned cost is added. This deliberately simple prior may collapse or
+skip unsupported states; report reference coverage, plateaus, jumps, orientation
+cost gap, local support and residual cost. It estimates ordered correspondence,
+not physical length or a calibrated position posterior.
+
+Interpolate the mapping onto query-calibration curve coordinates, then extend
+those fixed mapped positions to evaluation expression through the same query-
+calibration 15-neighbor weights. Compare with independent nearest-reference
+matching of the same query means (without the order constraint), and with
+calibration-neighbor transfer: assign calibration profiles by source neighbors,
+then extend those assignments to evaluation profiles through calibration neighbors.
+The latter isolates smoothing through extra unlabeled query observations and
+remains evaluable when a query-curve fit fails. Frozen source-neighbor and earlier
+pooled scFates/DPT plus privileged segment/coverage predictions remain references.
+
+Score both point and assignment-averaged response predictions, original and
+thinned evaluation expression, all/segment gene errors, frozen within-segment
+programs, gene-fold rank agreement and partial-calibration sensitivity. New methods
+must improve useful held-out programs and retain stable fine order across both
+transfer directions and partial coverage, including versus calibration-neighbor
+transfer. Failures, incomplete denominators and source-versus-query residual costs
+remain visible. No query-response/label/depth-based tuning or parameter rescue is
+allowed. If registration adds no useful reconstruction, close the branch. The
+two reused controls, selected programs, upstream source labels and shared all-gene
+exposure continue to limit identification and confirmatory claims.
+
+### Pre-run partial-support correction
+
+Before any notebook-29 private fit, review of the estimand caught a flaw: extending
+an S3-only calibration curve to every evaluation section would assign uncovered
+S1/S2 observations through S3 neighbors. That would test forced extrapolation,
+not partial repeated-object reconstruction. All three calibration methods must
+instead retain the frozen source assignment outside query-calibration support.
+This correction was specified before observing new outcomes.
+
+Use modeling-expression support only: the radius is the 95th percentile of each
+calibration profile's distance to its fifteenth other calibration neighbor.
+An evaluation profile is supported when its fifteenth calibration-neighbor
+distance does not exceed that frozen radius. Use the same rule separately on
+original and thinned evaluation expression, with the calibration radius and
+cloud frozen. Unsupported rows take the original source-scFates supports and
+weights, exactly. Apply this gate equally to ordered registration, independent
+mean matching and calibration-neighbor transfer. Report supported fractions by
+segment and read state, without labels entering the gate. This is a geometric
+support heuristic rather than true physical overlap or calibrated outlier status;
+it can misclassify atypical healthy states, and cannot establish safe disease
+or cross-species placement. No new numerical fit has been run.
+
+### Notebook 29 actual-control readout (2026-10-04)
+
+All twelve source-axis fits reproduce notebook 28's point/assignment scores,
+selected programs, structure IDs, original/thinned coordinates and privileged
+oracles. The unchanged input manifest permits reuse of its pooled context.
+Eleven of twelve query-curve registrations pass the fixed local-support gate;
+Ctrl1A2 source, fold 2, S3-only calibration has minimum effective support 9.596
+and is rejected against the prespecified threshold 12. Calibration-neighbor
+transfer remains available in all twelve cases. Cache key: `bd25e5defdfbfd54`.
+No threshold, knot count, cost or curve parameter was retuned.
+
+Full-calibration assignment-aware selected-program gains versus source-only
+scFates are −2.07%/−2.78%/−2.92% (S1/S2/S3, Ctrl1A2 source) and
+−3.97%/−7.81%/−8.29% (reverse), with all three folds. Ordered and independent
+mean matching are identical for all three first-direction full fits: the order
+constraint contributes nothing there. Reverse full-case changes are small and
+do not improve prediction. Calibration-neighbor transfer also loses to the
+source reference, by −0.03%/−3.82%/−3.68% and −2.05%/−1.67%/−2.52%.
+
+S3-only ordered gains are 0%/−5.27%/−7.32% (two eligible folds) and
+−0.77%/−71.62%/−9.67% (three). Relative to matched calibration-neighbor
+transfer they are 0%/−1.56%/−3.57% and −0.34%/−37.98%/−6.78%.
+Independent means lose less strongly than ordered registration in these partial
+cases; imposed query order can harm useful correspondence. Quarter-read reverse
+S2 error worsens by 251% versus the thinned source reference. Full all-gene
+gains are approximately −0.137%/−0.138%, and partial gains −0.140%/−0.279%;
+small aggregate errors do not negate large selected-program failures.
+
+Partial maps occupy reference spans 0.11–0.24 with 63–87% repeated consecutive
+knots. Free endpoints avoid stretching S3 into the full reference, but do not
+recover useful fine order. Reverse partial S3 gene-fold rank agreement averages
+0.049 across three pairs, versus 0.794 for source scFates and 0.800 for
+calibration-neighbor transfer. First-direction partial registration has only one
+eligible gene-fold pair; its S3 agreement is 0.628, versus 0.943 for the source
+reference across three pairs. Native curve orientations are arbitrary, so map
+slope signs alone are not evidence of biological inversions.
+
+The support gate preserves unsupported assignments exactly, including after a
+cache hit. Nevertheless, reverse S3-only calibration admits 21.2% of original
+S2 evaluation profiles and 55.2% after thinning. It protects most S1 profiles,
+but does not establish physical overlap at the S2/S3 boundary. Across all reverse
+profiles support increases 36.3%→50.8% after thinning; coordinate read MAE is
+0.0842 for the ordered partial method. The supported fraction is a geometric
+heuristic, not an anatomical probability. The implemented Pearson residual
+formula depends on count exposure even for fixed molecular proportions; whether
+this contributes to false support needs an isolated measurement-model check,
+not an asserted causal explanation of this run.
+
+Full/partial coordinate MAE is 0.0259/0.0563 for ordered registration, with
+2/3 matched folds in the two directions, versus 0.0073/0.0184 for calibration
+neighbors with three folds each. These are smaller than pooled scFates' changes
+but accompany worse predictive performance. An initial report incorrectly joined
+on the differing regime field, yielding no sensitivity matches; that reporting
+merge was corrected, a nonempty-match guard added, and the same cached fits
+re-audited. Plots were inspected and their panel scales made independent so the
+large reverse partial failure does not obscure small full-case differences.
+All 333 regression tests pass.
+
+**Decision:** do not adopt partial mean-path registration or neighbor-transfer
+calibration. Do not expand to offsets, richer warps, covariance, OT or flow on
+these results. A generic query curve's fine order cannot be assumed to be the
+canonical physical order, especially within a truncated segment. Future
+reconstruction should borrow validated reference information while retaining
+local molecular variation and explicit observation effects, rather than forcing
+an independently estimated query path to be spatial. Revisit the conditional
+measurement/representation model before another registration hypothesis; the
+existing source-neighbor comparator remains stronger. Source labels, selected
+programs, shared exposure and reused two-mouse development continue to limit
+physical identification. The repeated-object goal remains unmet.

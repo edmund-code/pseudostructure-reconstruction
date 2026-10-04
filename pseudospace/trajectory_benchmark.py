@@ -189,6 +189,58 @@ def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15,
                'root_rule': 'curve tip nearest training S1 molecular mean'}
 
 
+def fit_unoriented_scfates_axis(Y, *, nodes=30, seed=15):
+    """Fit an unlabeled unbranched curve with an arbitrary native orientation.
+
+    This returns coordinates normalized over this fit's own observed rows.
+    That scale describes the fitted query curve only; it does not assert that
+    the observations cover the full canonical interval.
+    """
+    Y = _matrix(Y, 'Y')
+    seed = _seed(seed)
+    if seed < 0:
+        raise ValueError('seed must be non-negative')
+    if (not isinstance(nodes, (int, np.integer)) or isinstance(nodes, (bool, np.bool_))
+            or nodes < 3):
+        raise ValueError('nodes must be an integer >= 3')
+    try:
+        import anndata as ad
+        import scFates as scf
+    except ImportError as exc:  # pragma: no cover - analysis environment dependent
+        raise ImportError('fit_unoriented_scfates_axis requires scFates and anndata') from exc
+
+    obj = ad.AnnData(X=Y.copy())
+    obj.obsm['X_benchmark'] = Y.copy()
+    scf.tl.curve(obj, use_rep='X_benchmark', Nodes=int(nodes), seed=seed,
+                 epg_lambda=0.01, epg_mu=0.1, basis=None, device='cpu')
+    tips, forks = _scfates_graph_guard(obj)
+    tip_coords = np.asarray(obj.uns['graph']['tips'], dtype=int)
+    if tip_coords.ndim != 1 or len(tip_coords) != 2:
+        raise ValueError('ScFates graph must expose exactly two tip indices')
+    root_tip = int(np.min(tip_coords))
+    scf.tl.root(obj, root_tip)
+    scf.tl.pseudotime(obj, n_jobs=2, n_map=1, seed=seed)
+    if 't' in obj.obs:
+        raw = np.asarray(obj.obs['t'], dtype=float)
+    elif 'pseudotime' in obj.obs:
+        raw = np.asarray(obj.obs['pseudotime'], dtype=float)
+    else:
+        raise ValueError('ScFates did not return a recognized pseudotime column')
+    if raw.ndim != 1 or len(raw) != len(Y) or not np.isfinite(raw).all():
+        raise ValueError('ScFates returned invalid unlabeled pseudotime values')
+    lo, hi = float(raw.min()), float(raw.max())
+    if hi - lo <= np.finfo(float).eps:
+        raise ValueError('trajectory produced a constant coordinate')
+    z = np.clip((raw - lo) / (hi - lo), 0., 1.)
+    return z, {
+        'method': 'scfates_unoriented_curve', 'root_tip': root_tip,
+        'root_rule': 'lowest-index inferred graph tip; arbitrary orientation, no anatomy',
+        'nonfinite_count': 0, 'nodes': int(nodes), 'seed': seed,
+        'tips': tips, 'forks': forks,
+        'scfates_version': _version('scFates'), 'anndata_version': _version('anndata'),
+    }
+
+
 def project_neighbor_axis(train_Y, train_z, query_Y, *, k=15,
                           return_distribution=False):
     """Project by frozen Euclidean kNN inverse-distance weights.

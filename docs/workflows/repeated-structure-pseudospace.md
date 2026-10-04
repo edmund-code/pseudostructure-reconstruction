@@ -633,3 +633,34 @@ improves while predictive performance declines. The initialization is retained a
 an audited experimental option, not adopted as the estimator. Do not expand its
 ablations without a new reconstruction-specific hypothesis; see the ledger for
 matched gains, stability denominators and the goal checkpoint.
+
+## Partial ordered path registration (notebook 29)
+
+`29_repeated_structure_partial_registration.ipynb` estimates an unlabeled query
+calibration curve separately from a source anatomical reference, then registers
+local modeling-expression means under an ordered correspondence constraint.
+Both native orientations are compared, reference endpoints are free, and knots
+may repeat or skip reference locations. This uses existing curve/registration
+ideas as a mean-path repeated-object model; it neither matches occupancy nor
+claims physical length. Every healthy calibration knot must match somewhere,
+so plateau fractions, coverage, costs and orientation ambiguity are reported.
+
+Full and S3-only calibration use the same held-out evaluation halves. A common
+modeling-expression support radius gates all calibration methods; outside it,
+the frozen source-scFates supports/weights are retained. Independent nearest-
+mean matching and calibration-neighbor transfer isolate order from denoising.
+Both response reductions, held-out programs, read perturbations and gene-panel
+rank agreement remain required. The notebook audits source/oracle reproduction,
+input-manifest equality for reused pooled context, and exact unsupported-row
+fallback after either fitting or a cache hit. No query labels, response genes,
+physical coordinates or depth determine matching, orientation or support.
+
+The actual-control pilot accepts 11/12 query registrations and reproduces all
+source/oracle references. Ordered full-calibration predictions lose to the frozen
+source reference, and partial reverse S2 programs worsen by 72%. Free endpoints
+prevent forced full-axis coverage, yet partial maps plateau and lose fine rank
+stability. The support radius also admits S2 profiles during S3-only calibration,
+more often after thinning. None of these calibration methods is adopted. See the
+ledger for matched denominators and the measurement-model goal checkpoint.
+
+For the next experiment, start with the [compact research checkpoint](../results/pseudostructure-current-state.md), then consult the ledger for detailed evidence.

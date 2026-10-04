@@ -16,6 +16,13 @@ metabolic, xenobiotic and sterol programs (several androgen-linked in male mice)
 human. Human zonates a different, smaller set. A few genes reverse direction. Overall human
 amplitude is only moderately lower (notebook 39; `docs/results/pt-zonation-amplitude.md`).
 
+> **Status after internal referee review (v0.1):** major revision. The central claim is under test
+> (`docs/paper/referee_report_v01.md`, issues M1–M8): human segment labels need anatomical validation,
+> the cross-species correlation needs a same-species ceiling, one-species "flat" calls need external
+> confirmation, and state confounders must be bounded. If conservation proves moderate rather than low,
+> the claim becomes "zonation is partly conserved, with transport conserved and metabolic programs
+> differing", which the paper can still support.
+
 ## Results sections, evidence and status
 
 | # | Section | Claim | Evidence | Status / owner |

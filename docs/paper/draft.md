@@ -1,5 +1,10 @@
 # Manuscript draft: where human and mouse proximal tubule differ along the tubule axis
 
+**Version 0.2 (partial).** Text fixes from the internal referee report (section C, M5, M4) and
+queued items 1, 2 and 4 of `v02_changes.md`. R2, R3 and the abstract were not rewritten; they
+change after the revision analyses. Sentences that wait on a revision analysis are marked
+**[PENDING D4]** or **[PENDING D8]**. The change log is in `draft_v02_changelog.md`.
+
 Assembled by workstream 4 on 2026-10-04 from the committed results documents (`docs/results/`,
 `docs/paper/`) and the saved result tables they cite. Each number was checked against those tables.
 
@@ -86,10 +91,11 @@ Segment-resolved transcriptomes exist for microdissected rat (Lee et al. 2015) a
 (Chen et al. 2021). Single-cell atlases describe PT diversity in mouse (Ransick et al. 2019) and
 human (Lake et al. 2023).
 
-Several canonical transport markers sit at the same position in humans and rodents. SGLT2 lies in
+Some canonical transport markers sit at the same position in humans and rodents. SGLT2 lies in
 S1/S2 and SGLT1 in S3, in locations that "largely resembled those in rats and mice" (Vrhovac et al.
-2015). AQP1 is strongest in the human proximal straight tubule (Maunsbach et al. 1997). OAT1–3 are
-stronger in S1/S2 than in S3 (Breljak et al. 2016).
+2015). Human protein maps also place AQP1 highest in the proximal straight tubule (Maunsbach et al.
+1997) and OAT1–3 higher in S1/S2 than in S3 (Breljak et al. 2016). These two maps have not been
+compared position by position with rodents.
 
 Other programs differ. In mouse, sexually dimorphic gene activity maps predominantly to PT segments,
 but only a limited set of genes shows conserved sex-linked regulation in human (Xiong et al. 2023).
@@ -191,12 +197,15 @@ with external S3-versus-early contrasts (Figure 1c):
 
 | Species | External reference | Coordinate | Segment labels |
 |---|---|---|---|
-| Mouse | Male snRNA | 0.75 | 0.73 |
+| Mouse | Male snRNA | 0.74 | 0.73 |
 | Mouse | Microdissection | 0.53 | 0.51 |
+| Mouse | Rat microdissection (male) | 0.11 | 0.10 |
 | Human | Cortex snRNA (resolves only convoluted PT versus S3) | 0.25 | 0.27 |
 
-Without fold protection, human agreement was 0.31, so part of it came from the genes that built the
-coordinate.
+Without fold protection, agreement was 0.75 for mouse snRNA and 0.31 for human, so part of the human
+agreement came from the genes that built the coordinate. Rat zonation agreed poorly with our mouse
+data: in the segment-label comparison of notebook 34, Spearman was 0.13, with 55% direction
+agreement for strongly zonated genes. Rat is therefore not used as a proxy for mouse.
 
 **No absorption of species differences.**
 
@@ -206,8 +215,9 @@ coordinate.
   data, the coordinate kept the external direction for 91%.
 - *Independent reads.* We built the coordinate on one half of the reads and tested on the other.
   59 of 66 robust and 39 of 42 core pathways from an earlier list were still called.
-- *Circular use.* Reusing the same reads inflated gene statistics by about 30%, without changing
-  which pathways were called.
+- *Circular use.* Reusing the same reads inflated gene statistics by about 30%. The circular arm
+  called more pathways than the independent arm (145 against 130), but kept a similar share of the
+  earlier robust list (57 against 59 of 66).
 
 **What the coordinate does not resolve** (Figure S1).
 
@@ -226,17 +236,49 @@ coordinate.
 
 **Alternatives** (Table S1).
 
-- *Diffusion pseudotime (DPT)* was more stable but made the positional pathway screen non-specific
-  (NCDR 0.40, defined in R2). Its relabeled calls were metabolic and transport programs, and it found
-  36 positional pathway differences between the two mice, against 16 on scFates.
+- *The pre-registered coordinate-selection rule selected DPT.* The rule required three things:
+  - equal-depth agreement ≥ 0.80;
+  - external agreement within 0.05 of scFates in each species;
+  - a species-registration gap ≤ 0.15.
+
+  Diffusion pseudotime (DPT) met all three (0.80; 0.74 mouse and 0.29 human; gap 0.14). It was
+  better than scFates on every pre-specified coordinate-quality metric:
+
+  | Metric | DPT | scFates |
+  |---|---:|---:|
+  | Human external agreement | 0.29 | 0.25 |
+  | Gene-fold within-segment agreement | 0.59 | 0.49 |
+  | Equal-depth agreement | 0.80 | 0.72 |
+  | Registration gap | 0.14 | 0.29 |
+
+  scFates itself would not have met the rule. The equal-depth refit of scFates also failed it
+  (0.73; gap 0.36).
+- *DPT failed downstream specificity.* On DPT the positional pathway screen was not specific
+  (NCDR 0.40, defined in R2; matched test). Its relabeled calls were metabolic and transport
+  programs, and it found 36 positional pathway differences between the two mice, against 16 on
+  scFates.
 - *A conserved-anchor coordinate,* built from 160 externally conserved zonation genes, failed to
   register the two species.
-- *Choice.* We kept the scFates coordinate. The rule that every candidate must keep the positional
-  screen specific was applied to all candidates after DPT's result was seen (disclosed).
+- *Choice (disclosed).* The selection rule did not include the pre-registered downstream
+  specificity gate: NCDR < 0.25 and fewer than 5% of pathways called under relabeling (criterion 5
+  of the conserved-anchor rule C6). After DPT was seen to fail that gate, the coordinator applied it
+  to every candidate. No candidate then qualified, and the rule's fallback, the scFates coordinate,
+  was kept as primary.
+- *Consequence.* Specificity of the positional screen is a property of the coordinate as well as of
+  the design. Notebook 37's joint-test pipeline is being run end to end on DPT [PENDING D4].
 
-**What the coordinate adds.** Not resolution finer than segments. It replicates measurements across
-positions within each specimen. That lets species-by-position differences be judged against
-specimen-by-position deviations (R2). It also localises differences continuously.
+**What the coordinate adds.** Not resolution finer than segments.
+
+- It replicates measurements across positions within each specimen. That lets species-by-position
+  differences be judged against specimen-by-position deviations (R2).
+- It localises differences continuously, but peak positions should be read at about segment
+  resolution.
+- The early/late split of the 36 robust pathways is not an artefact of unequal positional noise.
+  Ten human-high pathways peak at a median of 0.16 and 26 mouse-high pathways at 0.63. Equalising
+  positional noise between species changes this only slightly. We added the estimated excess human
+  noise to mouse positions (σ = 0.089, from gene-fold refits). The split moved to 11.9 / 24.1,
+  which accounts for about 15% of the gap between the median peaks and 7% of the mouse-high count.
+  With σ = 0.10 the figures were 14% and 8%.
 
 Zonation classes (R3) and the R5 stories use reviewed segment labels and do not depend on the
 coordinate.
@@ -270,8 +312,10 @@ ratio (NCDR) is the mean relabeled count divided by the species count.
 | S1/S2/S3 pseudobulk with signed GSEA | 204 | 343, 255 | 1.47 |
 | Gene-level constant-offset statistic (T_level), matched test | 27 | 127, 81 | 3.85 |
 
-Target–decoy estimates (Elias & Gygi 2007) agreed (Figure 2c). No average-level screen reached a
-decoy-estimated false-discovery proportion (FDP) of 10% at any threshold. The lowest attainable FDPs
+Target–decoy estimates (Elias & Gygi 2007) agreed (Figure 2c). No competitive average-level screen
+reached a decoy-estimated false-discovery proportion (FDP) of 10% at any threshold. The
+self-contained pathway-score offset model, also average-level, reached it with 1,087 calls; see
+the disclosed changes below. The lowest attainable FDPs
 were 1.00, 0.75 and 0.95; with the joint test, T_level reached 0.96.
 
 **The nonspecificity is in the pathway layer, not in the gene statistics.**
@@ -339,20 +383,33 @@ Such a split arises when the two species zonate different genes. Post-hoc diagno
 not pre-registered, confirmed it:
 
 - The noise-corrected cross-species correlation of S2 − S1 gradients was 0.14 (0.10–0.19) in our
-  data and 0.23 in independent snRNA, against 0.83 between mouse AKI and control mice.
+  data and 0.23 in independent snRNA, against 0.83 between mouse AKI and control mice. For
+  S3c − early in our data it was 0.29 (0.23–0.34).
 - The noise-corrected spread of S2 − S1 gradients was about half as large in human: 0.58 in our data
   and 0.47 independently. For S3 − early with cortical mouse S3 it was 0.84.
 
-**Ruled out: log compression and tissue state** (pre-specified).
+**Log compression and tissue state** (pre-specified checks).
 
-- *Log compression.* The top expression tertile gave 0.18 and probe-balanced genes 0.16.
-- *Tissue state.* None of three routes explained the pattern:
-  - Mouse AKI kept 0.74 of control S2 − S1 amplitude.
-  - Lake donors' injury scores correlated weakly with amplitude on a mouse axis (ρ = −0.24); on a
-    human axis, post hoc, ρ was −0.41.
-  - Low-injury and high-injury halves of our structures gave the same ratio (0.18 and 0.19).
+- *Log compression is not the cause.* The top expression tertile gave 0.18 and probe-balanced genes
+  0.16.
+- *Injury does not reproduce the S2 − S1 pattern, but tissue state is not excluded* [PENDING D8].
+  - *Mouse AKI.* AKI kept 0.74 of control S2 − S1 amplitude (gene-gradient correlation 0.83). It
+    cut S3 − early amplitude to 0.41–0.44 of control on mouse axes (correlation 0.59). That is
+    close to the human/mouse S3c − early ratio of 0.28–0.33.
+  - *Lake donors.* Injury scores correlated weakly with mouse-axis amplitude (ρ = −0.24, the
+    pre-specified test). They correlated more strongly with human-axis amplitude (ρ = −0.41, post
+    hoc). Median human-axis amplitude was 0.69 in healthy, 0.50 in CKD and 0.35 in AKI donors.
+  - *Workstream 3 check.* A separate check on another amplitude measure met its pre-specified rule
+    for tissue-state flattening (ρ = −0.42, 95% CI −0.66 to −0.10), although the effect it implies
+    is small.
+  - *Our structures.* Low- and high-injury halves gave the same S2 − S1 ratio (0.18 and 0.19).
+  - *Unmeasured differences.* Our donor's tissue state is unknown. Procurement, age, fasting and
+    medication differ between human tissue and mice, and the external human atlases share these
+    differences.
 
-Injury lowers amplitude in both species, but healthy human donors remain flatter than healthy mice.
+Injury lowers zonation amplitude in both species, and healthy human donors remain flatter than
+healthy mice. In these data injury does not reproduce the human S2 − S1 pattern. Whether tissue
+state contributes remains open [PENDING D8].
 
 **Zonation classes** (notebook 40; Figure 3; Table 1). We then called zonation separately in each
 species:
@@ -377,7 +434,9 @@ Of 7,407 probe-balanced genes measurable in both species:
 | Flat in at least one species and zonated in neither | 1,297 |
 | Could not be classified with two specimens per species | 5,590 |
 
-*Mouse-only genes outnumbered human-only genes under every alternative rule* (Figure 3b):
+*Mouse-only genes outnumbered human-only genes under every alternative rule (A1–A7) and in both
+region-matched contrasts* (Figure 3b). They did not when all mouse S3 was included: in S3 − early,
+which is mostly outer stripe in mouse, the counts were 77 mouse-only against 111 human-only.
 
 - Scaling the human effect threshold to the lower human amplitude narrowed the gap from 247 against
   66 to 243 against 141.
@@ -404,8 +463,12 @@ sex-biased in either direction.
   - phosphate (Slc34a3), Slc5a2 and Slc5a10;
   - the intrarenal renin–angiotensin genes (Agt, Ace, Enpep).
 
-  This agrees with the conserved localisations of SGLT1/2, AQP1 and OAT1–3 (Vrhovac et al. 2015;
-  Maunsbach et al. 1997; Breljak et al. 2016).
+  This agrees with the conserved localisation of SGLT2 and SGLT1 (Vrhovac et al. 2015). It does not
+  extend to every classical marker:
+  - Aqp1 is indeterminate in our classes.
+  - Slc22a6 (OAT1) is mouse-only.
+  - Slc22a7 (OAT2) is conserved in our transcript data, rising toward S3 in both species, whereas
+    human OAT2 protein stains more strongly in S1/S2 than in S3 (Breljak et al. 2016).
 - *Mouse-only zonation: metabolism.*
   - sterol synthesis (Lss, Ebp; Cyp51, probe-imbalanced);
   - peroxisomal very-long-chain β-oxidation (Acox1, Acox2, Hsd17b4, Slc27a2);
@@ -478,18 +541,29 @@ pathways keep ≥ 70% of their effect when flagged genes are removed (R4).
 
 ### R4 · Robustness and agreement with independent data
 
-**Robustness.** Every robust pathway keeps at least 70% of its effect under each check (Figure 4a):
+**Robustness.** Every robust pathway keeps at least 70% of its effect under each of these checks
+(Figure 4a):
 
 - an anatomy-anchored coordinate, in which human sections are warped so that their segment
   transitions fall on the mouse transitions;
 - cortical-like mouse S3 only;
 - removal of flagged ambient, neighbouring-segment and shared-exon genes;
 - 5-bin covariate matching;
-- equal probe counts in the two Visium HD panels;
-- an earlier analysis on a different trajectory method (DPT; Methods).
+- equal probe counts in the two Visium HD panels.
 
-Restricting to genes detected in both species kept 94% of robust pathways at that threshold, and
-removing mouse sex-biased genes kept 97%.
+The first two checks define "robust", so they also hold significance (joint q ≤ 0.10). So do the
+flagged-gene and 5-bin checks. With equal-probe genes only, 8 of the 36 lose significance
+(q > 0.10) although their effect is retained.
+
+The two gene-subset checks that define the core set were passed by fewer pathways (effect ratio
+≥ 0.7 and q ≤ 0.10):
+- genes detected in both species: 28 of 36;
+- mouse sex-biased genes removed: 32 of 36.
+
+Together they leave the 26 core pathways.
+
+DPT is not cited as robustness support until notebook 37 has been run on it end to end [PENDING
+D4].
 
 **Specimen-level split-plot test** (Methods).
 
@@ -515,7 +589,9 @@ above expression-matched chance, but about as well as the most highly expressed 
 | Lake/KPMP | 0.73 | 0.60 (0.66) | 0.72 |
 
 *Pathways.* Robust pathways replicated far better than uncalled ones (Mann–Whitney p = 2 × 10⁻¹³
-for Census and 1 × 10⁻⁹ for Lake). However:
+for Census and 1 × 10⁻⁹ for Lake). They did not clearly outperform pathways called only under
+relabeling (p = 0.016 and 0.19 against Census with male and female mice; 0.033 and 0.21 against
+Lake). Further:
 
 - Only 17 of 36 replicated individually against Census, and 6 against Lake (BH ≤ 0.10 within the
   list). The pre-specified criterion (≥ 50%) was not met.
@@ -575,10 +651,13 @@ Rules were fixed before these data were opened. Of 39 claimed genes, 30 met ever
   classification.*
   - In mouse references, Acadm (MCAD) rises from S1 to S3 (+2.1 and +2.3 in male and female snRNA)
     and Acaa2 is confined to S1 (−4.0 and −4.2); microdissection agrees in both sexes.
-  - In the human atlas both are nearly flat (ACADM +0.46; ACAA2 +0.58).
-  - Both hold against the cortical mouse segment, neither is sex-biased in mouse PT, probes are
-    balanced, and both proteins are high in human tubules (Human Protein Atlas). "Flat" is therefore
-    not "absent".
+  - In the human atlas ACADM is nearly flat (S3 − S1 +0.46).
+  - ACAA2 rises modestly in human (+0.58; +0.95 in male donors). That is above our own 0.5 log2
+    zonation floor, so ACAA2 is not flat in human and may reverse direction. Notebook 39 classes it
+    as a reversal.
+  - Both genes hold against the cortical mouse segment, neither is sex-biased in mouse PT, probes are
+    balanced, and both proteins are high in human tubules (Human Protein Atlas). Low human zonation
+    therefore does not mean absence.
   - With two specimens per species, our own data leave both indeterminate. The claim rests on the
     external references.
 - *Acsm3, Crot and Nudt19 are indeterminate.* Acsm3's late rise is moreover a male-mouse program
@@ -703,13 +782,21 @@ a function of position along the tubule. It yields three results.
    - S1→S2 gradients correlate at only 0.14–0.23 after noise correction.
    - Mouse-only zonated genes (247) outnumber human-only genes (66), with the excess concentrated in
      S1 → S2 metabolism.
-   - Human gradients are also about half as large overall.
-3. **A checked list of positional differences.** Each was tested against both mouse sexes, direct
-   microdissection and a cortex-only human atlas under pre-specified rules:
-   - mouse-only zonation of creatine synthesis, glutathione synthesis, sterol synthesis and
-     peroxisomal β-oxidation;
-   - human-only expression and zonation of RBP4 and AOX1, and the human early-PT placement of UGT1A9;
-   - reversals such as DCXR and UGT3A1.
+   - Human S1→S2 gradients are about half as large overall (0.47–0.58). The region-matched S3
+     contrast is reduced less (0.84).
+3. **A short list of positional differences, at stated levels of evidence.**
+   - *Headline under pre-specified gene-level rules,* tested against both mouse sexes, direct
+     microdissection and a cortex-only human atlas:
+     - Gatm: mouse-only zonation of creatine synthesis;
+     - Gclm: glutamate–cysteine ligase subunit;
+     - Dcxr and Ugt3a1: reversals;
+     - UGT1A9 and RBP4: expressed and zonated only in human.
+   - *Supporting under those rules:* Gclc and AOX1. The glutathione story was promoted to lead after
+     the rules were applied (disclosed).
+   - *Supported by class enrichment (R3) but not verified gene by gene:* mouse-only sterol synthesis
+     (Lss, Ebp) and peroxisomal very-long-chain β-oxidation (Acox1, Hsd17b4).
+   - *Headline genes that are indeterminate in our own classification:* Acadm, Acaa2, Acsm3 and
+     Nudt19. These rest on the external references.
 
 Rodent zonation of several of these programs was already known from microdissection or enzyme
 activity (Takeda et al. 1992; Parks et al. 1998). The human arm and the species contrast are new.
@@ -729,12 +816,14 @@ and its PT annotation depth could not be checked; this is the main residual nove
 
 **Why "flattening" is mostly a mouse-centric view.** Measured on mouse-zonated genes, human amplitude
 looks like 0.15 of mouse; measured on human-zonated genes, it looks like 2–3. The remainder is a
-moderate global reduction, about half. Injury lowers it further in both species but does not create
-it.
+moderate global reduction. It is about half for S1→S2, and smaller (0.84) for the region-matched
+S3 contrast. Injury lowers amplitude in both species and, in our checks, does not reproduce the
+human pattern. A contribution of tissue state is not excluded [PENDING D8].
 
 **Implications for mouse models of PT physiology and toxicity.**
 
-- *Transport.* Where human PT places apical transport is well predicted by mouse.
+- *Transport.* For the apical transporters in the conserved class, mouse predicts where human PT
+  places them. This does not hold for every transporter: OAT1 and NaDC3 are mouse-only zonation.
 - *Metabolism.* Mouse PT confines several metabolic programs to one region that human PT keeps flat:
   creatine and glutathione synthesis, sterol synthesis and peroxisomal β-oxidation. A metabolic or
   toxic effect confined to one mouse segment may therefore be spread along the human PT, or absent.
@@ -771,7 +860,9 @@ it.
 - *External references.* External human positions are snRNA cluster annotations, not anatomy.
   Pathway-level replication is not shown beyond the shared global component.
 - *Decisions taken after seeing results (disclosed).*
-  1. The coordinate specificity gate was applied to all candidates after DPT's result was seen.
+  1. The pre-registered coordinate-selection rule selected DPT. The pre-registered downstream
+     specificity gate (C6 criterion 5) was then applied to every candidate after DPT was seen to
+     fail it, and scFates was kept as primary.
   2. The 5% condition was added to the specificity rule after the first run.
   3. NCDR replaced the pre-specified decoy FDP as the primary R2 metric.
   4. The drug-handling story was promoted to lead.
@@ -972,8 +1063,14 @@ at the granularity the markers support. Reference panels:
 The map was PT-S1, PT-S2, PT-S3, two ascending-limb clusters, DCT, two collecting-system clusters,
 glomerulus, smooth muscle and one unresolved cluster. No cluster had thin-limb markers.
 
-Notebook 13's partition (membership hash `41fd77bb98da`) differs slightly from notebook 03's
-reviewed partition (`4ebd19739331`) [VERIFY: report concordance].
+Notebook 13 repeats notebook 03's pass-1 clustering on the same 26,839 structures. The two
+partitions differ in membership hash but agree closely:
+- adjusted Rand index (ARI) 0.979 for the Leiden clusters and 0.981 for the reviewed labels;
+- 99.1% of structures carry the same label.
+
+Notebook 13 calls 12,866 structures PT and notebook 03 calls 12,871; 12,864 are PT in both. Of these,
+98.5% have the same S1/S2/S3 label (ARI 0.955). Most disagreements are notebook-03 S1 structures that
+notebook 13 labels S2 (125).
 
 ### 6.8 Nephron re-integration (pass 2) and PT subset
 
@@ -1050,13 +1147,28 @@ All rules below were fixed before outputs were seen, except where marked.
 - a conserved-anchor coordinate (160 genes with the same external zonation direction in all
   selection datasets).
 
-Every candidate also had to keep the T_spatial screen specific (NCDR < 0.25 and fewer than 5% of
-pathways called under relabeling). This gate was applied to all candidates after DPT's result was
-seen (disclosed).
+**Pre-registered selection rule.** A candidate was adopted only if it met all three:
+- (i) equal-depth agreement P5 ≥ 0.80;
+- (ii) fold-protected P1 ≥ the scFates value − 0.05 in each species;
+- (iii) registration gap ≤ 0.15.
+
+Among passing candidates, the one with the highest gene-fold within-segment agreement was chosen. If
+none passed, scFates was kept.
+
+**Outcome (disclosed).**
+- The rule selected DPT13 (P5 0.80; P1 0.74 mouse, 0.29 human; gap 0.14).
+- The scFates equal-depth refit failed (P5 0.73; gap 0.36).
+- scFates itself would also have failed (P5 0.72; gap 0.29).
+- The rule omitted the pre-registered downstream specificity gate: criterion 5 of rule C6, which
+  requires the T_spatial screen to keep NCDR < 0.25 and fewer than 5% of pathways called under
+  relabeling.
+- After DPT13 was seen to fail that gate (NCDR 0.40), the coordinator applied it to every
+  candidate. No candidate then qualified, and scFates was kept as primary.
 
 **Outcomes.**
 - *DPT* on notebook 13's embedding: 96 calls; 56 of 66 robust and 38 of 42 core pathways from the
-  earlier list retained; NCDR 0.40, so not specific.
+  earlier list retained; NCDR 0.40 (matched test), so not specific. Notebook 37's joint-test
+  pipeline is being run end to end on DPT13 and the equal-depth refit [PENDING D4].
 - *Conserved-anchor coordinate:* 42 of 66 and 30 of 42 retained, on 7,167 structures, because it
   did not register the species.
 - Refits whose curve could not be rooted were reported as failed, not retuned.
@@ -1205,7 +1317,10 @@ The reporting set is built in five steps:
      transitions fall on the mouse transitions. Transitions are logistic fits per specimen
      (C = 10⁴). After refitting, the effect ratio must be ≥ 0.7 and joint q ≤ 0.10.
    - *Region.* Depth is the mean distance to the three nearest glomerulus-labelled structures, with
-     centroids verified [VERIFY: notebook 33 takes glomeruli from notebook 03's labels]. Mouse S3
+     centroids verified. Glomeruli were taken from notebook 03's labels. Every notebook-03
+     glomerulus is also a glomerulus in notebook 13, which adds three. Using notebook 13's glomeruli
+     would change the deep mouse S3 exclusion by 22 of 1,581 structures (Jaccard 0.97 in Ctrl1A2;
+     identical in Ctrl1A4). Mouse S3
      deeper than the 95th percentile of same-specimen S1 depth is removed. The same number of mouse
      S3 structures is also removed at random 20 times. A pathway is region-sensitive if its effect
      turns non-positive or falls below the 5th percentile of the power-matched ratios.
@@ -1220,7 +1335,8 @@ The reporting set is built in five steps:
 - equal probe counts;
 - 5-bin matching;
 - the earlier analysis on notebook 03's DPT coordinate (notebook 12 logic v5; 11,106 genes, 1,516
-  pathways);
+  pathways). This is a historical sensitivity only and is not cited as robustness support
+  [PENDING D4];
 - the specimen-level split-plot test.
 
 ### 6.17 Programs and descriptors
@@ -1537,8 +1653,9 @@ Every figure must come from a committed, output-free notebook. Sources are given
 `robust_pathways_by_class.csv`.
 
 **Figure 4 | Robustness and agreement with independent data (R4).**
-- **a,** Effect retained (AUC effect ÷ original) for the 36 robust pathways under eight checks, with
-  the share ≥ 0.7 at right. Core pathways dark, robust-only light. The green bar marks power-matched
+- **a,** Effect retained (AUC effect ÷ original) for the 36 robust pathways under each check, with
+  the share ≥ 0.7 at right. The DPT row is to be replaced by the notebook 37 run on DPT
+  [PENDING D4]. Core pathways dark, robust-only light. The green bar marks power-matched
   random removal of mouse S3.
 - **b,** Reviewed segment transitions on the coordinate, per specimen.
 - **c,** Gene-level agreement. Our species × segment interaction against Census (human − male
@@ -1711,8 +1828,8 @@ marked † were also verified by workstream 3 (`SCRATCH/ws3/literature_phase2.md
 
 ### B. [VERIFY]: numbers or statements not backed by a committed document or table
 
-6. **Attenuation on the final list.** R1's 9–17% attenuation bound was computed on the earlier 66
-   list; rerun it on the 36-pathway list.
+6. **Resolved (v0.2).** The attenuation bound on the 36 robust pathways is about 15% of the peak gap
+   and 7–8% of the mouse-high count (workstream 1 final checks).
 7. **Resolved (notebook 40 v2).** The class table now has all 36 robust pathways: 19 mouse-only, 15
    conserved, 1 reversal, 1 none. The two pathways below the 10-member floor are kept with a note.
 8. **Resolved (notebook 40 v2).** Figure 3a now shows the 7,391 probe-balanced genes, with counts
@@ -1720,9 +1837,8 @@ marked † were also verified by workstream 3 (`SCRATCH/ws3/literature_phase2.md
 9. **The coordinator's R3 note on mouse sex is wrong.** `docs/paper/r3_draft.md` says that the mouse
    snRNA confirmation atlas pools male and female donors. Notebook 40's code uses the 12 male donors
    only (`male_sn`). I wrote "12 male donors"; please correct r3_draft.md.
-10. **Partition concordance.** Notebook 13's partition (`41fd77bb98da`) against notebook 03's
-    (`4ebd19739331`) is not yet reported. Notebook 33 and the region checks take glomeruli from
-    notebook 03's labels.
+10. **Resolved (v0.2).** Partition concordance (ARI 0.979 / 0.981; 98.5% of S1/S2/S3 labels agree)
+    and the glomerulus-source check (22 of 1,581) are now in Methods.
 11. **Lake injury-marker list** used in notebook 39. Notebook 39 gives ρ = −0.24 and −0.41, while
     workstream 3's separate check gives −0.42 on another amplitude measure. Report one, and say which
     metric it uses.
@@ -1739,7 +1855,9 @@ marked † were also verified by workstream 3 (`SCRATCH/ws3/literature_phase2.md
 
 ### D. Coordinator decisions to keep disclosed in the paper
 
-14. The coordinate specificity gate was applied to all candidates after DPT's result was seen.
+14. The pre-registered coordinate-selection rule selected DPT13. The coordinator applied the
+    downstream specificity gate (C6 criterion 5) to every candidate after DPT13 was seen to fail it,
+    and scFates was kept (R1, Methods 6.10, Limitations).
 15. The 5% condition was added to the specificity rule after the first run.
 16. NCDR replaced the pre-specified decoy FDP as the primary metric.
 17. The drug-handling story was promoted to lead against the pre-specified rule.
@@ -1748,14 +1866,20 @@ marked † were also verified by workstream 3 (`SCRATCH/ws3/literature_phase2.md
 
 ### E. Consistency items for workstreams 2 and 3
 
-20. **Earlier reversal list.** `pt-pathway-literature-novelty.md` (Tier 1) and `r5_draft.md` still
-    call Pah, Acox2, Igfbp4, Nt5e, Glyat and Cyp24a1 reversals. Under notebook 40 they are
-    conserved, mouse-only or indeterminate. Acadm and Acaa2 are indeterminate in our data, whereas
-    notebook 39 classes Acaa2 as a reversal. The draft names only Dcxr and Ugt3a1 (plus Vnn1) as
-    reversals.
+20. **Earlier reversal list.** The draft now uses notebook 40 classes throughout (R5 table). Only
+    Dcxr, Ugt3a1 and Vnn1 are named as reversals; Acaa2 is noted as a possible reversal (notebook 39).
+    `pt-pathway-literature-novelty.md` (Tier 1) and `r5_draft.md` still carry the old labels for Pah,
+    Acox2, Igfbp4, Nt5e, Glyat and Cyp24a1 (outside this file).
 21. **OAT module.** The "human retains it into late PT" reading in the novelty doc is withdrawn: the
     module is mouse-only zonation in notebook 40.
 22. **Figure 5 genes.** Add R3 classes to the titles. Consider replacing Gamt and Ephx1, which do not
     replicate, with Rbp4, Ugt3a1 or Gclm.
-23. **Stale early/late counts.** The R1 draft's "19 human-high / 47 mouse-high" refers to the
-    earlier list; the final list has 10 and 26.
+23. **Resolved in this draft.** R1 now uses 10 / 26 (median peaks 0.16 / 0.63). `docs/paper/r1_draft.md`
+    still says 19 / 47.
+
+### F. Pending revision analyses (sentences marked in the text)
+
+24. **[PENDING D4].** Notebook 37 end to end on DPT13 and the equal-depth refit. Affects R1
+    (Consequence), R4 (DPT robustness), Methods 6.10 and 6.16, and the Figure 4a DPT row.
+25. **[PENDING D8].** Tissue state of the human sections, and its contribution to the amplitude
+    pattern. Affects R3 (Log compression and tissue state) and the Discussion.

@@ -16,7 +16,7 @@ replicate in independent segment-resolved data.
 
 | # | Section | Claim | Evidence | Status / owner |
 |---|---|---|---|---|
-| R1 | Reconstructing the PT axis | A continuous, cross-species PT coordinate recovers directly measured S1→S3 zonation in both species | Notebooks 13 (scFates), 34 (coordinate check vs microdissection and snRNA) | **Open: method choice.** Workstream 1 decides whether a problem-specific reconstruction beats scFates; otherwise scFates with justification |
+| R1 | Reconstructing the PT axis | A continuous, cross-species PT coordinate recovers directly measured S1→S3 zonation in both species and does not absorb species differences | Notebook 13 (scFates). Notebook 34 validates segment labels only; coordinate-based evidence is pending (workstream 1, notebook 35) | **Open: evidence and method choice.** Workstream 1: validation layer for scFates first, then a conserved-anchor alternative |
 | R2 | A specificity problem in cross-species pathway analysis | Average-level pathway screens report as many pathways for relabeled specimen groups as for species; only smooth position-dependent screens are specific | Notebook 31 (Figure 1, within-species controls) | Done; workstream 2 audits and finalizes |
 | R3 | Position-dependent pathway differences | 82 confident → 66 robust → 42 core pathways; human-high programs peak early, mouse-high late | Notebooks 31–33 (atlas, funnel, landscape) | Done; workstream 2 finalizes the reporting set and figure |
 | R4 | Robustness and independent replication | Results survive registration, region, detection, sex and trajectory-method checks and replicate in external segment data | Notebooks 33, 34 | Done; extend if workstream 1 changes the coordinate |

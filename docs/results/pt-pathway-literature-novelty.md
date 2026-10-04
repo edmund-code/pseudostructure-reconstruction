@@ -60,11 +60,17 @@ public datasets that measured PT segments directly:
 
 No human study has microdissected S1/S2/S3, so human positional data are snRNA annotations.
 
+**Scope correction (coordinator, after workstream 1 review).** These checks average our data within the
+reviewed S1/S2/S3 **labels**. They validate the labels and the species-by-segment differences, and they
+test genes our coordinate-based `T_spatial` ranks highest. They do **not** test the scFates coordinate
+itself. A coordinate-based check (within-segment order against external zonation) is being run in
+workstream 1 (notebook 35).
+
 | Check | Result |
 |---|---|
-| Our mouse S3 − early versus direct mouse measurements | Spearman 0.75 (male snRNA), 0.65 (female snRNA), 0.54 (microdissection); 89–99% direction agreement for strongly zonated genes |
-| Our human S3 − early versus human cortex snRNA | Spearman 0.37; 92.5% direction agreement for strongly zonated genes |
-| **Our species × position versus external (human − mouse)(S3 − early)** | Spearman 0.66 for our top-10% `T_spatial` genes (0.51 all genes); **94% direction agreement** for genes strong in both; 92% with female mice as the reference; 90% with microdissected mouse |
+| Our mouse S3 − early (segment labels) versus direct mouse measurements | Spearman 0.75 (male snRNA), 0.65 (female snRNA), 0.54 (microdissection); 89–99% direction agreement for strongly zonated genes |
+| Our human S3 − early (segment labels) versus human cortex snRNA | Spearman 0.37; 92.5% direction agreement for strongly zonated genes |
+| **Our species × segment versus external (human − mouse)(S3 − early)** | Spearman 0.66 for our top-10% `T_spatial` genes (0.51 all genes); **94% direction agreement** for genes strong in both; 92% with female mice as the reference; 90% with microdissected mouse |
 | Pathway level (median member interaction) | Same direction in 22 of 24 informative confident pathways; 11 of 12 core (12 of 12 with female reference) |
 | Tier 1 and 2 candidate genes | 36 of 39 replicate in direction (37 of 39 with female mice) |
 | Rat | Rat zonation differs from mouse for many genes (Spearman 0.13 with our mouse); rat lacks the male-mouse S2/S3 programs. Rat is not a mouse proxy. |
@@ -74,6 +80,10 @@ What this adds:
   Acsm3's late rise is male-specific, and Cyp7b1 is male-enhanced.
 - **Independent human confirmation:** human snRNA confirms Gatm flat along human PT, Dcxr rising
   toward S3, Rbp4 rising toward S3, and Phgdh and Ugt1a9 highest in early PT.
+- **Probe-panel asymmetry (workstream 3):** per-gene probe counts differ between the mouse and human
+  panels. Mouse Phgdh, Psat1 and Gstp1 have 1 probe versus 3 in human, so their "human-only" calls
+  are probe artefacts. Gstp1 is dropped, and Igfbp4 is demoted (HPA reports no IGFBP4 protein in
+  human tubules).
 - **Do not replicate:** Slc22a8 (OAT3, opposite sign), Psat1 (mouse-side mismatch), and Ehhadh
   (male reference only). Drop these as standalone claims.
 
@@ -102,7 +112,7 @@ validation (ISH or protein), because a probe gap would look the same.
 
 | Finding | Literature status |
 |---|---|
-| **Human PT serine synthesis**: Phgdh/Psat1 high in human S1 and falling, near-absent in mouse PT. | Mouse Phgdh is weak in PT and near-negative in the outer stripe ([PMID 17510490](https://pubmed.ncbi.nlm.nih.gov/17510490/)); human zonation **NOT FOUND** (~12 queries). Both are ATF4/stress-responsive, so donor tissue state matters. |
+| **Dropped as a species claim — probe artefact.** Phgdh/Psat1 high in human S1 and near-absent in our mouse PT. The mouse Visium HD panel has 1 probe for each versus 3 in human, and mouse microdissection shows both strongly S1-high in mouse too (workstream 3). The real pattern is S1-high in both species. Keep only as an example of probe-panel asymmetry. | Mouse Phgdh is weak in PT and near-negative in the outer stripe ([PMID 17510490](https://pubmed.ncbi.nlm.nih.gov/17510490/)); human zonation **NOT FOUND** (~12 queries). Both are ATF4/stress-responsive, so donor tissue state matters. |
 | **Human UGT1A9, EPHX1, GSTP1 decline from S1 to S3**; mouse Ugt1a9 absent. | Human renal UGT1A9 KNOWN ([PMID 25650382](https://pubmed.ncbi.nlm.nih.gov/25650382/)); axial gradient **NOT FOUND**. The mouse Ugt1a cluster shares exons, so the mouse zero may be a mapping issue. |
 | **Human RBP4 rises toward late PT**; mouse near zero. | Only a 1989 rat ISH placing RBP mRNA in outer-stripe S3 ([PMID 2469758](https://pubmed.ncbi.nlm.nih.gov/2469758/)); species contrast **NOT FOUND**. |
 | **Human AOX1 rises to S3** (mouse Aox1 near zero); **human AOC1** in PT. | Human PT AOX1 by IHC ([PMID 17992631](https://pubmed.ncbi.nlm.nih.gov/17992631/)); rodents have four AOX genes. AOC1 human PT localization is unresolved. |

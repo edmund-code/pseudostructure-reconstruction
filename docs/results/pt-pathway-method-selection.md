@@ -99,8 +99,14 @@ specimen means, and conventional log2FC.
 
 Gene-level examples worth naming in the text (both specimens of each species agree):
 
-- **Ugt3a1**: human-high in S1, mouse-high in S2/S3. Whole-PT DESeq2 reports mouse-high
-  (log2FC −1.3, significant), which is wrong for S1.
+- **Slc22a6 (OAT1)**, the main renal drug-uptake transporter: whole-PT DESeq2 reports no
+  species difference (log2FC −0.09, ns), while the segments differ significantly in opposite
+  directions (S1 +0.32, S2 −1.15, S3 +2.84). Mouse peaks sharply in S2; human stays flat. This
+  is confirmed without the coordinate (segment labels only) and survives a per-gene shift.
+  Slc13a3 and Cyp24a1 show the same whole-PT-null, regionally-opposite pattern (notebook 33,
+  Figure 9).
+- **Ugt3a1**: human-high in S1, mouse-high in S2/S3; segment DESeq2 confirms both signs.
+  Whole-PT DESeq2 reports mouse-high (log2FC −1.3, significant), which is wrong for S1.
 - **Cyp2e1**: mouse-expressed through S1–S2, falling in S3; essentially absent in human PT.
   Mouse renal CYP2E1 is androgen-regulated and bioactivates acetaminophen in S1/S2, while human
   kidney shows little CYP2E1 activity. This is a translational point for rodent nephrotoxicity
@@ -112,20 +118,50 @@ Gene-level examples worth naming in the text (both specimens of each species agr
   the PT in mouse and stay flat in human. Rodent-specific PPARα-driven peroxisomal programs
   are a known species difference; Nudt19 is a mouse-kidney-specific peroxisomal CoA
   diphosphohydrolase.
-- **Reversing genes (70)**: e.g. Acaa2, Dcxr, Cndp2, Igfbp4, Gc, Akr1c18. 33 belong to a
-  confident pathway. A single log2FC per gene cannot represent them.
+- **Reversing genes (70)**: e.g. Acaa2, Dcxr, Cndp2, Slc22a6, Slc22a7. 33 belong to a
+  confident pathway. 54 are confirmed by segment DESeq2 with significant opposite signs, and
+  24 of those have a non-significant whole-PT comparison. 21 also survive a per-gene shift of
+  the human curve; the others are better described as a species shift of the gene's expression
+  boundary than as a change of direction. A single log2FC per gene cannot represent either.
 
 Outputs: `results/pt_pathway_story/` (`figures/fig5_example_*`, `fig6_direction_reversing_genes`,
 `fig7_confident_pathway_landscape`, `example_gene_evidence.csv`,
 `flagship_member_genes.csv`, `direction_reversing_genes.csv`,
 `confident_pathways_for_paper.csv`).
 
+## Robustness to coordinate registration and sampled region (notebook 33)
+
+`analysis/notebooks/33_pt_pathway_registration_sensitivity.ipynb` tests the two alternatives
+the relabeling control cannot detect, because both are species-level effects.
+
+**Misregistration.** The reviewed S2→S3 transition falls at 0.63–0.64 on the coordinate in all
+four specimens. The S1→S2 transition falls at 0.27–0.28 in mouse but 0.35–0.38 in human, so human
+S1 spans more of the coordinate. A global affine stretch/shift barely improves human–mouse curve
+agreement (mean shape correlation 0.18 → 0.20), so the curves genuinely differ in shape. Warping
+each human section so its segment transitions land on the mouse ones and refitting everything:
+gene `T_spatial` Spearman 0.98, 129 → 131 spatial calls, **79 of 82 confident and all 54
+new-with-pseudospace pathways retained**. The three lost (OXPHOS, TCA cycle, glyoxylate) are
+broad energy pathways with non-specific conventional calls.
+
+**Sampled region.** Both human sections are cortex; mouse sections include the outer stripe.
+Using distance to the three nearest reviewed glomeruli (centroids verified against the fine
+GeoJSON), only 15–17% of mouse S3 lies within the depth of 95% of the same specimen's S1. After
+removing the deeper mouse S3 and refitting, 69 of 82 confident and 44 of 54 new pathways are
+retained. Losses may reflect region or the power lost by removing most of mouse S3.
+
+**Paper-quotable set.** 66 of 82 confident pathways survive both checks (44 new with
+pseudospace, 21 with non-specific conventional calls, 1 not testable conventionally). 13 are
+region-sensitive, mostly late sterol/bile-acid terms; 3 are registration-sensitive. All five
+flagships survive both (q ≈ 0.002). The early/late split holds in the robust set: 19 human-high
+pathways peak at median 0.145, 47 mouse-high at 0.624. Table:
+`results/pt_pathway_registration_sensitivity/confident_pathways_with_robustness.csv`.
+
 ### What this changes for notebook 14
 
 Notebook 14's headline benchmark (66 discrete → 89 continuous `T_total` calls) uses a
 constant-offset-dominated statistic. Under relabeling, `T_total` reports more pathways than
 for species (NCDR 1.72), so that count should not carry the "uncovers more pathways" claim.
-Use the `T_spatial` specificity result and the 54 new-with-pseudospace pathways instead.
+Use the `T_spatial` specificity result and the 44 robust new-with-pseudospace pathways instead.
 
 ## Caveats to keep beside any number here
 
@@ -133,6 +169,7 @@ Use the `T_spatial` specificity result and the 54 new-with-pseudospace pathways 
   replication units; no result is population-level human inference.
 - The relabeling control uses two partitions only.
 - Themes, drivers and reversal counts are display rules on working statistics, not tests.
-- Both human slices are healthy cortex despite the cortex/medulla labels.
+- Both human slices are healthy cortex despite the cortex/medulla labels; mouse S3 is mostly
+  outer stripe, so late-PT species differences carry a region caveat (see robustness section).
 
 Outputs: `results/pt_pathway_method_selection/` (tables, `figures/`, `run_manifest.json`).

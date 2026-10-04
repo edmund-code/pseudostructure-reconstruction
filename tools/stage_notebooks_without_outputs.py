@@ -74,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             blob = subprocess.run(["git", "hash-object", "-w", str(copy)], cwd=REPO_ROOT,
                                   check=True, capture_output=True, text=True).stdout.strip()
-            subprocess.run(["git", "update-index", "--cacheinfo", "100644", blob,
+            # --add so a notebook that is new to the index can be staged too, not only a tracked one.
+            subprocess.run(["git", "update-index", "--add", "--cacheinfo", "100644", blob,
                             path.relative_to(REPO_ROOT).as_posix()],
                            cwd=REPO_ROOT, check=True)
         finally:

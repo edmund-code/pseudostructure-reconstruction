@@ -161,6 +161,18 @@ trajectory method and PT labels; `results/pt_pathway_remodeling/`) recovers 61 o
 pathways, 42 of the 44 robust new ones, and all five flagships. Spatial pathway effects
 correlate at Spearman 0.92 between the DPT and scFates runs (126 and 129 calls, 101 shared).
 
+**Detection in both species and mouse sex bias (notebook 33, sections 10–11).**
+- 47 of the 66 robust pathways keep their call when only genes detected in at least 5% of
+  structures in each species are used ("shared-gene zonation"). 14 depend on genes that one
+  species barely detects, which could be true species-specific expression or probe gaps.
+- Removing all 1,211 genes that are sex-biased in mouse PT (Xiong et al. 2023 public tables)
+  keeps 51 of 61 testable robust pathways and all five flagships. The drug-metabolism sets
+  (Aspirin and Paracetamol ADME, Drug metabolism) depend on sex-biased genes.
+- **Core set: 42 pathways** pass every check (robust, shared-gene, sex-robust); 25 are new with
+  pseudospace.
+
+Literature status of these findings: [pt-pathway-literature-novelty.md](pt-pathway-literature-novelty.md).
+
 ### What this changes for notebook 14
 
 Notebook 14's headline benchmark (66 discrete → 89 continuous `T_total` calls) uses a

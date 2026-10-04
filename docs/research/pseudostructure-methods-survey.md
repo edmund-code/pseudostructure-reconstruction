@@ -24,6 +24,8 @@ primary-source pages instead. No private profiles were sent to an external servi
 
 | [Chakraborty and Panaretos, functional registration (accepted author version)](https://arxiv.org/abs/1702.03556) | Identifiability of amplitude versus coordinate warping depends on structural conditions; roughness penalties alone can fail. | A smooth fitted atlas is not evidence that specimen shifts and position have been identified. Restrict nuisance variation and test ordering separately from numerical gauge. |
 | [Panaretos and Zemel, point-process registration (2016)](https://arxiv.org/abs/1603.08691), DOI 10.1214/15-AOS1387 | Links repeated point-process registration, amplitude/phase variation and Wasserstein geometry, including over-registration. | Relevant precedent for repeated-object registration and a reason to inspect forced matching. Their observed point-process coordinate is not our unknown longitudinal coordinate, so the theory is not an identification guarantee here. |
+| [Lause, Berens and Kobak, analytic Pearson residuals (2021)](https://link.springer.com/article/10.1186/s13059-021-02451-7), DOI 10.1186/s13059-021-02451-7 | Analytic count residuals use an exposure-dependent NB variance; the authors compare residual and variance-stabilizing preprocessing. | Our existing transform follows this precedent. For repeated cuts, test whether using one training-reference scale preserves placement under read perturbation; it changes noise weighting and is not the paper's Pearson transform. |
+| [Hafemeister and Satija, regularized NB normalization (2019)](https://pmc.ncbi.nlm.nih.gov/articles/PMC6927181/), DOI 10.1186/s13059-019-1874-1 | Models sequencing depth and emphasizes preserving biological heterogeneity while controlling observation effects. | Exposure handling matters before latent-space fitting. Their single-cell results do not establish behavior for mixed-cell tubule aggregates; inspect actual count perturbations and gene transfer. |
 
 Publisher/author abstracts, indexed primary-source excerpts and official method
 APIs were checked across these entries. Accessible full text was read for
@@ -84,3 +86,20 @@ is also available in full text. Its introduction and model overview confirm the
 shared latent axis with covariate effects/interactions; that is relevant precedent
 for the umbrella formulation, not evidence that our repeated PT coordinate is
 anatomically identifiable.
+
+## Observation scale follow-up
+
+Primary text for Lause et al. was read through its analytic-residual derivation,
+and Hafemeister/Satija through the introduction and normalization diagnostics;
+this is bounded methods reading, not a full review of either paper. PMC retrieval
+was intermittent; the Lause publisher full text was accessible. The proposed
+fixed-reference rate representation is our algebraic ablation, not a claimed new
+normalization method or an implementation of scTransform. Its conditional mean
+is invariant to common count/exposure scaling before clipping, but sampling noise
+remains heteroscedastic. Both representation and frozen atlas must earn useful
+actual-data behavior, including within-segment gene programs and read stability.
+
+This observation-scale experiment was prepared but not run. It is deferred after
+the project goal checkpoint: a preprocessing improvement alone would not establish
+repeated-structure reconstruction. The next specified test concerns groupwise
+canonical inference with matched pooled trajectory baselines.

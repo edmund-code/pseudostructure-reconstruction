@@ -456,3 +456,53 @@ therefore retain aggregate compositional dependence and are not fully independen
 of held-out measurements. Query labels also inherit upstream molecular annotation;
 source anatomical orientation and frozen-panel selection limit claims of
 independent anatomical validation. These limits apply to both notebooks 22 and 23.
+
+## Restricted specimen calibration (notebook 24)
+
+`24_repeated_structure_specimen_registration.ipynb` tests the next hierarchical
+special case, a constant specimen offset around a frozen source-only canonical
+PT curve. It learns the count representation and scFates backbone from one
+control, fits calibration offsets using a deterministic hash half of the other,
+and evaluates the disjoint half. The restricted arm removes components
+orthogonal to the source mean-path subspace retaining 99% variation; the
+unrestricted arm uses the same penalty 4 and five update steps. These are
+geometric restrictions, not identified biological injury directions. A full-rank
+source path permits an exactly zero restricted offset.
+
+The S3-only regime constructs a deliberately incomplete calibration population
+using annotation, then hides those labels from the estimator. Evaluation rows
+stay identical between regimes. The notebook retains zero-calibration DPT and
+scFates references and the privileged quadratic segment-plus-coverage oracle;
+the calibrated arms explicitly receive extra unlabeled query data. Frozen
+positional-program panels come from earlier training-only selection. Paired
+quarter-read inference freezes calibration parameters and uses original response
+measurements as targets. Unknown nephron membership and shared count exposure
+continue to limit anatomical and independence claims. No joint final estimator,
+disease transfer, human alignment or regulator analysis is adopted from this
+single-source calibration experiment.
+
+## Goal check before each biological experiment
+
+State which part of repeated-structure reconstruction is being tested: the shared
+ordered object, inference from unordered partial sections, restricted specimen
+variation, or the reliability of frozen projection. Name the matched DPT/scFates
+and segment/coverage comparators and specify a result that would reject the
+proposed addition. A normalization or transport benchmark alone does not show a
+new reconstruction method. Record the hypothesis before reading outputs.
+
+The next core protocol in the research ledger concerns groupwise atlas fitting
+with source-only anatomical anchors and disjoint unlabeled calibration/evaluation
+rows. Its pooled trajectory comparators must receive the same calibration data.
+Unknown calibration anatomy contributes no ordinal likelihood or root/orientation
+information. Existing single-source null results remain evidence against adopting
+unnecessary components. Depth remains weak descriptive context because a winding
+nephron and unknown cross-section membership break its interpretation as
+longitudinal ground truth.
+
+The reusable joint-atlas fitter now permits `-1` anatomy only with explicit
+`allow_unlabeled_anatomy=True`; those rows receive no ordinal term in its
+posterior, cutpoint fitting or recorded objective. Trajectory baselines accept an
+explicit boolean `anchor_mask`, validate S1/S2/S3 only among anchors, and use them
+for rooting and orientation while retaining every point as a graph/curve
+observation. Both APIs preserve their previous strict defaults. These changes
+prepare the groupwise comparison; they are not results from that experiment.

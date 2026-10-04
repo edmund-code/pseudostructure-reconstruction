@@ -32,10 +32,33 @@ def _orient(z, anatomy):
     return np.clip((z - lo) / (hi - lo), 0., 1.), flipped
 
 
-def fit_dpt_axis(Y, anatomy, *, n_neighbors=30, seed=15):
-    """Fit Scanpy DPT on all training rows, rooted at the S1-mean-nearest row."""
+def _trajectory_anatomy(anatomy, n, anchor_mask=None):
+    """Validate anchor labels and mark non-anchor rows with the -1 sentinel."""
+    if anchor_mask is None:
+        labels = _anatomy(anatomy, n, require_all=True)
+        return labels, np.ones(n, dtype=bool)
+
+    mask = np.asarray(anchor_mask)
+    if mask.ndim != 1 or len(mask) != n or mask.dtype.kind != 'b':
+        raise ValueError('anchor_mask must be a one-dimensional boolean vector matching rows')
+    labels = np.asarray(anatomy)
+    if labels.ndim != 1 or len(labels) != n:
+        raise ValueError('anatomy must be a one-dimensional vector matching rows')
+    anchors = _anatomy(labels[mask], int(mask.sum()), require_all=True)
+    validated = np.full(n, -1, dtype=int)
+    validated[mask] = anchors
+    return validated, mask
+
+
+def fit_dpt_axis(Y, anatomy, *, anchor_mask=None, n_neighbors=30, seed=15):
+    """Fit DPT on all rows, calibrating its root and orientation from anatomy anchors.
+
+    With ``anchor_mask``, unlabeled rows still contribute to the DPT graph and
+    receive coordinates, while only masked rows calibrate segment rooting and
+    orientation. Without it, every row must retain the strict 0/1/2 labels.
+    """
     Y = _matrix(Y, 'Y')
-    anatomy = _anatomy(anatomy, len(Y), require_all=True)
+    anatomy, anchor_mask = _trajectory_anatomy(anatomy, len(Y), anchor_mask)
     seed = _seed(seed)
     if not isinstance(n_neighbors, (int, np.integer)) or isinstance(n_neighbors, (bool, np.bool_)) or n_neighbors < 2:
         raise ValueError('n_neighbors must be an integer >= 2')
@@ -53,8 +76,9 @@ def fit_dpt_axis(Y, anatomy, *, n_neighbors=30, seed=15):
     sc.pp.neighbors(obj, n_neighbors=k, use_rep='X_benchmark', random_state=seed)
     n_comps = min(15, len(Y) - 1)
     sc.tl.diffmap(obj, n_comps=n_comps)
-    obj.uns['iroot'] = int(np.flatnonzero(anatomy == 0)[np.argmin(
-        np.linalg.norm(Y[anatomy == 0] - Y[anatomy == 0].mean(axis=0), axis=1))])
+    s1_rows = np.flatnonzero(anchor_mask & (anatomy == 0))
+    obj.uns['iroot'] = int(s1_rows[np.argmin(
+        np.linalg.norm(Y[s1_rows] - Y[s1_rows].mean(axis=0), axis=1))])
     sc.tl.dpt(obj, n_dcs=min(10, n_comps))
     raw = np.asarray(obj.obs['dpt_pseudotime'], dtype=float)
     n_nonfinite = int((~np.isfinite(raw)).sum())
@@ -65,6 +89,8 @@ def fit_dpt_axis(Y, anatomy, *, n_neighbors=30, seed=15):
                'nonfinite_count': n_nonfinite, 'n_neighbors': k,
                'n_components': n_comps, 'n_dcs': min(10, n_comps),
                'seed': seed, 'orientation_flipped': flipped,
+               'anchor_count': int(anchor_mask.sum()),
+               'unlabeled_count': int((~anchor_mask).sum()),
                'scanpy_version': _version('scanpy'), 'anndata_version': _version('anndata')}
 
 
@@ -86,10 +112,15 @@ def _scfates_graph_guard(adata):
     return tips, forks
 
 
-def fit_scfates_axis(Y, anatomy, *, nodes=30, seed=15):
-    """Fit an unbranched ScFates curve and return training pseudotime."""
+def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15):
+    """Fit an unbranched curve using anchors only for root and orientation.
+
+    Non-anchor rows remain curve observations and receive coordinates, but do not
+    contribute anatomy labels to calibration. By default all rows are strict
+    0/1/2 anatomy anchors.
+    """
     Y = _matrix(Y, 'Y')
-    anatomy = _anatomy(anatomy, len(Y), require_all=True)
+    anatomy, anchor_mask = _trajectory_anatomy(anatomy, len(Y), anchor_mask)
     seed = _seed(seed)
     if not isinstance(nodes, (int, np.integer)) or isinstance(nodes, (bool, np.bool_)) or nodes < 3:
         raise ValueError('nodes must be an integer >= 3')
@@ -104,7 +135,7 @@ def fit_scfates_axis(Y, anatomy, *, nodes=30, seed=15):
     scf.tl.curve(obj, use_rep='X_benchmark', Nodes=int(nodes), seed=seed,
                  epg_lambda=0.01, epg_mu=0.1, basis=None, device='cpu')
     tips, forks = _scfates_graph_guard(obj)
-    s1_mean = Y[anatomy == 0].mean(axis=0)
+    s1_mean = Y[anchor_mask & (anatomy == 0)].mean(axis=0)
     tip_coords = np.asarray(obj.uns['graph']['tips'], dtype=int)
     curve = np.asarray(obj.uns['graph']['F'], dtype=float)
     root_tip = int(tip_coords[np.argmin(np.linalg.norm(curve[:, tip_coords] - s1_mean[:, None], axis=0))])
@@ -124,6 +155,8 @@ def fit_scfates_axis(Y, anatomy, *, nodes=30, seed=15):
                'nonfinite_count': n_nonfinite, 'nodes': int(nodes),
                'seed': seed, 'tips': tips, 'forks': forks,
                'orientation_flipped': flipped,
+               'anchor_count': int(anchor_mask.sum()),
+               'unlabeled_count': int((~anchor_mask).sum()),
                'scfates_version': _version('scFates'), 'anndata_version': _version('anndata'),
                'root_rule': 'curve tip nearest training S1 molecular mean'}
 

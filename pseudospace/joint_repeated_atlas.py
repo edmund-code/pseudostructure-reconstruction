@@ -127,8 +127,13 @@ def _posterior(Y, mean, offsets, specimens_idx, sigma2, grid, labels,
 def fit_joint_atlas(Y, specimens, anatomy, initial_z, grid=None, roughness=.001,
                     offset_penalty=4., anatomy_strength=1., anatomy_width=.1,
                     max_iter=60, tol=1e-5, fit_offsets=True,
-                    balance_specimens=True):
-    """Fit shared spline atlas, specimen offsets, and latent finite-grid z."""
+                    balance_specimens=True, allow_unlabeled_anatomy=False):
+    """Fit a shared atlas and latent finite-grid positions.
+
+    ``allow_unlabeled_anatomy=True`` permits ``-1`` labels for unlabeled
+    specimen point clouds. Those rows receive no ordinal anatomy information;
+    this does not replace them with pseudo-S2 labels.
+    """
     Y = _matrix(Y, 'Y', min_rows=4)
     specimens = np.asarray(specimens, dtype=object).ravel()
     initial_z = np.asarray(initial_z, float).ravel()
@@ -141,11 +146,18 @@ def fit_joint_atlas(Y, specimens, anatomy, initial_z, grid=None, roughness=.001,
         raise ValueError('initial_z must be finite, match rows, and lie in [0,1]')
     if anatomy.ndim != 1 or len(anatomy) != len(Y):
         raise ValueError('anatomy must have one label per row')
+    if not isinstance(allow_unlabeled_anatomy, (bool, np.bool_)):
+        raise ValueError('allow_unlabeled_anatomy must be boolean')
     try:
         numeric_anatomy = anatomy.astype(float)
     except (TypeError, ValueError) as exc:
         raise ValueError('anatomy labels must be integers in {0,1,2}') from exc
-    if not np.isfinite(numeric_anatomy).all() or not np.isin(numeric_anatomy, [0, 1, 2]).all():
+    allowed_anatomy = [0, 1, 2, -1] if allow_unlabeled_anatomy else [0, 1, 2]
+    if (not np.isfinite(numeric_anatomy).all()
+            or not np.equal(numeric_anatomy, np.rint(numeric_anatomy)).all()
+            or not np.isin(numeric_anatomy, allowed_anatomy).all()):
+        if allow_unlabeled_anatomy:
+            raise ValueError('anatomy labels must be integers in {-1,0,1,2}')
         raise ValueError('anatomy labels must be integers in {0,1,2}')
     labels = numeric_anatomy.astype(int)
     if grid is None:
@@ -227,7 +239,8 @@ def fit_joint_atlas(Y, specimens, anatomy, initial_z, grid=None, roughness=.001,
                 - .5*d*np.log(2*np.pi*sigma2))
         if anatomy_strength > 0:
             lp = np.log(np.maximum(_ordinal_probs(grid, cutpoints, anatomy_width), 1e-12))
-            logp += anatomy_strength * lp[:, labels].T
+            observed = labels >= 0
+            logp[observed] += anatomy_strength * lp[:, labels[observed]].T
         logp -= np.log(len(grid))
         objective = -float(np.dot(weights, logsumexp(logp, axis=1)))
         objective += .5*roughness*np.sum((d2 @ beta)**2)

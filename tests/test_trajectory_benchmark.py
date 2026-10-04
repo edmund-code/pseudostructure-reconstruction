@@ -4,7 +4,7 @@ pytest.importorskip("scipy")
 pytest.importorskip("sklearn")
 
 from pseudospace.trajectory_benchmark import (
-    fit_dpt_axis, fit_scfates_axis, project_neighbor_axis,
+    fit_dpt_axis, fit_scfates_axis, project_neighbor_axis, _trajectory_anatomy, _orient,
 )
 
 
@@ -41,26 +41,80 @@ def test_neighbor_projection_rejects_misalignment_and_nonfinite():
         project_neighbor_axis(np.array([[0.], [1.]]), np.array([0., 1.]), np.array([[np.nan]]))
 
 
-def test_scanpy_dpt_smoke_when_installed():
+def test_trajectory_anchor_mask_ignores_unlabeled_anatomy_values():
+    labels = np.array([0, 0, 1, 1, 2, 2, -1, -1], dtype=float)
+    mask = np.array([1, 1, 1, 1, 1, 1, 0, 0], dtype=bool)
+    validated, returned_mask = _trajectory_anatomy(labels, len(labels), mask)
+    altered = labels.copy()
+    altered[~mask] = [900, np.nan]
+    validated_altered, _ = _trajectory_anatomy(altered, len(altered), mask)
+    np.testing.assert_array_equal(validated, [0, 0, 1, 1, 2, 2, -1, -1])
+    np.testing.assert_array_equal(validated_altered, validated)
+    np.testing.assert_array_equal(returned_mask, mask)
+    raw = np.array([.1, .2, .3, .4, .7, .8, .5, .6])
+    z, flipped = _orient(raw, validated)
+    z_altered, flipped_altered = _orient(raw, validated_altered)
+    np.testing.assert_array_equal(z_altered, z)
+    assert flipped_altered == flipped
+
+
+@pytest.mark.parametrize('mask', [
+    np.array([True]),
+    np.array([[True, False]]),
+    np.array([1, 0]),
+])
+def test_trajectory_anchor_mask_requires_matching_boolean_vector(mask):
+    with pytest.raises(ValueError, match='anchor_mask'):
+        _trajectory_anatomy(np.array([0, 1]), 2, mask)
+
+
+def test_trajectory_anchor_mask_requires_all_anatomy_segments():
+    with pytest.raises(ValueError, match='all labels'):
+        _trajectory_anatomy(np.array([0, 0, 1, 1, -1]), 5,
+                            np.array([True, True, True, True, False]))
+
+
+def test_trajectory_anchor_default_remains_strict():
+    with pytest.raises(ValueError):
+        _trajectory_anatomy(np.array([0, 1, 2, -1]), 4)
+
+
+@pytest.mark.parametrize('use_mask', [False, True])
+def test_scanpy_dpt_smoke_when_installed(use_mask):
     pytest.importorskip('anndata')
     pytest.importorskip('scanpy')
     t = np.linspace(0, 1, 60)
     Y = np.column_stack([t, t**2, np.sin(t * np.pi)])
     anatomy = np.where(t < 1/3, 0, np.where(t < 2/3, 1, 2))
-    z, meta = fit_dpt_axis(Y, anatomy, n_neighbors=10, seed=2)
+    anchor_mask = np.arange(len(Y)) % 4 != 0 if use_mask else None
+    if anchor_mask is not None:
+        anatomy[~anchor_mask] = -1
+    z, meta = fit_dpt_axis(Y, anatomy, anchor_mask=anchor_mask,
+                           n_neighbors=10, seed=2)
     assert np.isfinite(z).all() and np.ptp(z) > 0
     assert meta['root_index'] >= 0
+    assert meta['anchor_count'] == (int(anchor_mask.sum()) if use_mask else len(Y))
+    assert meta['unlabeled_count'] == (int((~anchor_mask).sum()) if use_mask else 0)
+    if use_mask:
+        assert anchor_mask[meta['root_index']]
 
 
-def test_scfates_smoke_when_installed():
+@pytest.mark.parametrize('use_mask', [False, True])
+def test_scfates_smoke_when_installed(use_mask):
     pytest.importorskip('anndata')
     pytest.importorskip('scFates')
     t = np.linspace(0, 1, 60)
     Y = np.column_stack([t, t**2, np.sin(t * np.pi)])
     anatomy = np.where(t < 1/3, 0, np.where(t < 2/3, 1, 2))
-    z, meta = fit_scfates_axis(Y, anatomy, nodes=10, seed=2)
+    anchor_mask = np.arange(len(Y)) % 4 != 0 if use_mask else None
+    if anchor_mask is not None:
+        anatomy[~anchor_mask] = -1
+    z, meta = fit_scfates_axis(Y, anatomy, anchor_mask=anchor_mask,
+                               nodes=10, seed=2)
     assert np.isfinite(z).all() and np.ptp(z) > 0
     assert meta['tips'] == 2 and meta['forks'] == 0
+    assert meta['anchor_count'] == (int(anchor_mask.sum()) if use_mask else len(Y))
+    assert meta['unlabeled_count'] == (int((~anchor_mask).sum()) if use_mask else 0)
 
 
 

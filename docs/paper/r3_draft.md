@@ -93,5 +93,6 @@ padj ≤ 0.05 in any PT segment), among probe-balanced genes:
 | Human-only | 66 | 6.1% | 4.5% |
 
 199 of the 247 mouse-only genes are not sex-biased in either direction. The mouse-only excess is
-therefore not driven by male-specific mouse programs. The mouse snRNA confirmation atlas pools
-male and female donors, which supports the same conclusion.
+therefore not driven by male-specific mouse programs. Correction: notebook 40 confirms mouse calls
+in the 12 **male** mouse snRNA donors only (matching our male mice), not in a pooled-sex atlas. A
+female-donor confirmation is being added as a sensitivity check (workstream 2).

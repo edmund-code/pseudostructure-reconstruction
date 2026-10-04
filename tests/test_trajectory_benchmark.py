@@ -5,6 +5,7 @@ pytest.importorskip("sklearn")
 
 from pseudospace.trajectory_benchmark import (
     fit_dpt_axis, fit_scfates_axis, project_neighbor_axis, _trajectory_anatomy, _orient,
+    _anatomy_curve_initialization,
 )
 
 
@@ -103,6 +104,36 @@ def test_trajectory_anchor_default_remains_strict():
         _trajectory_anatomy(np.array([0, 1, 2, -1]), 4)
 
 
+def test_anatomy_curve_initialization_uses_ordered_anchor_only_centroids():
+    Y = np.array([[0., 0.], [2., 0.], [10., 1.], [12., 1.],
+                  [20., 2.], [22., 2.], [1000., -1000.]])
+    labels = np.array([0, 0, 1, 1, 2, 2, -1])
+    anchors = np.array([True, True, True, True, True, True, False])
+    first = _anatomy_curve_initialization(Y, labels, anchors)
+    np.testing.assert_array_equal(first['InitNodePositions'],
+                                  [[1., 0.], [11., 1.], [21., 2.]])
+    np.testing.assert_array_equal(first['InitEdges'], [[0, 1], [1, 2]])
+    assert first['InitNodes'] == 3
+    Y[-1] = [-10000., 10000.]
+    labels[-1] = 0
+    second = _anatomy_curve_initialization(Y, labels, anchors)
+    np.testing.assert_array_equal(second['InitNodePositions'], first['InitNodePositions'])
+
+
+def test_anatomy_curve_initialization_rejects_duplicate_centroids():
+    Y = np.array([[0.], [1.], [0.], [1.], [2.], [3.]])
+    labels = np.repeat([0, 1, 2], 2)
+    with pytest.raises(ValueError, match='distinct'):
+        _anatomy_curve_initialization(Y, labels, np.ones(6, dtype=bool))
+
+
+@pytest.mark.parametrize('initialization', ['invalid', None, 1])
+def test_scfates_rejects_invalid_initialization_before_import(initialization):
+    with pytest.raises(ValueError, match='initialization'):
+        fit_scfates_axis(np.ones((3, 1)), np.array([0, 1, 2]),
+                         initialization=initialization)
+
+
 @pytest.mark.parametrize('use_mask', [False, True])
 def test_scanpy_dpt_smoke_when_installed(use_mask):
     pytest.importorskip('anndata')
@@ -124,7 +155,8 @@ def test_scanpy_dpt_smoke_when_installed(use_mask):
 
 
 @pytest.mark.parametrize('use_mask', [False, True])
-def test_scfates_smoke_when_installed(use_mask):
+@pytest.mark.parametrize('initialization', ['default', 'anatomy'])
+def test_scfates_smoke_when_installed(use_mask, initialization):
     pytest.importorskip('anndata')
     pytest.importorskip('scFates')
     t = np.linspace(0, 1, 60)
@@ -134,11 +166,12 @@ def test_scfates_smoke_when_installed(use_mask):
     if anchor_mask is not None:
         anatomy[~anchor_mask] = -1
     z, meta = fit_scfates_axis(Y, anatomy, anchor_mask=anchor_mask,
-                               nodes=10, seed=2)
+                               nodes=10, seed=2, initialization=initialization)
     assert np.isfinite(z).all() and np.ptp(z) > 0
     assert meta['tips'] == 2 and meta['forks'] == 0
     assert meta['anchor_count'] == (int(anchor_mask.sum()) if use_mask else len(Y))
     assert meta['unlabeled_count'] == (int((~anchor_mask).sum()) if use_mask else 0)
+    assert meta['initialization'] == initialization
 
 
 

@@ -580,3 +580,91 @@ nodes. Unknown nephron variation remains integrated; no occupancy matching,
 specimen warps, covariance or flow is introduced. A successful three-anchor
 result must later face the weaker endpoint-only ablation. No new fit has been run
 for this hypothesis yet.
+
+### Notebook 28 protocol fixed before actual-data outputs
+
+Use the two healthy controls, three SHA256 gene folds, 15 source-only count PCs
+(dispersion 100), and the same hash calibration/evaluation halves as notebook 25.
+Full and S3-only calibration retain identical evaluation rows. Source-only and
+pooled default scFates are matched to source-only and pooled anatomy-initialized
+curves. DPT source/pooled context remains. Source curve initial means use only
+known source S1/S2/S3 rows; every pooled query calibration label is −1 and
+excluded from initialization, rooting and orientation. Query S3 labels only
+select the stress population and enter stratified scoring or privileged oracles.
+
+Keep 30 curve nodes, elastic lambda 0.01 and mu 0.1, seed 15, root/orientation
+rules, backend defaults and 15-neighbor extensions fixed. The ordered initial
+graph has three source-centroid nodes and edges 0–1–2; the fitted graph is still
+free to move. Require a connected nonbranching curve, finite coordinates, and
+report source segment medians without filtering out anatomical inversions.
+No specimen weights, ordinal likelihood, offset, covariance, flow or sampling
+prior is added. This is a mean-atlas special case for repeated physical objects;
+individual nephron identities and physical longitudinal distances are unknown.
+
+Source fits reproduce notebook 27's full-query point/assignment predictions,
+coordinates and paired thinning. Pooled/default half-query paths reproduce
+notebook 25's coordinates, read coordinates and point scores. Then score every
+arm with both response reductions, source-only response splines (grid 101,
+ridge 0.001), frozen programs, literal segment and quadratic coverage oracles.
+Retain failures and attempt counts for 18 new anatomical curve fits (six source,
+twelve pooled) and their default/DPT comparators. Report matched program gains,
+paired read changes, calibration-regime sensitivity and within-segment gene-panel
+rank agreement. No query-based initialization, parameter or arm selection is
+allowed. Repeated development panels and shared exposure remain limitations;
+gene-panel rank agreement is stability, not true anatomical order. This test
+can reject this initialization without rejecting the ordered-object prior.
+
+### Notebook 28 actual-control readout (2026-10-04)
+
+All 54 graph attempts completed: six source and twelve pooled fits each for DPT,
+default scFates and anatomy-initialized curves. All eighteen new curves were
+valid nonbranching graphs with ordered source segment medians. Uncached guards
+reproduced notebook 27's full-query point/assignment scores, selected programs,
+IDs and original/thinned coordinates, and notebook 25's evaluation-half default
+scores, programs and coordinates. Cache key: `05066900892d77de`. The program
+figure was inspected; no fits, inversions or unfavorable panels were omitted.
+
+Source-only anatomy initialization changes assignment-aware all-gene prediction
+error by −0.014%/+0.003% relative to generic source scFates (Ctrl1A2/Ctrl1A4
+training directions). Its S1/S2/S3 selected-program gains are
++0.12%/+0.86%/−0.74% and +0.14%/+0.06%/−0.08%, each with three folds.
+Source predictions are identical between calibration regimes by construction;
+those duplicates are not extra replication.
+
+Pooled anatomy versus source-only assignment-aware scFates has full-calibration
+program gains +0.55%/+1.79%/−1.23% and +0.97%/−10.02%/−0.07%.
+With S3-only calibration these are −0.76%/+0.19%/−0.02% and
+−0.47%/−5.23%/+1.11%. Relative to its own matched pooled generic scFates,
+the new initialization worsens ten of twelve program cells (two directions ×
+two regimes × three segments); gains range −1.35% to +0.46%. Each cell has all
+three folds. Improvements over a weaker pooled fit do not establish useful
+canonical reconstruction relative to a frozen source reference.
+
+Some stability changes are favorable, but not consistently. Source quarter-read
+coordinate MAE changes 0.0440→0.0384 and 0.0465→0.0478. Source within-S3
+gene-fold rank agreement changes 0.943→0.818 and remains approximately 0.794
+in the reverse direction. Full-calibration reverse pooled S2 rank agreement
+improves 0.447→0.924, despite worse held-out S2 program prediction. Partial
+reverse pooled S3 agreement instead falls 0.235→0.089. These rank summaries
+average three gene-fold pairs and measure stability, not true longitudinal order.
+DPT's within-segment rank agreement is at least 0.915 across these cells;
+this is another stability comparator, not proof of anatomical accuracy.
+
+Pooled calibration-regime coordinate MAE improves 0.0631→0.0597 and
+0.1319→0.1016 versus pooled generic scFates, but remains considerable. Query
+read perturbation also does not uniformly favor the new curves. Shared all-gene
+exposure, source-selected development programs, reused controls and only two
+biological specimens remain limitations. Source anatomy derives from upstream
+marker annotation; source-centroid initialization is not independent anatomical
+validation. All labels used for query calibration are hidden from curve fitting.
+
+**Decision:** do not adopt this initialization as the reconstruction method and
+do not expand it into endpoint-only, parameter-search, covariance, flow, AKI or TF
+branches. Ordered initial nodes and ordered segment medians are insufficient to
+protect useful fine reconstruction against specimen and sampling effects. This
+rejects an initialization addition, not the repeated-physical-object prior.
+Before the next experiment, revisit how that prior enters the estimator during
+fitting and how canonical position can be kept separate from sampling density.
+A new hypothesis must identify a reconstruction failure it changes and state a
+matched measurable retention criterion before fitting; improving generic curve
+appearance or prediction reduction alone will not satisfy the project goal.

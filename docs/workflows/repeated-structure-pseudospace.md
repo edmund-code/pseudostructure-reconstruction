@@ -600,3 +600,36 @@ its prediction gains to claim a reconstructed physical coordinate. Both the
 probabilistic projectors and unconstrained Gaussian hierarchy remain unadopted.
 The next curve-construction hypothesis and all measured denominators are in the
 research ledger. Depth remains excluded.
+
+## Anatomy-initialized reconstruction (notebook 28)
+
+`28_repeated_structure_anatomy_initialization.ipynb` tests an ordered initial
+polyline through source-only S1/S2/S3 feature centroids within the existing elastic
+curve backend. Centroids use marker-excluded modeling PCs; no expected gene
+profiles or fixed segment intervals are supplied. This changes construction,
+while root, orientation, graph parameters, source-only response decoders and
+neighbor extensions stay fixed. Initialization does not enforce anatomical order
+throughout fitting. Source median inversions remain reported observations.
+
+Both source-only and pooled unlabeled-calibration curves are tested in the same
+two transfer directions and three gene folds. Full versus S3-only calibration
+uses identical evaluation cuts. Query labels never initialize, root or orient
+the curves. Both point and assignment-averaged response predictions are compared
+with matched generic scFates, DPT, segment and coverage references. Uncached guards
+reproduce notebook 27's full-query source predictions and notebook 25's evaluation
+halves, coordinates and read perturbations after fitting or loading a cache.
+
+This is a mean-atlas component of repeated-structure reconstruction, not a claim
+that anatomical initialization is novel. Gene-fold rank agreement, paired reads
+and calibration sensitivity measure stability rather than true longitudinal
+order. Depth is excluded. Numerical graph validity is not a guarantee that the
+backend optimizer has converged, and failures are retained without retuning.
+
+The actual-control run completes all eighteen new anatomical fits, yet gives no
+consistent improvement over generic source scFates. Ordered segment medians do
+not prevent worse fine prediction; reverse pooled S2 programs worsen by about
+10% versus the source-only assignment-aware reference. Some pooled rank stability
+improves while predictive performance declines. The initialization is retained as
+an audited experimental option, not adopted as the estimator. Do not expand its
+ablations without a new reconstruction-specific hypothesis; see the ledger for
+matched gains, stability denominators and the goal checkpoint.

@@ -112,13 +112,34 @@ def _scfates_graph_guard(adata):
     return tips, forks
 
 
-def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15):
-    """Fit an unbranched curve using anchors only for root and orientation.
+def _anatomy_curve_initialization(Y, anatomy, anchor_mask):
+    """Build an ordered three-node path from anchor-only feature centroids."""
+    positions = np.vstack([
+        Y[anchor_mask & (anatomy == label)].mean(axis=0)
+        for label in (0, 1, 2)
+    ])
+    if any(np.array_equal(positions[i], positions[j])
+           for i in range(3) for j in range(i + 1, 3)):
+        raise ValueError('anatomy initialization requires three distinct anchor centroids')
+    return {
+        'InitNodePositions': positions,
+        'InitEdges': np.array([[0, 1], [1, 2]], dtype=int),
+        'InitNodes': 3,
+    }
+
+
+def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15,
+                     initialization='default'):
+    """Fit an unbranched curve with source-only anatomical anchors.
 
     Non-anchor rows remain curve observations and receive coordinates, but do not
     contribute anatomy labels to calibration. By default all rows are strict
-    0/1/2 anatomy anchors.
+    0/1/2 anatomy anchors. ``initialization='anatomy'`` initializes the curve
+    with an ordered path through the three anchor-only feature centroids; it
+    does not remove any observed fit rows.
     """
+    if not isinstance(initialization, str) or initialization not in ('default', 'anatomy'):
+        raise ValueError("initialization must be 'default' or 'anatomy'")
     Y = _matrix(Y, 'Y')
     anatomy, anchor_mask = _trajectory_anatomy(anatomy, len(Y), anchor_mask)
     seed = _seed(seed)
@@ -132,8 +153,14 @@ def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15):
 
     obj = ad.AnnData(X=Y.copy())
     obj.obsm['X_benchmark'] = Y.copy()
-    scf.tl.curve(obj, use_rep='X_benchmark', Nodes=int(nodes), seed=seed,
-                 epg_lambda=0.01, epg_mu=0.1, basis=None, device='cpu')
+    if initialization == 'default':
+        # Preserve the original backend call and its defaults exactly.
+        scf.tl.curve(obj, use_rep='X_benchmark', Nodes=int(nodes), seed=seed,
+                     epg_lambda=0.01, epg_mu=0.1, basis=None, device='cpu')
+    else:
+        init = _anatomy_curve_initialization(Y, anatomy, anchor_mask)
+        scf.tl.curve(obj, use_rep='X_benchmark', Nodes=int(nodes), seed=seed,
+                     epg_lambda=0.01, epg_mu=0.1, basis=None, device='cpu', **init)
     tips, forks = _scfates_graph_guard(obj)
     s1_mean = Y[anchor_mask & (anatomy == 0)].mean(axis=0)
     tip_coords = np.asarray(obj.uns['graph']['tips'], dtype=int)
@@ -155,6 +182,7 @@ def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15):
                'nonfinite_count': n_nonfinite, 'nodes': int(nodes),
                'seed': seed, 'tips': tips, 'forks': forks,
                'orientation_flipped': flipped,
+               'initialization': initialization,
                'anchor_count': int(anchor_mask.sum()),
                'unlabeled_count': int((~anchor_mask).sum()),
                'scfates_version': _version('scFates'), 'anndata_version': _version('anndata'),

@@ -71,7 +71,7 @@ workstream 1 (notebook 35).
 | Our mouse S3 − early (segment labels) versus direct mouse measurements | Spearman 0.75 (male snRNA), 0.65 (female snRNA), 0.54 (microdissection); 89–99% direction agreement for strongly zonated genes |
 | Our human S3 − early (segment labels) versus human cortex snRNA | Spearman 0.37; 92.5% direction agreement for strongly zonated genes |
 | **Our species × segment versus external (human − mouse)(S3 − early)** | Spearman 0.66 for our top-10% `T_spatial` genes (0.51 all genes); **94% direction agreement** for genes strong in both; 92% with female mice as the reference; 90% with microdissected mouse |
-| Pathway level (median member interaction) | Same direction in 22 of 24 informative confident pathways; 11 of 12 core (12 of 12 with female reference) |
+| Pathway level (median member interaction) | Same direction in 22 of 24 informative confident pathways, **but not specific**: uncalled pathways agree at a similar rate (170 of 173) because both datasets share a global trend; after detrending, 7 of 10 versus 17 of 20 (workstream 2). Gene level, top-10% `T_spatial` genes correlate 0.67 versus 0.62–0.64 for top genes by mean expression or `T_level`. So this shows measurement agreement, not pathway-specific replication. A competitive replication test is pending (workstream 2, notebook 37). |
 | Tier 1 and 2 candidate genes | 36 of 39 replicate in direction (37 of 39 with female mice) |
 | Rat | Rat zonation differs from mouse for many genes (Spearman 0.13 with our mouse); rat lacks the male-mouse S2/S3 programs. Rat is not a mouse proxy. |
 

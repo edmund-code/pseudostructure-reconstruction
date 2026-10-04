@@ -87,6 +87,33 @@ What this adds:
 - **Do not replicate:** Slc22a8 (OAT3, opposite sign), Psat1 (mouse-side mismatch), and Ehhadh
   (male reference only). Drop these as standalone claims.
 
+## Phase-2 verdicts (notebook 38, workstream 3)
+
+A human cortex atlas with true S1/S2/S3 labels (Lake et al. 2023 / KPMP snRNA v1.5; 7 normal donors,
+4 female and 3 male) and female mouse microdissection (GSE212213) were added. Results:
+
+- **Genome-wide agreement:** for our top-10% `T_spatial` genes, the Lake species-by-segment
+  interaction correlates at Spearman 0.70 with 96.7% direction agreement (0.67 and 93.7% with female
+  mice). Expression-matched comparators are evaluated in workstream 2 (notebook 37), because gene-level
+  agreement alone is not specific.
+- **Attenuation (segment labels):** human-to-mouse amplitude ratio 0.86 (95% interval 0.64–1.35) on 70
+  conserved controls. Every "human flat" claim survives correcting for it.
+- **Pre-specified verdicts for 39 candidate genes:** 30 headline, 5 supporting, 4 not replicated
+  (`results/pt_literature_deep/story_verdicts.csv`). Every gene now carries a probe-count balance from
+  both Visium HD panels (`probe_counts.csv`; 82% of the PT universe is balanced).
+- **Lead stories:** creatine synthesis (Gatm; the human half is new), mitochondrial β-oxidation (Acadm
+  and Acaa2 zoned in opposite directions in mouse, flat in human; Hadh did not replicate; Acsm3's rise
+  is male-only), drug-handling placement (human front-loaded conjugation and oxidation versus mouse
+  late glutathione synthesis and S1–S2 Cyp2e1), and the Dcxr reversal (all 8 reversal genes passed).
+  - **Coordinator decision on drug handling:** the pre-specified rule marked it supporting because
+    Gclc has 3 mouse versus 6 human probes. It is promoted to a lead story. Gclm, Gss, Ugt1a9 and Cyp2e1
+    are probe-balanced and headline, and Gclc's imbalance (fewer mouse probes) works against the
+    observed mouse-high direction, so it cannot explain the effect.
+- **Supporting:** Rbp4 (absent in mouse, present in human and rat), sterol synthesis, and SLC6A19 /
+  SLC9A3 / SLC4A4 retained in human late PT.
+- **Residual novelty risk:** a 2025 cross-species kidney atlas is not open access and could not be
+  checked in full text.
+
 ## Tier 1 — candidate novel findings with the strongest support
 
 Every row survives re-anchoring of the human coordinate, and every listed gene except where noted
@@ -96,11 +123,11 @@ human − mouse in S1, S2, S3 for all four human–mouse specimen pairings (+ or
 
 | Finding | Genes (both species express unless noted) | Our evidence | Literature status |
 |---|---|---|---|
-| **Creatine synthesis is a zonation shift.** Human AGAT stays high along the whole PT; mouse AGAT is S1-restricted and gone by S3. | Gatm | Pairings +++; S3 difference unchanged in cortical mouse S3; female-biased in mouse, so male mice may understate it. | GATM is a human PT enzyme (Fanconi syndrome, [PMID 29654216](https://pubmed.ncbi.nlm.nih.gov/29654216/)); kidney is the main creatine-synthesis site. Axial species contrast **NOT FOUND** (7 queries). |
+| **Creatine synthesis is a zonation shift.** Human AGAT stays high along the whole PT; mouse AGAT is S1-restricted and gone by S3. | Gatm | Pairings +++; S3 difference unchanged in cortical mouse S3; female-biased in mouse, so male mice may understate it. | Rodent early-PT restriction is **KNOWN**: rat transamidinase activity is confined to S1 and S2, S1 > S2 ([PMID 1378964](https://pubmed.ncbi.nlm.nih.gov/1378964/)). GATM is a human PT enzyme (Fanconi syndrome, [PMID 29654216](https://pubmed.ncbi.nlm.nih.gov/29654216/)). The human whole-PT profile and the species contrast are **NOT FOUND**; the novel half is the human side. |
 | **Mitochondrial β-oxidation is zoned differently.** Mouse rises along the PT; human is flat. Acadm and Acaa2 reverse direction. | Acadm, Hadh, Acaa2, Acads, Acadl | Pairings +−− (Acadm), −++ (Acaa2), −−− (Hadh); not sex-biased in mouse PT; cortical check holds. | **NOT FOUND** after ≥2 queries per gene; ACAA2/ACSM3 appear only in injury papers. |
-| **Glutathione synthesis rises toward S3 in mouse only.** | Gclc, Gclm, Gss | Pairings −−; 9–10 core pathways; not sex-biased; cortical check holds. | **PARTLY KNOWN**: rabbit PT GSH synthesis is highest in S3 ([PMID 9612330](https://pubmed.ncbi.nlm.nih.gov/9612330/)). The flat human profile is not reported. |
+| **Glutathione synthesis rises toward S3 in mouse only.** | Gclc, Gclm, Gss | Pairings −−; 9–10 core pathways; not sex-biased; cortical check holds. | **PARTLY KNOWN** (corrected): in rabbit PT the GSH *synthesis rate* is highest in S1 while *cellular GSH concentration* is highest in S3 ([PMID 9612330](https://pubmed.ncbi.nlm.nih.gov/9612330/)); rat glutathione is highest in convoluted and early straight PT ([PMID 998800](https://pubmed.ncbi.nlm.nih.gov/998800/)). Mouse transcript zonation and the flat human profile are **NOT FOUND**. One injury scRNA study calls Gclc distal-only ([PMID 38313210](https://pubmed.ncbi.nlm.nih.gov/38313210/)); healthy microdissected mouse PT contradicts that. |
 | **Sterol/mevalonate (SREBP2) program rises toward S3 in mouse only.** | Hmgcs1, Cyp51, Hmgcr, Sqle (human low) | Pairings −−−; cortical check holds; Cyp51 female-biased in mouse. | **NOT FOUND** (3–4 queries per gene). Context: Cyp7b1 loss lowers male kidney sterol synthesis ([PMID 10748048](https://pubmed.ncbi.nlm.nih.gov/10748048/)), so a male S3 axis is plausible. |
-| **Lead, not a result: the organic-anion uptake module persists into late PT in human; mouse confines it to S1–S2.** Whole-PT shows no difference for OAT1 and NaDC3. OAT1 and NaDC3 replicate in independent snRNA; OAT3 does not. | Slc22a6 (OAT1), Slc22a8 (OAT3), Slc13a3 (NaDC3) | Pairings +−+ (OAT1, NaDC3), +++ (OAT3); segment DESeq2 confirms opposite signs. About half the S3 difference is outer-stripe region; a smaller difference persists in cortical mouse S3. | **PARTLY KNOWN**: human OAT1–3 are stronger in S1/S2 than S3, and human outer-stripe S3 is unstained (Breljak 2016), so region explains much of the S3 contrast. The cortical-only species difference is **NOT FOUND**. Translationally relevant (drug secretion) if it holds in matched cortex. |
+| **Moved to a method illustration (R2/R3), not a biology claim: the organic-anion uptake module persists into late PT in human; mouse confines it to S1–S2.** Against the cortical medullary-ray mouse segment the sign reverses (workstream 3). Whole-PT shows no difference for OAT1 and NaDC3. OAT1 and NaDC3 replicate in independent snRNA; OAT3 does not. | Slc22a6 (OAT1), Slc22a8 (OAT3), Slc13a3 (NaDC3) | Pairings +−+ (OAT1, NaDC3), +++ (OAT3); segment DESeq2 confirms opposite signs. About half the S3 difference is outer-stripe region; a smaller difference persists in cortical mouse S3. | **PARTLY KNOWN**: human OAT1–3 are stronger in S1/S2 than S3, and human outer-stripe S3 is unstained (Breljak 2016), so region explains much of the S3 contrast. The cortical-only species difference is **NOT FOUND**. Translationally relevant (drug secretion) if it holds in matched cortex. |
 | **Human retains B0AT1 into late PT; mouse is S1–S2 only.** | Slc6a19 | Pairings +++; difference unchanged in cortical mouse S3; region-sensitive pathway, so treat as a lead. | Mouse S1–S2 restriction KNOWN ([PMID 35979966](https://pubmed.ncbi.nlm.nih.gov/35979966/)); human axial profile **NOT FOUND**. |
 | **Direction reversals of shared genes.** Best: Dcxr (mouse falls, human rises; no mouse sex bias, and male-mouse microdissection data confirm the fall). | Dcxr, Pah, Igfbp4, Glyat, Ugt3a1, Acox2, Nt5e, Cyp24a1 | Segment DESeq2 confirms opposite signs; pairings consistent. Glyat and Cyp24a1 are male-biased in mouse, and the Cndp2 S2 hump is likely androgen-driven. | Mouse PT localization known for several (Igfbp4 [PMID 9324049](https://pubmed.ncbi.nlm.nih.gov/9324049/); rat Nt5e PCT [PMID 19333785](https://pubmed.ncbi.nlm.nih.gov/19333785/)); functional PAH in human kidney known ([PMID 10444341](https://pubmed.ncbi.nlm.nih.gov/10444341/)). Species reversals and axial profiles **NOT FOUND**. |
 
@@ -113,7 +140,7 @@ validation (ISH or protein), because a probe gap would look the same.
 | Finding | Literature status |
 |---|---|
 | **Dropped as a species claim — probe artefact.** Phgdh/Psat1 high in human S1 and near-absent in our mouse PT. The mouse Visium HD panel has 1 probe for each versus 3 in human, and mouse microdissection shows both strongly S1-high in mouse too (workstream 3). The real pattern is S1-high in both species. Keep only as an example of probe-panel asymmetry. | Mouse Phgdh is weak in PT and near-negative in the outer stripe ([PMID 17510490](https://pubmed.ncbi.nlm.nih.gov/17510490/)); human zonation **NOT FOUND** (~12 queries). Both are ATF4/stress-responsive, so donor tissue state matters. |
-| **Human UGT1A9, EPHX1, GSTP1 decline from S1 to S3**; mouse Ugt1a9 absent. | Human renal UGT1A9 KNOWN ([PMID 25650382](https://pubmed.ncbi.nlm.nih.gov/25650382/)); axial gradient **NOT FOUND**. The mouse Ugt1a cluster shares exons, so the mouse zero may be a mapping issue. |
+| **Human UGT1A9 declines from S1 to S3**; mouse Ugt1a9 absent (probes balanced, 3 versus 3). EPHX1 did not replicate and GSTP1 is a probe artefact (1 versus 3 probes); both are dropped. | Human renal UGT1A9 KNOWN ([PMID 25650382](https://pubmed.ncbi.nlm.nih.gov/25650382/)); axial gradient **NOT FOUND**. The mouse Ugt1a cluster shares exons, so the mouse zero may be a mapping issue. |
 | **Human RBP4 rises toward late PT**; mouse near zero. | Only a 1989 rat ISH placing RBP mRNA in outer-stripe S3 ([PMID 2469758](https://pubmed.ncbi.nlm.nih.gov/2469758/)); species contrast **NOT FOUND**. |
 | **Human AOX1 rises to S3** (mouse Aox1 near zero); **human AOC1** in PT. | Human PT AOX1 by IHC ([PMID 17992631](https://pubmed.ncbi.nlm.nih.gov/17992631/)); rodents have four AOX genes. AOC1 human PT localization is unresolved. |
 | **Mouse-only Inmt (S2 peak), Me1, Lpl, Mogat1, CoA synthesis (Pank1, Coasy)**. | Mouse renal Inmt and Lpl are known; human contrasts **NOT FOUND**. Pank1, Coasy and Mogat1 are male-biased in mouse PT; the CoA cluster has a PPARα hypothesis. Human whole-kidney LPL exists ([PMID 24371263](https://pubmed.ncbi.nlm.nih.gov/24371263/)), so near-zero human PT Lpl needs ISH. |
@@ -122,7 +149,7 @@ validation (ISH or protein), because a probe gap would look the same.
 
 | Gene or program | What is known | Reference |
 |---|---|---|
-| Cyp2e1 mouse S1–S2, little in human kidney | Male-mouse, androgen-induced; no p-nitrophenol oxidase activity in human kidney (one 2023 report finds human PT CYP2E1) | [PMID 7839370](https://pubmed.ncbi.nlm.nih.gov/7839370/), [PMID 38042273](https://pubmed.ncbi.nlm.nih.gov/38042273/) |
+| Cyp2e1 mouse S1–S2, low or absent human PT mRNA | Male-mouse, androgen-induced; no p-nitrophenol oxidase activity in human kidney, but one 2023 report finds human PT CYP2E1 protein, so the human literature conflicts | [PMID 7839370](https://pubmed.ncbi.nlm.nih.gov/7839370/), [PMID 38042273](https://pubmed.ncbi.nlm.nih.gov/38042273/) |
 | Mouse male S2/S3 programs: Cyp7b1, Slc27a2, Acox1–3, Acsm2/3, Hsd11b1, Hsd17b2 | Main mouse PT sex differences in S2/S3 | [PMID 36758122](https://pubmed.ncbi.nlm.nih.gov/36758122/), [PMID 37673062](https://pubmed.ncbi.nlm.nih.gov/37673062/) |
 | Mouse peroxisomal FAO sexual dimorphism | Androgen-linked | [PMID 34651140](https://pubmed.ncbi.nlm.nih.gov/34651140/) |
 | Slc22a7 (OAT2) S3 in rodents; human OAT2 on both membranes | Species difference in membrane localization | [PMID 16885152](https://pubmed.ncbi.nlm.nih.gov/16885152/), [PMID 25904762](https://pubmed.ncbi.nlm.nih.gov/25904762/) |

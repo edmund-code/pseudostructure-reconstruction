@@ -156,6 +156,11 @@ flagships survive both (q ≈ 0.002). The early/late split holds in the robust s
 pathways peak at median 0.145, 47 mouse-high at 0.624. Table:
 `results/pt_pathway_registration_sensitivity/confident_pathways_with_robustness.csv`.
 
+**Trajectory method.** Notebook 12's earlier run on notebook 03's DPT coordinate (different
+trajectory method and PT labels; `results/pt_pathway_remodeling/`) recovers 61 of the 66 robust
+pathways, 42 of the 44 robust new ones, and all five flagships. Spatial pathway effects
+correlate at Spearman 0.92 between the DPT and scFates runs (126 and 129 calls, 101 shared).
+
 ### What this changes for notebook 14
 
 Notebook 14's headline benchmark (66 discrete → 89 continuous `T_total` calls) uses a

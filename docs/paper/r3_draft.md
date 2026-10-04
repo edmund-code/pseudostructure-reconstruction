@@ -26,7 +26,9 @@ of the rest (5,590) could not be classified with two specimens per species.
 Mouse-only genes outnumbered human-only genes under every alternative rule (Fig. Rb). The gap
 narrowed, from 247 against 66 to 243 against 141, when the human effect threshold was scaled to
 the lower human amplitude. Most of the excess came from S1 → S2 (219 against 44 genes). For the
-region-matched S3 contrast the two classes were similar (48 against 35).
+region-matched S3 contrast the two classes were similar (48 against 35). Confirming mouse calls in
+female rather than male donors kept most calls: female snRNA kept 214 of 247 mouse-only, 151 of 155
+conserved and 44 of 52 reversal calls; female microdissection kept 149, 127 and 30.
 
 The **conserved core** is apical solute transport: neutral and cationic amino-acid transport
 (Slc3a1, Slc7a8, Slc6a18, Slc7a7), organic anions (Slc22a7, Slc22a12), phosphate (Slc34a3), Slc5a2
@@ -44,8 +46,9 @@ expression, so the human-specific side is best described gene by gene:
 - **zonated only in human:** Sel1l3, Pkhd1;
 - **expressed and zonated only in human:** Rbp4, Aox1. These genes are absent from mouse PT.
 
-Of the 36 robust position-dependent pathways (R2), 18 have mostly mouse-only zonated members and
-14 mostly conserved members. The pathway screen therefore recovers both the shared transport core
+Of the 36 robust position-dependent pathways (R2), 19 have mostly mouse-only zonated members, 15
+mostly conserved members, 1 mostly reversal members and 1 none. Two of them (Steroid hormone
+biosynthesis, Nitrogen metabolism) have fewer than 10 classified members. The pathway screen therefore recovers both the shared transport core
 and the mouse-specific metabolic programs.
 
 **Caveats** (keep beside the result):
@@ -94,5 +97,14 @@ padj ≤ 0.05 in any PT segment), among probe-balanced genes:
 
 199 of the 247 mouse-only genes are not sex-biased in either direction. The mouse-only excess is
 therefore not driven by male-specific mouse programs. Correction: notebook 40 confirms mouse calls
-in the 12 **male** mouse snRNA donors only (matching our male mice), not in a pooled-sex atlas. A
-female-donor confirmation is being added as a sensitivity check (workstream 2).
+in the 12 **male** mouse snRNA donors only (matching our male mice), not in a pooled-sex atlas.
+
+Female-donor confirmation is now a sensitivity check (notebook 40 v2, A6 and A7). It keeps most
+calls:
+
+| Female confirmation | Mouse-only | Conserved | Reversal |
+|---|---|---|---|
+| Female snRNA | 214 of 247 | 151 of 155 | 44 of 52 |
+| Female microdissection | 149 of 247 | 127 of 155 | 30 of 52 |
+
+Mouse-only still exceeds human-only: 222 against 67, and 167 against 69.

@@ -383,6 +383,12 @@ Of 7,407 probe-balanced genes measurable in both species:
   66 to 243 against 141.
 - Most of the excess came from S1 → S2 (219 against 44 genes).
 - For the region-matched S3 contrast, the two classes were similar (48 against 35).
+- The excess held when mouse calls were confirmed in female rather than male mouse donors:
+  - female snRNA confirmation kept 214 of 247 mouse-only, 151 of 155 conserved and 44 of 52
+    reversal calls;
+  - female microdissection kept 149, 127 and 30.
+
+  Male confirmation remains primary because our mice are male.
 
 *Not a male-mouse artefact.* Mouse-only genes were not enriched for male-biased mouse PT genes (Xiong
 et al. 2023 tables): 5.3% were male-biased, against 15.5% of conserved genes. 199 of the 247 were not
@@ -441,9 +447,15 @@ zonated class) and genes expressed in only one species are reported separately (
 - glutathione (Gclc, Gclm, Gss);
 - branched-chain amino-acid degradation.
 
-*By zonation class.* Of the 34 robust pathways with classified members, 18 have mostly mouse-only
-members and 14 mostly conserved members [VERIFY: two robust pathways, apparently Steroid hormone
-biosynthesis and Nitrogen metabolism, are absent from `robust_pathways_by_class.csv`].
+*By zonation class.* Of the 36 robust pathways:
+- 19 have mostly mouse-only zonated members;
+- 15 have mostly conserved members;
+- 1 has mostly reversal members (Vitamin B5 metabolism);
+- 1 has no zonated member (Chemical carcinogenesis).
+
+Two of them, Steroid hormone biosynthesis (9 classified members) and Nitrogen metabolism (8), fall
+below the 10-member floor for class enrichment. They are still assigned a dominant class: mouse-only
+and conserved respectively.
 
 *Peaks and shape.* The 10 human-high pathways peak early (median 0.16) and the 26 mouse-high
 pathways late (median 0.63). Most differences are graded and one-signed: 26 graded, 4 localised and
@@ -1501,12 +1513,13 @@ Every figure must come from a committed, output-free notebook. Sources are given
 
 **Figure 3 | Beyond a conserved transport core, PT zonation is largely species-specific (R3).**
 - **a,** Per-gene S1 → S2 zonation in each species: mean of the two mice against mean of the two
-  human sections (log2). Calls are noise-scaled and reference-confirmed; colour shows the class.
-  [VERIFY: panel a legend counts (mouse-only 249, human-only 52, conserved 75, reversal 25) differ
-  from the probe-balanced S2 − S1 counts (219, 44, 65, 20) in `class_sizes_by_contrast.csv`. State
-  which gene set the panel shows.]
-- **b,** Class sizes under the primary rule and five alternatives (no confirmation, no effect floor,
-  amplitude-scaled floor, flat margin 0.5, microdissection confirmation). Probe-balanced genes,
+  human sections (log2). The panel shows the 7,391 probe-balanced genes measurable in both
+  species. Colour gives the S2 − S1 class: mouse-only 219, human-only 44, conserved 65, reversal 20
+  (the same gene set as `class_sizes_by_contrast.csv`). Calls are noise-scaled and
+  reference-confirmed.
+- **b,** Class sizes under the primary rule and seven alternatives: no confirmation; no effect floor;
+  amplitude-scaled floor; flat margin 0.5; male microdissection confirmation; female snRNA
+  confirmation; female microdissection confirmation. Probe-balanced genes,
   S2 − S1 and S3c − early combined.
 - **c,** Representative genes chosen by rule, in each specimen at S1, S2 and cortical S3 (log2 CPM;
   orange human sections, blue mice):
@@ -1700,12 +1713,10 @@ marked † were also verified by workstream 3 (`SCRATCH/ws3/literature_phase2.md
 
 6. **Attenuation on the final list.** R1's 9–17% attenuation bound was computed on the earlier 66
    list; rerun it on the 36-pathway list.
-7. **Two robust pathways are missing from the class table.**
-   `pt_zonation_classes/tables/robust_pathways_by_class.csv` has 34 rows. Steroid hormone
-   biosynthesis and Nitrogen metabolism appear to be missing, so "18 mouse-only and 14 conserved"
-   is out of 34, not 36.
-8. **Figure 3a counts.** The panel shows 249 / 52 / 75 / 25, while the probe-balanced S2 − S1 table
-   gives 219 / 44 / 65 / 20. State which gene set the panel uses.
+7. **Resolved (notebook 40 v2).** The class table now has all 36 robust pathways: 19 mouse-only, 15
+   conserved, 1 reversal, 1 none. The two pathways below the 10-member floor are kept with a note.
+8. **Resolved (notebook 40 v2).** Figure 3a now shows the 7,391 probe-balanced genes, with counts
+   219 / 44 / 65 / 20.
 9. **The coordinator's R3 note on mouse sex is wrong.** `docs/paper/r3_draft.md` says that the mouse
    snRNA confirmation atlas pools male and female donors. Notebook 40's code uses the 12 male donors
    only (`male_sn`). I wrote "12 male donors"; please correct r3_draft.md.

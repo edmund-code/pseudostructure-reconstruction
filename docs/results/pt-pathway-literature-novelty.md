@@ -45,9 +45,42 @@ tables: `results/pt_pathway_literature/`.
    equal probe counts. This is consistent with the relabeling result that average-level screens
    are not specific.
 
+## Independent segment-resolved data (notebook 34)
+
+Abstracts cannot say where along the PT a gene is expressed, but segment-resolved datasets can.
+`analysis/notebooks/34_pt_external_segment_validation.ipynb` compares our profiles with four
+public datasets that measured PT segments directly:
+
+- **Mouse, microdissected S1/S2/S3, bulk RNA-seq, male:** Chen et al. 2021 (GSE150338).
+- **Rat, microdissected S1/S2/S3, bulk RNA-seq, male:** Lee et al. 2015 (GSE56743).
+- **Mouse snRNA with S1/S2/S3 annotation:** 12 male and 12 female donors (CELLxGENE Census
+  dataset 25818bf7).
+- **Human renal-cortex snRNA with convoluted PT versus S3 annotation:** 6 donors (Census
+  09b518f9).
+
+No human study has microdissected S1/S2/S3, so human positional data are snRNA annotations.
+
+| Check | Result |
+|---|---|
+| Our mouse S3 − early versus direct mouse measurements | Spearman 0.75 (male snRNA), 0.65 (female snRNA), 0.54 (microdissection); 89–99% direction agreement for strongly zonated genes |
+| Our human S3 − early versus human cortex snRNA | Spearman 0.37; 92.5% direction agreement for strongly zonated genes |
+| **Our species × position versus external (human − mouse)(S3 − early)** | Spearman 0.66 for our top-10% `T_spatial` genes (0.51 all genes); **94% direction agreement** for genes strong in both; 92% with female mice as the reference; 90% with microdissected mouse |
+| Pathway level (median member interaction) | Same direction in 22 of 24 informative confident pathways; 11 of 12 core (12 of 12 with female reference) |
+| Tier 1 and 2 candidate genes | 36 of 39 replicate in direction (37 of 39 with female mice) |
+| Rat | Rat zonation differs from mouse for many genes (Spearman 0.13 with our mouse); rat lacks the male-mouse S2/S3 programs. Rat is not a mouse proxy. |
+
+What this adds:
+- **Sex:** female mice show most of the late mouse programs (Nudt19, Crot, Gclc, Cyp51, Acox2).
+  Acsm3's late rise is male-specific, and Cyp7b1 is male-enhanced.
+- **Independent human confirmation:** human snRNA confirms Gatm flat along human PT, Dcxr rising
+  toward S3, Rbp4 rising toward S3, and Phgdh and Ugt1a9 highest in early PT.
+- **Do not replicate:** Slc22a8 (OAT3, opposite sign), Psat1 (mouse-side mismatch), and Ehhadh
+  (male reference only). Drop these as standalone claims.
+
 ## Tier 1 — candidate novel findings with the strongest support
 
-Every row survives re-anchoring of the human coordinate. "Region check" compares human S3 with
+Every row survives re-anchoring of the human coordinate, and every listed gene except where noted
+replicates in direction in the independent snRNA comparison (notebook 34). "Region check" compares human S3 with
 **cortical** mouse S3 only (262 tubules no deeper than mouse S1). "Pairings" gives the sign of
 human − mouse in S1, S2, S3 for all four human–mouse specimen pairings (+ or − = all four agree).
 
@@ -57,7 +90,7 @@ human − mouse in S1, S2, S3 for all four human–mouse specimen pairings (+ or
 | **Mitochondrial β-oxidation is zoned differently.** Mouse rises along the PT; human is flat. Acadm and Acaa2 reverse direction. | Acadm, Hadh, Acaa2, Acads, Acadl | Pairings +−− (Acadm), −++ (Acaa2), −−− (Hadh); not sex-biased in mouse PT; cortical check holds. | **NOT FOUND** after ≥2 queries per gene; ACAA2/ACSM3 appear only in injury papers. |
 | **Glutathione synthesis rises toward S3 in mouse only.** | Gclc, Gclm, Gss | Pairings −−; 9–10 core pathways; not sex-biased; cortical check holds. | **PARTLY KNOWN**: rabbit PT GSH synthesis is highest in S3 ([PMID 9612330](https://pubmed.ncbi.nlm.nih.gov/9612330/)). The flat human profile is not reported. |
 | **Sterol/mevalonate (SREBP2) program rises toward S3 in mouse only.** | Hmgcs1, Cyp51, Hmgcr, Sqle (human low) | Pairings −−−; cortical check holds; Cyp51 female-biased in mouse. | **NOT FOUND** (3–4 queries per gene). Context: Cyp7b1 loss lowers male kidney sterol synthesis ([PMID 10748048](https://pubmed.ncbi.nlm.nih.gov/10748048/)), so a male S3 axis is plausible. |
-| **Lead, not a result: the organic-anion uptake module persists into late PT in human; mouse confines it to S1–S2.** Whole-PT shows no difference for OAT1 and NaDC3. | Slc22a6 (OAT1), Slc22a8 (OAT3), Slc13a3 (NaDC3) | Pairings +−+ (OAT1, NaDC3), +++ (OAT3); segment DESeq2 confirms opposite signs. About half the S3 difference is outer-stripe region; a smaller difference persists in cortical mouse S3. | **PARTLY KNOWN**: human OAT1–3 are stronger in S1/S2 than S3, and human outer-stripe S3 is unstained (Breljak 2016), so region explains much of the S3 contrast. The cortical-only species difference is **NOT FOUND**. Translationally relevant (drug secretion) if it holds in matched cortex. |
+| **Lead, not a result: the organic-anion uptake module persists into late PT in human; mouse confines it to S1–S2.** Whole-PT shows no difference for OAT1 and NaDC3. OAT1 and NaDC3 replicate in independent snRNA; OAT3 does not. | Slc22a6 (OAT1), Slc22a8 (OAT3), Slc13a3 (NaDC3) | Pairings +−+ (OAT1, NaDC3), +++ (OAT3); segment DESeq2 confirms opposite signs. About half the S3 difference is outer-stripe region; a smaller difference persists in cortical mouse S3. | **PARTLY KNOWN**: human OAT1–3 are stronger in S1/S2 than S3, and human outer-stripe S3 is unstained (Breljak 2016), so region explains much of the S3 contrast. The cortical-only species difference is **NOT FOUND**. Translationally relevant (drug secretion) if it holds in matched cortex. |
 | **Human retains B0AT1 into late PT; mouse is S1–S2 only.** | Slc6a19 | Pairings +++; difference unchanged in cortical mouse S3; region-sensitive pathway, so treat as a lead. | Mouse S1–S2 restriction KNOWN ([PMID 35979966](https://pubmed.ncbi.nlm.nih.gov/35979966/)); human axial profile **NOT FOUND**. |
 | **Direction reversals of shared genes.** Best: Dcxr (mouse falls, human rises; no mouse sex bias, and male-mouse microdissection data confirm the fall). | Dcxr, Pah, Igfbp4, Glyat, Ugt3a1, Acox2, Nt5e, Cyp24a1 | Segment DESeq2 confirms opposite signs; pairings consistent. Glyat and Cyp24a1 are male-biased in mouse, and the Cndp2 S2 hump is likely androgen-driven. | Mouse PT localization known for several (Igfbp4 [PMID 9324049](https://pubmed.ncbi.nlm.nih.gov/9324049/); rat Nt5e PCT [PMID 19333785](https://pubmed.ncbi.nlm.nih.gov/19333785/)); functional PAH in human kidney known ([PMID 10444341](https://pubmed.ncbi.nlm.nih.gov/10444341/)). Species reversals and axial profiles **NOT FOUND**. |
 

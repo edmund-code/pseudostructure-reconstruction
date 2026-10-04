@@ -80,6 +80,53 @@ other/signaling (19).
 (|Z| ≥ 3 and |difference| ≥ 0.25 over ≥3 contiguous grid points on each side). A whole-PT
 comparison reports one direction per gene and cannot represent these.
 
+## The paper story (notebook 32)
+
+`analysis/notebooks/32_pt_pathway_story.ipynb` tests nothing new. It picks readable examples from
+the frozen 82-pathway list, shows their genes, and makes the conventional contrast concrete.
+
+**Where the species differ, not whether.** Among the 82 confident pathways, the 22 that are
+human-high at their divergence peak have a median peak at 0.13 on the coordinate (S1). The 60
+mouse-high ones have a median peak at 0.65 (S2/S3 boundary). Pathways share genes, so this is a
+descriptive split, not a test. A whole-PT or three-segment summary assumes every pathway differs
+in the same place.
+
+**Flagships.** Chosen from pathways that are new with pseudospace and retained in all 7
+sensitivity runs, one per theme where possible: Drug ADME, mitochondrial fatty-acid
+β-oxidation, valine/leucine/isoleucine degradation, glutathione metabolism, retinoid
+metabolism & transport. Each figure shows D(s), member-gene differences, fitted curves with
+specimen means, and conventional log2FC.
+
+Gene-level examples worth naming in the text (both specimens of each species agree):
+
+- **Ugt3a1**: human-high in S1, mouse-high in S2/S3. Whole-PT DESeq2 reports mouse-high
+  (log2FC −1.3, significant), which is wrong for S1.
+- **Cyp2e1**: mouse-expressed through S1–S2, falling in S3; essentially absent in human PT.
+  Mouse renal CYP2E1 is androgen-regulated and bioactivates acetaminophen in S1/S2, while human
+  kidney shows little CYP2E1 activity. This is a translational point for rodent nephrotoxicity
+  models.
+- **Gatm** (creatine synthesis, first step): human high along the whole PT; mouse high only
+  early, falling toward S3. Segment log2FC grows from +1.2 (S1) to +7.0 (S3), so the species
+  difference is a zonation shift rather than a uniform offset.
+- **Acsm3, Crot, Nudt19, Slc27a2**: fatty-acid oxidation and peroxisomal genes that rise along
+  the PT in mouse and stay flat in human. Rodent-specific PPARα-driven peroxisomal programs
+  are a known species difference; Nudt19 is a mouse-kidney-specific peroxisomal CoA
+  diphosphohydrolase.
+- **Reversing genes (70)**: e.g. Acaa2, Dcxr, Cndp2, Igfbp4, Gc, Akr1c18. 33 belong to a
+  confident pathway. A single log2FC per gene cannot represent them.
+
+Outputs: `results/pt_pathway_story/` (`figures/fig5_example_*`, `fig6_direction_reversing_genes`,
+`fig7_confident_pathway_landscape`, `example_gene_evidence.csv`,
+`flagship_member_genes.csv`, `direction_reversing_genes.csv`,
+`confident_pathways_for_paper.csv`).
+
+### What this changes for notebook 14
+
+Notebook 14's headline benchmark (66 discrete → 89 continuous `T_total` calls) uses a
+constant-offset-dominated statistic. Under relabeling, `T_total` reports more pathways than
+for species (NCDR 1.72), so that count should not carry the "uncovers more pathways" claim.
+Use the `T_spatial` specificity result and the 54 new-with-pseudospace pathways instead.
+
 ## Caveats to keep beside any number here
 
 - Two mice and two sections from one human donor. Specimens, not structures, are the

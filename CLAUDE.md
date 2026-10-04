@@ -42,6 +42,12 @@ regenerating or overwriting a notebook, check that its source does not diverge f
   the saved outputs of 12 and 13 and refits nothing.
 - 04 and 08–11 are comparisons and validations.
 
+Notebooks 31 and 32 finish the PT pathway analysis: 31 chooses the method with a balanced
+specimen-relabeling control (`pseudospace/pathway_calibration.py`), and 32 builds the paper story
+from 31's frozen list. Read `docs/results/pt-pathway-method-selection.md` before quoting pathway
+counts. Constant-offset pathway screens (whole-PT, S1/S2/S3, `T_level`, `T_total`) are not
+specific in this cohort; the primary pathway statistic is `T_spatial`.
+
 Generated `.py` mirrors exist for 02–14. The mirror list in AGENTS.md omits 10, 11 and 14, but they
 follow the same naming rule. Notebooks 01 and 15+ have no mirror.
 

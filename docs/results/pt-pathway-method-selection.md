@@ -8,6 +8,129 @@ Cohort: 2 control mice, 2 cortex sections from 1 human donor, 12,272 PT structur
 11,071 genes, 1,513 pathways. All four specimens are male (Y-linked genes detected in every
 one), so sex does not separate the species. Everything below is descriptive.
 
+## Final analysis (notebook 37): read this first
+
+`analysis/notebooks/37_pt_pathway_final.ipynb` (logic version `37.pathway_final.1`) recomputes the
+whole pathway analysis from one coordinate in a single run. By default the coordinate is notebook
+13's scFates; `--coordinate` takes another. Results are in `results/pt_pathway_final/scfates/`.
+Its protocol and decision rules were fixed before it ran (workstream 2 plan). **It supersedes the
+82 → 66 → 42 list below**, which stays as a sensitivity.
+
+**Why the list changed.** Notebook 12 required a pathway to pass a covariate-matched test **and,
+separately,** a CAMERA-style correlation test. Under relabeling, the matched test alone is
+anti-conservative:
+- 50–70 relabeled pathways reach p ≤ 0.01, where about 15 are expected.
+- The decoy z² grows with set size, which is the signature of inter-gene correlation.
+
+Notebook 37 uses one **joint test** instead: the matched z divided by √VIF, with the VIF from
+notebook 12's residual correlations. The decoy-estimated inflation for `T_spatial` (ρ ≈ 0.009)
+matches the residual-correlation estimate (median ρ ≈ 0.010). This independently supports the
+size of the adjustment.
+
+**R2: specificity.** With 2 + 2 specimens, the species split and the two relabelings are the
+three orthogonal ±½ contrasts. Under independent specimen deviations, each relabeling is one draw
+of the species contrast's **section-level** null.
+
+The design is a split plot:
+- a species offset is judged against specimens within species, which leaves 2 df;
+- a species-by-position difference is judged against specimen-by-position deviations, which leave
+  2(k − 1) df.
+
+A term shared by both human sections, such as donor, probe panel or region, cancels in the
+relabelings. Relabeling therefore cannot detect it. Per-pathway specimen-level inference is
+impossible: a 2-df test calls nothing.
+
+| Strategy | Species calls | Relabeled calls | NCDR | Calls at decoy FDP ≤ 10% |
+|---|---:|---:|---:|---:|
+| Whole-PT pseudobulk + signed GSEA | 158 | 193, 255 | 1.42 | 0 (min FDP 1.00) |
+| S1/S2/S3 pseudobulk + signed GSEA | 204 | 343, 255 | 1.47 | 0 (min FDP 0.75) |
+| Gene GAM offset `T_level`, joint test | 0 | 46, 2 | – | 0 (min FDP 0.96) |
+| Gene GAM × S1/S2/S3 steps, joint test | 16 | 0, 0 | 0 | 6 |
+| **`T_spatial`, joint test** | **60** | **2, 0** | **0.02** | **57 (interval 23–78)** |
+
+The pre-specified rule would have made decoy FDP the primary R2 metric. It failed because of the
+pathway-score models: their decoy FDP is 0, yet they call 1,444 and 1,509 of 1,513 pathways for
+species and 67–1,317 under relabeling. These scores are self-contained, so nearly every pathway's
+mean differs between species by more than any section-to-section difference. Their decoy FDP
+measures only that. R2 therefore keeps NCDR with the null-rate condition as its primary metric.
+Decoy FDP is a secondary metric for competitive strategies.
+
+**R3: reporting set.**
+
+| Stage | Pathways |
+|---|---:|
+| Tested | 1,513 |
+| Joint-test candidates | 60 |
+| Not specimen-sensitive | 58 |
+| Stable (≥ 5 of 7 runs) | 51 |
+| **Robust** (registration effect ratio ≥ 0.7 and q ≤ 0.10; not region-sensitive against 20 power-matched removals) | **36** |
+| **Core** (also detected in both species and mouse sex-unbiased) | **26** |
+
+- **Programs.** The robust pathways form **17 gene-overlap programs**. The largest are steroid
+  hormone and xenobiotic metabolism (Cyp2e1, Hsd11b1, Adh1, Ugt genes), mitochondrial and
+  peroxisomal fatty-acid oxidation (Acsm3, Ehhadh, Acadm, Acaa2), vitamin and cofactor metabolism
+  (Slc22a13, Slc5a8, Pank1), bile acid and peroxisome (Crot, Nudt19, Slc27a2), fat-soluble
+  vitamins (Rbp4, Lpl, Apob), glutathione (Gclc, Gclm, Gss) and BCAA degradation.
+- **Early/late split.** The 10 human-high pathways peak early (median 0.16); the 26 mouse-high
+  pathways peak late (median 0.63).
+- **Shape.** 26 are graded, 4 localized and 6 reversing. The median averaging loss is 0: most
+  contributing genes differ in one direction along the PT. A whole-PT average **dilutes** these
+  differences more than it cancels them.
+- **"New with pseudospace" is dropped** as a class. It was defined by non-calls from screens whose
+  decoy FDP is 0.75–1.00.
+- **Overlap with the old list.** 27 of the 36 robust pathways were in the old 66, and 17 of the 26
+  core in the old 42. The joint test applied to the relabelings flags fewer pathways as
+  specimen-sensitive, so some broad programs return. Table S2 gives each pathway's specificity
+  margin.
+
+**R4: robustness.** Every robust pathway keeps ≥ 70% of its effect under:
+- the anatomy-anchored coordinate;
+- cortical-like mouse S3;
+- removal of flagged ambient, neighbouring-segment and mapping genes;
+- 5-bin matching;
+- equal probe counts (workstream 3's table);
+- the DPT coordinate.
+
+Detected-in-both keeps 94% of robust pathways at that threshold, and sex-unbiased keeps 97%.
+
+**R4: specimen-level split-plot test (E4).** This is a pseudobulk of specimen × 8 coordinate bins
+with voom-style weights and moderated F. Species × position is tested against specimen × position
+(22 df).
+- **Gene level.** It is calibrated under relabeling: 0.6% and 0.4% of genes at p ≤ 0.01, λ ≤ 0.87.
+  Its gene ranking agrees only weakly with `T_spatial` (Spearman 0.21).
+- **Pathway level, pre-specified joint test.** With the pseudobulk VIF it calls nothing. Decoys
+  show that this VIF overcorrects (decoy a = 1.10, ρ = 0.002, against a median VIF of 2.07).
+- **Pathway level, matched only.** It calls 41 pathways, with 0 and 0 under relabeling. 15 of the
+  36 robust pathways are among them, and the robust pathways' split-plot z far exceeds that of
+  uncalled pathways (median 2.6 against −0.5; Mann–Whitney p = 7 × 10⁻²⁰).
+- **Use.** A complement, not a replacement.
+
+**R4: external replication (E3).** Donors are the replicates. References are Census human cortex
+snRNA (6 donors, primary) and Lake/KPMP human cortex (7 donors), each against 12 male or 12 female
+mice.
+
+- **Gene level.** Our top-10% `T_spatial` genes correlate with the external species × position
+  contrast at ρ 0.68 (Census) and 0.73 (Lake). Expression-matched random genes give medians of
+  0.57 and 0.60, with 97.5th percentiles of 0.62 and 0.66. The agreement is therefore above
+  expression-matched chance, but similar to selecting the most highly expressed genes (0.64,
+  0.72).
+- **Pathway level.** Robust pathways replicate far better than uncalled pathways: Mann–Whitney
+  p = 2 × 10⁻¹³ (Census) and 1 × 10⁻⁹ (Lake). However, only 17 of 36 replicate within the list at
+  BH ≤ 0.10 against the Census reference, and 6 against Lake. The pre-specified criterion (≥ 50%)
+  is not met.
+- **Claim for R4.** Measurement-level agreement, plus the comparison with uncalled pathways. It is
+  not pathway-by-pathway replication.
+- **Global component.** In ours and in both external human references, the human S3 − early
+  contrast is a small fraction of the mouse contrast. Regressing the interaction on the mouse
+  gradient gives slopes of −0.81 (ours, segment labels), −0.86 (Census) and −0.88 (Lake), with
+  R² 0.60–0.76.
+- **Beyond the global component.** When this uniform flattening is removed from both sides, only
+  1–3 robust pathways replicate in any reference. The pathway screen therefore identifies the
+  programs where mouse zonation is strongest and the human profile is flat. Pathway-specific
+  positional differences beyond that global pattern are not replicated.
+- **Conventional-only pathways.** Pathways called only by conventional screens (184) rarely
+  replicate their average difference: 6 at nominal p ≤ 0.05, none at BH ≤ 0.10.
+
 ## The control this adds
 
 Notebook 12 compares screens to each other. It has no measurement of how many pathways a
@@ -63,7 +186,7 @@ are reported as context only: they may be real biology, but this cohort cannot s
 from specimen variation. Conventional analyses are not wrong; they ask a question this design
 cannot answer specifically.
 
-## Final list
+## Final list (notebook 31; superseded by notebook 37 above)
 
 129 notebook-12 spatial candidates → 104 not specimen-sensitive → 84 stable (retained in ≥5 of
 7 planned sensitivity runs) → **82 correlation-supported**. Versus conventional screens:
@@ -129,7 +252,7 @@ Outputs: `results/pt_pathway_story/` (`figures/fig5_example_*`, `fig6_direction_
 `flagship_member_genes.csv`, `direction_reversing_genes.csv`,
 `confident_pathways_for_paper.csv`).
 
-## Robustness to coordinate registration and sampled region (notebook 33)
+## Robustness to coordinate registration and sampled region (notebook 33; the counts here refer to the superseded list)
 
 `analysis/notebooks/33_pt_pathway_registration_sensitivity.ipynb` tests the two alternatives
 the relabeling control cannot detect, because both are species-level effects.

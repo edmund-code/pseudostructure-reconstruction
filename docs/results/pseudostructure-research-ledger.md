@@ -295,3 +295,102 @@ anatomy is excluded from all ordinal likelihood calculations, and graph anchors
 control rooting/orientation without excluding unlabeled expression observations.
 All 266 regression tests pass, including both strict-default and masked DPT/scFates
 smoke checks. The groupwise biological protocol remains unexecuted.
+
+### Notebook 25 execution details fixed before results
+
+The groupwise comparison will include full and S3-only unlabeled calibration on
+the same evaluation half. Source anatomical labels alone provide anchors; all
+calibration labels passed to fitters are unknown. The primary common-neighbor
+extension uses the entire source-plus-calibration point cloud and each method's
+fitted coordinates; each response decoder is fitted only on source response
+genes at that method's source positions. Native Gaussian projection is reported
+separately using the frozen learned query-specimen intercept.
+
+Alongside the quadratic coverage oracle, include a literal privileged segment-only
+baseline: fit three response-gene means on source S1/S2/S3 and assign them using
+supplied evaluation labels. This is not a label-free projector. Unconverged joint
+atlases retain their objective histories and failure records but provide no
+accepted biological predictions; successful arms and graph comparators continue
+independently. Aggregate only accepted fits and show denominators explicitly.
+No solver or parameter changes will be selected from these outputs.
+
+Before examining results, note one remaining model assumption: the Gaussian
+atlas likelihood integrates over a uniform latent grid mixture. There is no
+query rank stretching or hard occupancy matching, but the fitter also does not
+estimate specimen-specific cut-position frequencies. Uniform numerical grid
+spacing does not imply uniform physical sampling. Incomplete-calibration behavior
+therefore tests this particular likelihood as well as curve and offset fitting;
+a failure would not reject the existence of a shared anatomical object.
+
+### Groupwise reconstruction: measured results (notebook 25)
+
+All six source/fold references reproduce notebook 21, and all 12 full/S3-only
+pooled graph comparisons complete. Of 36 intended joint-atlas attempts, 21
+converge and 15 reach the fixed 60-iteration cap; there are no fitting exceptions.
+Full calibration accepts 14/18 arms, versus 7/18 for S3-only calibration. Every
+objective history decreases; nonconvergence means the specified stopping
+criterion was not met, not numerical divergence. Failed fits remain excluded
+from biological prediction summaries. Counts and exact matched-fold comparisons
+are saved, so unequal convergence sets cannot masquerade as a weighting effect.
+
+The balanced-offset atlas does not give a consistent improvement over the
+source-only scFates reference. On matching accepted full-calibration folds, its
+selected-program gains are approximately −3.37%/+8.46%/−9.78% (S1/S2/S3,
+Ctrl1A2 reference; two folds) and +0.16%/−4.84%/+0.57% (reverse; three folds).
+Its all-gene gains are approximately −0.129%/−0.034%. Paired quarter-read movement
+is approximately 40%/68% greater on those same successful folds. Partial
+calibration has only one accepted balanced fit per direction and cannot establish
+robust transfer. Native Gaussian projection gives mixed program changes and
+generally greater read sensitivity; no projector or winning segment arm is adopted.
+
+The apparent reverse-direction gains versus pooled scFates require particular
+care. Pooled scFates has weak gene-panel agreement: with Ctrl1A4 as source,
+full-calibration S1/S2 pairwise ranks can fall to 0.071/0.167; S3-only calibration
+S3 reaches −0.154. These are ordering disagreements, not just gauge stretching.
+Source-only scFates is substantially more repeatable in several of those
+comparisons, and source/pooled DPT remain more consistent across panels. There
+is no true fine anatomical coordinate here, so stability alone cannot choose DPT.
+The matched calibration-data allowance reveals that extra profiles do not
+automatically improve the reconstruction.
+
+Offsets contribute very little over the balanced no-offset arm (absolute mean
+selected-program changes below 0.07% on matched cases). Equal-specimen versus
+observation weighting has mixed small effects on the intersection of converged
+cases: full first-direction effects approximately −0.13%/+0.19%/−0.75% (one
+common fold), and reverse +0.55%/+0.12%/+0.23% (two). Those denominators are too
+limited to credit the repeated-specimen prior with a reliable improvement.
+
+There remains useful evidence for continuous molecular organization: source-only
+scFates beats the literal three-mean segment oracle on the frozen selected panels
+by approximately 16.3%/11.6%/16.3% in the first direction and 6.6%/10.5%/5.4%
+in reverse, across all three folds. It also beats the stronger quadratic coverage
+oracle on those panels. Selection favored an earlier atlas, shared count exposure
+retains aggregate dependence, and two mice have been reused throughout
+development. This validates neither true longitudinal distance nor a novel
+reconstruction algorithm. Depth remains excluded.
+
+The current unconstrained groupwise Gaussian prototype is not adopted. A useful
+shared-object method must preserve repeatable local organization across
+references and gene panels; pooling and a converged mean curve are insufficient.
+No OT, flexible covariance, disease, human or regulator extension follows.
+
+### Next goal-aligned model check: interpretable regularization units
+
+One concrete limitation is visible in the implemented hierarchy. Both curve and
+offset penalties are in absolute count-PC units. The balanced offset update
+shrinks by `1 + 4*sigma2`, and observed residual variances span approximately
+10.5–20.0, giving shrinkage factors around 43–81. Fitted offset norms are only
+0.012–0.044. The null offset result therefore describes this strong prior; it
+does not establish absence of specimen variation.
+
+Analytically, rescaling the supplied PCs, mean and offsets by c and residual
+variance by c squared leaves likelihood responsibilities unchanged, but multiplies
+these fixed quadratic penalties by c squared. An arbitrary representation scale
+therefore changes the effective reconstruction prior. Before another biological
+experiment, check the optimizer/objective's behavior under a uniform unit change
+and specify a training-defined reference-unit convention. This is a requirement
+for a reproducible shared-object model across gene panels, not a new expression
+normalizer or a query-tuned penalty sweep. Any corrected convention must return
+to the same matched real-control benchmark and still earn improvement in fine
+programs and reproducibility. Uniform latent mixing and absent fine anatomical
+ground truth remain separate limitations.

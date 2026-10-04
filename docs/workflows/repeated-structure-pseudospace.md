@@ -506,3 +506,47 @@ explicit boolean `anchor_mask`, validate S1/S2/S3 only among anchors, and use th
 for rooting and orientation while retaining every point as a graph/curve
 observation. Both APIs preserve their previous strict defaults. These changes
 prepare the groupwise comparison; they are not results from that experiment.
+
+## Groupwise reconstruction (notebook 25)
+
+`25_groupwise_repeated_structure_reconstruction.ipynb` directly tests whether
+separate specimen point clouds inform a shared latent PT object beyond a pooled
+trajectory. The source-only count transform is frozen. Each fit uses all source
+sections plus a deterministic calibration half of the other control, with the
+remaining half reserved for evaluation. Full and S3-only calibration regimes keep
+identical evaluation IDs. S3 annotation selects the stress population but is then
+hidden from the fitter.
+
+Pooled DPT/scFates receive the same calibration rows. Source labels root and
+orient the graph baselines and provide a weak ordinal likelihood to the atlas;
+these are different uses of the same source information. The three latent-atlas
+variants separate equal-specimen weighting from constant specimen offsets. The
+common-neighbor comparison isolates fitted axes; native expression-only atlas
+projection is separately named. Every response decoder uses source responses
+only. The privileged segment-only and quadratic segment-plus-coverage baselines
+receive evaluation labels explicitly; molecular projection does not.
+
+Unknown nephron identity is integrated variation, not estimated membership.
+Uniform grid spacing fixes a numerical coordinate and does not infer physical
+length or sampling uniformity. Constant offsets do not identify disease effects.
+Frozen source-selected programs, gene-fold disagreement and paired read thinning
+are descriptive development diagnostics on two repeatedly reused mice. Raw
+all-gene exposure retains aggregate dependence on withheld responses. No depth
+measurement contributes to selection, and no disease, human or regulator branch
+is enabled by this experiment. Solver failures remain visible and are excluded
+from accepted prediction summaries rather than silently treated as convergence.
+
+The Gaussian likelihood still uses uniform grid mixing and does not estimate
+specimen-specific sampling frequencies along the latent object. This is distinct
+from hard occupancy matching and from physically uniform cuts, but may affect
+partial-coverage fitting. Interpret the stress test as evidence about the tested
+likelihood, not an identification guarantee or a rejection of the shared-object
+prior.
+
+The first notebook-25 run accepts 21/36 joint fits and does not establish a
+consistent benefit over the source-only reference. Accepted-fit summaries show
+denominators, and a post-output reporting appendix compares arms on identical
+successful folds without changing any fit. Source-only comparators are visible
+in the program plot because gains over an unstable pooled scFates baseline are
+insufficient. The groupwise prototype remains experimental and unadopted;
+full measured conclusions and the next unit-convention check are in the ledger.

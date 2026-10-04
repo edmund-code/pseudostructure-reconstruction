@@ -72,3 +72,9 @@ fine-order stability, repeated-specimen contribution beyond a generic pooled
 curve, honest conditional uncertainty, and frozen position-versus-domain-deviation
 behavior. None can be claimed solely from a smooth curve, a green regression
 suite, preserved segment medians or a lower fitting cost.
+
+## Stopped checkpoint
+
+Work stopped at the user’s request. Notebook 30 contains only the prespecified
+measurement-invariance protocol; it is not implemented or executed. Notebook 29
+remains the latest measured result. No research processes are running.

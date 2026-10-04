@@ -829,3 +829,42 @@ measurement/representation model before another registration hypothesis; the
 existing source-neighbor comparator remains stronger. Source labels, selected
 programs, shared exposure and reused two-mouse development continue to limit
 physical identification. The repeated-object goal remains unmet.
+
+## 2026-10-04 — Measurement invariance diagnostic, before outputs
+
+Goal check: canonical position refers to a physical cut, so reducing its reads
+cannot change anatomy. Before more spatial inference, isolate whether the current
+frozen Pearson-residual geometry changes systematically even when every observed
+gene proportion is held fixed. This is a prerequisite diagnostic for the repeated-
+object observation model, not a new preprocessing method or a claim of anatomical
+accuracy. No model is selected using tissue depth or query genes/labels.
+
+Use the same two actual controls, three gene folds, marker exclusions, source-only
+15 PCs, dispersion 100 and seed 15. Reproduce notebook 29's source scFates/DPT
+neighbor coordinates, primary quarter-read coordinates and calibration support
+fractions. Only these unchanged reference fits are needed; no new spatial curve,
+registration, response decoder or hyperparameter search is introduced.
+
+Compare original query profiles with rate-preserving counterfactuals at exposures
+1, 1/2 and 1/4: use fractional mean counts alpha*C and alpha*L through the exact
+existing residual formula and frozen source centering/PCs. These are conditional
+mean-input diagnostics built from observed data, not real integer-count samples
+or E[nonlinear transformed thinned counts]. At alpha=1 require exact identity.
+Then compare six actual binomial quarter-read draws: the existing seed15+fold
+and five additional seeds105+fold through109+fold. All-gene thinning recomputes
+exposure; modeling genes remain fixed and source transforms never refit.
+
+Measure PC displacement, its component parallel to the exposure-only displacement,
+source-axis coordinate change/bias, and movement averaged over random draws.
+Original full/S3-only calibration clouds/radii remain frozen when assessing
+molecular support; report by segment only afterward. Query labels only select
+S3 stress populations and stratify diagnostics. Never equate this support gate
+with physical overlap. Gene folds and draws are perturbations, not independent
+biological specimens. A systematic rate-preserving effect would justify examining
+an explicitly conditional observation representation; a negligible effect would
+close this explanation of the registration failure. Neither outcome licenses a
+new reconstruction claim without cross-specimen/program validation.
+
+Checkpoint at user-requested stop: this protocol is saved in notebook 30, but
+implementation and execution have not begun. Notebook 29 remains the latest
+completed experiment; no measurement-invariance result is claimed.

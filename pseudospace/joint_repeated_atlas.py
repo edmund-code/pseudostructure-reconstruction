@@ -127,14 +127,39 @@ def _posterior(Y, mean, offsets, specimens_idx, sigma2, grid, labels,
 def fit_joint_atlas(Y, specimens, anatomy, initial_z, grid=None, roughness=.001,
                     offset_penalty=4., anatomy_strength=1., anatomy_width=.1,
                     max_iter=60, tol=1e-5, fit_offsets=True,
-                    balance_specimens=True, allow_unlabeled_anatomy=False):
+                    balance_specimens=True, allow_unlabeled_anatomy=False,
+                    prior_scale=1.0):
     """Fit a shared atlas and latent finite-grid positions.
 
     ``allow_unlabeled_anatomy=True`` permits ``-1`` labels for unlabeled
     specimen point clouds. Those rows receive no ordinal anatomy information;
     this does not replace them with pseudo-S2 labels.
+
+    ``prior_scale`` divides all feature values by one common scalar during
+    fitting, then restores returned atlas values to input units. The quadratic
+    smoothness and offset penalties therefore act on beta / prior_scale and
+    offsets / prior_scale. For fixed Y, changing this scale changes prior strength. Jointly scaling
+    Y and prior_scale preserves the fit. The scalar does not reweight features
+    or alter upstream PCA/graph inputs. Objective histories use reference
+    units; all returned molecular parameters and variances use input units.
     """
     Y = _matrix(Y, 'Y', min_rows=4)
+    if not np.isscalar(prior_scale) or isinstance(prior_scale, (bool, np.bool_)):
+        raise ValueError('prior_scale must be a positive finite scalar')
+    try:
+        prior_scale = float(prior_scale)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('prior_scale must be a positive finite scalar') from exc
+    if not np.isfinite(prior_scale) or prior_scale <= 0:
+        raise ValueError('prior_scale must be a positive finite scalar')
+    with np.errstate(over='ignore', under='ignore', invalid='ignore'):
+        scale2 = float(prior_scale * prior_scale)
+    if not np.isfinite(scale2) or scale2 <= 0:
+        raise ValueError('prior_scale squared must be positive and finite')
+    with np.errstate(over='ignore', divide='ignore', invalid='ignore'):
+        Y = Y / prior_scale
+    if not np.isfinite(Y).all():
+        raise ValueError('prior_scale normalization overflowed')
     specimens = np.asarray(specimens, dtype=object).ravel()
     initial_z = np.asarray(initial_z, float).ravel()
     anatomy = np.asarray(anatomy)
@@ -247,7 +272,8 @@ def fit_joint_atlas(Y, specimens, anatomy, initial_z, grid=None, roughness=.001,
         objective += .5*offset_penalty*np.mean(np.sum(offsets**2, axis=1))
         objective_change = (np.nan if not history else objective - history[-1]['objective'])
         history.append({'iteration': iteration + 1, 'objective': objective,
-                        'sigma2': sigma2, 'objective_change': objective_change})
+                        'sigma2': sigma2 * scale2,
+                        'objective_change': objective_change})
         if len(history) > 1 and abs(objective_change) <= tol * max(1., abs(history[-2]['objective'])):
             converged = True
             break
@@ -259,13 +285,24 @@ def fit_joint_atlas(Y, specimens, anatomy, initial_z, grid=None, roughness=.001,
     z_map = grid[np.argmax(posterior, axis=1)]
     offsets_by_specimen = {sample: offsets[i].copy()
                            for i, sample in enumerate(specimens_unique)}
+    mean = mean * prior_scale
+    beta = beta * prior_scale
+    offsets_by_specimen = {sample: value * prior_scale
+                           for sample, value in offsets_by_specimen.items()}
+    sigma2 = sigma2 * scale2
+    if (not np.isfinite(mean).all() or not np.isfinite(beta).all()
+            or not np.isfinite(sigma2) or sigma2 <= 0
+            or any(not np.isfinite(value).all() for value in offsets_by_specimen.values())
+            or any(not np.isfinite(item['sigma2']) or item['sigma2'] <= 0 for item in history)):
+        raise ValueError('prior_scale restoration produced nonfinite parameters or nonpositive variance')
     return {'grid': grid, 'mean': mean, 'beta': beta, 'offsets': offsets_by_specimen,
             'specimens': specimens_unique, 'sigma2': sigma2,
             'cutpoints': cutpoints, 'posterior': posterior,
             'z_mean': z_mean, 'z_MAP': z_map, 'history': history,
             'converged': converged,
             'weights': weights, 'feature_count': d,
-            'anatomy_strength': anatomy_strength, 'anatomy_width': anatomy_width}
+            'anatomy_strength': anatomy_strength, 'anatomy_width': anatomy_width,
+            'prior_scale': prior_scale}
 
 
 def project_joint_atlas(atlas, Y, offset=None, block_size=512):

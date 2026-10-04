@@ -394,3 +394,95 @@ normalizer or a query-tuned penalty sweep. Any corrected convention must return
 to the same matched real-control benchmark and still earn improvement in fine
 programs and reproducibility. Uniform latent mixing and absent fine anatomical
 ground truth remain separate limitations.
+
+### Reference-unit prerequisite: actual-data and regression evidence
+
+A fixed probe uses Ctrl1A2, fold 0, full unlabeled Ctrl1A4 calibration and the
+original pooled-scFates initialization. With all existing raw-unit parameters
+unchanged, multiplying PCs by seven changes average fitted positions by 0.0360
+(maximum 0.5266); accepted fits stop after 16 versus 7 iterations. This changes
+the effective dimensional priors, not the underlying point geometry. It is a
+numerical model check, not a biological prediction gain.
+
+An explicit `prior_scale` now computes the model in declared reference units and
+restores molecular parameters/variances to input units. History objectives and
+stopping criteria remain in reference units. The previous default scale 1 is
+preserved. Scaling both data and reference unit by seven reproduces the actual
+probe's positions to maximum approximately 1.3e-9, objectives to approximately
+2.7e-10, and the same 16 iterations. Code regression fixtures cover parameter
+restoration, frozen query projection, strict defaults and invalid/unrepresentable
+scales; they are not synthetic biological experiments. Changing reference scale
+for fixed data intentionally changes prior strength.
+
+### Next actual-data test specified before outputs: source-relative priors
+
+Notebook 26 retains notebook 25's exact data, gene folds, source-only transform,
+hidden calibration anatomy, source-plus-calibration graph inputs, initialization,
+three model arms, full/S3-only regimes, source-only response decoders, frozen
+programs, privileged segment/coverage comparators and paired read perturbation.
+Set the prior reference scalar to the root mean square of centered source PC
+values across rows and all 15 components. This uses only source modeling features
+and uniformly converts units for the latent fitter; it neither changes the PCA
+encoder nor reweights graph geometry. The priors now refer to total source
+molecular variation, not to an estimated measurement-noise standard deviation.
+No query-based scale, penalty, variance estimator or iteration sweep is allowed.
+
+Reproduce both source-only and pooled graph positions/scores from existing
+notebooks. Compare new joint arms against the old raw-unit arms on identical
+accepted cases, showing missing fits and successful-fold counts. Require gains
+against the source-only references as well as the extra-data pooled comparators;
+report molecular program, read and gene-panel stability separately. The object
+remains one ordered physical structure with integrated unknown-nephron variation
+and restricted constant specimen offsets. This fixes interpretable prior units;
+it does not identify anatomy, fix uniform sampling assumptions or automatically
+validate the hierarchy. The estimator remains unadopted until the actual results
+earn its use.
+
+### Actual-control reference-unit result (notebook 26)
+
+Executed `26.source_relative_priors.1`, cache key `dc5f39df312f7c54`.
+All six source references and twelve pooled-graph regimes reproduce notebook 21
+and 25 scores, evaluation coordinates and frozen quarter-read coordinates.
+Source-only reference scalars range 6.329–7.898. All 36 joint fits return without
+exceptions, but only **5/36 converge**, versus **21/36** under raw-unit priors.
+All 24 specimen-balanced fits fail the fixed convergence criterion. Accepted
+fits are observation-weighted without offsets: Ctrl1A2 full 2/3, S3-only 2/3;
+Ctrl1A4 full 0/3, S3-only 1/3. Every objective history descends. Nonconvergence
+at the fixed cap is not evidence of divergence or rejection of the physical
+shared-object prior. No cap, scale or penalty tuning follows these outcomes.
+
+Only two source/fold/regime cases are accepted under both prior conventions.
+For their common-neighbor projection, selected-program gains versus raw-unit
+fits are −3.84%/−8.91%/−2.93% (S1/S2/S3, Ctrl1A2 full) and
++1.23%/+3.41%/−2.90% (Ctrl1A4 S3-only), each one fold. Aggregate all-gene
+gains are only +0.049% and +0.040%. Matched read movement improves overall
+by 4.65% and 42.38%, respectively, while S2 movement worsens 80.77% in the
+first case. These are separate descriptive metrics on sparse survivor sets.
+
+Against source-only scFates, accepted observation-weighted common-neighbor
+program gains are −5.72%/+1.13%/−1.26% (Ctrl1A2 full, two folds),
+−0.90%/+1.90%/−0.73% (Ctrl1A2 S3-only, two) and
++1.63%/−11.81%/−0.09% (Ctrl1A4 S3-only, one). Some improvements over
+DPT remain, but the stronger scFates reference and opposite direction do not
+support adoption. Full Ctrl1A2 read movement is 32.02% greater than source-only
+scFates on matching accepted folds. Native projection is reported separately.
+Both plots were inspected; source-only context remains visible so gains over a
+weak pooled comparator cannot stand in for a method-level improvement.
+
+The reference-unit API passes code regression checks, including joint unit
+rescaling and restoration; the old default reproduces HEAD exactly. The full
+synthetic code suite passes 280 tests. The API remains explicit and default 1;
+the source-RMS convention is experimental, not a silent public-default change.
+
+### Goal decision after the unit check
+
+The unit convention is now explicit, but relaxing the dimensional priors does
+not rescue this unconstrained groupwise Gaussian estimator. Stop expanding this
+branch with flow, covariance flexibility, specimen warps or outcome-selected
+optimizer settings. The unresolved task is reconstructing reproducible local
+organization from repeated cuts while permitting unequal coverage and molecular
+variation. A next model experiment needs a concrete restriction or observation
+model addressing that task, and must justify itself against the completed
+source-only and pooled benchmarks before it is run. The project goal is still
+unmet; a numerical property and a reusable negative benchmark are progress, not
+a validated pseudostructure method. Depth remains unused.

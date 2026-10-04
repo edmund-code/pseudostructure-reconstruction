@@ -156,3 +156,67 @@ def test_iteration_limit_is_reported_as_not_converged():
     atlas = fit_joint_atlas(Y, specimens, anatomy, z, max_iter=1)
     assert len(atlas['history']) == 1
     assert atlas['converged'] is False
+
+
+@pytest.mark.parametrize('scale', [.2, 7.])
+def test_prior_scale_makes_joint_fit_unit_invariant_and_restores_raw_units(scale):
+    Y, specimens, anatomy, z = _synthetic(seed=43, n_per=24)
+    params = dict(max_iter=12, tol=1e-7)
+    raw = fit_joint_atlas(Y, specimens, anatomy, z, **params)
+    scaled = fit_joint_atlas(Y * scale, specimens, anatomy, z,
+                             prior_scale=scale, **params)
+
+    assert raw['converged'] == scaled['converged']
+    assert len(raw['history']) == len(scaled['history'])
+    for field in ('objective', 'objective_change'):
+        np.testing.assert_allclose([item[field] for item in raw['history']],
+                                   [item[field] for item in scaled['history']],
+                                   rtol=1e-9, atol=1e-9, equal_nan=True)
+    for item, scaled_item in zip(raw['history'], scaled['history']):
+        assert scaled_item['sigma2'] == pytest.approx(item['sigma2'] * scale ** 2,
+                                                       rel=1e-9, abs=1e-12)
+    np.testing.assert_allclose(raw['posterior'], scaled['posterior'], rtol=1e-6, atol=5e-9)
+    np.testing.assert_allclose(raw['z_mean'], scaled['z_mean'], rtol=1e-7, atol=1e-8)
+    np.testing.assert_array_equal(raw['z_MAP'], scaled['z_MAP'])
+    np.testing.assert_allclose(scaled['mean'], raw['mean'] * scale, rtol=1e-7, atol=1e-8)
+    np.testing.assert_allclose(scaled['beta'], raw['beta'] * scale, rtol=1e-7, atol=1e-8)
+    np.testing.assert_allclose(scaled['sigma2'], raw['sigma2'] * scale ** 2,
+                               rtol=1e-8, atol=1e-12)
+    for sample in raw['specimens']:
+        np.testing.assert_allclose(scaled['offsets'][sample], raw['offsets'][sample] * scale,
+                                   rtol=1e-7, atol=1e-8)
+
+    held = Y[::7] + [.03, -.02, .01]
+    offset = raw['offsets']['B']
+    p_raw = project_joint_atlas(raw, held, offset=offset)
+    p_scaled = project_joint_atlas(scaled, held * scale, offset=offset * scale)
+    np.testing.assert_allclose(p_scaled['posterior'], p_raw['posterior'], rtol=1e-6, atol=5e-9)
+    np.testing.assert_allclose(p_scaled['z_mean'], p_raw['z_mean'], rtol=1e-7, atol=1e-8)
+    np.testing.assert_array_equal(p_scaled['z_MAP'], p_raw['z_MAP'])
+
+
+def test_default_prior_scale_matches_explicit_one_exactly():
+    Y, specimens, anatomy, z = _synthetic(seed=44, n_per=20)
+    implicit = fit_joint_atlas(Y, specimens, anatomy, z, max_iter=5)
+    explicit = fit_joint_atlas(Y, specimens, anatomy, z, max_iter=5, prior_scale=1.)
+    for key in ('mean', 'beta', 'sigma2', 'posterior', 'z_mean', 'z_MAP', 'cutpoints'):
+        np.testing.assert_array_equal(implicit[key], explicit[key])
+    assert implicit['history'] == explicit['history']
+    assert implicit['prior_scale'] == explicit['prior_scale'] == 1.
+    for sample in implicit['specimens']:
+        np.testing.assert_array_equal(implicit['offsets'][sample], explicit['offsets'][sample])
+
+
+@pytest.mark.parametrize('scale', [0., -1., np.nan, np.inf, True, False,
+                                   [1.], np.array([1.]), 1e-200, 1e200])
+def test_invalid_prior_scale_is_rejected(scale):
+    Y, specimens, anatomy, z = _synthetic(seed=45, n_per=12)
+    with pytest.raises(ValueError, match='prior_scale'):
+        fit_joint_atlas(Y, specimens, anatomy, z, max_iter=2, prior_scale=scale)
+
+
+def test_prior_scale_rejects_underflowed_restored_variance():
+    with pytest.raises(ValueError, match='prior_scale restoration'):
+        fit_joint_atlas(np.zeros((6, 2)), np.repeat(['A', 'B'], 3),
+                        np.tile([0, 1, 2], 2), np.tile([.1, .5, .9], 2),
+                        max_iter=2, prior_scale=1e-160)

@@ -550,3 +550,32 @@ successful folds without changing any fit. Source-only comparators are visible
 in the program plot because gains over an unstable pooled scFates baseline are
 insufficient. The groupwise prototype remains experimental and unadopted;
 full measured conclusions and the next unit-convention check are in the ledger.
+
+## Reference units for the hierarchy (notebook 26)
+
+`26_repeated_structure_reference_units.ipynb` keeps notebook 25's actual-control
+design and changes only the joint fitter's prior reference scalar. For each
+source/fold, it uses the RMS of centered source PCs across rows and components.
+This is total source molecular variation, not a residual-noise estimate. PCA,
+graph inputs, initialization, ordinal supervision and evaluation remain fixed.
+The source-only and pooled graph coordinates, quarter-read coordinates and
+scores must reproduce the preceding benchmarks before new joint fits proceed.
+
+The reusable fitter's `prior_scale=1` default preserves previous behavior. With
+an explicit scalar it fits in reference units and returns molecular parameters
+and variances in input units; objectives and stopping criteria use reference
+units. Scaling both inputs and the scalar preserves the fitted positions.
+Changing the scalar for fixed data changes prior strength. Objective values
+across conventions are therefore not model-selection evidence.
+
+Raw-unit versus source-relative predictions are compared on identical accepted
+cases, with unmatched cases and fold counts reported. The same source-only,
+pooled, segment and coverage comparators remain required. Numerical invariance
+does not identify the anatomical coordinate or resolve partial coverage.
+
+The actual-control run accepts 5/36 source-relative fits, including none of the
+24 specimen-balanced attempts, versus 21/36 raw-unit fits. All graph references
+reproduce. Sparse accepted-fit gains do not consistently beat source-only
+scFates, and the hierarchy remains unadopted. Numerical unit consistency is
+retained as an explicit API property; see the ledger for matched denominators,
+program and read results, and the decision to stop expanding this branch.

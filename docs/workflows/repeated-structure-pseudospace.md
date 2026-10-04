@@ -579,3 +579,24 @@ reproduce. Sparse accepted-fit gains do not consistently beat source-only
 scFates, and the hierarchy remains unadopted. Numerical unit consistency is
 retained as an explicit API property; see the ledger for matched denominators,
 program and read results, and the decision to stop expanding this branch.
+
+## Assignment-aware response prediction (notebook 27)
+
+`27_repeated_structure_assignment_prediction.ipynb` freezes notebook 22's
+scFates/count references, adds the existing source-only DPT comparator, and
+distinguishes decoding at the mean position from averaging decoded responses over
+assignments. `SplineAtlas.predict_distribution` averages spline basis values
+before multiplying gene coefficients. `project_neighbor_axis` optionally exposes
+its original supports/weights; its default coordinate output is unchanged.
+Neighbor assignments are not calibrated probabilities.
+
+Every arm uses both response reductions and identical frozen training decoders.
+Actual-control guards reproduce earlier point positions/errors, selected programs
+and paired thinning before interpretation. The six transfers complete; averaging
+strengthens scFates' prediction while Gaussian/NB projection remains inferior in
+important programs, especially reverse S2. Coordinates and ordering are unchanged.
+Retain this explicit reduction distinction in subsequent comparisons; do not use
+its prediction gains to claim a reconstructed physical coordinate. Both the
+probabilistic projectors and unconstrained Gaussian hierarchy remain unadopted.
+The next curve-construction hypothesis and all measured denominators are in the
+research ledger. Depth remains excluded.

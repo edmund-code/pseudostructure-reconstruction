@@ -75,6 +75,45 @@ class SplineAtlas:
         zz = np.asarray(z, dtype=float).reshape(-1)
         return _basis(zz, self.grid) @ self.beta.T * self.scale + self.mean
 
+    def predict_distribution(self, support, weights):
+        """Predict the decoder averaged over discrete coordinate assignments.
+
+        ``support`` is either a shared one-dimensional grid or a matrix of
+        per-query support values matching ``weights``. The spline basis is
+        averaged before multiplying by gene coefficients, avoiding a
+        query-by-support-by-gene prediction tensor.
+        """
+        weights = np.asarray(weights, dtype=float)
+        if weights.ndim != 2 or weights.shape[1] < 1:
+            raise ValueError("weights must be a 2D matrix with non-empty support")
+        if not np.isfinite(weights).all() or np.any(weights < 0):
+            raise ValueError("weights must be finite and nonnegative")
+        if np.any(np.abs(weights.sum(axis=1) - 1.) > 1e-8):
+            raise ValueError("each weights row must sum to one within 1e-8")
+
+        support = np.asarray(support, dtype=float)
+        if support.ndim == 1:
+            if len(support) != weights.shape[1]:
+                raise ValueError("shared support length must match the weights support dimension")
+        elif support.ndim == 2:
+            if support.shape != weights.shape:
+                raise ValueError("per-query support shape must match weights")
+        else:
+            raise ValueError("support must be a 1D shared vector or 2D per-query matrix")
+        if not np.isfinite(support).all() or np.any((support < 0) | (support > 1)):
+            raise ValueError("support must contain finite coordinates in [0, 1]")
+
+        n_query, n_support = weights.shape
+        if n_query == 0:
+            return np.empty((0, self.beta.shape[0]), dtype=float)
+        if support.ndim == 1:
+            expected_basis = weights @ _basis(support, self.grid)
+        else:
+            basis = _basis(support.reshape(-1), self.grid).reshape(
+                n_query, n_support, -1)
+            expected_basis = np.einsum('nm,nmq->nq', weights, basis)
+        return expected_basis @ self.beta.T * self.scale + self.mean
+
 
 def fit_atlas(X, z, specimens, grid=None, ridge=1.0, specimen_weights=None):
     """Fit gene curves with equal specimen weights, or supplied bootstrap weights."""

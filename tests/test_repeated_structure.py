@@ -121,3 +121,47 @@ def test_explicit_original_specimen_weights_survive_duplicate_rows():
         fit_atlas(x, z, specimen, specimen_weights={"a": 0, "b": 1})
     with pytest.raises(ValueError):
         fit_atlas(x, z, specimen, specimen_weights={"a": 1})
+
+
+def test_spline_distribution_prediction_averages_nonlinear_decoder_values():
+    z = np.tile(np.linspace(0., 1., 100), 2)
+    specimen = np.repeat(['a', 'b'], len(z) // 2)
+    x = np.column_stack([z ** 2, np.sin(2 * np.pi * z)])
+    atlas = fit_atlas(x, z, specimen, ridge=.001)
+    support = np.array([.1, .9])
+    weights = np.array([[.25, .75], [.6, .4]])
+
+    actual = atlas.predict_distribution(support, weights)
+    expected = weights @ atlas.predict(support)
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
+    assert not np.allclose(actual[0], atlas.predict([weights[0] @ support])[0], atol=1e-3)
+
+
+def test_spline_distribution_prediction_supports_row_specific_grids_and_empty_queries():
+    x, z, specimen, _ = toy()
+    atlas = fit_atlas(x, z, specimen)
+    support = np.array([[.05, .4, .8], [.2, .6, .95]])
+    weights = np.array([[.2, .5, .3], [.6, .1, .3]])
+    actual = atlas.predict_distribution(support, weights)
+    expected = np.vstack([w @ atlas.predict(row) for row, w in zip(support, weights)])
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
+    assert atlas.predict_distribution(np.array([.1, .9]), np.empty((0, 2))).shape == (0, x.shape[1])
+    assert atlas.predict_distribution(np.empty((0, 3)), np.empty((0, 3))).shape == (0, x.shape[1])
+
+
+@pytest.mark.parametrize('support,weights', [
+    ([.1, .9], [[.5]]),
+    ([[.1, .9]], [[.5, .4]]),
+    ([.1, 1.1], [[.5, .5]]),
+    ([[.1, np.nan]], [[.5, .5]]),
+    ([.1, .9], [[.5, -.5]]),
+    ([.1, .9], [[np.nan, np.nan]]),
+    ([.1, .9], [[.2, .2]]),
+    ([.1, .9], [0., 1.]),
+    ([], np.empty((1, 0))),
+])
+def test_spline_distribution_prediction_rejects_invalid_support_or_weights(support, weights):
+    x, z, specimen, _ = toy()
+    atlas = fit_atlas(x, z, specimen)
+    with pytest.raises(ValueError):
+        atlas.predict_distribution(support, weights)

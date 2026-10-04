@@ -25,6 +25,30 @@ def test_neighbor_projection_averages_exact_duplicate_neighbors_only():
     assert result[0] == pytest.approx(.5)
 
 
+def test_neighbor_assignments_preserve_projection_and_zero_distance_rule():
+    train = np.array([[0.], [0.], [1.], [2.]])
+    z = np.array([.1, .9, .4, .8])
+    query = np.array([[0.], [1.5]])
+    result = project_neighbor_axis(train, z, query, k=3, return_distribution=True)
+    np.testing.assert_array_equal(result['z_mean'], project_neighbor_axis(train, z, query, k=3))
+    np.testing.assert_allclose(result['weights'].sum(axis=1), 1.)
+    np.testing.assert_allclose((result['weights'] * result['support']).sum(axis=1), result['z_mean'])
+    assert np.count_nonzero(result['weights'][0]) == 2
+    assert result['weights'][0].max() == .5
+    # Averaging nonlinear responses uses the original assignments, not their mean.
+    assert (result['weights'][0] * result['support'][0] ** 2).sum() > result['z_mean'][0] ** 2
+
+
+def test_neighbor_assignments_allow_empty_queries_and_validate_flag():
+    result = project_neighbor_axis(np.array([[0.], [1.]]), np.array([0., 1.]),
+                                   np.empty((0, 1)), k=15, return_distribution=True)
+    assert result['support'].shape == result['weights'].shape == (0, 2)
+    assert result['z_mean'].shape == (0,)
+    with pytest.raises(ValueError, match='return_distribution'):
+        project_neighbor_axis(np.array([[0.], [1.]]), np.array([0., 1.]),
+                              np.array([[.5]]), return_distribution=1)
+
+
 @pytest.mark.parametrize('kwargs', [
     {'k': 0}, {'k': 1.5},
 ])

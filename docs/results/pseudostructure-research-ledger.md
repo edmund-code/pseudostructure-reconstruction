@@ -486,3 +486,97 @@ model addressing that task, and must justify itself against the completed
 source-only and pooled benchmarks before it is run. The project goal is still
 unmet; a numerical property and a reusable negative benchmark are progress, not
 a validated pseudostructure method. Depth remains unused.
+
+## 2026-10-04 — Assignment-aware prediction: goal check before outputs
+
+The next check is a statistical contract of repeated-cut reconstruction, not
+another Gaussian hierarchy. Unknown section positions may have several plausible
+assignments on the canonical object. Notebooks 22/23 keep Gaussian/NB assignment
+weights but score responses at `decoder(E[Z|x])`; kNN similarly collapses neighbor
+assignments to their mean coordinate. For nonlinear response curves this differs
+from `E[decoder(Z)|x]`. The earlier negative scores concern point-coordinate
+prediction, not the full probabilistic reference prediction. Uncertainty
+propagation has precedent in Campbell and Yau's 2016 probabilistic pseudotime
+work; no mathematical novelty is claimed here.
+
+Notebook 27 will freeze notebook 22's source-only scFates axis, count transform,
+mean/NB projectors, parameters and response decoder. Add DPT's existing source
+reference as required context. Compare point-coordinate and assignment-averaged
+decoding for **every** projector, including both graph baselines using their
+actual inverse-distance neighbor weights. Repeat both control directions, three
+gene folds, all-gene and frozen within-segment panels, privileged segment and
+quadratic coverage predictors, and the same paired quarter-read realization.
+Reproduce earlier coordinates and point-response scores before new comparisons;
+no fitter, coordinate, query label, prior, parameter or sampling distribution is
+changed. All-gene exposure and reused source-selected panels retain the earlier
+independence limitations. kNN weights are assignments, not calibrated posteriors.
+
+This addition is rejected as a reason to adopt probabilistic projection if it
+fails to improve the relevant held-out programs beyond assignment-aware graph
+comparators. Any prediction improvement is a response-reduction effect: it cannot
+prove better spatial ordering, calibrated anatomical uncertainty or the final
+joint estimator. Even a positive result must return to the unresolved shared
+local-order problem. Do not revive the unconstrained hierarchy, flow, AKI or TF
+branches from this diagnostic. Depth remains excluded.
+
+### Assignment-aware prediction: measured result (notebook 27)
+
+All six real-control transfers complete and pass coordinate, point-score,
+selected-program and paired quarter-read reproduction guards. Cache key
+`4ab201f39d67f090`. The source axes, fitted projectors and every spatial ordering
+remain unchanged. The response reduction is now available for shared-grid
+posteriors and per-query neighbor assignments without allocating a
+query-by-support-by-gene tensor. Default neighbor projection remains unchanged;
+293 synthetic code regression tests pass.
+
+scFates assignment averaging improves all-gene errors over prediction at its mean
+coordinate by +0.143%/+0.210% in the two directions. Selected-program gains are
++0.34%/+7.50%/+3.20% (S1/S2/S3, Ctrl1A2 source) and
++4.52%/+4.25%/+3.42% (reverse), each with all three folds. DPT's aggregate
+gains are +0.043%/+0.059%, with smaller and heterogeneous program changes.
+These are gains from averaging nonlinear response curves, not improved positions.
+
+Gaussian/NB projection is not rescued. Versus assignment-aware scFates, the mean
+reference changes all-gene errors by −0.116%/−0.157%, and NB by
+−0.388%/−0.645%. NB selected-program gains are −1.75%/−5.97%/+0.91%
+and −5.94%/−25.74%/−2.72%; mean-reference gains are
+−1.05%/−6.37%/−1.89% and −1.19%/−13.57%/−2.52%. Each uses three
+folds. Thinned-query S1/S3 comparisons sometimes favor NB, but reverse S2
+remains worse. Strong conditional concentration and read stability do not
+establish correct local assignments.
+
+Assignment-aware scFates improves the frozen selected programs over the
+privileged quadratic coverage oracle by +14.85%/+15.44%/+7.81% and
++10.61%/+11.37%/+6.31%. This strengthens a development comparator; the
+source-selected panels and shared all-gene exposure still preclude independent
+anatomical claims. The program plot was inspected, and cropped labels corrected.
+Future comparisons should explicitly name point versus assignment-aware response
+reduction for every arm. Retain the historical point results, and do not adopt
+another projector or revive the unconstrained Gaussian hierarchy.
+
+### Next method hypothesis: anatomy in canonical curve construction
+
+The next method experiment must change reconstruction, not prediction again.
+Our current scFates baseline fits a generic elastic curve and uses source anatomy
+only for root and orientation. A concrete physical-object prior is to initialize
+a nonbranching curve with a polyline through the source modeling-feature means
+of S1, S2 and S3, in that order. No marker-expression profiles or fixed segment
+widths are supplied. The installed ElPiGraph/scFates backend already accepts
+initial node positions and edges; its author documentation and primary paper
+give precedent for changing initialization. This is a tailored initialization,
+not invented curve mathematics or an identification theorem.
+
+Before running this experiment, fix a matched source-only and pooled-calibration
+protocol using the existing actual controls, gene folds and partial-coverage
+evaluation halves. Initialization must use source anchors only; pooled query
+calibration anatomy remains hidden. Keep existing graph parameters, root,
+orientation, response decoder and neighbor weights fixed. Require old-baseline
+reproduction and report both response reductions, DPT/scFates comparisons,
+within-segment program prediction, paired read perturbation and gene-panel rank
+agreement. Reject the addition if it does not improve reproducible local order
+and prediction beyond the established references. Distinguish initialization
+from enforced anatomical order: subsequent elastic fitting can still move the
+nodes. Unknown nephron variation remains integrated; no occupancy matching,
+specimen warps, covariance or flow is introduced. A successful three-anchor
+result must later face the weaker endpoint-only ablation. No new fit has been run
+for this hypothesis yet.

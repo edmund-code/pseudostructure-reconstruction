@@ -161,8 +161,16 @@ def fit_scfates_axis(Y, anatomy, *, anchor_mask=None, nodes=30, seed=15):
                'root_rule': 'curve tip nearest training S1 molecular mean'}
 
 
-def project_neighbor_axis(train_Y, train_z, query_Y, *, k=15):
-    """Project query rows by frozen Euclidean kNN inverse-distance weights."""
+def project_neighbor_axis(train_Y, train_z, query_Y, *, k=15,
+                          return_distribution=False):
+    """Project by frozen Euclidean kNN inverse-distance weights.
+
+    The optional distribution returns the existing assignment supports/weights
+    alongside their coordinate mean. These weights are not calibrated spatial
+    probabilities; retaining them permits fair nonlinear response averaging.
+    """
+    if not isinstance(return_distribution, (bool, np.bool_)):
+        raise ValueError('return_distribution must be boolean')
     train_Y = _matrix(train_Y, 'train_Y')
     query_Y = np.asarray(query_Y, dtype=float)
     if query_Y.ndim != 2 or query_Y.shape[1] != train_Y.shape[1] or not np.isfinite(query_Y).all():
@@ -172,16 +180,25 @@ def project_neighbor_axis(train_Y, train_z, query_Y, *, k=15):
         raise ValueError('train_z must be finite in [0,1] and match training rows')
     if not isinstance(k, (int, np.integer)) or isinstance(k, (bool, np.bool_)) or k < 1:
         raise ValueError('k must be a positive integer')
-    if not len(query_Y):
-        return np.empty(0, dtype=float)
     k = min(int(k), len(train_Y))
+    if not len(query_Y):
+        empty = np.empty(0, dtype=float)
+        return ({'z_mean': empty, 'support': np.empty((0, k)),
+                 'weights': np.empty((0, k))} if return_distribution else empty)
     distances, indices = NearestNeighbors(n_neighbors=k).fit(train_Y).kneighbors(query_Y)
     result = np.empty(len(query_Y), dtype=float)
+    weights = np.zeros(distances.shape) if return_distribution else None
     for i, (d, idx) in enumerate(zip(distances, indices)):
         zero = d <= 1e-12
         if np.any(zero):
             result[i] = train_z[idx[zero]].mean()
+            if return_distribution:
+                weights[i, zero] = 1. / zero.sum()
         else:
             w = 1. / d
             result[i] = w @ train_z[idx] / w.sum()
-    return np.clip(result, 0., 1.)
+            if return_distribution:
+                weights[i] = w / w.sum()
+    result = np.clip(result, 0., 1.)
+    return ({'z_mean': result, 'support': train_z[indices], 'weights': weights}
+            if return_distribution else result)

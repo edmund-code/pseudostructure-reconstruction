@@ -349,3 +349,6 @@ Mean over the two specimens of each species.
   - The frozen rule reports "changes the substantive result", because 4 programs are gained
     (25 → 30). The cause is the number of tests, not the merging.
   - Caveat: chaining merges 67 cell-cycle and proteasome entries into one 429-gene set. Not adopted.
+- **Decision.** The pre-test deduplication was tried (1,513 → 1,160 sets; no positional calls lost;
+  whole-PT ORA 80 → 44) and dropped by the user's decision in favour of post-test driver-gene programs.
+  It has been removed from notebook 61. The order-invariant post-test program rule is kept.

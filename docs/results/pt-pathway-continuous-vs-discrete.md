@@ -352,3 +352,43 @@ Mean over the two specimens of each species.
 - **Decision.** The pre-test deduplication was tried (1,513 → 1,160 sets; no positional calls lost;
   whole-PT ORA 80 → 44) and dropped by the user's decision in favour of post-test driver-gene programs.
   It has been removed from notebook 61. The order-invariant post-test program rule is kept.
+
+## Addendum: notebook 61 expanded to every reasonable pathway analysis
+
+The plan was frozen in `nb61/plan_expansion.md`. The trims were: no NMF; no notebook 07 P modules; one
+rank-threshold ORA row and one structure-level self-contained row, both labelled demonstrations.
+48 method rows result: pathway-first A (33), score-first C (10) and gene-first B (5).
+
+- **Specific, selective, replicated.** These pass the relabeling rule, call < 10% of tested
+  pathways, and replicate externally (mean joint z, Census / Lake, p ≤ 0.001):
+  - A6·JNT, the primary method (60; 2, 0): 1.39 / 1.16;
+  - A6·ORAc, split-plot genes + ORA (35; 0, 0): 1.53 / 1.35;
+  - A4·JNT, coordinate-free steps (50; 0, 0): 1.38 / 1.17;
+  - A5·JNT, six bins (49; 17, 0): 1.36 / 1.20;
+  - A10·MAUC (41; 0, 0): 1.66 / 1.44, and A10·GSEA (65; 0, 0): 1.56 / 1.35, on the split-plot gene F;
+  - B2, curve modules of split-plot genes (23; 0, 0): 1.19 / 1.02.
+
+  The four positional joint tests and A6·ORAc each collapse to 25 programs.
+- **Average-level ORA** is specific: A1·ORAc (80; 0, 1) and A3·ORAc (118; 0, 1). It replicates only
+  in Lake (0.79 and 0.60, p ≈ 0.01), not in Census (p 0.071 and 0.053).
+- **Self-contained tests are specific but unselective.** The specimen-level rotation tests (A1, A3,
+  A4, A6·SCs) and all five score split plots (C·*·SP) have 0 relabeled calls, but call 73–100% of
+  pathways and do not replicate (z ≈ 0.1).
+- **Structure-level self-contained tests are not specific.** These are the structure-level score
+  GAMs and the global test (A6·SCu, a demonstration).
+- **Rank-threshold ORA fails** (A6·ORAr: 118; 41, 42). The calibrated list (A6·ORAc) passes.
+- **Preranked GSEA** on unsigned positional statistics passes (A4·GSEA and A6·GSEA, about 300 calls)
+  but replicates weakly (Census z 0.3, p 0.07–0.10).
+- **Gene-first.**
+  - Specificity: B1 (notebook 56's curve modules) and B4 (concatenated curves) are not specific; B2,
+    B3 and B5 are.
+  - Recovery: B2, B3 and B5 recover 7, 7 and 3 of the 25 primary programs. Only B2 replicates.
+  - Gene-first never beats pathway-first on specificity or replication.
+  - It adds one interpretable finding: a species-blind WGCNA-like module of 46 genes that rise into
+    mouse S3 and are higher in mouse (Slc22a7, Slc5a8, Slc7a13, Cyp7b1, Cd36). Its eigengene curve
+    differs between species (q 4e-44; relabelings 0.93, 0.99), and no library pathway is enriched in
+    it.
+- **Parallel execution.**
+  - joblib/loky with 32 workers, one BLAS thread per task, and per-task seeds. Outputs with 1 and 32
+    workers are asserted identical.
+  - The full uncached run took 7.0 min wall clock; a cached rerun takes 3.9 min.

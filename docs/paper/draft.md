@@ -1,11 +1,10 @@
-# Manuscript draft v0.5
+# Manuscript draft v0.6
 
 > **Editorial note (remove before submission).**
-> - *What changed.* v0.5 fills the strength-resolved conservation analysis and index sensitivity
->   (notebook 49) and the primary-list replication (notebook 50) into draft v0.4.
+> - *What changed.* v0.6 applies text-only fixes after the referee's re-review of v0.5
+>   (`docs/paper/referee_report_v05.md`).
 > - *Where the rest is.* Supplementary Notes and Supplementary Methods are in
->   `supplementary_notes_v05.md`. Fixes, sources and the remaining record-only [VERIFY] items are in
->   `draft_v05_changelog.md`.
+>   `supplementary_notes_v06.md`, and fixes and remaining markers in `draft_v06_changelog.md`.
 > - *Markers.* **[VERIFY]** needs lab records. **[CITE]** needs a reference.
 > - *Standing caveat*, which sits in short form beside each result:
 >   - two control mice and two cortex sections from one male human donor; all specimens male;
@@ -21,14 +20,12 @@
 1. **Human and mouse proximal tubule agree mainly on their most strongly zonated genes** (primary)
 2. Beyond their most strongly zonated genes, human and mouse proximal tubule share little axial
    zonation
-3. Measured against same-species reproducibility, human–mouse agreement of proximal tubule zonation is
-   confined to strongly zonated genes
+3. Human–mouse agreement of proximal tubule zonation is concentrated in strongly zonated genes
 
 ## 2. Abstract (≈ 300 words)
 
-Mouse proximal tubule (PT) is the main model for human PT transport, metabolism and injury, but whether
-the two species zonate their genes alike along the S1→S3 axis has not been measured against
-within-species reproducibility.
+Mouse proximal tubule (PT) is the main model for human PT, but whether the two species zonate their
+genes alike along the S1→S3 axis has not been measured against within-species reproducibility.
 
 We profiled two control mouse kidney sections and two cortical sections from one human donor with
 Visium HD, segmented tubule cross-sections on the paired histology, and compared segment gradients
@@ -36,20 +33,23 @@ with same-species reproducibility across independent datasets.
 - *Over all genes, agreement was low.* The conservation index was 0.09–0.35 across analysis settings:
   0.17 for S1→S2 and 0.28 for S3 against early PT at the pre-specified setting, with module-block
   intervals reaching 0.54. In public single-nucleus atlases alone it was 0.25–0.31.
-- *Agreement was concentrated in the most strongly zonated genes.* The index was 0.55–0.58 in the top
-  1% of genes and 0.09–0.37 among less strongly zonated genes whose gradients reproduced. For the
-  weakest half of genes, human gradients could not be shown to reproduce.
-- *Direction.* Among genes zonated in both species, direction agreement rose from about one half to
-  0.84–0.89 with strength.
-- *Asymmetry.* Genes weakly zonated in mouse shared no detectable zonation with human (index 0.00), whereas genes
-  weakly zonated in human kept some (0.18). Whether mouse-only genes outnumber human-only genes depends
-  on whether zonation is judged on an absolute or an amplitude-relative scale.
+- *Agreement was concentrated in the most strongly zonated genes, with wide intervals there.*
+  - The index was 0.55–0.58 in the top 1% of genes (module-block 95% intervals between −0.04 and 0.82)
+    and 0.33–0.40 in the next 4%.
+  - In the 50th–95th strength percentiles, where gradients reproduced in both species, it was
+    0.09–0.30.
+  - For S3 against early PT, the weakest 80% of genes reproduced within both species but were not
+    shared (index 0.03). For S1→S2 the human reference was too small to tell.
+- *Direction agreement* among genes zonated in both species rose from about one half to 0.84–0.89
+  with strength.
+- *Species-only genes.* Whether mouse-only genes outnumber human-only genes depends on whether zonation
+  is judged on an absolute or an amplitude-relative scale.
 
-The second finding concerns method. With two specimens per species, pathway screens comparing averages
-could not be shown specific by relabeling, in our cohort and in 100 cross-species designs from public
-atlases. Position-dependent screens passed when the specimens within each group shared their
-positional biology. Most of their 22 robust pathways summarise mouse zonation that the human sections
-do not share.
+Second, with two specimens per species, pathway screens comparing averages could not be shown
+specific by relabeling, in our cohort and in 100 cross-species designs from public atlases.
+Position-dependent screens passed when the specimens within each group shared their positional
+biology; most of their 22 robust pathways summarise mouse zonation that the human sections do not
+share.
 
 These results come from one human donor and are descriptive. Outside its most strongly zonated genes,
 mouse PT is a weak guide to human PT zonation.
@@ -235,11 +235,9 @@ By the pre-specified reading, the human labels have weak reference support, and 
 supported. We therefore repeat the main comparison with transferred labels (R2), and we flag gene
 claims that rest on S2 − S1 alone (R3, R6).
 
-**Contamination and capture.**
-- *Spillover.* Counts from non-PT markers made up a small and similar share in both species: 0.07–0.45%
-  in human and 0.13–0.29% in mouse, by segment.
-- *Polygons without bins.* Human polygons without bins lie outside the area covered by bins, consistent
-  with tissue beyond the capture area.
+**Contamination and capture.** Non-PT marker counts made up a small, similar share in both species
+(0.07–0.45% in human, 0.13–0.29% in mouse). Human polygons without bins lie outside the area covered by
+bins.
 
 **A continuous coordinate as a supporting tool** (Figure 1e; Supplementary Note 1). We also ordered the
 PT structures along a nonbranching principal curve fitted to the integrated embedding.
@@ -251,10 +249,9 @@ PT structures along a nonbranching principal curve fitted to the integrated embe
 
 ### R2 · Human and mouse agree mainly on their most strongly zonated genes
 
-**Same-species ceilings.** A low human–mouse correlation of gene gradients means "different genes" only
-relative to what two datasets of the same species give. For S2 − S1 and S3 − early (early = S1 + S2),
-we computed noise-corrected correlations of gene gradients for every pair of datasets with replicates
-(Figure 2a; Table 1).
+**Same-species ceilings.** A low human–mouse correlation of gradients means "different genes" only
+relative to two datasets of the same species. We computed noise-corrected correlations of gene
+gradients for every pair of datasets with replicates (Figure 2a; Table 1).
 
 | Pair | S2 − S1 | S3 − early |
 |---|---|---|
@@ -277,14 +274,13 @@ cortex atlas) and a mouse ceiling (our mice against male mouse snRNA).
 - *Gene bootstrap.* Every upper bound lies below 0.5, the pre-specified threshold for "largely
   different genes".
 - *Module-block bootstrap.* It resamples co-expression modules, because gradients are correlated within
-  modules. Its upper bounds reach 0.50–0.54 for the S3 contrasts across settings, and stay below 0.45
-  for S2 − S1. The pre-specified wording therefore does not hold under every sensitivity, and we
-  describe agreement as low rather than absent.
+  modules. Its upper bounds reach 0.50–0.54 for the S3 contrasts and stay below 0.45 for S2 − S1. The
+  pre-specified wording therefore does not hold under every sensitivity; we describe agreement as low,
+  not absent.
 - *Human ceiling.* For S2 − S1 it rests on one dataset pair, because the second human atlas has no S2.
   Leaving out one atlas donor at a time gave 0.63–0.68, and the index's upper bound would reach 0.5
   only if this ceiling fell to 0.13.
-- *Platforms.* The ceilings compare across platforms while the numerator compares within one, which
-  probably biases the index upward.
+- *Platforms.* Cross-platform ceilings probably bias the index upward.
 
 **Agreement is concentrated in the most strongly zonated genes** (Figure 2b).
 - *Design.* To avoid selecting genes on their noise, strength was defined on half of the external
@@ -302,22 +298,37 @@ cortex atlas) and a mouse ceiling (our mice against male mouse snRNA).
   | 0–50% | – | – | – |
 
   A dash means the human ceiling could not be estimated: the half-reference's reliability was below
-  0.2.
-- *Concentration.* The pre-specified concentration rule held. The top 5% exceeded the weakest 80% by
-  0.46 (S3 − early; module-block interval 0.11–0.67), and by 0.44 in noise-corrected correlation for
-  S2 − S1 (0.10–0.63).
-- *Two kinds of weaker gene.*
-  - *Reproducible but not shared.* In bins where both species' gradients reproduce (ceiling lower
-    bounds ≥ 0.3), the index stayed between 0.09 and 0.37: 1,308 genes for S2 − S1, 3,021 for
-    S3 − early and 2,343 for S3c − early.
-  - *Not reliably zonated.* Below those bins the human ceiling could not be estimated, and the
-    cross-species correlation was −0.13 to 0.01: 5,509, 3,358 and 2,391 genes.
-  - *Pre-specified verdict.* The rule "the weakest 80% are reproducible but not shared" failed only
-    for S2 − S1, whose human ceiling could not be estimated. The verdict is therefore "agreement is
-    confined to genes that are reliably zonated".
-  - *Post hoc check.* With strength defined on mouse data alone, so that the full cortex atlas could
-    provide the human ceiling, the weakest 80% of S2 − S1 genes had reproducible human gradients
-    (ceiling 0.68) and an index of −0.11 (Supplementary Note 8).
+  0.2 in at least one fold.
+- *Wide intervals in the top bins.* The module-block intervals were −0.04 to 0.82, −0.02 to 0.74 and
+  0.06 to 0.79 for the top 1%, and 0.03–0.63, 0.10–0.66 and 0.09–0.64 for the top 5% (Supplementary
+  Note 10). Even in the top 1%, agreement is about half of same-species agreement.
+- *Concentration.* The pre-specified rule held: the top 5% exceeded the weakest 80% by 0.46 (S3 − early;
+  module-block interval 0.11–0.67), and by 0.44 in noise-corrected correlation for S2 − S1
+  (0.10–0.63).
+- *Weaker genes.* The per-bin values are given, not a range limited to the bins that the
+  classification rule calls "not shared".
+  - *50th–95th percentiles.* Where gradients reproduced in both species (for S2 − S1, from the 80th
+    percentile), the index was 0.09–0.30.
+  - *95th–99th percentiles.* The index was 0.33–0.40, so these genes are weakly shared.
+- *The weakest 80%, per contrast.*
+  - *S3 − early and S3c − early.* The pre-specified rule "reproducible but not shared" held. Both
+    species' gradients reproduced (human ceilings 0.61 and 0.60, lower bounds 0.56 and 0.55; mouse
+    ceilings 0.78 and 0.80), and the index was 0.03 (−0.03 to 0.08 and −0.04 to 0.10).
+  - *S2 − S1.* The rule could not be evaluated, because the human ceiling could not be estimated from
+    half the atlas donors. A post hoc check, with the full atlas as human reference, gave a
+    reproducible human gradient (ceiling 0.68) and an index of −0.11 (Supplementary Note 8).
+  - *Bins without an estimable human ceiling* (the weakest half, and for S2 − S1 the weakest 80%;
+    5,509, 3,358 and 2,391 genes) had cross-species correlations of −0.13 to 0.01.
+- *Pre-specified verdict.* Because rule (ii) failed for S2 − S1, the verdict was "agreement is
+  confined to genes that are reliably zonated, and few genes are". It holds as stated only for S2 − S1
+  at half-atlas resolution. For the S3 contrasts, weak gradients are reproducible and not shared. The
+  title states the concentration result of rule (i) instead (Supplementary Note 8).
+- *What "strongest" means.* The human half-reference (3–4 atlas donors) had a reliability of only
+  0.10–0.78 below the 95th percentile, against 0.67–0.98 for mouse. Strength is therefore set mainly
+  by mouse gradients: "most strongly zonated" means in mouse, and in human where measurable.
+- *Reproducible is not the same as zonated.* A human ceiling can also be raised by gradients that both
+  human datasets share for other reasons, such as procurement, injury state or ambient signal
+  (Discussion).
 - *Public atlases alone* show the same concentration. On our strength bins, the atlas pair's
   correlation was 0.56 and 0.55 in the top 1% (S2 − S1, S3 − early), against 0.08 and 0.15 in the
   weakest 80%.
@@ -327,18 +338,10 @@ agreeing in direction rose from 0.57, 0.48 and 0.58 (50–80% bin; S2 − S1, S3
 0.89, 0.84 and 0.89 in the top 1%. Over all classified genes, 196 of 271 (72%) agree (R3). A low index
 therefore does not mean that most zonated genes disagree.
 
-**Genes weakly zonated in mouse share no detectable zonation with human.** Binning on one species'
-strength alone (S3 − early; Supplementary Note 10; Supplementary Figure S12):
-- *Weakest 80% by mouse strength.* The index was 0.00 (−0.06 to 0.06), although both species'
-  gradients reproduced (ceilings 0.70 and 0.71).
-- *Weakest 80% by human strength.* The index stayed at 0.18 (0.12–0.25).
-- *Reading.* Genes that mouse zonates weakly are zonated differently in human, whereas genes that human
-  zonates weakly still follow part of the mouse pattern.
-
 **Robustness** (Figure 2c; Supplementary Figure S9).
-- *Transferred labels.* Human labels were transferred from the cortex atlas, alone or with mouse labels
-  from microdissection, on one half of the genes and evaluated on the other. The index stayed at or
-  below 0.31 for S2 − S1 and S3 − early (largest upper bound 0.38), and 0.33 (0.43) for S3c − early.
+- *Transferred labels* (from reference atlases on one half of the genes, evaluated on the other). The
+  index stayed at or below 0.31 for S2 − S1 and S3 − early (largest upper bound 0.38), and 0.33 (0.43)
+  for S3c − early.
 - *Integration genes.* Without the 611 genes that built the integrated embedding, the index was 0.15
   (upper bound 0.20), 0.22 (0.27) and 0.25 (0.31). With cross-fitted labels it was at most 0.24 (0.33)
   for the two primary contrasts.
@@ -374,24 +377,23 @@ strength alone (S3 − early; Supplementary Note 10; Supplementary Figure S12):
 | Not classifiable with two specimens per species | 6,307 |
 
 **Reversals are not rare.** They make up 28% of the 271 genes zonated in both species.
-- *S2 − S1 reversals depend on the human labels:* 37 with reviewed labels; 24 and 15 with labels
-  transferred on all genes; 5–11 in cross-fitted gene halves, against 15 and 21 for reviewed labels on
-  the same halves.
-- *S3c − early reversals are stable:* 41 with reviewed and with transferred labels; 11–26 in
-  cross-fitted halves, against 16 and 24.
+- *S2 − S1 reversals depend on the human labels:* 37 with reviewed labels, 24 and 15 with transferred
+  labels, and 5–11 in cross-fitted gene halves (15 and 21 for reviewed labels on those halves).
+- *S3c − early reversals are stable:* 41 with reviewed and transferred labels; 11–26 in cross-fitted
+  halves (16 and 24).
 
 **Transporters are over-represented among conserved genes, but they are not most of them** (Figure 3b).
 - *Share.* Transporters (Slc, Abc and Aqp genes) are 33 of the 196 conserved genes (17%).
-- *Zonated in both species.* Being highly expressed and strongly zonated, 40 of 43 zonated transporters
-  (93%) are zonated in both species, against 271 of 388 genes overall (70%).
+- *Zonated in both species:* 40 of 43 zonated transporters (93%), against 271 of 388 genes (70%), as
+  expected for highly expressed, strongly zonated genes.
 - *Direction agreement.* Among genes zonated in both species, transporters agree in direction more
   often: 33 of 40 (83%), against 196 of 271 (72%).
 - *Examples.* SGLT2 and SGLT1 (Slc5a2, Slc5a1), Slc5a8, Slc7a13, Slc6a18, Slc22a7 (OAT2), Slc22a12,
   Slc34a3, and the renin–angiotensin genes Agt, Ace and Enpep.
-- *Protein maps.* Human protein maps agree with these calls for SGLT1/2, but not for OAT1 and OAT2,
-  whose protein is S1/S2 > S3 (Breljak et al. 2016). Our human OAT1 mRNA is indeterminate, and OAT2 mRNA
-  rises toward S3 in our sections and in the cortex atlas. mRNA–protein differences, antibody
-  specificity and interindividual variability could explain this.
+- *Protein maps* agree with these calls for SGLT1/2 but not for OAT1 and OAT2, whose protein is
+  S1/S2 > S3 (Breljak et al. 2016). Our human OAT1 mRNA is indeterminate, and OAT2 mRNA rises toward
+  S3; mRNA–protein differences, antibody specificity or interindividual variability could explain
+  this.
 - *Conserved zonation is not conserved usage.* SLC34A3 carries about 40% of sodium–phosphate
   cotransport in adult human kidney and little in mouse (Fernandes et al. 2026), although its zonation
   is conserved here.
@@ -412,8 +414,6 @@ strength alone (S3 − early; Supplementary Note 10; Supplementary Figure S12):
 - *Failed pre-specified check.* With labels transferred on held-out genes, the criterion "species-only
   counts unskewed" failed: one check of 12 gave 17 mouse-only against 4 human-only, and the same
   setting in the other gene half gave 7 against 22.
-- *Strength binning* gives a scale-free view of the same asymmetry (R2): genes weakly zonated in mouse
-  share no detectable zonation with human, whereas genes weakly zonated in human partly follow mouse.
 
 Either way, confidently species-only genes are few.
 - *Mouse-only examples:* Fah, Comt, Maoa, Igfbp4 and Ebp. Hsd17b4 is mouse-only with reviewed labels and
@@ -422,7 +422,9 @@ Either way, confidently species-only genes are few.
   transferred labels.
 - *Pathways.* An enrichment was named only if it had q ≤ 0.10, was not driven by expression, and was
   carried by at least three class genes (Supplementary Note 3).
-  - Mouse-only genes are enriched for tyrosine catabolism (Comt, Fah, Maoa; q = 2 × 10⁻⁶).
+  - Mouse-only genes are enriched for the KEGG tyrosine-metabolism set (q = 2 × 10⁻⁶), but only through
+    three genes: the catecholamine-degrading enzymes Comt and Maoa and the tyrosine-catabolic enzyme
+    Fah.
   - Sterol synthesis and peroxisomal β-oxidation rest on single genes (Ebp, Hsd17b4).
   - The human-only enrichments are generic labels on three-gene sets, so we name the genes instead:
     Ahcyl1, Hipk2, Wwtr1, Prkaa2 and Taf4.
@@ -590,7 +592,7 @@ The primary list is therefore supported by an externally calibrated screen that 
   human cortex atlases (Spearman 0.67 and 0.73). That is above expression-matched random genes (0.57
   and 0.60), but no better than the most highly expressed genes (0.64 and 0.72).
 - *Pathways.* Of the 22, 12 and 5 replicated against the two atlases with male mice, and 5 and 3 with
-  female mice (BH ≤ 0.10).
+  female mice (BH ≤ 0.10 within the 36 principal-curve robust pathways).
 - *Overlap-preserving collections.* Against random collections that keep set sizes, expression strata
   and overlaps, the 22 replicated in both atlases (mean z 1.62 and 1.44; p = 10⁻⁴).
   - *Against pathways called only under relabeling,* they replicated better at the pathway level
@@ -620,9 +622,9 @@ T_spatial rank, which can be high from an amplitude difference alone.
 Standing caveat: one human donor, two male mice, human cortex only, different probe panels.
 
 **Creatine synthesis: a large amplitude difference** (Gatm indeterminate; Figure 6).
-- *Mouse arm.* Gatm (AGAT, the first step) falls steeply from S1 to S3 in mouse: by 6.8 and 6.3 log2
-  units in male and female snRNA, and by 12.1 and 11.0 in male and female microdissection. The
-  cortical medullary-ray segment has 23.5 TPM, against 4,270 in S1.
+- *Mouse arm.* Gatm (AGAT, the first step) falls steeply from S1 to S3: by 6.8 and 6.3 log2 units in
+  male and female snRNA, and by 12.1 and 11.0 in microdissection (23.5 TPM in the cortical
+  medullary-ray segment, against 4,270 in S1).
 - *Rodent protein.* Rat AGAT protein falls at S3 (S3/S2 −3.7). Transamidinase activity is confined to
   S1 and S2 in rat (Takeda et al. 1992).
 - *Human arm.* GATM changes little and not consistently: −0.78 in our sections, +0.51 in the cortex
@@ -633,7 +635,7 @@ Standing caveat: one human donor, two male mice, human cortex only, different pr
   by T_spatial.
 - *Second step.* In rodents the second step, GAMT, rises toward late PT: in mouse microdissection and in
   rat protein (S3/S2 +1.6). Our data do not resolve Gamt.
-- *Literature.* GATM is a human PT enzyme (Reichold et al. 2018), and the human kidney releases
+- *Literature.* GATM is a human PT enzyme (Reichold et al. 2018); the human kidney releases
   guanidinoacetate in vivo (Edison et al. 2007).
 
 **Mitochondrial β-oxidation** (Acadm conserved; Acaa2 reversal, label-dependent; Figure 6).
@@ -647,15 +649,14 @@ Standing caveat: one human donor, two male mice, human cortex only, different pr
     instead.
 - *Rodent protein* matches the mouse directions: Acadm S3/S2 +0.7 and Acaa2 −2.7.
 - *State.* Neither gene is sex-biased in mouse PT, and their mouse zonation does not change with time
-  of day. Whether fasting flattens it in human cannot be tested with public data.
+  of day; a fasting effect in human cannot be tested.
 - *Ranking.* Both rank in the top 1% by T_spatial.
 
 **Genes whose difference changes sign** (Dcxr, Ugt3a1 reversal; Figure 6).
-- *Dcxr* (dicarbonyl/L-xylulose reductase) falls toward late PT in mouse and rises in human. It is a
-  reversal in S3c − early and S3 − early.
-  - Human: +0.97 in our sections and +1.53 in the cortex atlas (+1.59 in men, +1.48 in women).
-  - Mouse: −0.46 and −0.54 in snRNA, −1.94 and −2.03 in microdissection. Rat protein agrees (S3/S2
-    −1.1).
+- *Dcxr* (dicarbonyl/L-xylulose reductase) falls toward late PT in mouse and rises in human (reversal
+  in S3c − early and S3 − early).
+  - Human: +0.97 in our sections, +1.53 in the cortex atlas (+1.59 in men, +1.48 in women).
+  - Mouse: −0.46 and −0.54 in snRNA, −1.94 and −2.03 in microdissection; rat protein S3/S2 −1.1.
   - DCXR protein is known in mouse PT (Nakagawa et al. 2002), and DCXR loss tracks human CKD (Perco
     et al. 2019); its axial distribution is not reported.
 - *Ugt3a1* rises toward late PT in mouse (snRNA +1.0 and +1.5) and falls in human (ours −0.62, atlas
@@ -663,9 +664,8 @@ Standing caveat: one human donor, two male mice, human cortex only, different pr
 - *Ranking.* Both rank in the top 1% by T_spatial.
 
 **Expressed and zonated only in human** (RBP4; Figure 6).
-- *Human.* RBP4 rises steeply toward late human PT (ours +2.46, atlas +3.46). Mouse Rbp4 is absent:
-  0.0 TPM in every microdissected segment of both sexes. Because it is expressed in one species only,
-  RBP4 is outside the zonation classes.
+- *Human.* RBP4 rises steeply toward late human PT (ours +2.46, atlas +3.46). Mouse Rbp4 is absent
+  (0.0 TPM in every microdissected segment, both sexes), so RBP4 is outside the zonation classes.
 - *Rat.* RBP protein is found only in S1, as reabsorbed ligand. Rat in situ hybridisation placed RBP
   mRNA in outer-stripe S3 and in perinephric fat (Makover et al. 1989).
 - *Untested alternatives* to this mRNA claim: ambient RNA from perirenal fat, transcript diffusion
@@ -688,11 +688,16 @@ shown for comparison.
 
 **Main finding.** Measured against how well two datasets of the same species agree, human and mouse
 PT agree mainly on their most strongly zonated genes.
-- *Strongly zonated genes.* In the top 1% of genes by strength, the conservation index was 0.55–0.58.
+- *Strongly zonated genes.* In the top 1% of genes by strength, the conservation index was 0.55–0.58,
+  with module-block intervals as wide as −0.04 to 0.82. That is about half of same-species agreement.
   Among genes zonated in both species, direction agreement rose to 0.84–0.89.
-- *Weaker genes.* Where gradients still reproduced within both species, the index was 0.09–0.37.
-  For the weakest half, human gradients could not be shown to reproduce with current references, so
-  their agreement cannot be measured.
+- *Weaker genes.* The index was 0.33–0.40 in the 95th–99th strength percentiles. In the 50th–95th
+  percentiles, where gradients reproduced in both species, it was 0.09–0.30.
+- *The weakest 80%.* For the S3 contrasts, these genes reproduced within both species but were not
+  shared (0.03). For S1→S2 the human half-reference was too small to tell, and a post hoc check
+  pointed the same way.
+- *"Strongly zonated."* Because the human references are small, gradient strength is set mainly by
+  mouse data, so the phrase means strongly zonated in mouse, and in human where measurable.
 - *All genes.* The index was 0.09–0.35 across analysis settings and 0.25–0.31 in public atlases
   alone. It stayed at most 0.33 with human labels transferred from a reference atlas on held-out genes,
   and it fell slightly without the genes that built the integration.
@@ -719,10 +724,6 @@ alone, which supports it. Our data add three things:
   less likely, but not causes shared with that atlas, such as procurement or segment definition.
 - *What does not depend on it.* In either case, confidently species-only genes are few, and the low
   agreement is a genome-wide property rather than a long list of species-specific genes.
-- *Binning by species.* Binning on each species' strength is scale-free and points the same way. Genes
-  weakly zonated in mouse share no detectable zonation with human (index 0.00, with reproducible
-  gradients in both species), whereas genes weakly zonated in human still agree in part (0.18). Human zonation outside the
-  mouse pattern is therefore reproducible, not noise.
 
 **An evolutionary benchmark is missing.** Rat microdissection data were too noisy to serve as a third
 species, so we cannot say whether agreement this low is unusual for two mammalian species. PT
@@ -809,6 +810,8 @@ answer this.
   Genes with unequal probes are reported separately.
 - *Coordinate.* Its within-segment order is weakly supported and depth-dependent in human S1. Pathway
   calls depend on the coordinate, so the primary list is the set robust under two coordinates.
+- *Strength axis.* The human references used to rank gradient strength are small, so the strength axis
+  is set mainly by mouse gradients. Genes strongly zonated in human only cannot be ranked reliably.
 - *External references.* External human positions are single-nucleus cluster annotations, not
   anatomy. Pathway-level replication beyond the shared global component is not shown.
 
@@ -980,7 +983,8 @@ prefix 0cfb78e4eb273751).
     and the index an upper bound < 0.5.
 - *Direction agreement.* Among genes zonated in both species, the share conserved per bin, with Wilson
   intervals.
-- *Further schemes.* Bins on one species' rank alone were also reported, and a post hoc scheme with
+- *Further schemes.* Bins on one species' rank alone were reported as pre-specified secondary schemes,
+  and a post hoc scheme with
   strength from mouse data alone, so that the full cortex atlas could give the human ceiling.
 
 **Index sensitivity.**
@@ -1199,9 +1203,10 @@ medulla but is cortex; all findings are descriptive.
 - **b,** Agreement by gradient strength. Strength (the larger of a gene's human and mouse percentile
   rank) is defined on one half of the external donors, and the estimates use the other half and our
   data.
-  - *Top:* the index per strength bin, with 95% intervals.
+  - *Top:* the index per strength bin, with gene-bootstrap (thick) and module-block (thin) 95%
+    intervals.
   - *Bottom:* the per-bin human and mouse ceilings and the cross-species correlation. Open symbols mark
-    bins whose human ceiling could not be estimated.
+    bins whose human ceiling could not be estimated (reliability below 0.2 in at least one fold).
 - **c,** Index sensitivity: winsorisation (q = 0, 0.01, 0.05), module-block and donor bootstraps,
   cross-fitted transferred labels, and removal of the 611 integration genes.
 - **d,** Noise-corrected human ÷ mouse spread of gradients, for our data and public atlases.

@@ -4,6 +4,23 @@ Working document owned by the coordinating session. Every analysis task must map
 figure or method below. Work that does not serve this plan is out of scope until the plan
 changes.
 
+> **Re-centred 2026-10-05 (user).** The paper introduces a **new pseudospace reconstruction method**
+> for PT cross-sections and shows **what continuous analysis reveals that discrete S1/S2/S3 clustering
+> does not**. The biology-led draft v0.6 below was written before this re-centring. It is now the
+> application and a source of evaluation machinery: the coordinate benchmark (notebooks 35–36) and the
+> specificity framework (notebooks 31, 37, 45, 48). Its findings set the bars the new method and the
+> continuous analysis must clear:
+> - the scFates coordinate predicts held-out genes no better than segment labels;
+> - within-segment order is weakly supported;
+> - a coordinate-free segment-step screen recovers 20 of the 22 primary pathways.
+>
+> Two workstreams run in parallel:
+> - **(A) reconstruction method:** notebooks 51–55, `results/pt_reconstruction_v3/`;
+> - **(B) pathway analysis on the scFates coordinate, continuous against discrete, and framing:**
+>   notebooks 56–60, `results/pt_pathway_continuous/`.
+>
+> This outline will be rewritten once both phase-1 plans are reviewed.
+
 ## Central claim
 
 Measured against same-species reproducibility, **human and mouse proximal tubule agree mainly on

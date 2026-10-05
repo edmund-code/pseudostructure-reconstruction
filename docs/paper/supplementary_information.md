@@ -1,10 +1,10 @@
-# Supplementary Information, draft v0.4
+# Supplementary Information, draft v0.5
 
-Supplementary Notes 1–9 are followed by the Supplementary Methods. The standing caveat applies
+Supplementary Notes 1–10 are followed by the Supplementary Methods. The standing caveat applies
 throughout: two control mice and two cortex sections from one male human donor; all specimens male;
 human cortex only; different probe panels; descriptive.
 
-Markers: **[PENDING WS6]** (analysis still running), **[VERIFY]**, **[CITE]**.
+Markers: **[VERIFY]** (lab records), **[CITE]**.
 
 ---
 
@@ -189,7 +189,7 @@ the strategies at unit level for our cohort.
 | Whole-PT pseudobulk, GSEA | 649 | 208, 20 | 0.18 | 8.0% | fail | fail |
 | S1/S2/S3 pseudobulk, GSEA | 790 | 292, 207 | 0.32 | 17.5% | fail | fail |
 | Offset, joint test | 56 | 10, 0 | 0.09 | 0.3% | pass | fail |
-| Step screen (spline-based), joint test | 26 | 12, 6 | 0.35 | 0.6% | fail | fail |
+| Step screen (coordinate-free), joint test | 26 | 12, 6 | 0.35 | 0.6% | fail | fail |
 | Offset, matched test | 236 | 152, 11 | 0.35 | 5.7% | fail | fail |
 | Step screen, matched test | 169 | 131, 120 | 0.74 | 8.8% | fail | fail |
 | Whole-PT pseudobulk, joint rank test | 394 | 70, 0 | 0.09 | 2.4% | pass | fail |
@@ -286,10 +286,10 @@ noise-corrected spread (0.58, 0.47 and 0.84; main text R2) is therefore the ampl
 **Physiological state** (Supplementary Figure S6a, b).
 - *Programs* (fixed in advance): sterol/SREBP2, PPARα/fatty-acid oxidation, glutathione synthesis,
   tyrosine catabolism, the lead genes and structural markers.
-- *Fasting.* Whole-kidney 24-h fasting against fed (GSE267280) [CITE] changes PPARα-target and sterol
+- *Fasting.* Whole-kidney 24-h fasting against fed (GSE267280; Jiang et al. 2025) changes PPARα-target and sterol
   genes by amounts comparable to the species × position interaction. There is one pooled column per
   condition, so this is a point estimate.
-- *Time of day, whole kidney.* ZT18 against ZT6 (GSE277302) [CITE].
+- *Time of day, whole kidney.* ZT18 against ZT6 (GSE277302; Nguyen et al. 2025).
 - *Time of day, segment level.* Mouse single-nucleus data at ZT4 and ZT16, two mice each (GSE331332;
   Wigger et al. 2026).
   - Zonation (S3 − S1) of fatty-acid oxidation, glutathione synthesis and tyrosine catabolism genes,
@@ -325,32 +325,35 @@ interaction (human cortex atlas − male mouse snRNA):
 | Lake/KPMP cortex − male mouse | 6 | 5 |
 | Lake/KPMP cortex − female mouse | 4 | 3 |
 
-- *Replication with overlap kept* (notebook 48). The score is each pathway's donor-level joint z. Each
-  null draw relabels genes within the matching strata and rescores every set at once, so set sizes,
-  strata and pairwise overlaps are kept (9,999 draws per reference).
+- *Replication with overlap kept* (notebooks 48 and 50). The score is each pathway's donor-level joint
+  z. Each null draw relabels genes within the matching strata and rescores every set at once, so set
+  sizes, strata and pairwise overlaps are kept (9,999 draws per reference). Male-mouse references:
 
-  | Census cortex − male mouse | Mean z | p |
+  | | Census cortex | Lake/KPMP cortex |
   |---|---:|---:|
-  | 36 robust against random | 1.53 | 1 × 10⁻⁴ |
-  | 21 relabel-called (not robust) against random | 0.59 | 0.027 |
-  | Robust − relabel-called, pathways | 0.94 | 0.005 |
-  | Robust − relabel-called, programs (17 against 13; label permutation) | 0.53 | 0.059 |
+  | 22 primary, mean z (p against random) | 1.62 (1 × 10⁻⁴) | 1.44 (1 × 10⁻⁴) |
+  | 12 primary core, mean z | 1.78 (1 × 10⁻⁴) | 1.42 (1 × 10⁻⁴) |
+  | 21 relabel-called, not robust, mean z (p against random) | 0.59 (0.026) | 0.44 (0.070) |
+  | 22 − relabel-called, pathways (p) | 1.03 (0.004) | 0.99 (0.007) |
+  | Programs, 13 against 13 (label permutation p) | 0.039 | 0.065 |
+  | Selection-matched null, 22 against random (p) | 0.001 | 0.006 |
+  | Slope-free score, 22 − relabel-called (p) | 0.26 | 0.13 |
 
-  - *Lake cortex − male mouse.* Robust 1.24 (p 1 × 10⁻⁴); difference p = 0.015; programs p = 0.17.
-  - *Selection-matched null* (strata also split by our T_spatial quintile): p = 0.004 and 0.035, and
-    0.06 and 0.19 with female mice.
-  - *Slope-free score* (uniform flattening removed): robust beat random (p 0.001) but not
-    relabel-called pathways (p 0.42).
-  - *Pre-specified decision:* better than random only, for both references.
-  - *Per-pathway nulls.* These were not saved, so the test cannot be repeated for the 22 primary
-    pathways alone.
+  - *Reading.* The 22 replicate beyond random sets in both atlases. They replicate beyond relabel-called
+    pathways at the pathway level in both, but at the program level, the pre-specified unit, in one of
+    two atlases. They do not once the shared flattening of human gradients is removed.
+  - *Selection.* The 22 were defined after the coordinate results.
+  - *The 36.* The same test on the 36 principal-curve pathways gave mean z 1.53 and 1.24 (p = 10⁻⁴),
+    differences from relabel-called pathways with p = 0.005 and 0.015, and program-level p = 0.059 and
+    0.17: better than random only.
   - *Earlier comparisons.* This test replaces the Mann–Whitney comparisons, which treated overlapping,
     selected pathways as independent.
 - *Global component.* All three human datasets share it: the interaction is −0.81 to −0.90 times the
   mouse gradient (R² 0.60–0.82). Once it is removed, 1–3 of the 36 robust pathways replicate.
 - *Conventional-only pathways.* Of 184 pathways called only by conventional screens, 6 replicated their
-  average difference at nominal p ≤ 0.05 and none at BH ≤ 0.10. As a group they replicated better than
-  uncalled pathways [VERIFY: group test not in a saved table].
+  average difference at nominal p ≤ 0.05 and none at BH ≤ 0.10. An overlap-naive comparison suggested
+  that they replicate better as a group, but against overlap-preserving random collections they did not
+  (p = 0.41 and 0.24). No group claim is made.
 
 **Genome-wide against the cortex atlas** (Supplementary Figure S7).
 - *Human S3 − S1.* Our human contrast correlated with the atlas at Spearman 0.43 (6,787 genes), with
@@ -437,7 +440,8 @@ The model, training, selection and inference are described in Supplementary Meth
 - *Selection.* The checkpoint was chosen by pooled class-agnostic panoptic quality, never by validation
   loss.
 - *Held-out performance.* On a held-out nephrectomy slide (98 objects), panoptic quality was 0.837
-  without and 0.880 with D4 test-time augmentation [VERIFY whether to report].
+  without and 0.880 with D4 test-time augmentation. This is one slide, from mouse, and the human
+  segmentation has no comparable evaluation.
 - *Not recorded.* The human segmentation's provenance and pixel scale [VERIFY], and the rules of the
   upstream mouse quality control [VERIFY].
 
@@ -462,6 +466,11 @@ The model, training, selection and inference are described in Supplementary Meth
 | 13 | Primary pathway list | Robust list on the selected coordinate | Coordinate-robust intersection (22) | Item 1 | Main text R5 |
 | 14 | Class enrichments | Enrichment of each class (q ≤ 0.10, robust to expression) | A naming rule (also ≥ 3 class genes carrying the enrichment) was declared after the all-gene run had been seen, and before the probe-balanced run | Single-gene enrichments | Only tyrosine catabolism is named for mouse-only genes |
 | 15 | External replication | Mann–Whitney comparisons of pathway z | Replaced by an overlap-preserving collection null | Overlapping, selected pathways are not independent | Better than random only |
+| 16 | Agreement by gradient strength | Rule (ii): the weakest 80% of genes are reproducible within species but not shared | Failed for S2 − S1 only, because the human ceiling (from half the atlas donors) could not be estimated. The pre-specified verdict was applied: "agreement is confined to genes that are reliably zonated" | Human S2 reference too small when halved | Title and R2 wording |
+| 17 | Agreement by gradient strength | Strength cross-fitted on both references | A post hoc scheme defined strength on mouse data alone, so the full atlas could give the human ceiling (weakest 80%, S2 − S1: ceiling 0.68, index −0.11) | Rule (ii) was not estimable for S2 − S1 | Reported as post hoc (R2) |
+| 18 | Index sensitivity | "Largely different genes" holds if every upper bound for S2 − S1 and S3 − early is < 0.5 under every setting | Failed: module-block upper bounds reach 0.50–0.54 for the S3 contrasts | – | The wording "largely different genes" is not used; agreement is described as low and concentrated |
+| 19 | Primary-list replication | Overlap-preserving test on the robust list | Repeated on the 22 primary pathways, which were defined after the coordinate results | Primary list changed after review | Replication beyond random sets, and beyond relabel-called pathways in one of two atlases (program level) |
+| 20 | Conventional-only replication | – | An earlier overlap-naive group claim was tested against overlap-preserving collections and dropped (p = 0.41 and 0.24) | Overlap | No group claim |
 
 ---
 
@@ -493,8 +502,9 @@ human; Gss conserved).
   protein.
 
 **UGT1A9** (expressed in human only). It is highest in early PT (atlas −0.67). UGT1A9 is among the most
-abundant renal UGTs in human (Margaillan et al. 2015). UGT1A isoforms share exons 2–5, so the probes
-must target the unique exon 1 for this to be a UGT1A9 call [VERIFY probe positions].
+abundant renal UGTs in human (Margaillan et al. 2015). UGT1A isoforms share exons 2–5, and we did not
+check whether the panel's three UGT1A9 probes lie in the UGT1A9-specific exon 1. The signal may
+therefore include other UGT1A transcripts.
 
 **AOX1** (expressed in human only). It rises toward late human PT (atlas +1.13). The evidence is
 supporting only, because the probe counts differ (2 human against 3 mouse). Humans carry one AOX gene
@@ -540,6 +550,204 @@ Garrido et al. 2022).
   Psat1 each have one probe against three in human, and mouse microdissection shows both
   S1-restricted, as in human.
 - *Not replicated by the pre-specified checks:* Gamt (in our data), Hadh, Ephx1 and Me1.
+
+---
+
+## Supplementary Note 10 · Agreement by gradient strength and sensitivity of the conservation index
+
+Notebook 49 (Supplementary Methods SM34) first reproduced the published conservation index exactly.
+Then:
+
+**Index sensitivity** (Tables SN10a–c).
+- *Winsorisation.* The published estimator winsorises gradients at the 1st and 99th percentiles, which
+  clips the strongest gradients. Our index ranged from 0.09 to 0.35 across winsorisation settings and
+  reliability conventions, and the public-atlas index from 0.25 to 0.31.
+- *Gene bootstrap.* It treats genes as independent, and every upper bound stayed below 0.5.
+- *Module-block bootstrap.* It resamples co-expression modules of our PT structures. Its upper bounds
+  reached 0.50–0.54 for the S3 contrasts and 0.44 for S2 − S1. The public-atlas index stayed below
+  0.46.
+- *Donor bootstrap.* Resampling 7 atlas donors with replacement duplicates donors. That overstates
+  reliability and shifts the intervals relative to the point estimate, so the leave-one-donor-out range
+  is the more useful check.
+- *Pre-specified decision.* "Largely different genes" requires every upper bound below 0.5 under every
+  setting, so it does not hold (Supplementary Note 8, deviation 18).
+
+**Agreement by strength** (Tables SN10d–i).
+- *Design.* Strength was cross-fitted: defined on one half of the external donors and evaluated on the
+  other.
+- *Within-bin values.* Reliabilities were computed on the winsorised values, so the all-gene values
+  differ slightly from the published index (0.16 against 0.17 for S2 − S1).
+- *Estimability.* A dash means a correlation could not be estimated: the bin's reliability was below
+  0.2 in the half-reference.
+- *Bin classes.* "Reproducible, not shared" means both ceilings' lower bounds ≥ 0.3 and the index's
+  upper bound < 0.5. "Not reliably zonated" means a ceiling was not estimable or its upper bound was
+  below 0.3. "Uncertain" covers the remaining bins, where the index's upper bound is ≥ 0.5.
+
+**Table SN10a · Index under each winsorisation and reliability setting** (gene bootstrap point estimates).
+
+| Contrast | Version | Reliability | q = 0 | q = 0.01 | q = 0.05 |
+|---|---|---|---:|---:|---:|
+| S2 − S1 | ours | unwinsorised (published) | 0.25 | 0.17 | 0.10 |
+| S2 − S1 | ours | matched | 0.25 | 0.17 | 0.09 |
+| S2 − S1 | public atlases | unwinsorised (published) | 0.30 | 0.27 | 0.25 |
+| S2 − S1 | public atlases | matched | 0.30 | 0.28 | 0.28 |
+| S3 − early | ours | unwinsorised (published) | 0.35 | 0.28 | 0.19 |
+| S3 − early | ours | matched | 0.35 | 0.28 | 0.19 |
+| S3 − early | public atlases | unwinsorised (published) | 0.31 | 0.28 | 0.25 |
+| S3 − early | public atlases | matched | 0.31 | 0.28 | 0.26 |
+| S3c − early | ours | unwinsorised (published) | 0.34 | 0.29 | 0.21 |
+| S3c − early | ours | matched | 0.34 | 0.29 | 0.21 |
+| S3c − early | public atlases | unwinsorised (published) | 0.29 | 0.27 | 0.26 |
+| S3c − early | public atlases | matched | 0.29 | 0.27 | 0.25 |
+
+**Table SN10b · 95% intervals at the published setting** (q = 0.01, unwinsorised reliability).
+
+| Contrast | Version | Gene | Module k = 50 | Module k = 100 | Module k = 200 | Donor | Donor + gene |
+|---|---|---|---|---|---|---|---|
+| S2 − S1 | ours (0.17) | 0.12 to 0.22 | −0.10 to 0.41 | −0.07 to 0.40 | 0.00 to 0.34 | 0.17 to 0.23 | 0.13 to 0.26 |
+| S2 − S1 | public atlases (0.27) | 0.22 to 0.33 | 0.10 to 0.40 | 0.11 to 0.40 | 0.16 to 0.38 | 0.18 to 0.29 | 0.15 to 0.32 |
+| S3 − early | ours (0.28) | 0.22 to 0.33 | −0.02 to 0.53 | 0.01 to 0.51 | 0.08 to 0.49 | 0.28 to 0.33 | 0.23 to 0.37 |
+| S3 − early | public atlases (0.28) | 0.23 to 0.33 | 0.11 to 0.42 | 0.12 to 0.42 | 0.15 to 0.42 | 0.22 to 0.31 | 0.20 to 0.32 |
+| S3c − early | ours (0.29) | 0.23 to 0.35 | −0.03 to 0.54 | 0.01 to 0.51 | 0.08 to 0.52 | 0.29 to 0.35 | 0.23 to 0.38 |
+| S3c − early | public atlases (0.27) | 0.21 to 0.32 | 0.08 to 0.44 | 0.10 to 0.43 | 0.13 to 0.44 | 0.21 to 0.31 | 0.18 to 0.33 |
+
+Across all settings, the largest upper bound of our index was 0.44 (S2 − S1), 0.54 (S3 − early) and 0.54 (S3c − early); for public atlases alone, 0.45.
+
+**Table SN10c · Dependence on the human ceiling.**
+
+| Contrast | Human ceiling | Leave-one-donor-out | Index, leave-one-donor-out | Ceiling at which the index's upper bound reaches 0.5 | Human datasets giving a ceiling |
+|---|---:|---|---|---:|---:|
+| S2 − S1 | 0.65 | 0.63–0.68 | 0.166–0.173 | 0.13 | 1 |
+| S3 − early | 0.67 | 0.65–0.68 | 0.275–0.281 | 0.30 | 2 |
+| S3c − early | 0.66 | 0.65–0.68 | 0.285–0.292 | 0.33 | 2 |
+
+**Table SN10d · Agreement by strength** (primary scheme: larger of the human and mouse ranks, cross-fitted; q = 0.01; gene-bootstrap intervals). Columns: index; noise-corrected cross-species correlation; human and mouse ceilings.
+
+| Contrast | Strength bin | Genes | Index (95% interval) | Cross r* | Human ceiling | Mouse ceiling | Index, public atlases |
+|---|---|---:|---|---:|---:|---:|---:|
+| S2 − S1 | 0–50% | 3443 | – | −0.13 | – | 0.65 | – |
+| S2 − S1 | 50–80% | 2066 | – | 0.01 | – | 0.84 | – |
+| S2 − S1 | 80–90% | 688 | 0.24 (0.14 to 0.33) | 0.20 | 0.73 | 0.91 | 0.23 |
+| S2 − S1 | 90–95% | 344 | 0.22 (0.10 to 0.32) | 0.19 | 0.83 | 0.92 | 0.32 |
+| S2 − S1 | 95–99% | 276 | 0.33 (0.18 to 0.44) | 0.29 | 0.85 | 0.93 | 0.27 |
+| S2 − S1 | 99–100% | 69 | 0.57 (0.34 to 0.74) | 0.53 | 0.90 | 0.95 | 0.39 |
+| S2 − S1 | weakest 80% | 5509 | – | −0.05 | – | 0.77 | – |
+| S2 − S1 | top 5% | 345 | 0.43 (0.32 to 0.54) | 0.39 | 0.89 | 0.94 | 0.34 |
+| S2 − S1 | all genes | 6886 | 0.16 (0.12 to 0.21) | 0.13 | 0.75 | 0.89 | 0.29 |
+| S3 − early | 0–50% | 3358 | – | −0.07 | – | 0.65 | – |
+| S3 − early | 50–80% | 2014 | 0.09 (0.02 to 0.17) | 0.07 | 0.64 | 0.83 | 0.21 |
+| S3 − early | 80–90% | 671 | 0.26 (0.17 to 0.34) | 0.21 | 0.73 | 0.89 | 0.21 |
+| S3 − early | 90–95% | 336 | 0.27 (0.15 to 0.39) | 0.23 | 0.75 | 0.91 | 0.20 |
+| S3 − early | 95–99% | 268 | 0.40 (0.27 to 0.51) | 0.35 | 0.84 | 0.90 | 0.26 |
+| S3 − early | 99–100% | 68 | 0.58 (0.41 to 0.73) | 0.54 | 0.93 | 0.93 | 0.56 |
+| S3 − early | weakest 80% | 5372 | 0.03 (−0.03 to 0.08) | 0.02 | 0.61 | 0.78 | 0.18 |
+| S3 − early | top 5% | 336 | 0.49 (0.36 to 0.59) | 0.44 | 0.89 | 0.91 | 0.40 |
+| S3 − early | all genes | 6715 | 0.27 (0.22 to 0.33) | 0.22 | 0.74 | 0.88 | 0.28 |
+| S3c − early | 0–50% | 2391 | – | −0.08 | – | 0.65 | – |
+| S3c − early | 50–80% | 1434 | 0.10 (0.02 to 0.20) | 0.07 | 0.62 | 0.86 | 0.23 |
+| S3c − early | 80–90% | 478 | 0.21 (0.10 to 0.32) | 0.18 | 0.74 | 0.91 | 0.18 |
+| S3c − early | 90–95% | 239 | 0.30 (0.14 to 0.43) | 0.25 | 0.73 | 0.92 | 0.21 |
+| S3c − early | 95–99% | 192 | 0.37 (0.19 to 0.49) | 0.32 | 0.81 | 0.93 | 0.28 |
+| S3c − early | 99–100% | 48 | 0.55 (0.39 to 0.71) | 0.53 | 0.94 | 0.96 | 0.47 |
+| S3c − early | weakest 80% | 3825 | 0.03 (−0.04 to 0.10) | 0.02 | 0.60 | 0.80 | 0.21 |
+| S3c − early | top 5% | 240 | 0.46 (0.34 to 0.55) | 0.42 | 0.88 | 0.94 | 0.36 |
+| S3c − early | all genes | 4782 | 0.29 (0.22 to 0.35) | 0.23 | 0.73 | 0.90 | 0.27 |
+
+**Table SN10e · Bin classification** (rule (ii) applied to each bin).
+
+| Contrast | Bin | Genes | Gene bootstrap | Module-block bootstrap |
+|---|---|---:|---|---|
+| S2 − S1 | 0–50% | 3,443 | not reliably zonated | not reliably zonated |
+| S2 − S1 | 50–80% | 2,066 | not reliably zonated | not reliably zonated |
+| S2 − S1 | 80–90% | 688 | reproducible, not shared | reproducible, not shared |
+| S2 − S1 | 90–95% | 344 | reproducible, not shared | reproducible, not shared |
+| S2 − S1 | 95–99% | 276 | reproducible, not shared | uncertain |
+| S2 − S1 | 99–100% | 69 | uncertain | uncertain |
+| S3 − early | 0–50% | 3,358 | not reliably zonated | not reliably zonated |
+| S3 − early | 50–80% | 2,014 | reproducible, not shared | reproducible, not shared |
+| S3 − early | 80–90% | 671 | reproducible, not shared | reproducible, not shared |
+| S3 − early | 90–95% | 336 | reproducible, not shared | uncertain |
+| S3 − early | 95–99% | 268 | uncertain | uncertain |
+| S3 − early | 99–100% | 68 | uncertain | uncertain |
+| S3c − early | 0–50% | 2,391 | not reliably zonated | not reliably zonated |
+| S3c − early | 50–80% | 1,434 | reproducible, not shared | reproducible, not shared |
+| S3c − early | 80–90% | 478 | reproducible, not shared | reproducible, not shared |
+| S3c − early | 90–95% | 239 | reproducible, not shared | uncertain |
+| S3c − early | 95–99% | 192 | reproducible, not shared | uncertain |
+| S3c − early | 99–100% | 48 | uncertain | uncertain |
+
+**Table SN10f · Direction agreement by strength** (genes zonated in both species; share conserved, Wilson 95% interval; raw sign agreement over all genes).
+
+| Contrast | Bin | Zonated in both | Share conserved (95% interval) | Raw sign agreement, all genes |
+|---|---|---:|---|---:|
+| S2 − S1 | 0–50% | 0 | – | 0.48 |
+| S2 − S1 | 50–80% | 14 | 0.57 (0.33 to 0.79) | 0.50 |
+| S2 − S1 | 80–90% | 34 | 0.59 (0.42 to 0.74) | 0.55 |
+| S2 − S1 | 90–95% | 27 | 0.70 (0.52 to 0.84) | 0.57 |
+| S2 − S1 | 95–99% | 44 | 0.86 (0.73 to 0.94) | 0.58 |
+| S2 − S1 | 99–100% | 27 | 0.89 (0.72 to 0.96) | 0.67 |
+| S2 − S1 | all genes | 146 | 0.75 (0.67 to 0.81) | 0.51 |
+| S3 − early | 0–50% | 1 | 1.00 (0.21 to 1.00) | 0.61 |
+| S3 − early | 50–80% | 52 | 0.48 (0.35 to 0.61) | 0.57 |
+| S3 − early | 80–90% | 66 | 0.68 (0.56 to 0.78) | 0.60 |
+| S3 − early | 90–95% | 54 | 0.67 (0.53 to 0.78) | 0.62 |
+| S3 − early | 95–99% | 78 | 0.74 (0.64 to 0.83) | 0.64 |
+| S3 − early | 99–100% | 38 | 0.84 (0.70 to 0.93) | 0.72 |
+| S3 − early | all genes | 289 | 0.68 (0.63 to 0.73) | 0.60 |
+| S3c − early | 0–50% | 0 | – | 0.63 |
+| S3c − early | 50–80% | 19 | 0.58 (0.36 to 0.77) | 0.58 |
+| S3c − early | 80–90% | 38 | 0.74 (0.58 to 0.85) | 0.60 |
+| S3c − early | 90–95% | 32 | 0.75 (0.58 to 0.87) | 0.67 |
+| S3c − early | 95–99% | 50 | 0.76 (0.63 to 0.86) | 0.67 |
+| S3c − early | 99–100% | 27 | 0.89 (0.72 to 0.96) | 0.79 |
+| S3c − early | all genes | 166 | 0.75 (0.68 to 0.81) | 0.62 |
+
+**Table SN10g · Strength from one species only** (weakest 80% and top 5%; index with gene-bootstrap 95% interval).
+
+| Contrast | Scheme | Weakest 80%: index | Human ceiling | Mouse ceiling | Top 5%: index |
+|---|---|---|---:|---:|---|
+| S2 − S1 | larger of both ranks (primary) | – | – | 0.77 | 0.43 (0.32 to 0.54) |
+| S2 − S1 | human rank only | – | – | 0.88 | 0.53 (0.40 to 0.65) |
+| S2 − S1 | mouse rank only | – | – | 0.72 | 0.47 (0.34 to 0.57) |
+| S2 − S1 | mean of both ranks | – | – | 0.82 | 0.53 (0.42 to 0.64) |
+| S2 − S1 | our mouse gradient (absolute), same data | −0.06 (−0.12 to 0.00) | 0.69 | 0.71 | 0.46 (0.35 to 0.56) |
+| S3 − early | larger of both ranks (primary) | 0.03 (−0.03 to 0.08) | 0.61 | 0.78 | 0.49 (0.36 to 0.59) |
+| S3 − early | human rank only | 0.18 (0.12 to 0.25) | 0.59 | 0.87 | 0.50 (0.33 to 0.62) |
+| S3 − early | mouse rank only | 0.00 (−0.06 to 0.06) | 0.70 | 0.71 | 0.62 (0.51 to 0.70) |
+| S3 − early | mean of both ranks | 0.10 (0.04 to 0.16) | 0.62 | 0.82 | 0.56 (0.43 to 0.65) |
+| S3 − early | our mouse gradient (absolute), same data | 0.03 (−0.02 to 0.09) | 0.67 | 0.70 | 0.53 (0.39 to 0.63) |
+| S3c − early | larger of both ranks (primary) | 0.03 (−0.04 to 0.10) | 0.60 | 0.80 | 0.46 (0.34 to 0.55) |
+| S3c − early | human rank only | 0.19 (0.12 to 0.26) | 0.59 | 0.88 | 0.46 (0.28 to 0.58) |
+| S3c − early | mouse rank only | 0.02 (−0.05 to 0.10) | 0.68 | 0.72 | 0.57 (0.44 to 0.68) |
+| S3c − early | mean of both ranks | 0.09 (0.03 to 0.16) | 0.63 | 0.83 | 0.50 (0.36 to 0.59) |
+| S3c − early | our mouse gradient (absolute), same data | 0.05 (−0.03 to 0.13) | 0.66 | 0.77 | 0.48 (0.35 to 0.58) |
+
+**Table SN10h · Post hoc: strength from mouse snRNA alone, full cortex atlas as human reference.**
+
+| Contrast | Bin | Index (95% interval) | Human ceiling | Mouse ceiling |
+|---|---|---|---:|---:|
+| S2 − S1 | 0–50% | −0.23 (−0.31 to −0.15) | 0.66 | 0.56 |
+| S2 − S1 | 50–80% | −0.02 (−0.09 to 0.05) | 0.70 | 0.81 |
+| S2 − S1 | weakest 80% | −0.11 (−0.16 to −0.05) | 0.68 | 0.72 |
+| S2 − S1 | top 5% | 0.46 (0.33 to 0.57) | 0.89 | 0.94 |
+| S3 − early | 0–50% | −0.06 (−0.14 to 0.02) | 0.65 | 0.55 |
+| S3 − early | 50–80% | 0.04 (−0.04 to 0.11) | 0.70 | 0.79 |
+| S3 − early | weakest 80% | 0.00 (−0.06 to 0.06) | 0.67 | 0.71 |
+| S3 − early | top 5% | 0.62 (0.51 to 0.70) | 0.83 | 0.92 |
+| S3c − early | 0–50% | −0.10 (−0.22 to 0.03) | 0.66 | 0.53 |
+| S3c − early | 50–80% | 0.09 (0.00 to 0.18) | 0.66 | 0.81 |
+| S3c − early | weakest 80% | 0.02 (−0.05 to 0.10) | 0.66 | 0.72 |
+| S3c − early | top 5% | 0.57 (0.44 to 0.68) | 0.84 | 0.94 |
+
+**Table SN10i · Public atlases alone, on our strength bins** (noise-corrected correlation of the cortex atlas with male mouse snRNA).
+
+| Contrast | Weakest 80% | Top 5% | Top 1% | All genes |
+|---|---:|---:|---:|---:|
+| S2 − S1 | 0.08 | 0.39 | 0.56 | 0.26 |
+| S3 − early | 0.15 | 0.44 | 0.55 | 0.23 |
+| S3c − early | 0.13 | 0.36 | 0.40 | 0.22 |
+
+Cortex-atlas healthy donors had 59–780 S2 nuclei each (S1 95–1648; S3 54–608).
 
 ---
 
@@ -623,6 +831,16 @@ pre-specified test, the symmetric zonation class, probe counts and the rat prote
 - **g, h,** Slc22a6, Slc13a3 and Cyp24a1: fitted curves (g) and DESeq2 log2 fold changes for whole PT
   and each segment (h). The S3 bars compare human cortex S3 with mouse S3 that includes the outer
   stripe.
+
+**Supplementary Figure S12 | Agreement by strength under alternative strength schemes.** Index, human
+and mouse ceilings, and cross-species correlation per strength bin, for strength defined from:
+- the larger of both ranks (primary);
+- the human rank only;
+- the mouse rank only;
+- the mean rank;
+- our own mouse gradient (same data, showing the selection effect).
+
+Post hoc full-atlas estimates are overlaid for the mouse-rank scheme (Table SN10h).
 
 ---
 
@@ -716,7 +934,8 @@ disabled.
 - *Checkpoint selection.* The checkpoint was chosen by pooled class-agnostic panoptic quality (PQ)
   (Kirillov et al. 2019), never by validation loss. The selected checkpoint is epoch 35 of 54.
 - *Held-out PQ.* On a fully held-out nephrectomy slide (98 objects), PQ was 0.837 without and 0.880
-  with D4 test-time augmentation [VERIFY whether to report].
+  with D4 test-time augmentation (one mouse slide; the human segmentation has no comparable
+  evaluation).
 - *Known errors.* Predicted objects are smaller than annotated ones, and merges of touching
   same-type tubules are the main error.
 
@@ -758,8 +977,8 @@ have no polygons without bins (notebook 42, `registration_qc.csv`).
 
 ### SM5 · Cross-species ortholog space
 
-**Ortholog map.** We used the HCOP human–mouse table (Yates et al. 2021) [VERIFY download date;
-local sha256 prefix `0cfb78e4eb273751`].
+**Ortholog map.** We used the HCOP human–mouse table (Yates et al. 2021; local copy dated 31 August 2026,
+sha256 prefix `0cfb78e4eb273751`).
 
 - Pairs supported by fewer than three databases were removed.
 - Each pair was scored as 10 × (number of supporting databases) + 1 if the symbols are identical.
@@ -828,7 +1047,10 @@ glomerulus, smooth muscle and one unresolved cluster. No cluster had thin-limb m
 - Notebook 42 tests the labels against distance to glomeruli and against expression-only reference
   transfer (SM25). Notebook 46 repeats the conservation index and class counts with transferred
   labels (SM28).
-- No current notebook records why θ = 6 was chosen [VERIFY rationale].
+- θ = 6 was fixed in the pipeline (in notebook 03 since its first full version) before any analysis
+  reported here; its original rationale is [VERIFY: authors]. An older diagnostic table that compared
+  θ values is no longer produced and is not used. The labels were checked by reference
+  transfer instead (SM25, SM28).
 
 Notebook 13 repeats notebook 03's pass-1 clustering on the same 26,839 structures. The two
 partitions differ in membership hash but agree closely:
@@ -1019,8 +1241,8 @@ weighted least squares on coordinate s:
 
 **Libraries.**
 - Reactome 2022 (Gillespie et al. 2022), MSigDB Hallmark 2020 (Liberzon et al. 2015) and KEGG 2019
-  Mouse (Kanehisa et al. 2019), in Enrichr format (Kuleshov et al. 2016) [VERIFY download source and
-  date].
+  Mouse (Kanehisa et al. 2019), as Enrichr library files (Kuleshov et al. 2016; local copies dated
+  31 August 2026).
 - Members were mapped through the ortholog table, and sets with 10–300 eligible members were tested:
   1,513 pathways (Reactome 1,181, Hallmark 50, KEGG 282).
 
@@ -1367,9 +1589,12 @@ pathway called only by conventional screens was searched.
   - PARTLY KNOWN: one part reported.
   - NOT FOUND: nothing after ≥ 2 targeted queries. This is a candidate, not proof of novelty.
   - CONTRADICTS: the literature reports the opposite.
-- *Verification.* Each citation used in the Results was re-checked against its source. The search
-  was done with AI agents querying Europe PMC with defined queries [VERIFY wording; archive the
-  queries].
+- *Who searched.* The searches were run by AI agents (Claude, Anthropic) through the Europe PMC
+  interface, with queries containing only gene, pathway, method and generic terms.
+- *Verification.* Each cited source was then checked by PubMed identifier, and its abstract or open
+  full text was read.
+- *Records.* The literature-check table in the repository records the outcome and number of queries
+  per claim. The query strings themselves are not part of the repository.
 
 ### SM23 · Statistics and multiple testing
 
@@ -1570,8 +1795,8 @@ structures.
   Acox2), and structural markers (Slc5a2, Slc5a12, Slc7a13, Slc22a7, Slc34a1, Lrp2).
 - *Whole-kidney state effects:*
   - 24-h fasting against fed, GSE267280 (one pooled column per condition, so a point estimate)
-    [CITE: publication for GSE267280, if any];
-  - ZT18 against ZT6, GSE277302 [CITE: publication for GSE277302, if any].
+    (Jiang et al. 2025);
+  - ZT18 against ZT6, GSE277302 (Nguyen et al. 2025).
 
   Each was compared with the gene's external species × position interaction (Lake against male
   mouse snRNA). A program's state effect was called comparable if its median largest state effect was
@@ -1713,10 +1938,90 @@ Outputs go to `results/paper_figures/`, with a panel-source manifest.
 | Many-draw nulls, AKI control | 45 | `pt_revision_method/` |
 | Cross-fitted labels | 46 | `pt_revision_classes/crossfit/` |
 | Revision addenda | 47 | `pt_revision_addenda/` |
-| Index sensitivity, agreement by gradient strength | [PENDING WS6] | [PENDING WS6] |
+| Agreement by gradient strength, index sensitivity | 49 | `pt_conservation_strength/` |
+| Primary 22-pathway list, its replication, coordinate-free calls | 50 | `pt_primary_pathways/` |
 | Overlap-preserving replication, symmetric-class enrichment, AKI under both rules, step-screen reconciliation | 48 | `pt_revision_addenda_pathways/` |
 
 ### SM33 · Data and code availability
 
 [VERIFY: deposition of the Visium HD data and segmentation polygons (controlled access for human
 tissue), code archive DOI and licence.] The public datasets are listed in SM21.
+
+### SM34 · Agreement by gradient strength and index sensitivity (notebook 49)
+
+Notebook 49 runs in `results/pt_conservation_strength/` (logic `49.conservation_strength.1`). Its
+protocol was written before any result. It rebuilds notebook 43's inputs with the reviewed labels and
+first reproduces notebook 43's published conservation index exactly (all eight rows, to 10⁻⁹).
+
+**Strength bins without selection bias.**
+- *Why cross-fit.* Binning genes on one dataset's |gradient| and correlating that same dataset selects
+  its noise extremes (regression to the mean).
+- *Folds.* The healthy cortex-atlas donors (7) and the male mouse snRNA donors (12) were each split into
+  two folds: sorted by sha256 of the donor identifier, then dealt alternately (4/3 and 6/6).
+- *Strength.* In fold A, each species' |gradient| was converted to a percentile rank, and a gene's
+  strength was the larger of its human and mouse ranks.
+- *Bins.* Genes were binned at the 50th, 80th, 90th, 95th and 99th percentiles of strength.
+- *Evaluation.* All correlations used fold B and our data. The folds were then swapped and the two
+  directions averaged.
+- *Secondary schemes.* Bins on the human rank only, the mouse rank only, the mean rank, and |our mouse
+  gradient| (the same data) are also reported.
+
+**Per-bin index.**
+- Notebook 43's conservation index was recomputed within each bin, with gradients winsorised at the 1st
+  and 99th percentiles within the bin and reliabilities computed on the same winsorised values.
+- A noise-corrected correlation was not estimable if a dataset's reliability in the bin was below 0.2.
+- Intervals came from 1,000 gene bootstraps and 1,000 module-block bootstraps. A bound was not
+  reported when more than 10% of draws were not estimable.
+
+**Decision rules (fixed in advance).**
+- (i) *Concentration.* In S2 − S1 and S3 − early, the index in the top 5% of strength exceeds that in
+  the bottom 80% by ≥ 0.25, with an interval excluding 0, under both bootstraps. If the bottom index is
+  not estimable, the rule applies to the noise-corrected cross-species correlation.
+- (ii) *Reproducible but not shared.* In the bottom 80%, both ceilings have lower bounds ≥ 0.3 and the
+  index an upper bound < 0.5. If the bottom-80% ceilings are below 0.3 or not estimable, the weaker
+  genes are "not reliably zonated".
+
+**Module blocks.** Co-expression modules of our PT structures:
+- log-normalised expression of the index genes, centred per specimen and scaled per gene within species
+  (species weighted equally);
+- embedded by a 50-component truncated SVD;
+- clustered by k-means (k = 100; 50 and 200 as sensitivities).
+
+A draw resamples modules with replacement.
+
+**Index sensitivity.**
+- Winsorisation q ∈ {0, 0.01, 0.05}, with reliability either unwinsorised (notebook 43) or computed on
+  the winsorised values.
+- Gene, module-block, external-donor (cortex-atlas and male mouse donors resampled; our specimens fixed)
+  and combined donor + gene bootstraps.
+- Leave-one-atlas-donor-out human ceilings.
+
+**Direction agreement.** Among probe-balanced genes zonated in both species under notebook 43's
+symmetric classes, the share conserved per strength bin (Wilson intervals), with strength from the full
+references.
+
+**Post hoc diagnostic** (Supplementary Note 8, deviation 17). The S2 − S1 human ceiling was not
+estimable below the 80th percentile: atlas folds of 3–4 donors had reliability < 0.2. Strength was
+therefore also defined from the mouse snRNA fold alone, so that the full atlas could give the human
+ceiling without selection bias.
+
+**Limitation of the donor bootstrap.** Resampling 7 atlas donors with replacement duplicates donors,
+which understates within-reference noise and overstates reliability. Donor-bootstrap percentile
+intervals are therefore shifted relative to the point estimate, and the leave-one-donor-out range is
+reported alongside.
+
+### SM35 · Primary pathway list and its replication (notebook 50)
+
+Notebook 50 runs in `results/pt_primary_pathways/` (logic `50.primary_pathways.1`).
+- *Primary list.* It saves the 22 pathways robust under both the principal curve and DPT13
+  (`primary_pathway_list.csv`), with:
+  - category;
+  - segment-unit peaks under three coordinates;
+  - probe flags;
+  - the call of notebook 45's coordinate-free step screen on our cohort, recomputed per pathway
+    (`cohort_step_screen_per_pathway.csv`).
+- *Replication.* Notebook 48's overlap-preserving collection test was repeated on the 22, on their 12
+  core pathways and on their 13 programs, against the 21 relabel-called pathways (9,999 draws; male
+  mouse references; matched, selection-matched and slope-free scores).
+- *Conventional-only pathways.* The group comparison of the 184 pathways called only by conventional
+  screens was repeated against overlap-preserving collections.

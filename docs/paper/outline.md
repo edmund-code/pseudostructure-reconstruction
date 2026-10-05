@@ -6,19 +6,20 @@ changes.
 
 ## Central claim
 
-Reconstructing a continuous proximal-tubule (PT) coordinate from segmented Visium HD tubules lets a
-human–mouse comparison ask *where* along the tubule a program differs. With two specimens per
-species, average-level pathway comparisons (whole-PT or S1/S2/S3 pseudobulk) cannot be separated
-from specimen variation; position-dependent comparisons can when specimens of a group share their positional biology
-(relabeling control; many-draw external null, notebook 45; the split-plot argument is motivation, not
-proof). Applied to human and mouse PT, they show that
-**axial zonation is largely species-specific beyond a conserved core of strong markers**: against
-same-species reliability ceilings, the human–mouse correlation of gene gradients is only 0.17
-(S1→S2) and 0.28 (S3) of the ceiling (notebook 43). Confidently species-only genes are few and not
-skewed toward mouse (41 mouse-only, 76 human-only); human amplitudes are also lower overall. The
-pathway screen mainly summarizes mouse zonation that human PT does not share (26 of 36 robust
-pathways). The earlier "mouse zonates more programs" reading was a threshold artefact and is
-withdrawn; rat data fail the reliability rule and are not used.
+Measured against same-species reproducibility, **human and mouse proximal tubule agree mainly on
+their most strongly zonated genes** (notebook 49). With gradient strength cross-fitted on external
+donors and ceilings estimated per strength bin, the human–mouse conservation index is about 0.55 in
+the top 1% of genes, 0.1–0.3 among moderately zonated genes whose gradients still reproduce within
+each species, and near zero below that. Over all genes the index is 0.1–0.35 depending on
+winsorisation (0.17/0.28 at the published setting; module-block intervals reach 0.54 for the S3
+contrasts), and 0.25–0.31 in public atlases alone. Among genes zonated in both species, direction
+agreement rises from about 0.5 to 0.85–0.89 with strength. Whether mouse-only genes outnumber
+human-only ones depends on absolute versus amplitude-relative thresholds. Second contribution: with
+two specimens per species, average-level pathway screens cannot be shown specific by relabeling,
+whereas position-dependent screens can when specimens within a group share positional biology
+(notebooks 31, 37, 45). The primary list of 22 position-dependent pathways (robust under both
+coordinates; 20 also called coordinate-free) mostly summarises mouse zonation that the human
+sections do not share.
 
 > **Status after the revision round (notebooks 42, 44, 45, 46).** The central claim survived its tests.
 > Human segment labels have only weak reference support (transfer agreement 0.71), but with transferred

@@ -868,3 +868,259 @@ new reconstruction claim without cross-specimen/program validation.
 Checkpoint at user-requested stop: this protocol is saved in notebook 30, but
 implementation and execution have not begun. Notebook 29 remains the latest
 completed experiment; no measurement-invariance result is claimed.
+
+## 2026-10-05 — Landmark count-position model (LCP), protocol fixed before any fit
+
+
+**Goal check.** The reconstruction failure this addresses is within-segment order, and it is
+measured. In mouse, a landmark ratio from selection references only agrees with itself at 0.66–0.83
+within segments, with genes and reads both disjoint. scFates ignores that axis in S1 and S3 (−0.12 to
+0.33), and DPT ignores it in S1 (0.05–0.20) (`docs/results/pt-reconstruction-v3-phase1.md`, F5b). Depth dependence is
+largely cut size: polygon width against log library gives ρ 0.60–0.83.
+
+**How the repeated-object prior enters.** One shared rate path per species, fitted with equal
+specimen weight at every grid point, for all nephrons. Position is anchored to external
+segment-level landmark shapes. There are no offsets, hierarchy, covariance, flow or registration, so
+no closed hypothesis is rerun.
+
+**What is new relative to notebooks 16–17 and 36.** Notebooks 16–17 used marker-excluded genes and a
+frozen projection. Notebook 36's conserved-anchor coordinate used a 160-gene conserved panel through
+Harmony and scFates. LCP instead uses a large species-specific landmark panel, a count likelihood
+with an exposure offset, and no embedding or curve. **x/y, depth and glomerular distance are not used
+anywhere.**
+
+### Precedents
+
+- Halpern et al. 2017 ([PMID 28166538](https://pubmed.ncbi.nlm.nih.gov/28166538/)): landmark-gene
+  posterior over zones with a UMI likelihood.
+- Ouija ([PMID 29939207](https://pubmed.ncbi.nlm.nih.gov/29939207/)): marker-gene pseudotime.
+- GLM-PCA ([PMID 31870412](https://pubmed.ncbi.nlm.nih.gov/31870412/)): count likelihood instead of
+  log-normalization.
+- Count splitting ([PMID 36511385](https://pubmed.ncbi.nlm.nih.gov/36511385/)).
+
+### Inputs (as notebook 36)
+
+- 12,866 PT structures from notebook 13.
+- Raw counts rebuilt by `rebuild_pt_expression` and checked against notebook 13's cache.
+- Library = the measured-in-both total (`LIBRARY_PT`). The plan said "all-gene library"; the
+  measured-in-both total is used so that it matches every evaluation metric.
+- Comparators SCF13 and DPT13 are read from notebook 36's own stage cache: full, three gene folds,
+  equal depth 352, count-split halves A/B (seed 35), and LOSO for SCF13. A guard requires the full fit
+  to reproduce the saved coordinates exactly.
+
+### Landmark panel (selection references only; fixed)
+
+- **Mouse:** |S3 − early| ≥ 1 with the same sign in mouse microdissection and female mouse snRNA,
+  level ≥ 1 in both.
+- **Human:** |S3 − early| ≥ 1 in human snRNA donor half A, level ≥ 1.
+- **Both:** detection ≥ 10% in that species' PT structures, and PT-specific in that species (no
+  non-PT nephron class mean > 2× the PT mean; notebook 36's rule applied per species).
+- **Evaluation references, never read during construction:** male mouse snRNA, human half B, rat.
+
+### Model (fixed in advance)
+
+- **Grid.** K = 50 points on [0, 1].
+- **Likelihood.** y_ig ~ NB(ℓ_i·exp(η_g(z)), θ_g), with log-likelihood divided by a temperature T.
+  The prior over grid points is uniform.
+- **Rate path.** η_g(z) = a_g + B(z)·b_g, where B is a cubic B-spline basis with df 6, centred, no
+  intercept.
+- **External shape (prior mean b0_g).** A least-squares projection of the centred external shape:
+  - mouse: microdissection log2 means at z = 1/6 (S1), 1/2 (S2) and 5/6 (S3);
+  - human: half-A early at z = 1/3 and S3 at z = 5/6;
+  - linear between points, constant beyond the end points, converted to natural log.
+
+  Penalty (λ/2)‖b_g − b0_g‖², λ = 10. The shape sets orientation and gauge; labels are never used.
+- **M-step.** Per-specimen posterior-weighted rates on the grid, averaged with equal specimen weight
+  at each grid point. A penalized Poisson Newton step on the grid aggregates. Dispersion 1/θ_g is a
+  moment estimate clipped to [10⁻⁴, 10].
+- **Initialization and stopping.** Start from η = η0, θ = 10. Stop when the largest change in
+  posterior mean is < 10⁻⁴, or after 100 iterations. The tempered marginal log-likelihood is
+  recorded; decreases are reported.
+- **Temperature T,** per species, from {1, 2, 4, 8, 16, 32, 64, 128}. Fit on calibration half A
+  (binomial split ε = 0.5, seed 51, landmark genes only) and choose the T that maximizes half-B
+  posterior-predictive log-likelihood. T is then frozen for every refit. No evaluation gene, label or
+  reference is involved.
+- **Outputs.** Posterior mean (the coordinate), 10% and 90% posterior quantiles, entropy and MAP.
+
+### Fits
+
+- full data;
+- three gene folds, each excluding that fold's landmarks;
+- equal depth 352;
+- count-split halves A and B;
+- own-landmark injection: human-only, 10% of human landmarks (sha256 mod 10 = 0), exp(±log 2·(2s₀ − 1))
+  with s₀ = LCP's full human position, signs alternating in hash order, seed 357;
+- notebook 36's non-anchor injection (seed 351), for comparability;
+- LOSO: fit on the other specimen of the species, project the held-out one with frozen rates;
+- three perturbed starts: b0 plus N(0, 0.5²), seeds 1–3; descriptive.
+
+### Comparators (run unchanged)
+
+- SCF13 and DPT13.
+- **LRS:** log((late + 0.5)/(early + 0.5)) landmark counts. Fold versions drop that fold's
+  landmarks. Mapped to [0, 1] by within-species rank, for gap metrics only.
+- Segment labels: the segment-mean oracle.
+- The segment + coverage quadratic oracle (log library, log spots, log detected genes; ridge 0.01,
+  degree 2).
+
+### Metrics (every arm, per species × segment, all cells shown)
+
+1. **P4** (notebook 36): gain over segment means, cross-specimen within species, 3 folds × 2
+   directions.
+2. **P4c.** Two stages:
+   1. fit the quadratic oracle on the training specimen;
+   2. within each segment, fit a cubic B-spline of the coordinate (df 4, ridge 10⁻⁶) to the training
+      residuals and add its prediction at test positions, clipped to the training range.
+
+   Gain = 1 − Σ_g MSE_c/var_g ÷ Σ_g MSE_oracle/var_g.
+
+   **P4c-dev (sensitivity).** Poisson deviance with a library offset: segment rate against a
+   within-segment Poisson spline of the coordinate (df 4), gain = 1 − ΣD_B/ΣD_A.
+3. **P1 and P1w,** fold-protected, scored on **evaluation references only.**
+   - P1: male mouse snRNA and human half B.
+   - P1w: mouse uses male-snRNA adjacent contrasts (S2−S1 for S1, S3−S1 for S2, S3−S2 for S3); human
+     uses half B for early and S3.
+   - *Clarification:* notebook 36's primary mouse P1w used microdissection contrasts, which are a
+     selection reference here. They are reported for continuity, flagged as circular for LCP and LRS,
+     and not used in any rule. DPT13's P1w is recomputed on the same male-snRNA references.
+4. Gene-fold within-segment agreement: the median over fold pairs per specimen × segment; the summary
+   is the mean over segments of the per-segment median.
+5. LOSO within-segment agreement with the full fit, and count-split half A against half B within
+   segment.
+6. P5 (equal depth against full, within segment; human S1 shown separately), and ρ(position, log
+   library) within segment.
+7. P2 absorption.
+   - *Clarification:* the plan's "median ratio ≤ 1.10" was a slip. The gate is notebook 35's
+     pre-registered flag: no material absorption when median ratio ≥ 0.85 and the human within-segment
+     ρ (refit against frozen) ≥ 0.90. Whether the ratio is ≤ 1.10 is also reported.
+8. Registration gap: the maximum over the fold and half refits.
+9. Downstream: notebook 37's joint test. Run **only** if (A) and (B) below pass.
+10. Uncertainty, reported only:
+    - the fraction of structures whose half-B MAP lies in the half-A 80% interval;
+    - interval width by species × segment.
+
+**Dropped before fitting:** the exploratory collinear-pair check (plan item 11). It uses x/y, which
+the coordinator excluded.
+
+### Decision rules (from the plan, frozen)
+
+**Abandon** if any of these holds, evaluated in mouse:
+- (i) gene-fold agreement ≤ DPT13's;
+- (ii) P1w ≤ DPT13's on the same references;
+- (iii) P4c > 0 in fewer than 5 of 6 cells;
+- (iv) mean P4c ≤ LRS's mean, **or** gene-fold agreement ≤ LRS's. This is the stricter reading of
+  "fails to beat LRS on P4c and stability".
+
+If abandonment triggers: stop, do not tune, report.
+
+**Adopt** only if all of (A) and (B) hold:
+- **(A)** P1 ≥ SCF13 − 0.03 in each species; P5 ≥ 0.80 overall and ≥ 0.70 in human S1; gap ≤ 0.15;
+  no material P2 absorption; and the downstream gate (NCDR < 0.25 and relabeled calls < 5% of tested
+  pathways).
+- **(B)** P4c > 0 in ≥ 5/6 mouse and ≥ 4/6 human cells, with mean above the best of SCF13, DPT13 and
+  LRS; P1w ≥ DPT13 + 0.05 in mouse and ≥ DPT13 in human; gene-fold ≥ 0.70 in mouse and ≥ 0.59 in
+  human; LOSO ≥ 0.85.
+
+**What would justify keeping LCP:** passing (A) and (B). A result that only beats LRS, or only the
+generic trajectories, does not.
+
+### Measured results
+
+### Implementation notes (fixed before the run)
+
+- **Notebook.** Everything runs in notebook 51 (`51_pt_landmark_count_position.ipynb`); notebook 52
+  was not needed.
+- **P4c-dev Poisson fit.** It carries a ridge of 10⁻³ on the non-intercept spline coefficients, and
+  genes with no training counts in a segment keep the segment rate. Both choices were made after the
+  synthetic tests and before any private output.
+- **LRS scale.** LRS enters the spline-based metrics through its within-species rank. The rank is
+  monotone, so every Spearman metric is unchanged.
+
+### Measured results (notebook 51, 2026-10-05)
+
+Logic version `51.landmark_count_position.1`. Outputs are in `results/pt_reconstruction_v3/nb51/`.
+
+**Inputs and guards.**
+- Inputs: 12,866 PT structures and 8,880 evaluation genes.
+- Landmarks: 420 mouse (154 late-high, 266 early-high) and 556 human (117 late-high, 439
+  early-high). Of these, 326 and 489 are also evaluation genes, and are scored only on fold-protected
+  refits.
+- Guards: notebook 36's anchors reproduce; its cached SCF13 and DPT13 reproduce notebook 13; P4 for
+  SCF13 and DPT13 reproduces notebook 36 in all 24 cells.
+- The selected temperature is **T = 1 in both species**: half-B predictive log-likelihood falls
+  monotonically with T.
+
+**Fits.**
+- 42 LCP fits, all completed; none crashed.
+- **None met the posterior-mean tolerance of 10⁻⁴ within 100 iterations.**
+  - The mouse objective was still rising slowly (+71 over the last 10 iterations, against +5.9 × 10⁵
+    over the first 10).
+  - The human objective drifted by −0.3, a negligible decrease.
+- Three perturbed starts agree with the primary fit at within-segment ρ = 1.000 in every
+  specimen × segment, so ranks are stable despite the non-convergence.
+- Without labels, LCP orders the segment medians S1 < S2 < S3 in all four specimens: mouse
+  0.15–0.20 / 0.42 / 0.85, human 0.29–0.30 / 0.68–0.72 / 0.93–0.95.
+
+**Summary by arm.** Per-species × segment tables are in `summary_cells_by_segment.csv`,
+`summary_p1w.csv` and `summary_p4.csv`.
+
+| Metric | SCF13 | DPT13 | LRS | LCP |
+|---|---|---|---|---|
+| Gene-fold within-segment agreement, mouse / human | 0.60 / 0.21 | 0.61 / 0.59 | 0.91 / 0.76 | **0.96 / 0.74** |
+| P1w, evaluation references, mouse / human | 0.17 / 0.10 | 0.23 / 0.14 | 0.38 / 0.20 | 0.34 / 0.21 |
+| P1, male snRNA / human half B (segment labels 0.755 / 0.317) | 0.745 / 0.246 | 0.739 / 0.291 | 0.752 / 0.317 | 0.748 / 0.319 |
+| P4, gain over segment means, mouse / human (coverage oracle +1.30% / +1.31%) | +0.09% / +0.02% | −0.43% / −0.01% | −0.06% / +0.07% | **+0.56% / +0.18%** |
+| **P4c, gain over segment + coverage, mouse / human** | −0.48% / −0.32% | −0.79% / −0.32% | −0.31% / −0.31% | **−0.09% / −0.27%** |
+| P4c > 0 cells, mouse / human (of 6) | 1 / 0 | 0 / 0 | 0 / 0 | **3 / 0** |
+| P5, overall; human S1 | 0.72; 0.41 | 0.80; 0.72 | 0.96; 0.80 | 0.98; **0.42** |
+| Registration gap, maximum over refits | 0.29 | 0.14 | 0.18 | **0.28** (0.27–0.28 in every refit) |
+| LOSO within-segment | 0.93 | n/a | n/a | 0.99 (human S1 0.60) |
+| Count split A vs B within segment, mouse S1/S2/S3 | 0.62/0.08/−0.36 | 0.76/0.70/0.44 | 0.87/0.90/0.80 | 0.94/0.95/0.90 |
+| P2, own-landmark injection: median ratio; human ρ | 1.01 (nb35) | 1.03 (nb35) | 0.97; 0.99 | 1.03; 0.99 (no material absorption) |
+
+**Per segment, where LCP loses.**
+- **Human S1:**
+  - gene-fold agreement 0.40 (DPT13 0.57, LRS 0.63);
+  - P5 0.42 (DPT13 0.72, LRS 0.80);
+  - LOSO 0.60;
+  - count split 0.57.
+- **Mouse S3 P1w:** 0.21, against DPT13 0.23 and LRS 0.39.
+- **P4c per segment.** Positive only in mouse S3 (+0.11%). Negative in mouse S1 (−0.26%) and S2
+  (−0.13%), and in every human segment.
+- **Uncertainty.**
+  - The half-B MAP falls in the half-A 80% interval for 73–83% of mouse structures and 66–75% of
+    human structures.
+  - Full-data 80% intervals are one grid step wide in mouse (0.020) and 0.06–0.08 in human.
+  - The posterior is overconfident, despite the tempering.
+- **P4c-dev failed numerically.** Separation in sparse genes gave values down to −10⁸. It is reported
+  as not interpretable and was not rerun: any fix would be chosen after seeing outputs.
+
+### Decision
+
+**Abandonment rule (iii) triggered.** Mouse P4c is positive in only 3 of 6 cells; the rule requires 5.
+Rules (i), (ii) and (iv) did not trigger. Per the protocol, LCP is **not adopted**. Nothing was tuned
+or rerun, and the downstream joint test was not run.
+
+Adoption criteria were also unmet independently:
+- P5 in human S1 is 0.42 (the bar is 0.70);
+- the registration gap is 0.28 (the bar is 0.15). It is a stable offset between the species' external
+  shape gauges, not refit instability.
+
+### Interpretation
+
+1. **Coordinates do not beat segment + coverage on held-out genes.** No coordinate, generic or
+   landmark-based, adds held-out-gene prediction across specimens once segment and coverage
+   covariates are modelled (P4c ≤ 0 in 44 of 48 cells; the 4 positive cells are ≤ +0.15%). The bar "continuous beats discrete on
+   held-out genes" is not met by any arm in this cohort.
+2. **The landmark information solves within-segment stability, and the trivial ratio gets most of
+   it.**
+   - LRS and LCP raise mouse gene-fold agreement from about 0.6 to 0.91–0.96, and LOSO from 0.93 to
+     0.99.
+   - P1w on evaluation-only references roughly doubles in mouse.
+   - The EM model adds little over the LRS score, except for P4, P4c and mouse gene-fold, and it loses
+     to LRS in human S1.
+3. **Human S1 remains measurement-limited** under both landmark arms.
+
+The coordinate is saved for workstream B as `results/pt_reconstruction_v3/lcp_coordinate.csv`. It is
+not adopted. The repeated-object goal is still unmet: the external landmark axis is stable, but it
+does not translate into held-out-gene prediction beyond segment and coverage.

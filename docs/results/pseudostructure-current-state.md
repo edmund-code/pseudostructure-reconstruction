@@ -1,6 +1,6 @@
 # Pseudostructure research: current checkpoint
 
-Updated 2026-10-04 after notebook 29. This short entrypoint avoids reopening
+Updated 2026-10-05 after notebook 51 (paper workstream A). This short entrypoint avoids reopening
 closed branches; the [research ledger](pseudostructure-research-ledger.md) holds
 protocols fixed before outcomes, complete denominators and measured results.
 
@@ -47,6 +47,7 @@ a longitudinal target. Injury, species and regulator interpretation remain gated
 | 27 assignment-aware response reduction | Improves nonlinear response prediction, without changing positions; retain fairer benchmark. |
 | 28 ordered anatomical initialization | All 18 new fits valid but no consistent benefit; coarse median order insufficient. |
 | 29 independent query path/partial ordered registration | 11/12 eligible; full prediction worsens, partial ranks collapse and reverse S2 prediction fails severely. Do not adopt. |
+| 51 landmark count-position model (LCP; no x/y) | Within-segment stability fixed (gene-fold 0.96 vs scFates 0.60; LOSO 0.99) and P1w up (0.34 vs 0.17), but abandonment rule (iii) triggered: held-out-gene gain over the segment + coverage oracle in only 3/6 mouse cells. No coordinate (scFates, DPT, LRS, LCP) beats that oracle (P4c ≤ 0 in 44/48 cells). A zero-cost landmark ratio score gets most of the gain. Not adopted. |
 
 Notebook 29 uses full/S3-only calibration with identical evaluation halves,
 free reference endpoints, and common expression-based support/frozen-reference
@@ -78,3 +79,12 @@ suite, preserved segment medians or a lower fitting cost.
 Work stopped at the user’s request. Notebook 30 contains only the prespecified
 measurement-invariance protocol; it is not implemented or executed. Notebook 29
 remains the latest measured result. No research processes are running.
+
+## Paper re-centring (2026-10-05)
+
+The paper now introduces a reconstruction method and asks what continuous analysis shows that
+discrete segments do not. The user's constraint: the method must stay general for continuous repeated
+structures (for example intestinal crypts), so tissue x/y is never used in inference. Notebook 51
+(LCP) is the first experiment under this goal; notebooks 56–60 (pathway workstream) measure
+continuous-only information per coordinate. See `docs/results/pt-reconstruction-v3-phase1.md` and
+`docs/results/pt-pathway-continuous-vs-discrete.md`.

@@ -28,12 +28,18 @@ withdrawn; rat data fail the reliability rule and are not used.
 > 44). R2 holds in external many-draw nulls at segment resolution but is conditional: positional
 > screens lose specificity when specimens differ in positional biology (age, injury severity; notebook 45).
 >
-> **Coordinate decision (user, 2026-10-04): keep scFates (36 robust pathways).** Disclose that the
-> pre-registered rule (notebook 36) selected DPT13 on stability and registration gap, that the downstream
-> gate used to override it came from the matched-only test, and that on the joint test DPT13 is also
-> specific (45 calls; 3 and 0 relabeled). Report per-pathway coordinate robustness: 22 of the 36 are also
-> robust under DPT13 and peak direction agrees for all 40 pathways in the union
-> (`results/pt_revision_labels/coordinate_robustness.csv`).
+> **Decisions after the independent review of v0.3 (user, 2026-10-04;
+> `docs/paper/referee_report_v03.md`).**
+> - **Framing: biology-led, with the pathway-specificity method as a full second contribution.** Lead with
+>   the ceiling-calibrated human–mouse comparison and agreement by gradient strength; the few-specimen
+>   pathway-specificity result keeps its own section and figure; the continuous coordinate is a tool
+>   (one Figure 1 panel plus a supplementary note) that adds within-specimen replication, not finer
+>   resolution.
+> - **Primary pathway list: the 22 pathways robust under both scFates and DPT13**; peaks reported in
+>   segment units; curves still drawn on scFates; each coordinate reported separately as a sensitivity.
+>   This supersedes the earlier "keep scFates (36)" decision. Disclose that the pre-registered rule
+>   selected DPT13 and that the override reason did not hold on the joint test.
+> - Restructure toward ~4,500 words of Results and six main figures (referee report section 4).
 
 ## Results sections, evidence and status
 

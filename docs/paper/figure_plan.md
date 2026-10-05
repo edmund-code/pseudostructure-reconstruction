@@ -1,5 +1,7 @@
 # Figure plan for draft v0.4
 
+> **Superseded** by `figure_plan_methods.md` (2026-10-05), which follows the authors' methods-paper outline.
+
 There is one line per panel, with the source table relative to `results/`. "nb41 §3" means notebook
 41's descriptive aggregates (no model, no test). Panels marked [WS6] wait for the running analysis. The
 legends are in `draft_v04.md` (main) and `supplementary_notes_v04.md` (supplementary).

@@ -318,3 +318,34 @@ Mean over the two specimens of each species.
 
 **Results** (gitignored): `results/pt_pathway_continuous/`, with the subfolders `56_taxonomy/`,
 `57_beyond_steps/`, `58_descriptors/`, `59_external_onsets/`, `60_resolution_budget/` and `inputs/`.
+
+## Addendum (notebook 61, plan addendum 3): order-invariant programs and pre-test deduplication
+
+- **Notebook 37's program grouping is superseded by the order-invariant rule.**
+  - Average linkage with tied distances depends on input order. Notebook 37 clustered in library
+    order; the new rule sorts by `pathway_id` first.
+  - On the 36 robust pathways the count stays at 17, but 7 vitamin pathways change co-members.
+    "Metabolism Of Vitamins And Cofactors" moves from the water-soluble/pantothenate program to the
+    fat-soluble/retinoid program. Pantothenate and CoA biosynthesis, Vitamin B5 and Water-Soluble
+    Vitamins stay together.
+  - Notebook 37 itself is unchanged; the moves are in `robust36_program_moves.csv`.
+- **Programs under the new rule:**
+  - the primary 22 give 12 programs (the same grouping as before);
+  - the 60 C1 calls give 25;
+  - per method, pathways → programs: segment steps 50 → 25, six bins 49 → 25, whole-PT ORA 80 → 23,
+    S1/S2/S3 ORA 118 → 43.
+- **Pre-test deduplication** (member Jaccard ≥ 0.7, unions of connected components). The library goes
+  from 1,513 sets to 1,160; at ≥ 0.5 it would be 853, and at ≥ 0.9, 1,395.
+
+  | Method | Original library | Collapsed library |
+  |---|---|---|
+  | T_spatial joint test | 60 calls (2, 0) | 63 (3, 0) |
+  | Segment-step screen | 50 calls (0, 0) | 49 (0, 0) |
+  | Whole-PT ORA | 80 calls (0, 1) | 44 (0, 1) |
+
+  - All 60 T_spatial calls are kept. There are 6 new calls, all single sets that cross the threshold
+    because BH runs over fewer tests.
+  - No loss comes from union dilution, and no specificity verdict changes.
+  - The frozen rule reports "changes the substantive result", because 4 programs are gained
+    (25 → 30). The cause is the number of tests, not the merging.
+  - Caveat: chaining merges 67 cell-cycle and proteasome entries into one 429-gene set. Not adopted.

@@ -84,9 +84,8 @@ it. Resolved items from the earlier list are summarised at the end.
     196 of 388 zonated genes. Counted by workstream 4 from `gene_classes_symmetric.csv`, not by a
     notebook. Confirm, or add the count to notebook 43. Item 9's 30 of 54 is the notebook 40 count;
     R3 gives both.
-19. **Abedini PMID.** `data/external/abedini2024_visium/SOURCE.txt` cites PMID 38514613, which is a
-    different paper. The correct PMID is 39048792 (Nat Genet 56:1712–1724). The file is local
-    (gitignored), and any committed doc that copied it needs the same fix.
+19. **Abedini PMID.** Fixed 2026-10-04: the local `SOURCE.txt` now cites PMID 39048792 (Nat Genet
+    56:1712–1724); no committed document carried the wrong PMID.
 20. **Documents that still carry superseded statements.**
     - `docs/paper/r2_revision_results.md`: 72% (table 0.715 → 71%).
     - `docs/paper/revision_state_citations.md`: rat OAT1 S3/S2 −6.6 (table −6.55 → −6.5); Gamt "first

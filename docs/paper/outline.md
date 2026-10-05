@@ -42,30 +42,19 @@ sections do not share.
 >   selected DPT13 and that the override reason did not hold on the joint test.
 > - Restructure toward ~4,500 words of Results and six main figures (referee report section 4).
 
-## Results sections, evidence and status
+## Results sections, evidence and status (draft v0.5 structure)
 
-| # | Section | Claim | Evidence | Status / owner |
+| # | Section | Evidence | Figure | Status |
 |---|---|---|---|---|
-| R1 | Reconstructing the PT axis | The scFates coordinate recovers directly measured zonation (coordinate-based P1: mouse 0.745, human 0.25), absorbs no injected species-by-position effect and survives an independent count split (59/66 robust kept). Its fine within-segment order is weakly supported, it predicts held-out genes no better than segment labels, it is depth-dependent in human S1 and its registration is fragile. Its value is replication across positions within specimens and continuous localization, not finer-than-segment resolution | Notebooks 13, 35, 36 | **Decided (user): scFates primary.** The pre-registered rule selected DPT13 (P5 0.80 vs 0.72; registration gap 0.14 vs 0.29); the override cited NCDR 0.40 from the matched-only test, and on the joint test DPT13 is specific too. Disclose both. DPT13 and the anchor coordinate are sensitivity analyses; 22/36 robust pathways are also DPT13-robust. Human segment labels: weak reference support (notebook 42), claim robust to transferred labels (notebook 46) |
-| R2 | A specificity problem in cross-species pathway analysis | Average-level competitive screens report as many pathways for relabeled specimen groups as for species (NCDR ≥ 1.4; decoy FDP ≥ 0.75); position-dependent screens are specific (joint `T_spatial`: 60 versus 2 and 0). External many-draw nulls: whole-PT GSEA NCDR 1.34, segment-step joint screen 0.05; specificity is empirical and fails when specimens differ in positional biology (age, AKI severity). Split-plot argument is motivation only. NCDR measures vulnerability to specimen noise, not FDP | Notebooks 31, 37, 45 (Figure 2); `docs/paper/r2_revision_results.md` | Done (workstreams 2, 5) |
-| R3 | Position-dependent pathway differences | Joint test: 60 → 51 confident → **36 robust (17 programs)** → 26 core; human-high programs peak early (median 0.16), mouse-high late (0.63); differences mostly graded and one-signed | Notebook 37 (Figure 3); 31–33 superseded list as sensitivity | Done (workstream 2) |
-| R4 | Robustness and independent replication | Robust pathways keep ≥ 70% of effect under all checks; specimen-level split-plot test calibrated and concordant (complement). External: measurement-level agreement; robust ≫ uncalled pathways in donor-level replication, but pathway-by-pathway replication not shown (17/36 Census, 6/36 Lake), and little beyond a shared global flattening of human gradients | Notebooks 33, 34, 37 (Figure 4) | Done; rerun notebook 37 if workstream 1 changes the coordinate |
-| R5 | Biology | Lead stories: creatine-synthesis zonation (human side new), mitochondrial β-oxidation (Acadm/Acaa2 opposite in mouse, flat in human), drug-handling placement (human front-loaded conjugation/oxidation versus mouse late glutathione and S1–S2 Cyp2e1), Dcxr reversal. Supporting: Rbp4, sterol synthesis, human late-PT retention of SLC6A19/SLC9A3/SLC4A4 | Notebooks 32–34, 38; Lake/KPMP human S1/S2/S3; `docs/results/pt-pathway-literature-novelty.md`; draft `docs/paper/r5_draft.md` | Evidence done (notebook 38). Text conditional on workstream 1 attenuation check |
+| R1 | Segmented PT structures and their segment labels: cohort, joint labels, glomerulus distance, reference transfer (weak human support), spillover; the coordinate as a tool | Notebooks 01, 03, 13, 42; Supplementary Note 1 (notebooks 35, 36) | 1 | Done; lab records pending |
+| R2 | Human and mouse agree mainly on their most strongly zonated genes: ceilings, conservation index and sensitivity, agreement by gradient strength, cross-fitted labels, integration genes excluded | Notebooks 43, 46, 47, 49 | 2 | Done (v0.6 wording fixes pending) |
+| R3 | Which genes are shared: symmetric classes, direction agreement, transporters over-represented (33 of 196 conserved), absolute versus relative asymmetry, tissue and physiological state | Notebooks 43, 44, 47, 48 | 3 | Done |
+| R4 | With two specimens per species, average-level pathway screens cannot be shown specific by relabeling; positional screens pass when specimens share positional biology; external many-draw nulls; AKI read under both rules | Notebooks 31, 37, 45, 48 | 4 | Done; depends on unrecorded mouse ages |
+| R5 | Position-dependent pathways mostly summarise mouse zonation: 22 robust under both coordinates (13/3/0/1/5; 12 core), 20 also called coordinate-free; replication beyond random sets, beyond relabel-called in one of two atlases | Notebooks 37, 47, 48, 50 | 5 | Done |
+| R6 | Lead genes: Gatm (amplitude), Acadm/Acaa2, Dcxr and Ugt3a1 reversals, RBP4, Slc7a13 reference; rodent protein support | Notebooks 38, 43, 44 | 6 | Done |
 
-## Figures (draft)
-
-1. Study design, segmentation, reconstructed coordinate, external zonation concordance (R1).
-2. Specificity of pathway strategies under specimen relabeling (R2).
-3. Positional atlas of species pathway differences and the early/late landscape (R3).
-4. Robustness and external replication (R4).
-5. Biology panels: gene curves with specimen means and conventional fold changes (R5).
-
-## Methods (to be written from the notebooks)
-
-Segmentation (`segmentation/`), tubule-by-gene matrices (01), cross-species integration (03,
-13), coordinate reconstruction (13 or workstream 1), nested GAMs and `T_spatial` (12), matched
-rank-AUC tests (12), specimen relabeling control (31), robustness checks (33), external
-segment datasets (34), literature-check procedure (literature-novelty doc).
+Figures are built by notebook 41 from saved results (`results/paper_figures/`). Supplementary Notes 1–10 and
+the protocol-deviation table are in `docs/paper/supplementary_information.md`.
 
 ## Standing caveats (must appear beside results)
 
@@ -83,10 +72,15 @@ probe panels differ between species; findings are descriptive.
 - A complete manuscript draft (`docs/paper/draft.md`) with Methods, Results, Discussion and
   figure legends, consistent with the results docs.
 
-## Workstreams (current)
+## Notebooks behind the paper
 
-| Workstream | Goal | Notebook numbers | Results folder |
-|---|---|---|---|
-| 1 Reconstruction | Problem-specific PT reconstruction, or a justified decision to keep scFates | 35–36 | `results/pt_reconstruction_v2/` |
-| 2 Pathway analysis | Final pathway method, reporting set and figure; audit 31–34 | 37 | `results/pt_pathway_final/` |
-| 3 Literature and novelty | Verified novelty claims, deeper evidence for R5 stories | 38 | `results/pt_literature_deep/` |
+| Notebooks | Role | Results folder |
+|---|---|---|
+| 13, 35, 36 | Coordinate and its validation (Supplementary Note 1) | `minimal_pt_scfates/`, `pt_reconstruction_v2/` |
+| 31, 37 | Pathway method selection and final joint test | `pt_pathway_method_selection/`, `pt_pathway_final/` |
+| 38, 44 | Literature, external genes, state and rodent protein | `pt_literature_deep/`, `pt_revision_state/` |
+| 39, 40, 43 | Amplitude, v1 classes (superseded), ceilings and symmetric classes | `pt_zonation_amplitude/`, `pt_zonation_classes/`, `pt_revision_classes/` |
+| 41 | All paper figures | `paper_figures/` |
+| 42, 46, 47 | Label validation, cross-fitted labels, addenda | `pt_revision_labels/`, `pt_revision_classes/crossfit/`, `pt_revision_addenda/` |
+| 45, 48, 50 | Many-draw nulls, overlap-preserving replication, primary list | `pt_revision_method/`, `pt_revision_addenda_pathways/`, `pt_primary_pathways/` |
+| 49 | Agreement by gradient strength and index sensitivity | `pt_conservation_strength/` |

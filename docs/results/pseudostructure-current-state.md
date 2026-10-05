@@ -1,6 +1,6 @@
 # Pseudostructure research: current checkpoint
 
-Updated 2026-10-05 after notebook 51 (paper workstream A). This short entrypoint avoids reopening
+Updated 2026-10-05 after notebooks 52–53 (paper workstream A). This short entrypoint avoids reopening
 closed branches; the [research ledger](pseudostructure-research-ledger.md) holds
 protocols fixed before outcomes, complete denominators and measured results.
 
@@ -48,6 +48,8 @@ a longitudinal target. Injury, species and regulator interpretation remain gated
 | 28 ordered anatomical initialization | All 18 new fits valid but no consistent benefit; coarse median order insufficient. |
 | 29 independent query path/partial ordered registration | 11/12 eligible; full prediction worsens, partial ranks collapse and reverse S2 prediction fails severely. Do not adopt. |
 | 51 landmark count-position model (LCP; no x/y) | Within-segment stability fixed (gene-fold 0.96 vs scFates 0.60; LOSO 0.99) and P1w up (0.34 vs 0.17), but abandonment rule (iii) triggered: held-out-gene gain over the segment + coverage oracle in only 3/6 mouse cells. No coordinate (scFates, DPT, LRS, LCP) beats that oracle (P4c ≤ 0 in 44/48 cells). A zero-cost landmark ratio score gets most of the gain. Not adopted. |
+| 52 landmark model ablation ladder | Count likelihood, zone shapes, specimen balancing and joint species fitting each failed their pre-registered margins over the free landmark ratio; calibration abandoned (bootstrap 2–4× conservative). Not adopted as a model. |
+| 53 zone-derived landmark ratio (LRS-Z; landmarks from the data's own zones, read-split, no atlas, no x/y) | Passes the amended adoption criteria (P4c as claim gate, decided before fits): within-segment gene-fold agreement 0.93/0.95 (scFates 0.60/0.21), human S1 0.96 (0.07), external within-segment concordance 0.38/0.19 (0.17/0.10), positional noise 0.21–0.31 of within-segment spread (0.83–1.49). P4c still ≤ 0 for every arm. Caveats: between-zone order equals the labels; registration gap tautological in zone units; uncertainty conservative. Adoption as the paper coordinate awaits the user. |
 
 Notebook 29 uses full/S3-only calibration with identical evaluation halves,
 free reference endpoints, and common expression-based support/frozen-reference

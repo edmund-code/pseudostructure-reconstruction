@@ -1124,3 +1124,302 @@ Adoption criteria were also unmet independently:
 The coordinate is saved for workstream B as `results/pt_reconstruction_v3/lcp_coordinate.csv`. It is
 not adopted. The repeated-object goal is still unmet: the external landmark axis is stable, but it
 does not translate into held-out-gene prediction beyond segment and coverage.
+
+## 2026-10-05 — Phase 3: does a model beat the landmark ratio, and can landmarks come from the data's own zones? Protocol fixed before any fit
+
+*Draft for `docs/results/pseudostructure-research-ledger.md`. Workstream A (ws7), notebooks 52–53.
+Plan: `docs/results/pt-reconstruction-v3-phase3-plan.md`, approved by the coordinator.*
+
+**Goal check.** Notebook 51 showed that external landmarks repair within-segment stability, but the
+zero-cost landmark ratio (LRS) gets most of the gain. LCP failed P4c, as does every arm. Phase 3
+asks two questions:
+1. Which model component, if any, earns its keep over LRS?
+2. Can the landmarks and gauge come from the data's own coarse zones, so that the method is general
+   (no atlas, no x/y, kidney data only)?
+
+**How the repeated-object prior enters.** One shared, specimen-balanced rate path per species for all
+nephrons; and zones, the discrete clustering of the repeated structure, as coarse order.
+
+**Decision recorded before any fit (coordinator, option b).** P4c moves from an adoption gate to a
+claim gate. No existing arm passes it (≤ 0 in 44 of 48 cells), so it measures a limit of the data,
+not method quality. This was known before these fits.
+- Adoption uses (A) + (B) without the P4c items, plus the component ablations.
+- Claim gates, reported for every arm:
+  - "improves held-out-gene prediction beyond discrete segments" only if P4c > 0 as originally
+    defined;
+  - "carries replicated within-segment information beyond discrete zones" only if WSR passes **and**
+    the placebo coordinate fails.
+- Deviation-table row: "P4c role changed before the phase-3 fits; reason: data limit, not method
+  quality."
+
+### Common model settings (every model arm)
+
+- **Likelihood.** NB with the measured-in-both library as offset.
+- **Rate paths.** Spline basis with df 6 (M1) or linear in z (M0), shrunk toward the landmark shape
+  with λ = 10.
+- **Dispersion.** Moment estimate, 1/θ clipped to [10⁻⁴, 10].
+- **Gauge anchoring.** After every M-step, the grid is monotone-remapped so that occupancy is
+  uniform on [0, 1]; paths are re-evaluated at the remapped positions and projected back onto the
+  basis. Occupancy is specimen-balanced (mean of per-specimen normalized posterior mass) in balanced
+  arms and pooled otherwise.
+  - *Pre-fit clarification of plan §3.1:* the zone prior alone leaves within-zone warps flat, so
+    anchoring applies to every model arm. A uniform-prior mixture's own fixed point is roughly
+    occupancy-uniform, so anchoring accelerates convergence rather than changing the target.
+- **Grid and stopping.**
+  - Coarse stage: K = 50 until max |Δ posterior mean| < 10⁻⁴, at most 300 iterations.
+  - Fine stage: K = 200, paths evaluated on the fine grid. Converged when relative objective change
+    < 10⁻⁹ **and** max |Δ posterior mean| < 10⁻⁴ for 5 consecutive iterations; cap 500.
+  - **The convergence fix fails** if > 10% of fits hit the fine-stage cap. Reported; the cap is not
+    raised.
+- **Temperature.** T = 1 except in calibrated arms.
+- **Design-effect temperature (calibrated arms).**
+  - Split landmarks into two gene halves (sha256 mod 2) and fit each at T = 1.
+  - d = (m₁ − m₂)/√(sd₁² + sd₂²) per structure.
+  - T = max(1, (Q₀.₈(|d|)/1.2816)²) per species, then frozen for every refit of that arm.
+- **Landmarks (notebook 52).** Notebook 51's external panels (420 mouse, 556 human), so the ladder is
+  comparable with phase 2.
+
+### Notebook 52: the ablation ladder (external landmarks)
+
+**Arms.**
+
+| Arm | Definition |
+|---|---|
+| LRS | as in notebook 51 |
+| LRS-U | LRS with B = 200 bootstrap replicates: Poisson resampling of counts plus resampling of landmark genes with replacement (seed 520). SD in raw LRS units |
+| M0 | pooled, linear paths |
+| M1 | pooled, spline paths |
+| M1B | balanced |
+| M1BC | balanced, calibrated T |
+| M1BCJ | M1BC with a joint species fit: conserved landmarks (in both panels with the same sign) share spline shape coefficients, with species-specific levels. *Amplitude terms from the plan are omitted for identifiability; recorded before fitting* |
+| PLACEBO | M1B on expression-matched non-zonal genes: \|S3 − early\| < 0.2 in every selection reference, same counts per species, nearest log total count, seed 521 |
+
+**Fits per model arm and species:**
+- full; three gene folds (that fold's landmarks withheld); equal depth 352; count-split halves A and B
+  (seed 35);
+- LOSO for each specimen (fit on the other specimen, project the held-out one);
+- human-only own-landmark injection (notebook 51's design, seed 357);
+- composition stress for M1, M1B and LRS: delete 70% of Ctrl1A4's S3 rows and of HUK1_MED1's S3 rows
+  (seed 52; labels only select the rows);
+- calibrated arms: gene-half fits at T = 1 for T, and at T for the calibration check.
+
+**Component tests (margins fixed in the plan, §1).**
+
+| Component | Comparison | Keep if |
+|---|---|---|
+| C-lik | M0 vs LRS | mouse gene-fold ≥ +0.03, P1w (evaluation references) not lower by > 0.02, and human S1 gene-fold not lower |
+| C-shape | M1 vs M0 | gene-fold ≥ +0.02, or mean WSR statistic ≥ +10%, with no other headline metric worse by > 0.02 |
+| C-bal | M1B vs M1 | untouched-specimen median \|Δz\| in segment units ≤ 50% of M1's and of LRS's |
+| C-unc | M1BC vs LRS-U | calibration error (\|SD(d) − 1\| for read-split and gene-half pairs) ≤ LRS-U's, with relative width (posterior SD ÷ within-segment SD of positions) ≤ LRS-U's |
+| C-reg | M1BCJ vs M1BC | median cross-species within-zone curve agreement of conserved held-out genes ≥ +0.05 |
+
+Composition-stress details:
+- segment units come from the unperturbed fit's species boundaries (balanced-accuracy thresholds
+  between adjacent labels);
+- headline metrics are mouse gene-fold, P1w and human S1 gene-fold.
+
+Calibration targets (plan §3.2):
+- SD(d) in [0.85, 1.15] and share of |d| ≤ 1.28 in [0.75, 0.85], per species × segment, for the
+  read-split and gene-half pairs;
+- **calibration is abandoned** if targets fail in more than half of these cells.
+
+**Adopted configuration.** The most complex ladder arm whose components all passed along its path.
+Components after the first failure are reported, not adopted. If C-lik fails, the method is LRS-U.
+
+**Cross-species curve test.**
+- Genes: conserved held-out genes, meaning |S3 − early| ≥ 0.5 with the same sign in male mouse snRNA
+  and human half B, detected ≥ 10% in both species, and a landmark in neither species.
+- Per species and zone: cubic spline (df 4) of log-normalized expression on positions rescaled to that
+  zone's range, evaluated on 21 points.
+- Statistic: per-gene Spearman between species, median over genes. A shift null moves the human grid
+  by ±0.25 zone widths.
+
+### Evaluation for every arm (per species × segment, losers included)
+
+**Unchanged from notebook 51:**
+- P1 and P1w, fold-protected, evaluation references (male mouse snRNA and its adjacent contrasts;
+  human half B), with microdissection P1w for continuity;
+- gene-fold agreement; P5; position against log library; LOSO; count-split A vs B; registration gap;
+- P2 (notebook 35 flag);
+- P4, and **P4c, unchanged**.
+
+**P4c-dev, repaired before any fit.** Genes with < 10 training counts in a segment are excluded from
+both models, and the spline coefficients get a ridge of 1. Recomputed for SCF13, DPT13, LRS and LCP
+too.
+
+**WSR (new, reported beside P4c).**
+1. For each species, gene fold and direction (train → test), residualize the held-out genes
+   (log-normalized) in each specimen on its own segment + coverage quadratic oracle.
+2. In the training specimen, fit per-gene, per-segment cubic splines (df 4) of the coordinate,
+   scaled to the training segment's range, to those residuals.
+3. Predict test residuals at the test coordinate, clipped.
+4. Statistic per species × segment × direction: mean over all fold genes of
+   atanh(Pearson(prediction, residual)).
+5. Null: 500 within-segment permutations of the test coordinate (seed 61), with the same permutation
+   applied to each fold's coordinate; p = (1 + #null ≥ observed)/501.
+6. A cell **passes** if p ≤ 0.01 in both directions and WSR exceeds the placebo coordinate in both
+   directions.
+
+### Adoption, after the P4c decision
+
+- **(A)** P1 ≥ SCF13 − 0.03 in each species; P5 ≥ 0.80 overall and ≥ 0.70 in human S1; registration
+  gap ≤ 0.15; no material P2 absorption; and, only for an arm passing everything else, notebook 37's
+  downstream gate.
+  - *Clarification:* in the zone-unit gauge of notebook 53 the gap is nearly tautological. It is
+    reported, flagged.
+- **(B)** P1w ≥ DPT13 + 0.05 in mouse and ≥ DPT13 in human; gene-fold ≥ 0.70 in mouse and ≥ 0.59 in
+  human; LOSO ≥ 0.85.
+- **Human S1 is "unresolved"** if the adopted arm has human S1 gene-fold agreement < 0.50 or human S1
+  P5 < 0.70.
+
+### Notebook 53: zone-anchored landmarks (written after notebook 52, using its adopted configuration)
+
+1. **Zones.** The reviewed labels. Zone order comes from the shortest Hamiltonian path through
+   specimen-balanced zone-mean log-rate profiles on half A, with the start zone S1 given. Guard: the
+   path must be S1–S2–S3 in both species.
+2. **Selection.**
+   - Reads: half A (Poisson split ε = 0.5, seed 53), with the scored fold excluded.
+   - Eligible genes: detection ≥ 10% in the species, and PT-specific in that species.
+   - Score: quasi-Poisson zone-versus-constant F with a library offset and specimen-balanced weights.
+   - Keep the top 500 genes. Each gene's shape is its zone means placed at zone centres, with zone
+     widths equal to the specimen-balanced occupancy fractions on half A.
+3. **Fit and combination.** Positions are fitted on half B, then swapped. The final posterior is the
+   normalized product of the two half-likelihoods times the prior. Positions are reported in zone
+   units (S1 [0, 1), S2 [1, 2), S3 [2, 3]).
+4. **Zone prior.** (1 − ε)·U(zone) + ε·U(other zones), ε = 0.10. Ablation: no label prior.
+5. **Placebo.** The 500 lowest-F eligible genes, matched in expression.
+6. **Comparators.** LRS-zone (the ratio over zone landmarks), the notebook-52 arms on external
+   landmarks, SCF13 and DPT13.
+7. **Rules.**
+   - Keep ZAL if mouse gene-fold ≥ LCP-ext − 0.03 and P1w (references neither selected on) is within
+     0.03.
+   - **Abandon ZAL** if gene-fold drops by > 0.10 or P1w by > 0.05.
+   - Extra evaluation references (now free): microdissection, female mouse snRNA, human half A, each
+     reported separately.
+
+### Downstream (workstream B's notebooks, unedited, run with the coordinate file as a parameter)
+
+For every surviving arm and the placebo: notebook 58 (i) and notebook 60, each output to scratch.
+
+A within-segment cell counts as information only if it beats:
+- every step-null replicate; **and**
+- the placebo's slope agreement.
+
+**User note (received during the notebook-52 fits, before any result was seen).** The manuscript
+pipeline keeps scFates (SCF13) as the primary ordering step. A new model replaces it only if it passes
+the adoption criteria above. SCF13 is the incumbent comparator, with DPT13 and LRS as further
+comparators. No rule changes; a head-to-head table against SCF13 is added to the report.
+
+### Measured results
+
+Notebook 52: logic `52.landmark_ladder.1`, 118 fits, outputs in `results/pt_reconstruction_v3/nb52/`.
+Notebook 53: logic `53.zone_landmarks.1`, outputs in `.../nb53/`.
+
+**Pre-fit engineering, disclosed.** Notebook 52 was stopped once after its first 80 fits were
+cached, then restarted. Two changes, neither touching any setting or metric:
+- each fit is now cached as soon as it finishes;
+- the M0/M1/M1B injections run in parallel with wave 2.
+
+Notebook 53 changed LRS-Z to the zone-unit gauge before it ran, as plan §1's fallback specifies.
+
+**Convergence fix: works.**
+- Every landmark fit converged: fine-stage iterations ≤ 298; M0 ≤ 34, M1/M1B ≤ 202.
+- 5 of 118 fits (4.2%) hit the cap, all on the placebo panel. The bar was 10%.
+- Design-effect temperatures: 1.19 (mouse) and 1.22 (human).
+
+**Ablation ladder (notebook 52, external landmarks).**
+
+| Component | Result | Kept? |
+|---|---|---|
+| C-lik, M0 vs LRS | Mouse gene-fold 0.936 vs 0.912: **+0.024 < +0.03 margin.** P1w 0.368 vs 0.376 (allowed). Human S1 gene-fold 0.877 vs 0.631 (large gain) | **No (by margin)** |
+| C-shape, M1 vs M0 | Gene-fold +0.013; WSR +35%; but mouse P1w −0.031 (worse by > 0.02) | No |
+| C-bal, M1B vs M1 | Stress shift 0.150 vs 0.146 (M1) and 0.146 (LRS) | No |
+| C-unc, M1BC vs LRS-U | Calibration error 0.17 vs 0.53; relative width 0.19 vs 0.91 | Passes, but follows a failed step |
+| C-reg, M1BCJ vs M1BC | Curve agreement 0.162 vs 0.137 (+0.025 < 0.05). Human gene-fold falls to 0.65 | No |
+
+- **Adopted configuration: LRS-U** (C-lik failed first).
+- LRS-U on external landmarks **fails (A)**: registration gap 0.175 > 0.15.
+- **M1BC calibration is abandoned.** Targets were met in 5 of 12 cells.
+- **The LRS-U bootstrap is conservative:** SD(d) 0.25–0.67, |d| ≤ 1.28 for ~100% of structures.
+
+**Zone-anchored landmarks (notebook 53).** Notebook 52 adopted LRS-U, so the zone arm is the
+cross-fitted ratio LRS-Z: landmarks are selected on one read half and scored on the other, with
+zone-unit gauge.
+
+- **Zone order** inferred from the data: S1–S2–S3 in both species, from both halves.
+- **Against LCP-ext:** mouse gene-fold 0.929 (−0.027; within −0.03). P1w 0.377 (+0.036).
+- **The pre-registered keep rule is not met as worded.** It requires P1w "within 0.03", and LRS-Z
+  is *better* by 0.036. The abandon rule does not fire. So: literally inconclusive; non-inferior in
+  substance. This is left to the coordinator, not reinterpreted.
+- **Adoption (A) + (B) without P4c: all pass.**
+  - P1 0.752 / 0.317;
+  - P5 0.976 overall, 0.980 in human S1;
+  - P2 ratio 1.00 (human ρ 0.98);
+  - P1w 0.377 / 0.191;
+  - gene-fold 0.929 / 0.946;
+  - LOSO n/a;
+  - gap 0.014, **flagged tautological** in zone units.
+- **Notebook 37's downstream gate** (joint T_spatial with relabeling): 46 species calls, 0 / 0
+  relabeled, NCDR 0. Passes. SCF13: 60 calls, 2 / 0, NCDR 0.017.
+  - Funnel: 46 candidates → 26 robust → 19 core (SCF13: 60 → 36 → 26).
+  - 15 of the 22 primary pathways are robust under LRS-Z.
+  - Notebook 37 was run unedited, in a sandboxed results root;
+    outputs are in `results/pt_reconstruction_v3/b_reruns/37/`.
+- **Human S1 is resolved under LRS-Z:** gene-fold 0.96, P5 0.98.
+- **Calibration abandoned** (bootstrap SD(d) 0.25–0.42).
+
+**Head-to-head against the incumbent SCF13** (user request):
+
+| Metric | SCF13 | LRS-Z |
+|---|---|---|
+| Within-segment gene-fold agreement, mouse / human / human S1 | 0.60 / 0.21 / 0.07 | 0.93 / 0.95 / 0.96 |
+| P1w, evaluation references, mouse / human | 0.17 / 0.10 | 0.38 / 0.19 |
+| P1, male mouse snRNA / human half B | 0.745 / 0.246 | 0.752 / 0.317 |
+| P5, overall / human S1 | 0.72 / 0.41 | 0.98 / 0.98 |
+| Count split within segment, mouse S1 / S2 / S3 | 0.62 / 0.08 / −0.36 | 0.89 / 0.91 / 0.82 |
+| Registration gap | 0.29 | 0.01 (tautological) |
+| P4 (gain over segment means), mouse / human | +0.09% / +0.02% | −0.01% / +0.02% |
+| P4c, mouse / human (cells > 0) | −0.48% / −0.32% (1/6, 0/6) | −0.27% / −0.33% (0/6, 0/6) |
+| P4c-dev (repaired), mouse / human | +0.74% / +0.06% | +0.84% / +1.30% |
+| WSR mean | 0.0105 | 0.0156 |
+| Notebook 58(i) slope agreement between specimens, mouse S1 / S2 / S3 | 0.18 / 0.36 / 0.30 | 0.34 / 0.34 / 0.37 |
+| Notebook 58(i), human S1 / S2 / S3 | 0.44 / 0.18 / 0.12 | 0.24 / 0.25 / 0.09 |
+| Notebook 60 fold noise ÷ within-segment spread | 0.83–1.49 | 0.21–0.31 |
+| Cross-species curves of conserved held-out genes | 0.115 | 0.129 (DPT13 0.258) |
+| Notebook 37 joint T_spatial: calls (relabeled), NCDR | 60 (2, 0), 0.017 | 46 (0, 0), 0 |
+
+**Claim gates (every arm).**
+- **"Improves held-out-gene prediction beyond discrete segments": no arm qualifies.** P4c > 0 in at
+  most 3 of 6 mouse cells and 0 of 6 human cells, for every arm.
+- **"Replicated within-segment information beyond discrete zones": depends on the placebo.**
+  - *Notebook 52 model placebo* (M1B on non-zonal genes): WSR significant in every cell for every
+    arm *including the placebo* (p = 0.002, the floor). **Claim fails everywhere.** Landmark arms are
+    about 2× the placebo in mouse S2/S3, but close in human S1 (0.023 vs 0.018).
+  - *Notebook 53 zone placebo* (lowest-F ratio): the placebo is significant in mouse S1/S2 but not in
+    mouse S3 or human S1–S3. The claim passes in those 4 cells **for every arm, SCF13, DPT13, LRS,
+    LCP and LRS-Z alike.** It is therefore not specific to the new method.
+  - *Workstream B notebook 58(i)* (unedited, sandboxed): LRS-Z slope agreement beats every step-null
+    replicate and the zone placebo's (0.01–0.09) in all 6 cells. Caveat: in the zone-unit gauge the
+    step nulls are near 0 by construction.
+  - The notebook 52 placebo could not be run through notebook 58: its human transitions are out of
+    order, so notebook 58's guard stops it.
+
+### Decision (as pre-registered, with the coordinator's option b)
+
+- **Notebook 52.**
+  - The model components do not earn their margins over the ratio. The likelihood failed by 0.006
+    on mouse gene-fold, despite a large human S1 gain.
+  - The adopted configuration is LRS-U. On external landmarks and a rank gauge it fails the
+    registration gap.
+- **Notebook 53.** **LRS-Z passes every adoption criterion.** That covers (A) with the downstream
+  gate and (B) without P4c. It beats SCF13 on every within-segment stability and external-concordance
+  metric.
+- **Caveats on that pass.**
+  1. The registration gap is tautological in zone units, and the non-tautological curve test is
+     only marginally better than SCF13's (0.129 vs 0.115; below DPT13).
+  2. The ZAL keep rule is literally unmet, because P1w is too *good*.
+  3. Its uncertainty (the bootstrap) is conservative, not calibrated.
+  4. Between-zone order is the labels by construction, so human label noise (κ 0.54) is inherited.
+  5. Neither claim gate is passed in a method-specific way.
+- **The coordinator and user decide** whether LRS-Z replaces SCF13 as the ordering step under these
+  caveats.

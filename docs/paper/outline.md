@@ -20,6 +20,12 @@ changes.
 >   notebooks 56–60, `results/pt_pathway_continuous/`.
 >
 > This outline will be rewritten once both phase-1 plans are reviewed.
+>
+> **Reconstruction outcome (2026-10-05).** The zone-landmark ratio (notebook 53; landmarks from the data's
+> own zones, no atlas, no x/y) passed its adoption criteria and beats scFates on within-segment order
+> (human S1 gene-fold agreement 0.96 against 0.07). **User decision: benchmark only.** scFates stays
+> the paper coordinate, and the zone-landmark method is shown in Figure 2 as the within-segment
+> improvement.
 
 ## Central claim
 

@@ -1000,6 +1000,12 @@ sha256 prefix `0cfb78e4eb273751`).
 - Pairs supported by fewer than three databases were removed.
 - Each pair was scored as 10 × (number of supporting databases) + 1 if the symbols are identical.
 - Only mutual best pairs were kept. This gives a bijective map of 17,449 pairs.
+- 1,051 of these pairs lie in multi-member HCOP orthogroups, where reciprocal-best matching keeps one pair by
+  database support. In 59 of 393 mouse families with a PT-expressed member, the kept member is not the most
+  expressed PT paralog (notebook 62). Notebook 64 re-ran the conservation index and the symmetric classes with
+  these pairs swapped or dropped. Every index moved by at most 0.007 (top strength bin 0.023) and every class
+  count quoted in R2 and R3 by less than 10%; one unquoted count (S3c − early mouse-only) fell from 13 to 10
+  when the pairs were dropped.
 
 **Mapping and measurement flags.** Human counts were moved to mouse-symbol columns by a sparse
 transformation. Each gene is flagged as measured in every input or not. A column that no human

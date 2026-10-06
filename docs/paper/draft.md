@@ -142,7 +142,7 @@ mouse PT is a weak guide to human PT zonation.
 
 **This study.** We profiled two control mouse kidney sections and two cortex sections from one human
 donor with Visium HD. We segmented tubule cross-sections from the paired H&E images and aggregated
-2-µm bins into tubule-level profiles in a shared one-to-one ortholog space. Then:
+2-µm bins into tubule-level profiles in a shared ortholog space of reciprocal-best HCOP pairs. Then:
 - we validated the segment labels anatomically and by reference transfer;
 - we compared human and mouse segment gradients against same-species reproducibility measured across
   independent datasets, in our data and in public atlases alone;
@@ -205,7 +205,7 @@ the weakest genes it cannot be measured with current human references.
   species-specific probe panels. Tubule cross-sections and glomeruli were segmented on the paired H&E
   images (Supplementary Note 7), and bins were summed per structure: 26,839 structures passed
   filters.
-- *PT structures.* Two passes of cross-species integration in a one-to-one ortholog space, each
+- *PT structures.* Two passes of cross-species integration in a reciprocal-best HCOP ortholog space, each
   followed by clustering, identified 12,866 PT structures: mouse 2,852 and 2,808; human 3,438 and
   3,768.
 
@@ -416,7 +416,7 @@ therefore does not mean that most zonated genes disagree.
   setting in the other gene half gave 7 against 22.
 
 Either way, confidently species-only genes are few.
-- *Mouse-only examples:* Fah, Comt, Maoa, Igfbp4 and Ebp. Hsd17b4 is mouse-only with reviewed labels and
+- *Mouse-only examples:* Fah and Maoa. Comt, Igfbp4 and Ebp are borderline: each becomes indeterminate when the ortholog pairing inside paralog families changes (notebook 64). Hsd17b4 is mouse-only with reviewed labels and
   indeterminate with transferred labels.
 - *Human-only examples:* Sel1l3 and Ace2. Slc9a3 is human-only in S2 − S1 and changes class with
   transferred labels.
@@ -424,8 +424,8 @@ Either way, confidently species-only genes are few.
   carried by at least three class genes (Supplementary Note 3).
   - Mouse-only genes are enriched for the KEGG tyrosine-metabolism set (q = 2 × 10⁻⁶), but only through
     three genes: the catecholamine-degrading enzymes Comt and Maoa and the tyrosine-catabolic enzyme
-    Fah.
-  - Sterol synthesis and peroxisomal β-oxidation rest on single genes (Ebp, Hsd17b4).
+    Fah. Comt is borderline (see above), so the enrichment rests on two robust genes.
+  - Sterol synthesis and peroxisomal β-oxidation rest on single genes (Ebp, which is borderline, and Hsd17b4).
   - The human-only enrichments are generic labels on three-gene sets, so we name the genes instead:
     Ahcyl1, Hipk2, Wwtr1, Prkaa2 and Taf4.
   - Conserved genes are enriched for amino-acid and organic-anion transport, bile secretion,
@@ -900,7 +900,10 @@ Library preparation and sequencing depth are not yet recorded [VERIFY].
 
 **Ortholog space.** Human counts were mapped to mouse symbols through mutual-best HCOP pairs supported
 by at least three databases (Yates et al. 2021; 17,449 pairs; local copy dated 31 August 2026, sha256
-prefix 0cfb78e4eb273751).
+prefix 0cfb78e4eb273751). Inside multi-member orthogroups (1,051 of the 17,449 pairs) this keeps one pair,
+which is not always the paralog expressed in PT. Putting the main PT paralog in its place (92 pairs) or
+dropping these pairs changed the conservation index by at most 0.007, the top strength-bin index by at most
+0.023, and the class counts reported in R3 by less than 10% (notebook 64).
 - An ortholog column that no human feature feeds is a structural zero, not an observed zero.
 - Gene-level analyses use the 15,567 orthologs measured in all four specimens.
 

@@ -355,6 +355,10 @@ Mean over the two specimens of each species.
 
 ## Addendum: notebook 61 expanded to every reasonable pathway analysis
 
+This grid now lives in notebook 63, as 45 methods after three rows were removed. Notebook 61 now has
+two parts. It chooses one of five continuous methods by internal criteria, then compares the chosen
+method with whole-PT, S1/S2/S3-step and S1/S2/S3-ORA analyses. It uses no external data.
+
 The plan was frozen in `nb61/plan_expansion.md`. The trims were: no NMF; no notebook 07 P modules; one
 rank-threshold ORA row and one structure-level self-contained row, both labelled demonstrations.
 48 method rows result: pathway-first A (33), score-first C (10) and gene-first B (5).

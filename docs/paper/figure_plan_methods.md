@@ -60,7 +60,7 @@ pre-registered adoption criteria (notebook 52, running).
 | b | **Solute-handling micro-gradients:** heatmap of transporter genes ordered by peak, mouse and human blocks, with specimen strips | Notebook 61 heatmap code + new transporter selection | new |
 | c | Within-segment gradients that replicate between specimens beyond step-only nulls, per species × segment | Notebook 58(i) | ready |
 | d | Resolution budget: positional noise against within-segment spread, per coordinate, against the number of cells with replicated within-segment information | Notebook 60 | ready (rerun if notebook 52 adopts) |
-| e | What continuous adds, by category: location of a difference, sign change along the PT, interior peak; counts with validation status. Also what it does not add: no extra pathways over six bins | Notebooks 57, 58, 61 | rebuild |
+| e | What continuous adds, by category: location of a difference, sign change along the PT, interior peak; counts with validation status. Also how much it adds over the S1/S2/S3 step screen: 13 more pathways, all near misses for the steps | Notebooks 57, 58, 61 | rebuild |
 
 ## Figure 4: Pathway analysis along pseudospace, methods compared
 
@@ -70,9 +70,9 @@ tight.
 | Panel | Content | Source | Status |
 |---|---|---|---|
 | a | The specimen-relabeling control: balanced contrasts and what each relabeling tests | Notebooks 31, 37 | ready |
-| b | Heat-table of methods × metrics, grouped by family (pathway-first, score-first, gene-first): calls, relabeled calls, pass/fail, programs, information returned | Notebook 61 expansion | blocked (running) |
+| b | Heat-table of methods × metrics, grouped by family (pathway-first, score-first, gene-first): calls, relabeled calls, pass/fail, programs, information returned | Notebook 63 (full grid) | blocked (running) |
 | c | External many-draw null: average-level screens against positional screens (NCDR distributions) | Notebook 45 | ready |
-| d | Convergence: positional methods collapse to the same ~25 programs; overlap (UpSet) by family | Notebook 61 | ready |
+| d | Convergence: positional methods collapse to the same ~25 programs; overlap (UpSet) by family | Notebook 63 | ready |
 | e | Pathway-first then genes: one program heatmap (driver genes, member-pathway matrix), next to the best gene-first module | Notebook 61 | rebuild |
 
 ## Figure 5: Comparative analysis across species (outline: across species or samples)
@@ -107,7 +107,7 @@ coarse-label checkpoint if the clusters drift from the reviewed labels.
 - **S3** Integration diagnostics, the reviewed cluster labels and the fingerprint.
 - **S4** Coordinate alternatives: DPT, the equal-depth refit, the landmark score and the new model; the coordinate decision.
 - **S5** Label validation: glomerulus distance and reference transfer (notebook 42).
-- **S6** Full pathway-method grid (notebook 61 expansion) and the program galleries (12 primary programs).
+- **S6** Full pathway-method grid (notebook 63) and the program galleries (12 primary programs).
 - **S7** Conservation-index sensitivity (notebooks 46, 47, 49).
 - **S8** Physiological and tissue state (notebook 44).
 - **S9** External datasets and lead-gene evidence (notebook 38).

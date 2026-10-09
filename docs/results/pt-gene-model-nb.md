@@ -187,3 +187,48 @@ are archived in `results/_archive_gaussian_2026-10-09/`, which is outside Git.
   pathways whose genes share one direction, including constant offsets (oxidative phosphorylation)
   that T_spatial removes by design. It also finds AKI proliferation (G2-M, M phase), which T_spatial
   ranks low. Overlap with cameraPR is Jaccard 0.15 over redundancy clusters on both datasets.
+
+## Notebook 67 protocol: T_spatial normalized by specimen shape variation
+
+Frozen on 2026-10-09, before any fit. The user asked whether `T_spatial` should be normalized.
+Notebook 66 suggested two reasons why packaged set tests on `T_spatial` are not specific:
+- it grows with counts;
+- it treats structures as independent, so shape differences between individual specimens count as
+  group differences.
+
+**Statistic.** The NB fits stay the same: the shared gene model, the species-split α, and the
+weights and offset of `contrast_designs`.
+- **Numerator.** `T_spatial`, unchanged: LR of M_full against M_full without group × basis, with
+  df₁ = 6.
+- **Denominator.** LR_spec = D(M_full) − D(M_spec), where M_spec adds a specimen-specific shape to
+  M_full: specimen-within-group × basis. For the condition split df₂ = 12; for a relabeling, which
+  keeps the condition shape as nuisance, df₂ = 6.
+- s² = LR_spec / df₂ is moderated by `limma::squeezeVar`, with log mean count per structure as
+  covariate. This is the primary. Sensitivities: no covariate, and `robust = TRUE`.
+- The moderated F is (T_spatial / df₁) / s²_post, with df (6, df₂ + d₀). It converts to
+  z = Φ⁻¹(1 − p).
+
+**Pathway tests on z**, with gene sets as in notebook 66 (sizes 10–300):
+- `limma::cameraPR`, with `inter.gene.cor` 0.01 and `use.ranks` FALSE. A call is Up with FDR ≤ 0.05.
+  This is the primary test.
+- gseapy prerank on z.
+- ORA with `gseapy.enrich` on genes with BH ≤ 0.05; the background is all tested genes.
+- Sensitivity: `cameraPR` on rank-normal scores of the F.
+
+**Datasets.** Human vs mouse PT on SCF13 and AKI vs control mouse PT, each with the condition split
+and both balanced relabelings, exactly as in notebook 66.
+
+**Pass rule.** Notebook 66's rule, unchanged:
+- **Relabeling.** NCDR < 0.25, and each relabeling calls < 5% of tested pathways.
+- **Calibration.** The pooled share of relabeled one-sided p ≤ 0.05 is ≤ 0.075.
+
+**Gene-level checks**, reported for information and not used for selection:
+- under the relabelings, the share of genes with p ≤ 0.01 and p ≤ 0.05, and the median-based λ;
+- the Spearman correlation of relabeled z with mean expression.
+
+Genes with zero counts in any specimen are flagged. They stay in the primary and are dropped in a
+sensitivity.
+
+**Decision.** If the primary passes on both datasets, it becomes the user's candidate replacement
+for the joint test as primary; the user decides. Otherwise the result is reported as is. Nothing is
+tuned after the fits, and any later check is labelled post hoc.

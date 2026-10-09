@@ -232,3 +232,30 @@ sensitivity.
 **Decision.** If the primary passes on both datasets, it becomes the user's candidate replacement
 for the joint test as primary; the user decides. Otherwise the result is reported as is. Nothing is
 tuned after the fits, and any later check is labelled post hoc.
+
+## Notebook 67 results
+
+`analysis/notebooks/67_pt_normalized_t_spatial.ipynb` (logic version `67.normalized.1`) writes to
+`results/pt_normalized_t_spatial/`. It followed the protocol above; its section 10 lists how the
+protocol was read. Cells give condition calls; relabeled calls; NCDR; calibration share:
+
+| Test on the normalized statistic | Human vs mouse | AKI vs control |
+|---|---|---|
+| cameraPR on z (primary) | 70; 0, 0; 0; 0.044 · pass | 93; 17, 11; 0.15; 0.102 · fails calibration |
+| GSEA prerank on z | 77; 0, 0; 0; 0.085 · fails calibration | 51; 34, 31; 0.64; 0.140 · fails both |
+| ORA on genes with BH ≤ 0.05 (list-based) | 71; 0, 0; 0; 0.000 · pass | 100; 8, 3; 0.06; 0.029 · pass |
+
+- **The decision rule is not met.** Every cameraPR sensitivity passes on human vs mouse and fails
+  calibration on AKI (0.096–0.118).
+- **The human pass is against a weak null.** Its replicates are two sections of one donor.
+- **Gene level.** Under the relabelings the moderated F is close to calibrated: AKI λ 0.96–1.00;
+  human vs mouse 1.35–1.50, against 1.8–2.7 for raw `T_spatial`. Its correlation with expression
+  falls from about 0.2 to about 0.
+- **Why AKI still fails (post hoc).** The relabeled pathway z are inflated by a constant factor,
+  a = 1.49. The relabeled calls are coherent programs that differ between the two AKI mice: DNA
+  replication, E2F, EMT and complement. A per-gene denominator cannot see that coherence.
+- **The prior's share.** d₀/(df₂ + d₀) is 0.32–0.37 in human vs mouse and 0.55–0.74 in AKI.
+- **ORA was a listed secondary test, not the primary.** In human vs mouse no gene reaches BH ≤ 0.05
+  under either relabeling, so its relabeling pass there is trivial. In AKI 13 and 57 genes do.
+- **Overlap.** The new calls are nearly a subset of notebook 66's raw cameraPR calls (Jaccard 0.70
+  and 0.66 over redundancy clusters). They hold 28 of the joint test's 32 calls and 11 of its 12.

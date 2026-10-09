@@ -16,6 +16,12 @@ around limma's cameraPR (through rpy2).
 ``clustering_first_inputs`` and ``single_split_design`` feed the same gene model to the clustering-first pipeline of
 the external package ``pseudospace_reconstruction`` (stages 06-07): its CountFit and AxisDefinition are built from
 the GeneModel's specimen curves on our grid, so that package's own count model and binning are not used.
+
+Notebook 67 normalizes T_spatial by specimen shape variation (protocol in docs/results/pt-gene-model-nb.md):
+``specimen_shape_lr`` gives the denominator LR_spec = D(M_full) - D(M_spec), where M_spec gives every specimen its
+own smooth shape; ``squeeze_var`` is limma's squeezeVar (through rpy2); ``moderated_f`` turns T_spatial over the
+moderated LR_spec / df2 into an F, its log p and z = Phi^-1(1 - p); ``over_representation`` is a thin wrapper around
+gseapy's hypergeometric ORA.
 """
 from __future__ import annotations
 
@@ -23,6 +29,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.special import betaln, gammainc, gammaincc, gammaln, hyp2f1, hyperu, ndtri_exp
+from scipy.special import betainc as _betainc
 from scipy.stats import norm, rankdata
 
 from .nb_gam import nb_dispersion, nb_fit, nested_nb_lr
@@ -255,6 +263,182 @@ def camera_pr(statistic, gene_sets, *, inter_gene_cor=.01, use_ranks=False, fdr=
     out['p_one_sided'] = np.where(out.direction.eq('Up'), out.p / 2, 1 - out.p / 2)
     out['call'] = out.direction.eq('Up') & out.fdr.le(fdr)
     return out
+
+
+def over_representation(listed, gene_sets, background, *, fdr=.05):
+    """gseapy's hypergeometric ORA (``gseapy.enrich``) of ``listed`` genes against ``background``, one row per set.
+
+    gseapy restricts each set to the background, tests only sets holding at least one listed gene and applies BH over
+    those. Returns, in ``gene_sets`` order: pathway_id, n (members in the background), overlap, p (gseapy's
+    P-value; 1 when no listed gene is a member), fdr (gseapy's Adjusted P-value; 1 when untested) and call
+    (fdr <= ``fdr``). An empty list tests nothing: every p is 1. The p is one-sided (over-representation), so it is
+    also the calibration p (notebook 61's convention for one list).
+    """
+    universe = pd.Index(pd.unique(np.asarray(list(background)).astype(str)))
+    query = sorted(set(map(str, listed)))
+    if not set(query) <= set(universe):
+        raise ValueError('Listed genes must be members of the background.')
+    sizes = {str(p): len(set(map(str, v)) & set(universe)) for p, v in gene_sets.items()}
+    out = pd.DataFrame({'pathway_id': list(sizes), 'n': list(sizes.values())})
+    out['overlap'], out['p'], out['fdr'] = 0, 1., 1.
+    if query:
+        import gseapy as gp
+
+        result = gp.enrich(gene_list=query, gene_sets={str(p): sorted(map(str, v)) for p, v in gene_sets.items()},
+                           background=list(universe), outdir=None, no_plot=True)
+        table = getattr(result, 'res2d', None)
+        if table is not None and len(table):
+            table = table.set_index(table.Term.astype(str))
+            hits = out.pathway_id.isin(table.index)
+            rows = table.loc[out.pathway_id[hits]]
+            out.loc[hits, 'overlap'] = rows.Overlap.str.split('/').str[0].astype(int).to_numpy()
+            out.loc[hits, 'p'] = pd.to_numeric(rows['P-value']).to_numpy()
+            out.loc[hits, 'fdr'] = pd.to_numeric(rows['Adjusted P-value']).to_numpy()
+    out['call'] = out.fdr.le(fdr)
+    return out
+
+
+def specimen_shape_designs(position, group, specimen, knots, *, nuisance_shape=None):
+    """M_full of ``contrast_designs`` and M_spec = M_full + specimen-within-group x basis, with the shared weights.
+
+    The added columns are each group's within-group specimen contrasts (the same sum-to-zero coding as
+    contrast_designs' specimen intercepts) times the spline basis without its intercept. M_spec therefore gives every
+    specimen its own smooth shape. The rank it adds is (J - rank of the specimen-level span of 1, group and the
+    nuisance) x basis columns: for 2 + 2 specimens, 12 for the condition split and 6 for a balanced relabeling, whose
+    M_full already holds the species shape as nuisance. Returns ({'full': X, 'spec': X_spec}, weights).
+    """
+    designs, weights = contrast_designs(position, group, specimen, knots, nuisance_shape=nuisance_shape)
+    s, g = np.asarray(position, float), np.asarray(group, float)
+    samples = np.asarray(specimen).astype(str)
+    basis = make_gam_design(s, knots)[:, 1:]
+    shapes = []
+    for level in (0., 1.):
+        names = np.unique(samples[g == level])
+        shapes.extend(((samples == name).astype(float) - (samples == names[-1]))[:, None] * basis
+                      for name in names[:-1])
+    return {'full': designs['full'], 'spec': np.column_stack([designs['full'], *shapes])}, weights
+
+
+def specimen_shape_lr(counts, library, position, group, specimen, dispersion, *, nuisance_shape=None, basis_df=6,
+                      block_size=200, n_jobs=1, fill='median'):
+    """The specimen-shape LR of one partition: LR_spec = max(D(M_full) - D(M_spec), 0) per gene (notebook 67).
+
+    Same NB model as ``standard_gene_model``: offset log(library), contrast_designs' weights, knots from
+    ``gam_internal_knots(position, basis_df)`` and the fixed ``dispersion`` (pass the species split's). M_spec is
+    ``specimen_shape_designs``. Fitted by ``nb_gam.nested_nb_lr`` (M_spec warm-started from M_full, R glm's
+    convergence criterion): a gene is converged when its dispersion, M_full and M_spec all converged; others are
+    filled by ``fill`` (nb_gam's median rule). ``separated`` (either design loses rank on the rows with a count, for
+    example a specimen without counts) is flagged, never filled. Returns dict LR_spec, df2 (added rank, from the
+    designs), residual_df, converged, separated.
+    """
+    s = np.asarray(position, float)
+    lib = np.asarray(library, float)
+    if lib.shape != s.shape or not np.isfinite(lib).all() or (lib <= 0).any():
+        raise ValueError('Library sizes must be positive, finite and aligned to positions.')
+    knots = gam_internal_knots(s, basis_df=basis_df)
+    designs, weights = specimen_shape_designs(s, group, specimen, knots, nuisance_shape=nuisance_shape)
+    lr = nested_nb_lr(counts, designs, weights, np.log(lib), dispersion, {'LR_spec': ('full', 'spec')},
+                      block_size=block_size, n_jobs=n_jobs, fill=fill)
+    df2, residual = lr['df']['LR_spec']
+    return {'LR_spec': lr['LR_spec'], 'df2': int(df2), 'residual_df': int(residual), 'converged': lr['converged'],
+            'separated': lr['separated']}
+
+
+def squeeze_var(variance, df, *, covariate=None, robust=False):
+    """limma's squeezeVar (R, through rpy2): empirical Bayes moderation of gene variances with ``df`` each.
+
+    limma's defaults otherwise: with one df for all genes it uses the legacy fitFDist (fitFDistRobustly when
+    ``robust``, winsor.tail.p (0.05, 0.1)); ``covariate`` gives a natural-spline trend of the prior variance. Returns a
+    DataFrame (index of ``variance`` when it is a Series): var, var_prior, df_prior (np.inf where limma finds no
+    variance heterogeneity, in which case var_post = var_prior) and var_post.
+    """
+    import rpy2.robjects as ro
+    from rpy2.robjects.packages import importr
+
+    values = pd.Series(variance, dtype=float)
+    dfs = np.broadcast_to(np.asarray(df, float), values.shape)
+    if not np.isfinite(values.to_numpy()).all() or (values < 0).any() or not np.isfinite(dfs).all() or (dfs <= 0).any():
+        raise ValueError('Need finite nonnegative variances with positive finite degrees of freedom.')
+    if covariate is not None:
+        covariate = np.asarray(covariate, float)
+        if covariate.shape != values.shape or not np.isfinite(covariate).all():
+            raise ValueError('The covariate must be finite and aligned to the variances.')
+    importr('limma')
+    df_r = ro.FloatVector(np.unique(dfs) if np.ptp(dfs) == 0 else dfs)       # one df: limma's legacy fitFDist
+    fit = ro.r['squeezeVar'](ro.FloatVector(values.to_numpy()), df_r,
+                             covariate=ro.NULL if covariate is None else ro.FloatVector(covariate), robust=bool(robust))
+    get = lambda key: np.array(np.broadcast_to(np.asarray(fit.rx2(key), float), values.shape))   # noqa: E731
+    return pd.DataFrame({'var': values.to_numpy(), 'var_prior': get('var.prior'), 'df_prior': get('df.prior'),
+                         'var_post': get('var.post')}, index=values.index)
+
+
+def log_f_sf(f, df1, df2):
+    """log P(F(df1, df2) >= f), elementwise, accurate in both tails; df2 = inf gives chi2(df1) / df1.
+
+    Near f = 0 the result is log1p(-CDF), so a p of 1 - 1e-20 keeps its distance from 1 (and its z stays finite).
+    Where the direct survival function underflows, exact log-space identities take over: for finite df2,
+    I_x(a, b) = x^a (1 - x)^b / (a B(a, b)) 2F1(a + b, 1; a + 1; x) with x = df2 / (df2 + df1 f), a = df2/2,
+    b = df1/2 (DLMF 8.17.8); for df2 = inf, Gamma(a, z) = z^a e^-z U(1, 1 + a, z) with a = df1/2, z = df1 f / 2
+    (DLMF 8.5.3 with Kummer's transformation).
+    """
+    f = np.asarray(f, float)
+    d2 = np.broadcast_to(np.asarray(df2, float), f.shape)
+    if not np.isfinite(f).all() or (f < 0).any() or not df1 > 0 or (d2 <= 0).any() or np.isnan(d2).any():
+        raise ValueError('Need finite nonnegative F with positive degrees of freedom.')
+    out = np.empty(f.shape)
+    b = df1 / 2.
+    inf = np.isinf(d2)
+    z = b * f[inf]
+    a, x = d2[~inf] / 2., d2[~inf] / (d2[~inf] + df1 * f[~inf])
+    lower = np.empty(f.shape)                       # the CDF, computed directly (no cancellation near f = 0)
+    with np.errstate(divide='ignore'):
+        out[inf], lower[inf] = np.log(gammaincc(b, z)), gammainc(b, z)
+        out[~inf] = np.log(_betainc(a, b, x))
+        lower[~inf] = _betainc(b, a, df1 * f[~inf] / (d2[~inf] + df1 * f[~inf]))
+    near_one = lower < .5
+    out[near_one] = np.log1p(-lower[near_one])
+    tail = (out < -600.) & ~near_one                # also catches log(0) = -inf
+    if tail.any():
+        idx_inf, idx_fin = np.flatnonzero(inf), np.flatnonzero(~inf)
+        t_inf, t_fin = tail[inf], tail[~inf]
+        zt = z[t_inf]
+        out[idx_inf[t_inf]] = b * np.log(zt) - zt + np.log(hyperu(1., 1. + b, zt)) - gammaln(b)
+        at, xt = a[t_fin], x[t_fin]
+        out[idx_fin[t_fin]] = (at * np.log(xt) + b * np.log1p(-xt) - np.log(at) - betaln(at, b)
+                               + np.log(hyp2f1(at + b, 1., at + 1., xt)))
+    return np.minimum(out, 0.)
+
+
+def moderated_f(numerator, df1, denominator, df2, *, covariate=None, robust=False):
+    """F = (numerator / df1) / s2_post, with s2 = denominator / df2 moderated by ``squeeze_var`` (notebook 67).
+
+    numerator: T_spatial (an NB LR with df1 added columns); denominator: LR_spec with df2. Under the null both are
+    roughly scaled chi-square with the gene's own specimen-shape scale, which cancels in the ratio. The reference
+    distribution is F(df1, df2 + d0); where limma's prior df d0 is infinite, chi2(df1) / df1, as limma treats it.
+    p, its log (``log_f_sf``) and z = Phi^-1(1 - p) = -ndtri_exp(log p), finite even where p underflows. A gene whose
+    s2_post is 0 (only possible with d0 = 0) has no finite F and raises. Returns a DataFrame (numerator's index when
+    a Series): s2, s2_prior, d0, s2_post, F, df_total, log_p, p, z.
+    """
+    num = pd.Series(numerator, dtype=float)
+    den = np.asarray(denominator, float)
+    if den.shape != num.shape or not np.isfinite(num.to_numpy()).all() or (num < 0).any():
+        raise ValueError('Need finite nonnegative numerators aligned to the denominators.')
+    squeezed = squeeze_var(den / df2, df2, covariate=covariate, robust=robust)
+    if not (squeezed.var_post > 0).all():
+        raise ValueError('A moderated variance is 0 (prior df 0 and LR_spec 0): F is undefined.')
+    f = num.to_numpy() / df1 / squeezed.var_post.to_numpy()
+    total = df2 + squeezed.df_prior.to_numpy()
+    log_p = log_f_sf(f, df1, total)
+    z = -ndtri_exp(log_p)
+    # Ponytail: F = 0 (an LR truncated at 0, such as a separated gene without positional information) has p = 1 and
+    # z = -inf; it is tied with the smallest finite z so that mean-based set tests stay defined. A rank-based or
+    # mid-p z would be the upgrade if many genes sat there.
+    if (f == 0).any() and (f > 0).any():
+        z[f == 0] = z[f > 0].min()
+    return pd.DataFrame({'s2': squeezed['var'].to_numpy(), 's2_prior': squeezed.var_prior.to_numpy(),
+                         'd0': squeezed.df_prior.to_numpy(), 's2_post': squeezed.var_post.to_numpy(), 'F': f,
+                         'df_total': total, 'log_p': log_p, 'p': np.exp(log_p), 'z': z},
+                        index=num.index)
 
 
 def specimen_rate_floor(library, specimen, floor_counts=FLOOR_COUNTS):

@@ -2,12 +2,17 @@ import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
+from scipy.special import ndtri_exp
 from scipy.stats import chi2
 
-from pseudospace.nb_gam import nb_group_difference_curves, nb_species_trajectories
-from pseudospace.pathway_pipelines import (camera_pr, clustering_first_inputs, common_grid, partition_groups,
-                                           rank_first_gsea, rank_normal_scores, single_split_design,
-                                           specimen_ranges, specimen_rate_floor, standard_gene_model)
+from pseudospace.nb_gam import nb_group_difference_curves, nb_species_trajectories, nested_nb_lr
+from pseudospace.pathway_calibration import COMPARISONS, contrast_designs
+from pseudospace.pathway_pipelines import (camera_pr, clustering_first_inputs, common_grid, log_f_sf, moderated_f,
+                                           over_representation, partition_groups, rank_first_gsea,
+                                           rank_normal_scores, single_split_design, specimen_ranges,
+                                           specimen_rate_floor, specimen_shape_designs, specimen_shape_lr,
+                                           squeeze_var, standard_gene_model)
+from pseudospace.stats_gam import gam_internal_knots, make_gam_design
 
 SPECIMENS = ['m1', 'm2', 'h1', 'h2']
 SHAPE = 0                                   # human-only smooth shape: a species x position gene
@@ -244,3 +249,148 @@ def test_single_split_design_keeps_one_mixed_split():
     assert one.pairs == design.pairs and one.case_samples == design.case_samples
     with pytest.raises(ValueError, match='0 mixed splits'):
         single_split_design(design, ['h1', 'h2'])
+
+
+# Notebook 67: T_spatial normalized by specimen shape variation.
+
+def test_specimen_shape_design_adds_twelve_columns_for_the_split_and_six_for_a_relabeling(cohort):
+    c = cohort
+    knots = gam_internal_knots(c['position'])
+    parts = partition_groups(c['specimen'], c['human'])
+    for label, expected in (('species', 12), ('swap:h1+m1', 6), ('swap:h1+m2', 6)):
+        group, nuisance = parts[label]
+        designs, weights = specimen_shape_designs(c['position'], group, c['specimen'], knots, nuisance_shape=nuisance)
+        reference, ref_weights = contrast_designs(c['position'], group, c['specimen'], knots, nuisance_shape=nuisance)
+        np.testing.assert_array_equal(designs['full'], reference['full'])
+        np.testing.assert_array_equal(weights, ref_weights)
+        full, spec = (np.linalg.matrix_rank(designs[k]) for k in ('full', 'spec'))
+        assert spec - full == expected and spec == designs['spec'].shape[1] - (0 if nuisance is None else 6)
+        # M_spec is every specimen's own intercept + shape, whatever the partition.
+        spline = make_gam_design(c['position'], knots)
+        own = np.column_stack([(c['specimen'] == n)[:, None] * spline for n in SPECIMENS])
+        assert np.linalg.matrix_rank(np.column_stack([designs['spec'], own])) == spec == own.shape[1]
+
+
+def _shape_null(seed=5, n_genes=300, n_per=150, tau=.15, alpha=.05):
+    """2 + 2 specimens; every gene has species offsets and its own random smooth shape in each specimen (sd ``tau``
+    per basis coefficient), but no group shape. Gene 0 adds a human-only bump: a true species x position gene."""
+    rng = np.random.default_rng(seed)
+    specimen = np.repeat(SPECIMENS, n_per)
+    position = rng.uniform(0, 1, len(specimen))
+    human = np.isin(specimen, ['h1', 'h2'])
+    library = rng.lognormal(np.log(3000), .3, len(specimen))
+    basis = make_gam_design(position, gam_internal_knots(position))[:, 1:]
+    rate = (np.log(rng.uniform(3e-4, 3e-2, n_genes))[None, :] + .5 * position[:, None]
+            + .3 * human[:, None] * rng.normal(0, 1, n_genes)[None, :])
+    for name in SPECIMENS:
+        rows = specimen == name
+        rate[rows] += basis[rows] @ rng.normal(0, tau, (basis.shape[1], n_genes)) + rng.normal(0, .1, n_genes)
+    rate[:, 0] += 1.2 * human * np.sin(2 * np.pi * position)
+    counts = rng.poisson(rng.gamma(1 / alpha, library[:, None] * np.exp(rate) * alpha)).astype(float)
+    return dict(counts=counts, library=library, position=position, human=human, specimen=specimen,
+                alpha=np.full(n_genes, alpha))
+
+
+def test_specimen_normalized_f_is_calibrated_where_raw_t_spatial_is_inflated():
+    _limma_available()
+    c = _shape_null()
+    knots = gam_internal_knots(c['position'])
+    covariate = np.log(c['counts'].mean(axis=0))
+    for label, (group, nuisance) in partition_groups(c['specimen'], c['human']).items():
+        designs, weights = contrast_designs(c['position'], group, c['specimen'], knots, nuisance_shape=nuisance)
+        numerator = nested_nb_lr(c['counts'], designs, weights, np.log(c['library']), c['alpha'],
+                                 {'T_spatial': COMPARISONS['T_spatial']})['T_spatial']
+        den = specimen_shape_lr(c['counts'], c['library'], c['position'], group, c['specimen'], c['alpha'],
+                                nuisance_shape=nuisance)
+        assert den['df2'] == (12 if nuisance is None else 6) and den['converged'].all() and not den['separated'].any()
+        f = moderated_f(numerator, 6, den['LR_spec'], den['df2'], covariate=covariate)
+        nulls = slice(1, None) if label == 'species' else slice(None)
+        raw = chi2.sf(numerator[nulls], 6)
+        assert np.mean(raw <= .05) > .4                                   # specimen shapes count as group shape
+        assert .02 <= np.mean(f.p.to_numpy()[nulls] <= .05) <= .12        # judged against the specimens: ~5%
+        assert np.isfinite(f.d0).all() and (f.d0 > 5).all() and np.isfinite(f.z).all()
+        if label == 'species':
+            assert f.p.iloc[0] < 1e-6 and f.z.iloc[0] == f.z.max()
+
+
+def _fit_f_dist(x, df1):
+    """limma's legacy fitFDist without a covariate, written out (Smyth 2004)."""
+    from scipy.optimize import brentq
+    from scipy.special import digamma, polygamma
+
+    x = np.maximum(np.asarray(x, float), 0)
+    x = np.maximum(x, 1e-5 * np.median(x))
+    e = np.log(x) + np.log(df1 / 2) - digamma(df1 / 2)
+    evar = e.var(ddof=1) - polygamma(1, df1 / 2)
+    if evar <= 0:
+        return np.inf, x.mean()
+    df2 = 2 * brentq(lambda y: polygamma(1, y) - evar, 1e-8, 1e8, xtol=1e-14, rtol=1e-14)
+    return df2, np.exp(e.mean() - np.log(df2 / 2) + digamma(df2 / 2))
+
+
+def test_squeeze_var_matches_limmas_formula_and_handles_an_infinite_prior():
+    _limma_available()
+    rng = np.random.default_rng(4)
+    variance = pd.Series(.7 * rng.chisquare(12, 50) / 12 * rng.lognormal(0, .4, 50), index=[f'g{i}' for i in range(50)])
+    variance.iloc[3] = 0.                                     # a zero LR: offset away from zero for the prior only
+    out = squeeze_var(variance, 12)
+    d0, s0 = _fit_f_dist(variance, 12)
+    assert list(out.columns) == ['var', 'var_prior', 'df_prior', 'var_post'] and out.index.equals(variance.index)
+    np.testing.assert_allclose(out.df_prior, d0, rtol=1e-6)
+    np.testing.assert_allclose(out.var_prior, s0, rtol=1e-6)
+    np.testing.assert_allclose(out.var_post, (12 * variance + d0 * s0) / (12 + d0), rtol=1e-6)
+    flat = squeeze_var(np.linspace(.999, 1.001, 30), 6)       # no variance heterogeneity: d0 = inf, var_post = prior
+    assert np.isinf(flat.df_prior).all()
+    np.testing.assert_allclose(flat.var_post, flat['var'].mean())
+    covariate = np.linspace(0, 5, 400)                        # a planted trend of the prior variance
+    trend = np.exp(-.5 * covariate) * rng.chisquare(12, 400) / 12
+    fitted = squeeze_var(trend, 12, covariate=covariate)
+    assert fitted.var_prior.iloc[0] > 5 * fitted.var_prior.iloc[-1]
+    robust = squeeze_var(np.r_[trend, 50.], 12, covariate=np.r_[covariate, 2.5], robust=True)
+    assert robust.df_prior.iloc[-1] < robust.df_prior.iloc[:-1].median()   # the outlier gets less shrinkage
+
+
+def test_log_f_sf_is_exact_in_the_far_tail_and_moderated_f_handles_an_infinite_prior():
+    from scipy.stats import f as f_dist
+    values = np.array([0., .3, 1., 4., 20.])
+    for df2 in (6., 14.5, 300.):
+        np.testing.assert_allclose(log_f_sf(values, 6, df2), f_dist.logsf(values, 6, df2), rtol=1e-10, atol=1e-14)
+    np.testing.assert_allclose(log_f_sf(values, 6, np.inf), chi2.logsf(6 * values, 6), rtol=1e-10, atol=1e-14)
+    far = log_f_sf(np.array([1e30, 1e6]), 6, np.array([30., np.inf]))
+    assert np.isfinite(far).all() and far[0] < -700 and far[1] < -1e6
+    mpmath = pytest.importorskip('mpmath')
+    mpmath.mp.dps = 40
+    x = mpmath.mpf(30) / (30 + 6 * mpmath.mpf(10) ** 30)
+    exact = [float(mpmath.log(mpmath.betainc(15, 3, 0, x, regularized=True))),
+             float(mpmath.log(mpmath.gammainc(3, 3e6, mpmath.inf, regularized=True)))]
+    np.testing.assert_allclose(far, exact, rtol=1e-10)
+    near = log_f_sf(np.array([1e-6, 1e-9]), 6, np.array([17.5, np.inf]))     # p within 1e-20 of 1: still below 0
+    exact = [float(mpmath.log(1 - mpmath.betainc(3, 8.75, 0, 6e-6 / (17.5 + 6e-6), regularized=True))),
+             float(mpmath.log(1 - mpmath.gammainc(3, 0, 3e-9, regularized=True)))]
+    np.testing.assert_allclose(near, exact, rtol=1e-10)
+    assert (near < 0).all() and np.isfinite(-ndtri_exp(near)).all()
+    _limma_available()
+    flat = moderated_f(pd.Series([0., 3., 60., 3000.]), 6, np.linspace(5.994, 6.006, 4), 6)
+    assert np.isinf(flat.d0).all()
+    np.testing.assert_allclose(flat.p.iloc[1:], chi2.sf(flat.F.iloc[1:] * 6, 6), rtol=1e-10)
+    assert flat.z.iloc[0] == flat.z.iloc[1:].min() and np.isfinite(flat.z).all()     # F = 0 ties at the bottom
+
+
+def test_over_representation_reproduces_the_hypergeometric_test():
+    pytest.importorskip('gseapy')
+    from scipy.stats import hypergeom
+    genes = [f'G{i:03d}' for i in range(200)]
+    listed = genes[:20]
+    sets = {'planted': genes[:15] + genes[100:110], 'random': genes[15:17] + genes[120:150], 'empty': genes[150:170]}
+    out = over_representation(listed, sets, genes)
+    assert list(out.columns) == ['pathway_id', 'n', 'overlap', 'p', 'fdr', 'call']
+    table = out.set_index('pathway_id')
+    assert table.overlap.to_dict() == {'planted': 15, 'random': 2, 'empty': 0}
+    assert table.p['planted'] == pytest.approx(hypergeom.sf(14, 200, 25, 20), rel=1e-10)
+    assert table.p['random'] == pytest.approx(hypergeom.sf(1, 200, 32, 20), rel=1e-10)
+    assert table.p['empty'] == 1 and table.fdr['empty'] == 1 and table.call.to_dict() == {
+        'planted': True, 'random': False, 'empty': False}
+    nothing = over_representation([], sets, genes)
+    assert (nothing.p == 1).all() and not nothing.call.any()
+    with pytest.raises(ValueError, match='background'):
+        over_representation(['not_a_gene'], sets, genes)

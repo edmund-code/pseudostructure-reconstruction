@@ -9,6 +9,8 @@ dependencies:
   - pyarrow
   - scipy
   - scikit-learn
+  - joblib
+  - threadpoolctl
   - matplotlib
   - seaborn
   - anndata

@@ -34,3 +34,4 @@ dependencies:
       - pydeseq2>=0.5,<0.6
       - scFates==1.2.5
       - genes2genes @ git+https://github.com/Teichlab/Genes2Genes.git@42ba945d370a864464a2d3cc7174aa0ee451e600
+      - pseudospace-reconstruction @ git+https://github.com/calebhallinan/pseudospace_reconstruction.git@59da04bee28f457e17bf1661060151d5fee2dac6

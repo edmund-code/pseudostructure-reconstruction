@@ -162,3 +162,28 @@ are archived in `results/_archive_gaussian_2026-10-09/`, which is outside Git.
   ρ 0.0096). The Pearson-residual estimate (0.0018) is about 5 times too small.
 - This uses only the relabelings, never the species split. The choice of VIF source is the user's
   (2026-10-09).
+
+## Notebook 66: packaged set tests and clustering-first on the NB statistic
+
+`analysis/notebooks/66_pt_pathway_pipelines_compared.ipynb` (logic version `66.pipelines.1`) writes to
+`results/pt_pathway_pipelines_compared/`. It runs every pathway method on one shared NB gene model
+(`pathway_pipelines.standard_gene_model`), for human vs mouse on SCF13 and for AKI vs control mouse
+(notebook 45's inputs). Each row gives condition calls; relabeled calls; share of relabeled p ≤ 0.05:
+
+| Method | Human vs mouse | AKI vs control |
+|---|---|---|
+| limma cameraPR on rank-normal T_spatial | 98; 46, 29; 0.121 (fails both) | 144; 87, 86; 0.170 (fails both) |
+| gseapy prerank GSEA on rank-normal T_spatial | 146; 75, 80; 0.147 (fails both) | 203; 120, 146; 0.212 (fails both) |
+| NB joint test, VIF fitted on the relabelings | 32; 3, 0; 0.067 | 12; 0, 0; 0.072 |
+| Clustering-first ORA (Hallinan's package, single-split null) | 162 and 159; 0, 0 | 469 and 482; 2, 0 |
+
+- **The packaged rank tests are not specific here.** Their relabeled z-scores are inflated by a
+  constant factor (1.51 and 2.13), so no setting of `inter.gene.cor` repairs them. Ranking within
+  expression × detection × coverage strata (post hoc) nearly passes human vs mouse (share 0.082) but
+  not AKI (0.135).
+- **The joint test's VIF is fitted on the relabelings that judge it.** Fitted on one and judged on
+  the other, its share is 0.067 and 0.075; the AKI value sits at the limit.
+- **Clustering-first is specific under a fair null, but returns no p-value per pathway.** It calls
+  pathways whose genes share one direction, including constant offsets (oxidative phosphorylation)
+  that T_spatial removes by design. It also finds AKI proliferation (G2-M, M phase), which T_spatial
+  ranks low. Overlap with cameraPR is Jaccard 0.15 over redundancy clusters on both datasets.

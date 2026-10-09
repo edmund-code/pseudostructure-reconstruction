@@ -10,7 +10,12 @@ the species-split M_full, reused for every fit. ``standard_gene_model`` returns 
 
 A relabeled grouping (``pathway_calibration.balanced_partitions``) keeps the species' own smooth shape as a nuisance
 term in every model and the species-split dispersion, exactly as notebooks 37 and 65 do; ``partition_groups``
-builds those inputs. ``rank_first_gsea`` is a thin wrapper around gseapy's preranked GSEA.
+builds those inputs. ``rank_first_gsea`` is a thin wrapper around gseapy's preranked GSEA and ``camera_pr`` one
+around limma's cameraPR (through rpy2).
+
+``clustering_first_inputs`` and ``single_split_design`` feed the same gene model to the clustering-first pipeline of
+the external package ``pseudospace_reconstruction`` (stages 06-07): its CountFit and AxisDefinition are built from
+the GeneModel's specimen curves on our grid, so that package's own count model and binning are not used.
 """
 from __future__ import annotations
 
@@ -26,6 +31,7 @@ from .stats_gam import gam_internal_knots, make_gam_design
 
 STATISTICS = ('T_level', 'T_spatial', 'T_total')
 SUPPORT = (.01, .99)          # each specimen's own position range: its 1st-99th percentiles
+FLOOR_COUNTS = .5             # clustering-first log ratios: a specimen rate never falls below half a count
 
 
 def specimen_ranges(position, specimen, quantiles=SUPPORT):
@@ -202,4 +208,124 @@ def rank_first_gsea(statistic, gene_sets, *, metric='raw', min_size=10, max_size
                         'leading_edge': [[x for x in str(v).split(';') if x] for v in table.Lead_genes]})
     out['p_one_sided'] = np.where(out.NES > 0, out.p / 2, 1 - out.p / 2)
     out['call'] = out.NES.gt(0) & out.q.le(fdr)
+    return out
+
+
+def camera_pr(statistic, gene_sets, *, inter_gene_cor=.01, use_ranks=False, fdr=.05):
+    """limma's cameraPR (R, through rpy2) of every gene set on one gene statistic; limma's defaults otherwise.
+
+    cameraPR compares the mean statistic of a set with the rest of the genes in a two-sample t-test whose set
+    variance is inflated by 1 + (m - 1) * ``inter_gene_cor`` (Wu & Smyth 2012); ``use_ranks`` switches to its
+    correlation-adjusted rank-sum test. Members missing from ``statistic`` are dropped; a set needs >= 2 present.
+    Returns one row per tested set, in ``gene_sets`` order: pathway_id, n, direction (limma's Up/Down), p
+    (limma's two-sided PValue), fdr (limma's BH FDR over all tested sets), p_one_sided (upper tail: p/2 when Up,
+    else 1 - p/2) and call (Up and fdr <= ``fdr``).
+    """
+    import rpy2.robjects as ro
+    from rpy2.robjects.packages import importr
+
+    values = pd.Series(statistic, dtype=float)
+    if values.index.has_duplicates or not np.isfinite(values.to_numpy()).all():
+        raise ValueError('Need one finite statistic per uniquely named gene.')
+    importr('limma')
+    names = pd.Index(values.index.astype(str))
+    index = {}
+    for pathway, members in gene_sets.items():
+        idx = names.get_indexer(sorted(set(map(str, members))))
+        idx = np.sort(idx[idx >= 0])
+        if len(idx) >= 2:
+            index[str(pathway)] = ro.IntVector(idx + 1)
+    if not index:
+        raise ValueError('No gene set has two members in the statistic.')
+    stat = ro.FloatVector(values.to_numpy())
+    stat.names = ro.StrVector(list(names))
+    sets = ro.vectors.ListVector.from_length(len(index))
+    for k, members in enumerate(index.values()):
+        sets[k] = members
+    sets.names = ro.StrVector(list(index))
+    table = ro.r['cameraPR'](stat, sets, **{'use.ranks': bool(use_ranks), 'inter.gene.cor': float(inter_gene_cor),
+                                            'sort': False})
+    rows = list(table.rownames)
+    if rows != list(index):
+        raise RuntimeError('cameraPR returned its sets in another order.')
+    get = lambda column: np.asarray(table.rx2(column))          # noqa: E731
+    out = pd.DataFrame({'pathway_id': rows, 'n': get('NGenes').astype(int), 'direction': get('Direction').astype(str),
+                        'p': get('PValue').astype(float)})
+    out['fdr'] = get('FDR').astype(float) if len(rows) > 1 else out.p
+    out['p_one_sided'] = np.where(out.direction.eq('Up'), out.p / 2, 1 - out.p / 2)
+    out['call'] = out.direction.eq('Up') & out.fdr.le(fdr)
+    return out
+
+
+def specimen_rate_floor(library, specimen, floor_counts=FLOOR_COUNTS):
+    """Natural-log rate floor per specimen: ``floor_counts`` over the specimen's summed library (Series)."""
+    total = pd.Series(np.asarray(library, float)).groupby(np.asarray(specimen).astype(str)).sum()
+    return np.log(floor_counts / total)
+
+
+def clustering_first_inputs(model, position, group, specimen, library, *, zone_names, zone_cuts,
+                            zone_short_names=None, floor_counts=FLOOR_COUNTS):
+    """(AxisDefinition, CountFit) of ``pseudospace_reconstruction`` built from a ``GeneModel``.
+
+    Its CountFit holds one log2-rate curve per specimen on a grid: here the GeneModel's specimen curves (natural-log
+    rate per library unit) divided by ln 2, on the GeneModel's grid. A gene with (almost) no counts in a specimen
+    has a fitted rate near 0 there, and with no prior in the package's log ratio the gap would be infinite; each
+    specimen curve is therefore floored at ``floor_counts`` over the specimen's summed library
+    (``specimen_rate_floor``). Ponytail: a fixed half-count floor binds only for genes nearly absent from a
+    specimen; a per-gene floor from the NB fit's own uncertainty would be the upgrade. The fields its stage 06 does
+    not read (pooled curves, smoothing index, edf, dispersion) carry the GeneModel's group curves, zeros and alpha.
+    The axis keeps the package's own grid weights (overlap of the two groups' structure densities, its default
+    smoothing, ``features.axis.overlap_weights``) on our grid; zones are given as fixed cut-points. ``group`` is 0/1
+    per structure (1 = case). Gene names come from ``model.statistics.index``.
+    """
+    from pseudospace_reconstruction.features import AxisDefinition, AxisParams, CountFit
+    from pseudospace_reconstruction.features.axis import overlap_weights
+
+    s, g = np.asarray(position, float), np.asarray(group, float)
+    samples = np.asarray(specimen).astype(str)
+    grid, genes = np.asarray(model.grid, float), np.asarray(model.statistics.index).astype(str)
+    names = sorted(model.specimen_curves)
+    if sorted(set(samples)) != names or set(np.unique(g)) != {0., 1.}:
+        raise ValueError('Specimens must match the GeneModel and the group must be 0/1.')
+    floor = specimen_rate_floor(library, samples, floor_counts)
+    curves = np.array([np.maximum(model.specimen_curves[n], floor[n]) for n in names]) / np.log(2.)
+    params = AxisParams()
+    lo, hi = float(grid[0]), float(grid[-1])
+    sigma_axis = params.density_weight_sigma_bins * (hi - lo) / (params.density_weight_reference_points - 1)
+    weights = overlap_weights(s, g == 1, grid, sigma_axis / (grid[1] - grid[0]))
+    cuts = np.asarray(zone_cuts, float)
+    zones = tuple(map(str, zone_names))
+    if len(cuts) != len(zones) - 1 or np.any(np.diff(cuts) <= 0):
+        raise ValueError('Need len(zone_names) - 1 increasing cut-points.')
+    limits = np.array([(lo if i == 0 else max(lo, cuts[i - 1]), hi if i == len(zones) - 1 else min(hi, cuts[i]))
+                       for i in range(len(zones))], float)
+    short = tuple(str((zone_short_names or {}).get(z, z)) for z in zones)
+    axis = AxisDefinition(gene_names=genes, grid=grid, knots=np.asarray(model.knots, float), weights=weights, lo=lo,
+                          hi=hi, zones=zones, zone_cuts=cuts, zone_limits=limits, zone_short=short)
+    fit = CountFit(gene_names=genes, grid=grid, specimen=curves.astype('float32'), specimen_names=np.array(names),
+                   curve_reference_log2rate=(model.reference / np.log(2.)).astype('float32'),
+                   D_pooled=(model.delta / np.log(2.)).astype('float32'), lam_idx=np.zeros(len(genes), int),
+                   edf=np.zeros(len(genes)), dispersion=model.statistics.alpha.to_numpy(float),
+                   total_counts=np.zeros(len(genes)), n_rows=len(s), n_units=len(s))
+    return axis, fit
+
+
+def single_split_design(design, keep):
+    """A copy of a ``pseudospace_reconstruction`` Design whose null holds one mixed split: the split with ``keep``
+    (a collection of sample names) as one of its two sides. Raises when no split or more than one matches."""
+    from dataclasses import dataclass, fields
+
+    from pseudospace_reconstruction.compare import Design
+
+    side = frozenset(map(str, keep))
+
+    @dataclass(frozen=True)
+    class OneSplitDesign(Design):
+        @property
+        def mixed_splits(self):
+            return [m for m in super().mixed_splits if side in (frozenset(m.high), frozenset(m.low))]
+
+    out = OneSplitDesign(**{f.name: getattr(design, f.name) for f in fields(Design)})
+    if len(out.mixed_splits) != 1:
+        raise ValueError(f'{len(out.mixed_splits)} mixed splits have {sorted(side)} as a side.')
     return out

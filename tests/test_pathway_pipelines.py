@@ -5,8 +5,9 @@ from scipy import sparse
 from scipy.stats import chi2
 
 from pseudospace.nb_gam import nb_group_difference_curves, nb_species_trajectories
-from pseudospace.pathway_pipelines import (common_grid, partition_groups, rank_first_gsea, rank_normal_scores,
-                                           specimen_ranges, standard_gene_model)
+from pseudospace.pathway_pipelines import (camera_pr, clustering_first_inputs, common_grid, partition_groups,
+                                           rank_first_gsea, rank_normal_scores, single_split_design,
+                                           specimen_ranges, specimen_rate_floor, standard_gene_model)
 
 SPECIMENS = ['m1', 'm2', 'h1', 'h2']
 SHAPE = 0                                   # human-only smooth shape: a species x position gene
@@ -136,3 +137,110 @@ def test_rank_normal_scores_are_ordered_normal_quantiles_with_shared_ties():
     assert scores['a'] > scores['c'] > scores['b']
     with pytest.raises(ValueError, match='finite'):
         rank_normal_scores([1., np.nan])
+
+
+def _limma_available():
+    pytest.importorskip('rpy2')
+    from rpy2.robjects.packages import isinstalled
+    if not isinstalled('limma'):
+        pytest.skip('R package limma is not installed')
+
+
+def _camera_formula(statistic, members, cor):
+    """limma's cameraPR (use.ranks = FALSE): two-sample t of the set mean, set variance inflated by 1 + (m - 1) cor."""
+    from scipy.stats import t as t_dist
+    s = statistic.to_numpy()
+    idx = statistic.index.get_indexer(sorted(set(members) & set(statistic.index)))
+    g, m = len(s), len(idx)
+    delta = g / (g - m) * (s[idx].mean() - s.mean())
+    pooled = ((g - 1) * s.var(ddof=1) - delta ** 2 * m * (g - m) / g) / (g - 2)
+    t = delta / np.sqrt(pooled * ((1 + (m - 1) * cor) / m + 1 / (g - m)))
+    up, down = t_dist.sf(t, g - 2), t_dist.cdf(t, g - 2)
+    return 2 * min(up, down), up
+
+
+def test_camera_pr_reproduces_limmas_formula_and_calls_a_planted_set():
+    _limma_available()
+    statistic, sets = _ranking()
+    statistic = rank_normal_scores(statistic)
+    sets['partial'] = list(statistic.index[200:212]) + ['not_a_gene']
+    sets['one_member'] = [statistic.index[0], 'not_a_gene']
+    out = camera_pr(statistic, sets)
+    assert list(out.columns) == ['pathway_id', 'n', 'direction', 'p', 'fdr', 'p_one_sided', 'call']
+    assert list(out.pathway_id) == [p for p in sets if p != 'one_member']
+    table = out.set_index('pathway_id')
+    assert table.n['partial'] == 12
+    for pathway in ('planted', 'random0', 'partial'):
+        two_sided, upper = _camera_formula(statistic, sets[pathway], .01)
+        assert table.p[pathway] == pytest.approx(two_sided, rel=1e-8)
+        assert table.p_one_sided[pathway] == pytest.approx(upper, rel=1e-8)
+    assert table.call['planted'] and table.direction['planted'] == 'Up' and table.call.sum() == 1
+    ranks = camera_pr(statistic, sets, use_ranks=True).set_index('pathway_id')
+    assert ranks.call['planted'] and not ranks.p.equals(table.p)
+    stronger = camera_pr(statistic, sets, inter_gene_cor=.2).set_index('pathway_id')
+    assert stronger.p['planted'] > table.p['planted']           # more correlation, less evidence
+
+
+@pytest.fixture(scope='module')
+def wide_cohort():
+    """40 genes: one human-only bump, one gene absent from h2, the rest species offsets only."""
+    rng = np.random.default_rng(11)
+    specimen = np.repeat(SPECIMENS, 200)
+    position = rng.uniform(0, 1, len(specimen))
+    human = np.isin(specimen, ['h1', 'h2'])
+    library = rng.lognormal(np.log(3000), .3, len(specimen))
+    base = np.log(rng.uniform(5e-4, 2e-2, 40))
+    rate = base[None, :] + (.4 * human[:, None] * rng.normal(0, 1, 40)[None, :]) + .5 * position[:, None]
+    rate[:, 0] += 1.5 * human * np.sin(2 * np.pi * position)
+    log_mu = np.log(library)[:, None] + rate
+    counts = rng.poisson(rng.gamma(20, np.exp(log_mu) / 20)).astype(float)
+    counts[specimen == 'h2', 1] = 0.                               # absent from one specimen: a separated fit
+    genes = [f'g{i}' for i in range(40)]
+    model = standard_gene_model(sparse.csr_matrix(counts), library, position, human.astype(float), specimen,
+                                genes=genes)
+    return dict(counts=counts, library=library, position=position, specimen=specimen, human=human, model=model)
+
+
+def test_clustering_first_inputs_carry_the_shared_curves_into_the_external_pipeline(wide_cohort):
+    pytest.importorskip('pseudospace_reconstruction')
+    from pseudospace_reconstruction.compare import CompareParams, Design, compare_groups
+
+    c, model = wide_cohort, wide_cohort['model']
+    axis, fit = clustering_first_inputs(model, c['position'], c['human'], c['specimen'], c['library'],
+                                        zone_names=['A', 'B'], zone_cuts=[.5])
+    floor = specimen_rate_floor(c['library'], c['specimen'])
+    assert floor['h2'] == pytest.approx(np.log(.5 / c['library'][c['specimen'] == 'h2'].sum()))
+    assert list(fit.specimen_names) == sorted(SPECIMENS) and fit.specimen.shape == (4, 40, len(model.grid))
+    np.testing.assert_allclose(axis.grid, model.grid)
+    assert axis.weights.sum() == pytest.approx(1.) and (axis.weights > 0).all()
+    for k, name in enumerate(fit.specimen_names):
+        expected = np.maximum(model.specimen_curves[name], floor[name]) / np.log(2.)
+        np.testing.assert_allclose(fit.specimen[k], expected, rtol=1e-6)
+    h2 = list(fit.specimen_names).index('h2')
+    assert model.specimen_curves['h2'][1].max() < floor['h2']     # the absent gene sits on the floor ...
+    np.testing.assert_allclose(fit.specimen[h2, 1], floor['h2'] / np.log(2.), rtol=1e-6)
+    assert np.isfinite(fit.specimen).all()                         # ... so every log ratio stays finite
+    design = Design.from_labels(c['specimen'], np.where(c['human'], 'human', 'mouse'), case_label='human',
+                                reference_label='mouse')
+    result = compare_groups(fit, axis, design, node_spacing=.05, params=CompareParams(prior_k=0.))
+    table = result.gene_table.set_index('gene')
+    assert table.selected['g0'] and table.shape_replicated['g0']
+    # No prior: the pooled gap is the group-mean difference of the log2 curves, minus the typical gene.
+    log2 = {n: fit.specimen[k] for k, n in enumerate(fit.specimen_names)}
+    raw = (log2['h1'] + log2['h2']) / 2 - (log2['m1'] + log2['m2']) / 2
+    np.testing.assert_allclose(result.contrasts.D, raw - np.median(raw, axis=0), rtol=1e-5, atol=1e-6)
+
+
+def test_single_split_design_keeps_one_mixed_split():
+    pytest.importorskip('pseudospace_reconstruction')
+    from pseudospace_reconstruction.compare import Design
+
+    design = Design.from_labels(['h1', 'h2', 'm1', 'm2'], ['human', 'human', 'mouse', 'mouse'], case_label='human',
+                                reference_label='mouse')
+    assert len(design.mixed_splits) == 2
+    one = single_split_design(design, ['m2', 'h1'])
+    assert len(one.mixed_splits) == 1 and set(one.mixed_splits[0].high) == {'h1', 'm2'}
+    assert single_split_design(design, ['h2', 'm2']).null_names != one.null_names   # the other side names it too
+    assert one.pairs == design.pairs and one.case_samples == design.case_samples
+    with pytest.raises(ValueError, match='0 mixed splits'):
+        single_split_design(design, ['h1', 'h2'])

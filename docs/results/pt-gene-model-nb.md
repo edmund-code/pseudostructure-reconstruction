@@ -24,7 +24,7 @@ T_spatial therefore scores some offsets as shape:
 - **Simulation.** Genes given a pure constant ratio reached the Gaussian top 10% at 10.1%, and
   27% in the largest-ratio tertile. Under NB the rate was 0%. The simulation draws counts from the
   NB model, so it favours NB by construction.
-- **Real data.** 930 genes are detected in under 1% of one species' structures. 138 of them are in
+- **Real data.** 930 genes are detected in under 1% of one species' structures. 139 of them are in
   the Gaussian top 10% and 6 in the NB top 10%.
 - **The relabeling control cannot catch this.** The artefact follows species (depth, probe panels,
   absent genes), and the relabelings mix species.
@@ -106,3 +106,59 @@ in notebook 37, the cascade stops and the result is reported. Nothing is tuned.
 
 The Gaussian results, the working notebooks with their outputs and the scratch provenance scripts
 are archived in `results/_archive_gaussian_2026-10-09/`, which is outside Git.
+
+## Notebook 65 results
+
+`analysis/notebooks/65_pt_gene_model_comparison.ipynb` (logic version `65.gene_model.1`) writes to
+`results/pt_gene_model_comparison/`. It recomputes the Gaussian side from code.
+- On its first run every Gaussian statistic, VIF and call matched the live notebooks 37, 45 and 50.
+  Notebook 45's pool was rebuilt and matched too.
+- The Gaussian reference is saved in `reference/`, and later runs must reproduce it.
+- The live-notebook guards switch off once notebook 37's gene table carries `gene_model = nb.1`, so
+  notebook 37's NB re-run must write that column.
+
+**Pathway screens on SCF13** (species calls; relabeled calls; share of relabeled p ≤ 0.05, limit 0.075):
+
+| Screen | Gaussian | NB, Gaussian VIF | NB, NB Pearson VIF (frozen) |
+|---|---|---|---|
+| A6·JNT | 60; 2, 0; 0.060 | 31; 0, 0; 0.067 | 74; 13, 1; **0.085, fails calibration** |
+| A4·JNT | 50; 0, 0; 0.064 | 15; 1, 1; 0.079, fails | 62; 9, 9; 0.105, fails |
+| Continuous adds / steps add | 13 / 3 | 16 / 0 | 21 / 9 |
+
+- **The pilot is reproduced exactly.** It used the Gaussian VIF, so the pilot table above
+  describes the middle column.
+- **The frozen primary fails criterion 2.** The NB LR with the Pearson-residual VIF, computed here
+  for the first time, passes the relabeling rule (NCDR 0.09) but not the calibration limit.
+- **Why.** The median VIF falls from 1.30 to 1.06, and the median within-pathway residual
+  correlation from 0.010 to 0.002.
+  - Gaussian log1p residuals share a depth component: within each specimen, a structure's mean
+    residual correlates with its log library at r = 0.75–0.94.
+  - The NB offset absorbs depth, giving r = −0.05 to −0.29.
+  - Much of the Gaussian residual correlation was therefore shared depth. It happened to deflate the
+    joint test enough to pass the relabelings.
+- **Stop rule.** Notebook 37 would compute the same screen. Under the stop rule above, the cascade
+  would therefore stop there with this specification. Nothing was tuned, and the choice is open.
+
+**Gene level, as in the pilot:**
+- T_spatial Spearman between the models is 0.36.
+- The Gaussian-only top-10% genes have median |log ratio| 2.11 (NB-only: 0.83). 25% of them are
+  nearly absent in one species (NB-only: 0.2%).
+- Of the 930 nearly absent genes, 139 are in the Gaussian top 10% (12.5%) and 6 in the NB top 10%.
+- The 4,588 split-plot genes are 5.1% nearly absent, against the 8.4% base rate.
+- In the simulation, pure offsets reach the top-10% cut at 10.1% under Gaussian (27% in the
+  largest-offset tertile) and at 0% under NB.
+
+**Shrinkage.**
+- With the Gaussian VIF it reproduces the pilot check: the same 31 calls (0, 0; 0.068; Jaccard 1.0),
+  so the unshrunk α stays primary.
+- With the NB Pearson VIF both versions fail calibration (0.085 and 0.087), so the rule cannot be met.
+
+**What size the VIF should be.**
+- Notebook 37 validated the Gaussian VIF by fitting E[z²] = a(1 + (m − 1)ρ) to the matched z of all
+  1,513 pathways under the two relabelings, using `pathway_decoys.decoy_inflation`.
+- The same fit applied to the NB statistic gives a = 1.04, ρ = 0.0096, and an implied median VIF of
+  1.35. For the Gaussian statistic it gives 1.03, 0.0086 and 1.30.
+- The NB statistic's own null correlation therefore matches the Gaussian-residual estimate (median
+  ρ 0.0096). The Pearson-residual estimate (0.0018) is about 5 times too small.
+- This uses only the relabelings, never the species split. The choice of VIF source is the user's
+  (2026-10-09).

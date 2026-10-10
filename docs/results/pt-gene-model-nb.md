@@ -491,3 +491,129 @@ replicates.
     means the result is consistent across technologies. It does not prove biology.
   - snRNA measures nuclear RNA and Visium HD measures whole-cell RNA. A nuclear-fraction bias that is
     conserved between species cancels in the human-vs-mouse difference.
+
+## Notebook 68 results
+
+`analysis/notebooks/68_pt_species_level_control.ipynb` (logic version `68.level.1`) writes to
+`results/pt_species_level_control/`. It followed the protocol above (commit aa15069).
+
+**Stage caches:**
+- `gene_model_species__9bfedfdd733d1c53`;
+- `lake_cortex_pt__899c17f45c1b5192`;
+- `visium_family_sums__981625d9f0e95c86`.
+
+**Guards.**
+- The refitted gene model reproduces notebook 67's cache: statistics, flags, α, Δ and curves, rtol 1e-6.
+- The Lake pseudobulk equals notebook 62's cache (all genes) and notebook 38's cache (our genes).
+- The Census family fetch has the main file's groups and totals.
+
+| Criterion | Result | Status |
+|---|---|---|
+| (i) primary literature controls with the expected sign | 17 of 27, 63% (Wilson 44–78%) | **fails** |
+| (ii) atlas-strong genes with \|L\| ≥ 1 sharing the atlas sign | 3,584 of 3,984, 90.0% (88.9–90.9%) | passes |
+| (iii) Spearman L vs A, with a 2,000-gene bootstrap | 0.60 [0.58, 0.61]; atlas ceiling 0.97 | descriptive |
+| (iv) families in the member-count direction | 198 of 410, 48% | descriptive |
+
+**Verdict.** The overall criterion is not met. The reading is (fail, pass): level agrees with the atlas
+genome-wide but not with the curated controls, which are protein measurements.
+
+**(i) Literature controls.**
+- **Coverage.** 27 of the 29 gene rows verified for mouse are in our universe. Slc47a2 and Ephx3 are not.
+- **Beside the share:**
+  - 8 controls clear the housekeeping band;
+  - 14 have the expected sign in all four section × mouse pairs;
+  - the equal-probe subset gives 13 of 23;
+  - without nearly absent genes, 15 of 25.
+- **The failing controls**, with their atlas sign and probe balance (`tables/failing_literature_controls.csv`):
+  - All 10 have 3 probes in each panel, and none is nearly absent.
+  - **The atlas disagrees with the control too** in 6: Abcc4, Fmo1, Slc16a1, Slc22a6, Slc22a7 and
+    Slc22a8. Two examples:
+    - Slc22a6 (OAT1): ours +0.2, atlas +2.7.
+    - Fmo1: ours −1.9, atlas −2.3.
+  - **The atlas agrees with the control** in 4:
+    - **Abcc2** is the one clear failure of our measurement: ours +0.6 against an atlas −2.6 (BH < 10⁻³).
+    - **Gusb** is small on both sides: ours −0.8, atlas +0.7.
+    - **Slc22a2 and Slc22a13** have an atlas level that does not differ from the typical gene (BH 0.31 and
+      0.76).
+- **The atlas itself** agrees with only 19 of the 27 protein-based controls. Our L agrees with the atlas sign for
+  21 of the 27 (post hoc).
+- **Rows not verified for mouse** (reported only): Kyat1 has the expected sign and Abcc1 does not; Slc22a3 is
+  outside our universe.
+- **Pathway rows** (descriptive):
+  - L17 (Slc22a1 + Slc22a2) has mean L −2.9. That ranks below all 1,513 pathway means, in the expected
+    direction.
+  - L16 (13 transporters, not verified) has mean L −0.35, rank 1,131 of 1,513, also in the expected direction.
+
+**(ii) and (iii) sensitivities.**
+
+| Setting | (ii) share | (iii) Spearman |
+|---|---|---|
+| Primary | 90.0% (n = 3,984) | 0.60 |
+| All atlas-strong genes, any \|L\| | 81.0% (n = 6,071) | — |
+| P in place of L | 89.8% | 0.60 |
+| Equal probes / and probe-clean in both | 91.0% / 91.0% | 0.62 / 0.62 |
+| Without nearly absent genes | 88.6% | 0.55 |
+| Without separated genes | 89.5% | — |
+| Without pairs in non-1:1 orthogroups | 90.0% | 0.60 |
+| All 12 Census males | 90.2% | 0.59 |
+| Lake's 3 men | 90.9% | — |
+| Census human in place of Lake | 91.6% | 0.61 |
+
+- **P is not an independent check.** L and P have Spearman 0.999.
+- **Probe count leaks into the level.** Over the 1,918 genes with unequal probe counts, L − A has Spearman 0.45
+  [0.42, 0.49] with log2(human / mouse probes).
+- **Bands** (2.5–97.5%, log2):
+
+  | Band | Range | Width |
+  |---|---|---|
+  | Housekeeping, our L | −3.1 to 2.6 | 5.7 |
+  | Housekeeping, atlas A | −2.7 to 2.7 | 5.4 |
+  | Mouse − mouse | −0.3 to 1.1 | 1.4 |
+  | Section − section | −0.5 to 0.4 | 1.0 |
+
+  Housekeeping genes therefore spread almost as widely in the probe-free atlas as in our data, so most of the
+  band is between-species or between-dataset spread, not probe noise. The same-species bands are 4–6 times
+  narrower.
+
+**(iv) Families** (descriptive; 720 eligible orthogroups plus Ugt2b).
+- **The genome-defined expectation fails in both datasets.**
+  - Our F has the expected sign in 198 of 410 detected families (48%); with probe-clean members only, 50%.
+  - Mouse-expanded families are mouse-higher in 45%, and human-expanded families human-higher in 52%.
+  - The atlas F has the expected sign in 52%.
+- **Our F tracks the atlas F.** The signs agree in 296 of 407 complete families (73%), with Spearman 0.67
+  [0.60, 0.74].
+- **Pre-named families** (F, then atlas F):
+  - Mouse-higher in both: Slco1a (−7.4, −10.7), Cyp2d (−10.3, −7.0), Cyp2j (−8.0, −9.6), Ces1 (−8.5, −9.8),
+    Akr1c (−5.0, −5.4) and Nat8 (−1.5, −3.0).
+  - Cyp2c: +1.9 and +2.4, against the expectation in both.
+  - Cyp4a: +0.6 against −1.0.
+  - Sult2a is not detected.
+  - **Sult1a disagrees:** −4.2 against +4.5. The human members SULT1A1 and SULT1A2 have one probe each and are
+    detected in under 0.5% of human structures (post hoc). This looks like a probe failure.
+  - Ugt2b, which has no expectation: −1.9 against +1.5.
+
+**Pathways** (descriptive). Mean L vs mean A has Spearman 0.70 [0.66, 0.73] across the 1,513 sets. The gene
+sets overlap.
+
+**Readings of the protocol** (implementation details not written in it):
+- **Census symbol audit.** Census columns whose symbol now belongs to another Ensembl id than our panel's
+  measured another gene. They were dropped from that atlas:
+  - in the mouse file: Arvcf, Ccdc121, Eppk1, Lin54, Tctn2, Tusc3 and Ugt3a1;
+  - in the human file: PAXX.
+  - In the existing `census_pt_segments` mouse file, the **Ugt3a1 column is Ugt3a2**, because Census swapped
+    the two symbols. Earlier notebooks that read Ugt3a1 from that file (38, 43 and 64) compared the wrong gene.
+- **Analysed atlas genes.** Our genes mapped in Lake and listed under our gene in Census: 11,036; 11,048 for
+  Census human against mouse.
+- **Families.** The member sets are notebook 62's panel members of the orthogroup's non-1:1 classes: 1,652 mouse
+  and 1,116 human. The Census mouse members were fetched by Ensembl id (`analysis/scripts/fetch_census_pt_families.py`);
+  2,016 of 2,018 were found.
+- **Literature pathway rank.** The rank places the members' mean L among the 1,513 pathway means.
+- **Post hoc** (section 12 of the notebook): the controls' agreement with the atlas, and the probe counts and
+  detection of the pre-named families' members.
+
+**What this cannot tell you.**
+- The controls are mostly one protein study of whole mouse kidney, so they test mRNA–protein concordance as much
+  as our measurement.
+- In the atlases, species is confounded with dataset. Agreement with them shows consistency across technologies,
+  not biology.
+- With one human donor there is no species-level inference. Every number here is descriptive.

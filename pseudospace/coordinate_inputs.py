@@ -40,12 +40,18 @@ def common_support_mask(position, specimen, quantiles=(.01, .99)):
     return ((s >= lo) & (s <= hi)).to_numpy()
 
 
-def pt_inputs(results_root, data_root, coordinate, *, detection=.02, set_sizes=(10, 300), strata_bins=3):
+def pt_inputs(results_root, data_root, coordinate, *, detection=.02, set_sizes=(10, 300), strata_bins=3,
+              exclude_genes=()):
     """Rebuild notebook 37's expression, gene universe, pathways and strata on ``coordinate``.
 
     ``coordinate`` maps structure ids to positions; it is rescaled to [0, 1] when needed and
     must run from S1 to S3. Returns a dict with obs, Y (sparse lognorm, eligible genes), counts,
     position, human, specimen, segment, genes, gene_sets, strata, covariates, grid and library.
+
+    ``exclude_genes`` (mouse symbols) are treated as unmeasured: they leave the library (the NB offset) and the
+    gene universe, and the pathways are rebuilt on the reduced universe with the same size rule. Notebook 69 passes
+    the mitochondrially encoded genes. The default excludes nothing; ``Y`` keeps its full-library normalization either
+    way.
     """
     import anndata as ad
     from scipy import sparse
@@ -88,7 +94,8 @@ def pt_inputs(results_root, data_root, coordinate, *, detection=.02, set_sizes=(
 
     expression = sparse.csr_matrix(adata.layers['lognorm'], dtype=float)
     universe = gene_covariates(expression, position, human, specimen, adata.var_names)
-    universe['measured_in_both'] = adata.var.measured_in_both_inputs.to_numpy()
+    universe['measured_in_both'] = (adata.var.measured_in_both_inputs.to_numpy()
+                                    & ~universe.gene.astype(str).isin(set(map(str, exclude_genes))).to_numpy())
     universe['eligible'] = universe.measured_in_both & universe.detection.ge(detection)
     genes = universe.loc[universe.eligible, 'gene'].tolist()
     eligible = universe.eligible.to_numpy()

@@ -787,3 +787,116 @@ Definitions:
 - New option: `pt_inputs(..., exclude_genes=())`, which removes the named genes from the library and from the
   universe. Its default leaves every existing input, and so every existing cache key, unchanged. It is tested in
   `tests/test_coordinate_inputs.py`.
+
+## Notebook 69 results
+
+`analysis/notebooks/69_pt_pathways_without_mitochondrial_reads.ipynb` (logic version `69.no_mito.1`) writes to
+`results/pt_pathways_without_mito/`. It followed the protocol above (commit 4fdcdf4). Its section 10 lists how the
+protocol was read. Section 8.1 is post hoc.
+
+**Stage caches:**
+- `gene_model_human_vs_mouse_species__1c1cadaef98bb99c`;
+- `gene_model_aki_vs_control_species__9977e65777d6275d`;
+- `specimen_shape_human_vs_mouse_species__486d509e3fe47198`;
+- `method_b_human_vs_mouse_species__null_default__4b4253d8cfc3a794`.
+
+**Guards.**
+- 12 mt genes left the human vs mouse library and universe (11,071 → 11,059 genes). 13 left the AKI library and 12
+  the AKI universe (9,107 → 9,095). Each library fell by exactly those genes' counts.
+- With the mt genes kept, the inputs reproduce notebook 66's and 67's recorded gene-model stage keys.
+- The structures, positions, non-mt counts, gene sets (1,513 and 1,429), redundancy clusters, zone cuts and grid are
+  unchanged.
+- df₂ is 12 and 6.
+- The clustering ORA recomputed from the gene groups reproduces both this run's calls and notebook 66's.
+
+**Verdicts.**
+
+| Check | Result | Status |
+|---|---|---|
+| (a) Null drift, human vs mouse: median d_g over the 1,875 genes with q > 0.5 in both runs | +0.079 before, −0.048 after (predicted −0.055) | **passes** (\|after\| ≤ 0.05) |
+| (a) AKI, reported only (1,419 genes) | +0.016 → −0.002 (predicted −0.006) | — |
+| (b) Significant genes rising in the case group toward S3 | human vs mouse 2,624 of 3,835 (68%) → 1,890 of 3,614 (52%); AKI 55% → 51% | falls, as expected |
+| (c) Pass rules | normalized: passes on human vs mouse, still fails calibration on AKI; clustering: specific under the fair null | as expected, except that the clustering calls moved (below) |
+| (d) Overlap between the methods | Jaccard over redundancy clusters 0.093–0.198 | ≤ 0.2, as expected |
+| (e) Lost and gained calls | normalized: few lost, gains mostly falling; clustering: 36 human vs mouse calls lost | partly as expected |
+
+- **The drift is removed and slightly overshot.** The mt tilt (−0.13) is larger than the drift it removed (+0.08), so
+  the null genes now drift slightly the other way. Over each run's own q > 0.5 genes the drift is +0.039 before and
+  +0.001 after.
+- **The 12 mt genes were all among the significant genes before.**
+- **Decision.** Check (a) passes, so notebook 69's calls replace notebooks 66/67's as the primary for both methods on
+  both datasets. The normalized method's AKI calibration failure stands.
+
+**(c) Calls and pass rules.** Each cell gives the calls (redundancy clusters); relabeled calls; NCDR; calibration
+share (limit 0.075).
+
+| Method | Human vs mouse, 66/67 → 69 | AKI vs control, 66/67 → 69 |
+|---|---|---|
+| Normalized (cameraPR on z) | 70 (68); 0, 0; 0; 0.044 → **97 (90); 0, 0; 0; 0.044 · passes** | 93 (86); 17, 11; 0.15; 0.102 → **99 (91); 16, 10; 0.13; 0.101 · fails calibration** |
+| Clustering, default null | 167 (72); 0, 0 → **132 (51); 0, 0** | 464 (262); 2, 0 → **455 (253); 2, 0** |
+| Clustering, single-split nulls | 162, 159 → 162, 46 | 469, 482 → 465, 468 |
+
+The clustering method's list-based calibration share is 0.003 (human vs mouse) and 0.005 (AKI), before and after.
+
+**(d) Overlap between the normalized and clustering calls** (condition split). Each cell gives both / normalized only /
+clustering only / neither (Jaccard). Pathways are counted first; redundancy clusters follow in brackets.
+
+| Dataset | Universe | 66/67 | 69 |
+|---|---|---|---|
+| Human vs mouse | all genes | 17 / 53 / 150 / 1,293 (0.077) [17 / 51 / 55 / 854 (0.138)] | 22 / 75 / 110 / 1,306 (0.106) [21 / 69 / 30 / 857 (0.175)] |
+| Human vs mouse | without the 8 proteasome subunits | 14 / 57 / 21 / 1,421 (0.152) [14 / 55 / 18 / 890 (0.161)] | 20 / 77 / 14 / 1,402 (0.180) [20 / 70 / 11 / 876 (0.198)] |
+| AKI vs control | all genes | 33 / 60 / 431 / 905 (0.063) [33 / 53 / 229 / 584 (0.105)] | 30 / 69 / 425 / 905 (0.057) [30 / 61 / 223 / 585 (0.096)] |
+| AKI vs control | without the 8 proteasome subunits | 34 / 59 / 430 / 906 (0.065) [34 / 52 / 229 / 584 (0.108)] | 29 / 70 / 423 / 907 (0.056) [29 / 62 / 222 / 586 (0.093)] |
+
+The 66/67 rows without the subunits reproduce the earlier sensitivity exactly (71 and 35 calls, 14 shared).
+
+**(e) Lost and gained calls** (`tables/check_e_*.csv`). Median d_g is over each pathway's tested members; > 0 means
+rising in the case group toward S3.
+
+| Dataset · method | Kept | Lost (rising before) | Gained (falling after) |
+|---|---|---|---|
+| Human vs mouse · normalized | 69 | 1 (1) | 28 (20) |
+| Human vs mouse · clustering | 131 | 36 (26) | 1 (1) |
+| AKI · normalized | 91 | 2 (2) | 8 (8) |
+| AKI · clustering | 443 | 21 (14) | 12 (1) |
+
+- **Normalized, human vs mouse.**
+  - The one lost call is KRAS Signaling Up (FDR 0.047 → 0.052).
+  - 24 of the 28 gains had FDR 0.05–0.10 before. 14 of them already fell in human toward S3 before.
+  - Gains include cholesterol and bile acid synthesis, steroid metabolism, mTORC1 signalling, very-long-chain fatty
+    acid β-oxidation, glutathione synthesis and vitamin digestion. Among the rising ones are mineral absorption,
+    vitamin D metabolism and EMT.
+  - The leading calls are unchanged: fatty acid metabolism, inorganic ion and amino acid transport, branched-chain
+    amino acid degradation, xenobiotic and arginine/proline metabolism.
+  - The Spearman correlation of pathway p before and after is 0.87 (AKI 0.96).
+- **Normalized, AKI.**
+  - Lost: Myc Targets V1 and Processive Synthesis On Lagging Strand, both rising.
+  - Gained, all falling: among them oxidative phosphorylation, Parkinson disease and NAFLD.
+- **Clustering, human vs mouse.** The lost calls are mostly Reactome sets that hold proteasome subunits: antigen
+  processing, neddylation, deubiquitination, CLEC7A, the ER-phagosome pathway and IL-1 signalling. Cell-cycle sets,
+  p53 and EMT are lost too.
+- **Clustering, AKI.** 24 of the 33 changes sit at a matched q of 0.05–0.09 on the other side.
+
+**Post hoc (section 8.1): why the clustering calls moved.**
+- **Before.** In each human vs mouse condition run, all 8 proteasome subunits sat in one Ward shape cluster. That
+  cluster carried 126–130 of the run's calls.
+- **After.** The subunits are split between two clusters:
+  - with the default null, D4 (126 calls) becomes a 5 / 3 split, and the run falls from 167 to 132 calls;
+  - with the relabeling-2 null, D5 (127 calls) becomes a 4 / 4 split, and the run falls from 159 to 46;
+  - with the relabeling-1 null, the split is 6 / 2, the larger cluster still carries 129 calls, and the run keeps 162.
+- **The stable part.** The gene group "Down · gradient toward S3", which does not depend on the clustering, carries
+  108 calls before and 107 after.
+- **Without the 8 subunits** the clustering calls are 35 before and 34 after.
+- **So the clustering count rests on whether 8 genes land in one cluster.** That is a discrete outcome of the Ward k
+  rule; the mt change moved it, but most of the difference is not about mt.
+- AKI's clustering calls come from gene groups (Up · uniform, Up · gradient toward S3) and are stable.
+
+**Figure.** `figures/fig1_null_drift_and_overlap.{png,pdf}`:
+- a–b: the median Δ along the PT of the null genes, before and after;
+- c–d: the 2 × 2 counts of pathways called by the two methods, after the change, with the before counts in brackets.
+
+**What this cannot tell you.**
+- Check (a) passes by 0.002.
+- The offset now ignores mt reads entirely. The mt share still varies between structures within a specimen.
+- The relabelings mix the conditions, so they cannot see an artefact that follows the condition.
+- With two specimens per group, and one human donor, every result is descriptive.

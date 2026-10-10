@@ -259,3 +259,235 @@ protocol was read. Cells give condition calls; relabeled calls; NCDR; calibratio
   under either relabeling, so its relabeling pass there is trivial. In AKI 13 and 57 genes do.
 - **Overlap.** The new calls are nearly a subset of notebook 66's raw cameraPR calls (Jaccard 0.70
   and 0.66 over redundancy clusters). They hold 28 of the joint test's 32 calls and 11 of its 12.
+
+## Notebook 68 protocol: does the species level recover known differences?
+
+Frozen on 2026-10-10, before any human-vs-mouse level statistic was computed on our Visium data or
+the atlases. The literature controls were compiled by a separate agent that never saw our data
+(sha256 below).
+
+**The question.** This is a positive control of the measurement, not a discovery screen. Two things
+confound constant (level) human-vs-mouse differences:
+- **Probe efficiency.** Each gene's probe efficiency depends on its panel, and the panels differ by
+  species (SI, "Probe panels").
+- **Replication.** With one human donor and two mice, there is no species-level replication.
+
+The notebook asks whether the level still recovers species differences that are already known. It
+reports agreement and effect sizes. **No species-level p-value is computed on our data.**
+
+**Our level statistic, L_g.**
+- **Gene model.** The shared NB model of notebooks 66 and 67 (`pathway_pipelines.standard_gene_model`)
+  for the human-vs-mouse species split, on notebook 37's inputs (`coordinate_inputs.pt_inputs` on
+  SCF13): 12,272 structures and 11,071 genes. It uses offset log(library), basis_df 6, α from M_full
+  and the 101-point grid.
+  - It is refitted under this notebook's cache.
+  - **Guard:** `T_spatial`, the flags, α and Δ must equal notebook 67's cached
+    `gene_model_human_vs_mouse_species` (rtol 1e-6).
+- **Δ_g(x).** The natural-log rate ratio, human over mouse, between the equal-specimen group curves.
+  The grid has 101 equally spaced points on SCF13's common support, 0.053–0.836.
+- **Grid weights.** The model has none, so each grid point gets weight 1/101, uniform on the
+  coordinate. This is notebook 67's `log_ratio`.
+- **Definition.** L_g = (1 / ln 2) · mean over x of [Δ_g(x) − m(x)], where m(x) is the median of Δ at
+  x over the reference genes (converged and not separated). L is in log2 units: L = 1 means twice the
+  human/mouse ratio of the typical gene.
+  - Centring at each x removes three things that change along the PT and between species: depth,
+    library composition and the mitochondrial share.
+  - It also removes any efficiency difference that is the same for every gene of a panel.
+  - **It cannot remove gene-specific probe efficiency.**
+- **Pair spread.** The same statistic from the specimen curves, for the four human-section × mouse pairs
+  (HUK1_COR1 and HUK1_MED1 × Ctrl1A2 and Ctrl1A4). Each pair is centred by its own median.
+  - Reported: the minimum, the maximum, and whether all four pairs share the sign.
+  - A pair is skipped where either specimen fit is separated or did not converge.
+  - The two human sections come from one donor, so the spread covers sections and mice, not human donors.
+- **Same-species reference** (descriptive). Ctrl1A2 − Ctrl1A4 and HUK1_COR1 − HUK1_MED1, by the same
+  formula, with their 2.5–97.5% bands over genes.
+- **Coordinate-free twin, P_g.**
+  - Per specimen × segment: a pseudobulk of raw counts over the 12,272 structures, with
+    log-CPM = log2((y + 0.5) / (N + 1) · 10⁶) and N the summed library.
+  - Average over S1, S2 and S3 with equal weights.
+  - Take the human mean minus the mouse mean (two specimens each), then subtract the median over the
+    reference genes.
+  - P is built exactly like the atlas statistic. It is the pre-specified sensitivity for L, and it gives
+    the direction of separated genes.
+
+**Flags.**
+- **Non-converged genes** (21 in notebook 67's cache) are dropped everywhere.
+- **Separated genes** (283) are those whose design loses rank on the structures with a count, for
+  example a species or a specimen without counts.
+  - They are left out of every correlation, band and median.
+  - In direction checks they enter with sign(P_g) and with |P_g| in place of |L_g|.
+- **Nearly absent genes** (930, detected in < 1% of one species' structures) stay in. Every criterion is
+  also reported without them.
+
+**Atlas reference, A_g.** Single-nucleus RNA-seq with poly-A capture and no probes. Donors are the
+replicates.
+- **Human: Lake et al. 2023 (KPMP v1.5).**
+  - Normal cortex (region C, tissue "cortex of kidney"), author labels PT-S1/S2/S3.
+  - The 7 donors with ≥ 50 nuclei in every segment: 164-10, 164-6, 18-142, 18-312, 3535, KRP446 and
+    KRP460 (4 female, 3 male).
+  - Ensembl ids are mapped to our mouse symbols first and symbols second, with duplicates summed
+    (notebook 38's rule).
+  - The pseudobulk is rebuilt under this notebook's cache at the Ensembl level. **Guards:** it equals
+    notebook 38's cache on our genes and notebook 62's cache on all genes.
+- **Mouse: CELLxGENE Census 2025-11-08, dataset 25818bf7.**
+  - Segments 1/2/3 (`DATA/external/census_pt_segments/`).
+  - **Adult males only, 3–6 months and 12 months: 6 donors**, each with ≥ 50 nuclei in every segment.
+  - Why not all 12 males:
+    - Our controls are adults.
+    - The three 21-day males are prepubertal, so androgen-dependent PT genes are not yet induced.
+    - Notebook 45 found that age imbalance drives null calls.
+    - Notebook 59 used the same 6 donors.
+- **Per donor.** log-CPM per segment = log2((y + 0.5) / (N + 1) · 10⁶), with N the donor-segment total
+  over the analysed genes. Then the equal-weight mean over S1, S2 and S3. Equal weights mirror P and
+  L, which do not weight segments by sampling. Our Visium sampling differs between segments and
+  species.
+- **Species coefficient.**
+  - limma `lmFit` on the donor-level values (genes × 13 donors), design ~ species, then
+    `eBayes(trend = TRUE, robust = TRUE)`. The coefficient b_g is in log2.
+  - Centring: A_g = b_g − median(b). The median is over the analysed genes: our universe genes present
+    in both atlases.
+  - Test against the median: t = A_g / (stdev.unscaled · √s²_post), on df.total, with BH over the
+    analysed genes. This is an atlas statistic, not one of ours.
+- **Atlas-strong:** BH ≤ 0.05 and |A_g| ≥ 1.
+- **Sensitivities:**
+  - all 12 Census males;
+  - Lake's 3 male donors only (all our specimens are male);
+  - Census human cortex (dataset 09b518f9) in place of Lake: the 6 donors with ≥ 50 nuclei in both of
+    its labels, with convoluted PT weighted 2/3 and S3 1/3 so that S1, S2 and S3 count equally.
+- **Atlas ceiling** (descriptive). The Spearman correlation of A_g from Lake with A_g from Census human,
+  against the same mice. The mice are shared, so this is an optimistic ceiling for (iii).
+
+**Literature controls.**
+- **Source.** `docs/results/pt-level-literature-controls.csv` (34 rows), sha256
+  `f1aa71844552327e7f8b11905167fae34c205398c2499053711bcbee2ca06c4f`. It is used as written and never edited
+  after the freeze. The search strategy and the excluded candidates are in
+  `docs/results/pt-level-literature-controls-notes.md`.
+- **What the controls measure.** 29 of the 30 rows with `direction_verified_for_mouse = yes` come from one
+  study, Thakur et al. 2024 (Clin Pharmacol Ther, PMID 38711199). It used LC-MS/MS of 78 membrane transporters
+  and enzymes in kidney membrane fractions from human (n = 15) and mouse (n = 14).
+  - These are **protein** abundances, not mRNA.
+  - The rodent samples are whole kidney and the human samples are tissue sections.
+  - Values are pooled over sex.
+  - So a sign disagreement can come from mRNA–protein discordance or from the tissue, not only from our
+    measurement.
+- **Primary set for (i).** Gene rows with `direction_verified_for_mouse = yes`. Rows marked `no` (L02, L07,
+  L14, L16) are reported separately and do not enter (i). The pathway rows (L16, L17) are checked by the sign
+  of their members' mean L. That check is descriptive.
+- **Gene rows.** A row is in our universe when its symbol is one of the 11,071 genes: a mouse symbol
+  directly, a human symbol through `ortholog_map_used.csv`.
+- **Other rows.** Rows that name a non-1:1 gene or a family go to the family analysis. Pathway rows go
+  to the pathway analysis. Rows that fit none of these are listed as not evaluable.
+- **Correct sign.** A control has the correct sign when sign(L_g) equals its expected direction; for a
+  separated gene, sign(P_g). Rows that expect no difference are reported only.
+
+**Housekeeping yardstick.**
+- **List.** Eisenberg & Levanon 2013 (`DATA/external/housekeeping/HK_genes.txt`, untracked; 3,804 human
+  symbols; sha256 `df7aa10e635efb5b0df7dd607e5c11c91df2bdf3e321fb97c0c088ea96a60756`). Mapped by human symbol through the ortholog map, 3,184 of them are in our universe.
+- **Band.** The 2.5–97.5% quantiles of L over the housekeeping genes that are converged and not
+  separated.
+- **Clearing the band.** A control clears it when its L lies beyond the band on its expected side.
+- **Other bands.** The same band is computed for P (used for families) and for A. The band widths, ours
+  against the atlas, are reported. The difference in width is what our two probe panels add to the
+  spread of level differences.
+
+**Probe and pairing sensitivities.**
+- **Equal-probe genes.** (i)–(iii) are repeated on genes with equal included-probe counts in both panels
+  (`results/pt_literature_deep/probe_counts.csv`, `probe_balance == balanced`: 9,090 of 11,071). They
+  are repeated again on genes that also are probe-clean in both species (notebook 62: 9,019).
+- **Probe ratio** (descriptive). The Spearman correlation of L_g − A_g with log2(human probes / mouse
+  probes) over the unbalanced genes. A positive value means probe count leaks into the level.
+- **Pairing.** (ii) and (iii) are repeated without the pairs that lie in non-1:1 orthogroups (notebook
+  64's `dropped_pairs.csv`, 419 in our universe). In those pairs a mis-chosen mouse partner shifts our
+  data and the atlas alike.
+
+**Families** (descriptive; the expectation is explicitly weaker).
+- **Orthogroups.** Notebook 62's HCOP components (support ≥ 3) of class 1:many, many:1 or many:many,
+  with ≥ 1 panel member in each species and unequal HCOP member counts: 720 orthogroups.
+- **Family sum.** Per structure, the sum of raw counts over every panel member of the species, from
+  `DATA/tubule_by_gene/<sample>_tubule_by_gene_caleb.h5ad` joined on structure id.
+  - Summing over all members makes within-family cross-hybridisation cancel, so this is the primary.
+  - Probe-clean members only is a sensitivity.
+- **Statistic.** F_f is P's statistic on the family sum: equal-segment log-CPM against the gene model's
+  library, human minus mouse, minus the median of P over the reference genes.
+- **Expectation.** sign(F_f) = sign(n_human − n_mouse), with n the HCOP member counts.
+  - Reported as the share that agree, over the eligible families whose summed counts are detected in
+    ≥ 2% of the structures of both specimens of at least one species.
+  - Reported separately for the pre-named families:
+    - expanded in mouse: Cyp4a, Akr1c, Slco1a, Sult2a, Cyp2d, Ces1, Nat8, Cyp2j and Cyp2c;
+    - expanded in human: Sult1a;
+    - no expectation: Ugt2b, which has 8 and 8 HCOP members.
+- **Atlas family sums.** The same statistic in Lake and in the Census adult males. The Census side needs
+  the members fetched first; see the inventory.
+  - Reported: the Spearman correlation of F with the atlas F, and the sign agreement.
+  - If the fetch is not done, the atlas family check is limited to the families already complete. It is
+    then labelled as a biased subset.
+
+**Pathways** (descriptive).
+- Each of notebook 66/67's 1,513 sets (10–300 tested members) is summarised by the mean L of its members
+  that are converged and not separated.
+- The atlas mean of A is taken over the same members present in the atlas. The Spearman correlation
+  between the two is reported across pathways.
+- Literature pathway controls are checked by the sign of their mean L, and their rank among the 1,513 is
+  reported.
+- No pathway is tested.
+
+**Criteria** (fixed now):
+- **(i) Literature.** At least 80% of the primary literature gene controls in our universe have the
+  correct sign.
+  - This needs ≥ 10 evaluable controls; with fewer, (i) is "not evaluable".
+  - Reported beside it: the Wilson 95% interval; how many controls clear the housekeeping band; how many
+    have the same sign in all four pairs; the equal-probe subset.
+- **(ii) Atlas direction.** Among genes that are atlas-strong and have |L_g| ≥ 1, at least 80% have the
+  sign of A_g.
+  - This needs ≥ 30 genes; with fewer, (ii) is "not evaluable".
+  - Reported beside it: all atlas-strong genes regardless of |L|, and every sensitivity above.
+- **(iii) Gene-level agreement** (descriptive). The Spearman correlation of L_g with A_g, with a 95%
+  interval from 2,000 gene bootstraps (seed 68).
+  - Computed on all genes that are converged, not separated and present in both atlases, and on the
+    equal-probe genes.
+  - It is set against the atlas ceiling and P's correlation with A.
+- **(iv) Families** (descriptive). The share of families in the expected direction, and the agreement of
+  F with the atlas.
+- **Overall.** "Level recovers known biology" if (i) and (ii) both pass. The primary statistic L
+  decides; P is reported beside it.
+
+**Why 80%.**
+- Chance is 50%.
+- Shape reached 94% direction agreement against the same atlases
+  (`docs/results/pt-pathway-literature-novelty.md`). Shape cancels probe efficiency; level does not.
+- 80% allows probe-driven sign flips in up to a fifth of strong genes. It still rejects a measurement
+  in which probe efficiency rivals biology.
+- |L| ≥ 1 and |A| ≥ 1 restrict (ii) to two-fold differences on both sides, where the sign is
+  meaningful.
+
+**What counts as failure.**
+- A criterion below 80%, or not evaluable, fails. The result is then reported as it is.
+- The thresholds, the gene universe, the atlas donors and the statistic are not changed after the fits.
+  Any later check is labelled post hoc.
+- **A pass licenses no gene-level claim.** It shows that the level agrees with known biology on
+  average, not that any one gene's level difference is real. Level differences are then reported with
+  the housekeeping band and the pair spread, never with a p-value.
+
+**Readings, fixed now.**
+
+| (i) | (ii) | Reading |
+|---|---|---|
+| Pass | Pass | Level is a usable descriptive measurement. |
+| Fail | Pass | Level agrees with the atlas genome-wide but not with the curated controls, which are protein measurements. List the failing controls, their atlas sign and their probe balance. |
+| Pass | Fail | The agreement rests on a few curated genes and does not hold genome-wide. Level stays out of the paper's claims. |
+| Fail | Fail | Level differences in our data are not interpretable. The paper keeps the SI's statement. |
+
+**Output.**
+- Notebook: `analysis/notebooks/68_pt_species_level_control.ipynb`, logic version `68.level.1`.
+- Results: `results/pt_species_level_control/`.
+- Reusable logic goes in `pseudospace/species_level.py`, tested by `tests/test_species_level.py`. It
+  covers the grid-centred level, the pair levels, the equal-segment pseudobulk log-CPM, the family sums
+  and the limma-trend atlas coefficient through rpy2.
+- **Assumptions.**
+  - The coordinate is treated as exact.
+  - Specimens are the replicates on our side and donors in the atlases.
+  - The human "replicates" are two sections of one donor.
+  - **In the atlases, species is also confounded with dataset:** lab, protocol and donor ages. Agreement
+    means the result is consistent across technologies. It does not prove biology.
+  - snRNA measures nuclear RNA and Visium HD measures whole-cell RNA. A nuclear-fraction bias that is
+    conserved between species cancels in the human-vs-mouse difference.

@@ -617,3 +617,173 @@ sets overlap.
 - In the atlases, species is confounded with dataset. Agreement with them shows consistency across technologies,
   not biology.
 - With one human donor there is no species-level inference. Every number here is descriptive.
+
+## Notebook 69 protocol: pathway tests without mitochondrial reads in the offset
+
+Frozen on 2026-10-10, before any fit. The user approved the change.
+
+**The failure.**
+- **The library holds mitochondrial reads.** Every NB gene model so far uses offset log(library), where the library
+  is the total over all orthologs measured in both inputs (`coordinate_inputs.pt_inputs`; notebook 66/67's AKI
+  construction). That total includes the mitochondrially encoded genes:
+  - human vs mouse: 12 genes (mt-Atp6, mt-Co1, mt-Co2, mt-Co3, mt-Cytb, mt-Nd1, mt-Nd2, mt-Nd3, mt-Nd4, mt-Nd4l,
+    mt-Nd5 and mt-Nd6); mt-Atp8 is not measured in human;
+  - AKI vs control: the same 12 plus mt-Atp8, which is measured in mouse but is outside the tested universe
+    (notebook 12's universe requires both species).
+- **Their share changes along the PT, and differently by species.** On SCF13, from the first to the last fifth of
+  the coordinate, mt reads fall from 21.5% to 12.4% of the human library and rise from 3.4% to 5.5% of the mouse
+  library. Both specimens of each species agree.
+- **This is not mitochondrial content.** The 61 nuclear-encoded OXPHOS subunits stay flat within ±0.15 log2 in
+  both species. Part of the mouse late rise travels with TAL spillover (Umod, Slc12a1).
+- **The effect.**
+  - The offset tilts every gene's human/mouse log ratio toward S3. From the shares above, removing the mt reads
+    changes [late − early] of every gene's Δ by about −0.13 natural-log units.
+  - Genes that are not significant drift too, by about +0.1.
+  - The tilt pushes calls toward genes "rising in human toward S3".
+- **The mt genes themselves.** In notebook 67 they are among the strongest species-shape genes (z 6.6–7.9), but
+  they belong to none of the 1,513 gene sets, because the Enrichr libraries list no mt-encoded gene. Dropping them
+  from the cameraPR background alone changes the normalized calls from 70 to 71 (+ KEGG Glycerolipid metabolism).
+- **AKI is expected to change little.** mt reads go from 5.4% to 5.8% of the AKI library and from 3.7% to 6.1% of
+  the control library, a predicted tilt of about −0.02.
+- **Notebook 68 is not rerun.** It centres the level at each grid point on reference genes.
+
+**The single change.** Genes whose mouse symbol starts with `mt-` are removed from two places:
+- **The library**, and so from the NB offset and the clustering method's half-count floor:
+  - human vs mouse: the total over the orthologs measured in both inputs, without the 12 mt genes
+    (`pt_inputs(..., exclude_genes=...)`);
+  - AKI: the total over the measured panel genes, without the 13 mt genes.
+- **The tested universe:** human vs mouse 11,071 → 11,059 genes; AKI 9,107 → 9,095.
+
+The gene sets are rebuilt on the reduced universe with the same rule (10–300 tested members). No mt gene is in
+any set, so the sets are expected to stay 1,513 and 1,429, identical to notebooks 66 and 67.
+
+**Held fixed, as frozen in notebooks 66 and 67.**
+- **Inputs.** The same structures, positions, specimens and segments (12,272 and 16,991 structures), and the same
+  condition split and two balanced relabelings (`partition_groups`).
+- **Gene model.** `pathway_pipelines.standard_gene_model`:
+  - NB GLM on raw counts, offset log(library) with the new library;
+  - 6-df cubic B-spline with knots at the position quartiles, and the prior weights wᵢ = n / (2 · J · n_j);
+  - the 101-point grid.
+  - α is re-estimated per gene under the condition split's M_full with the new offset, and reused for both
+    relabelings. This is the frozen rule applied to the new offset, not a second change.
+- **Normalized method** (notebook 67's primary):
+  - the denominator LR_spec (`specimen_shape_lr`), with df₂ = 12 for the condition split and 6 for a relabeling;
+  - `limma::squeezeVar` with covariate log mean raw count per structure. Raw counts do not depend on the library,
+    so the covariate is unchanged.
+  - F and z (`moderated_f`);
+  - `cameraPR` with `inter.gene.cor` 0.01 and `use.ranks` FALSE; a call is Up with FDR ≤ 0.05;
+  - the gene-level q is the BH of the moderated F's p.
+- **Clustering method** (notebook 66's method B), from `pseudospace_reconstruction` at commit 59da04b:
+  - stages 06–07 on the shared specimen curves (`clustering_first_inputs`), with the half-count floor over each
+    specimen's summed library;
+  - `CompareParams(prior_k = 0)`, `PathwayParams(min_genes = 10, max_genes = 300)` and node spacing 1/29;
+  - the zone cuts from the package's marker rule on the control mice of the condition split;
+  - the condition run with the default null (both relabelings) and with each single-split null; each relabeled
+    run with the fair null (the other relabeling).
+- **Redundancy clusters.** The package's `cluster_gene_sets` (1 − Jaccard, average linkage, cut at 0.5),
+  recomputed on the reduced universe. Expected to equal notebook 66's.
+- **Pass rules.**
+  - Relabeling: NCDR < 0.25, and each relabeling calls < 5% of tested pathways.
+  - Calibration: the pooled share of relabeled one-sided p ≤ 0.05 is ≤ 0.075. For the clustering method, notebook
+    61/66's list-based convention: the best matched ORA p × the number of lists.
+- **Not changed, because neither method's calls use it.**
+  - The log-normalized matrix, normalized inside `rebuild_pt_expression` against the full library. It feeds only
+    the zone cuts and descriptive mean expression. The zone cuts are guarded to equal notebook 66's.
+  - The covariate strata of the joint test.
+- **Not rerun.** Notebook 66's cameraPR and GSEA on raw `T_spatial`, the NB joint test, and notebook 67's
+  sensitivities.
+
+**Guards** (not cached).
+- Exactly 12 mt genes leave the human vs mouse universe. 12 leave the AKI universe and 13 leave the AKI library.
+- **The inputs before the change equal notebook 66's.** With the mt genes kept, the inputs reproduce notebook 66's
+  recorded stage keys for its gene models: counts digest, library, position, specimen, genes, group and nuisance.
+  The keys are recomputed with the code digest stored in notebook 66's cache sidecars.
+- **After the change, only the intended parts differ:**
+  - the same structures, positions, specimens and segments;
+  - the non-mt count columns are identical;
+  - the genes are notebook 66/67's minus the mt genes;
+  - the gene sets, redundancy clusters and zone cuts are identical.
+- df₂ = 12 and 6, from the design ranks.
+- Recomputing everything with the mt genes kept, to reproduce notebook 66/67's calls, is not required.
+
+**Pre-stated checks, each with its expected result.** All are fixed now, before looking.
+
+Definitions:
+- d_g, for gene g, is the mean of Δ_g(x) over the grid points in the last 20% of the grid's range, minus the mean over
+  the first 20% (21 of the 101 points at each end).
+  - Δ is the natural-log rate ratio, case over reference (human/mouse; AKI/control), from the condition split.
+  - d_g > 0 means "rising in human (AKI) toward S3".
+- **Before** values come from notebook 67's cached `gene_model_<dataset>_species` (Δ, converged, separated), which
+  equals notebook 66's. They also use notebook 67's gene-level q (`gene_statistics_<dataset>_primary.csv`, condition
+  split). **After** values come from notebook 69.
+- Only genes that are converged and not separated enter.
+
+**(a) Null drift.**
+- The statistic is the median of d_g over genes with q > 0.5 on the normalized method in both runs. The mt genes are
+  absent after the change, so they are excluded from both.
+- **Criterion** (human vs mouse): |after| ≤ 0.05 natural-log units, about 5% over the coordinate. A ratio
+  criterion (|after| ≤ |before| / 3) was considered and rejected before freezing: the change shifts every d_g by
+  about −0.13 deterministically, so with a "before" near +0.1 a ratio rule sits on its own pass/fail line.
+- Reported beside it:
+  - the predicted "after", the "before" minus the tilt computed from the mt shares;
+  - the same median with each run's own q > 0.5 genes;
+  - the median Δ curve of those genes along the PT, before and after.
+- AKI is reported and not judged, because its predicted tilt (about 0.02) is too small for the ratio to mean
+  anything.
+
+**(b) Direction balance.**
+- Among genes with q ≤ 0.05 on the normalized method (condition split), count those with d_g > 0 (rising in
+  human toward S3) and d_g < 0, before and after, on both datasets.
+- **Expected:** the rising share falls after the change on human vs mouse. This check is descriptive and not a pass rule.
+
+**(c) Calls and pass rules**, for both methods on both datasets:
+- what is reported: condition calls (pathways, and the redundancy clusters they touch), the calls of each
+  relabeling (the fake-group calls), NCDR, the relabeling rule, the calibration share and whether it is within
+  0.075;
+- the clustering rows: the default null (its calls), each single-split null, and the fair relabeled runs.
+- **Expected:**
+  - The normalized method still passes on human vs mouse. It still fails calibration on AKI: the change does not
+    touch the coherent specimen programs behind that failure (notebook 67, section 6.1).
+  - The clustering method stays specific under the fair null. Its calls stay nearly unchanged, because it
+    re-references every gap to the typical gene (the median gap at each position), which removes any shift shared
+    by all genes.
+
+**(d) Overlap between the methods.**
+- **Inputs.** The normalized calls (cameraPR on z) against the clustering calls (its ORA, default null; notebook
+  66's "B ORA"), on both datasets.
+- **The table:** both, normalized only, clustering only, and neither (tested pathways called by neither). It also
+  gives the Jaccard index, over pathways and over redundancy clusters.
+- **Sensitivity: without the 8 proteasome subunits.** Psma3, Psma4, Psmb5, Psmb6, Psmc2, Psmc6, Psmd11 and Psmd14
+  are removed from both methods' universes, as in the earlier sensitivity:
+  - **Normalized.** cameraPR on the same z without the 8 genes, with no squeezeVar refit. Sets below 10 members
+    are dropped.
+  - **Clustering.** The ORA (`ora_by_group` with its `PathwayParams`) is rerun with the 8 genes outside the
+    universe. It keeps the gene groups and clusters of the condition run unchanged.
+- **Before values,** human vs mouse:
+  - all genes: Jaccard 0.077 over pathways and 0.138 over redundancy clusters;
+  - without the 8 subunits: 0.152 and 0.161.
+- **Expected:** the overlap stays low. The Jaccard over redundancy clusters stays ≤ 0.2 on both datasets, with and
+  without the 8 subunits. Descriptive.
+
+**(e) Lost and gained calls.**
+- **What is compared.** For each method and dataset, the calls of notebook 69 against those of notebook 67 for
+  the normalized method, and against notebook 66's default-null ORA for the clustering method.
+- **Per pathway:** its FDR (normalized) or best matched q (clustering), before and after; and the median d_g over
+  its tested members, before and after (its median direction toward S3).
+- **Expected:**
+  - The normalized method's lost calls are mostly pathways whose genes rise in human toward S3 (median d_g before
+    > 0). Its gained calls are mostly falling ones.
+  - The clustering method loses and gains few calls.
+
+**Decision rule.**
+- **If (a) passes,** notebook 69's calls replace notebook 66/67's calls as the primary for both methods on both
+  datasets. The pass rules in (c) are reported for the new calls; this does not reopen notebook 67's decision.
+- **If (a) fails,** the result is reported and notebooks 66/67 stay primary. Nothing is tuned.
+- Any later check is labelled post hoc.
+
+**Output.**
+- Notebook: `analysis/notebooks/69_pt_pathways_without_mitochondrial_reads.ipynb`, logic version `69.no_mito.1`.
+- Results: `results/pt_pathways_without_mito/`.
+- New option: `pt_inputs(..., exclude_genes=())`, which removes the named genes from the library and from the
+  universe. Its default leaves every existing input, and so every existing cache key, unchanged. It is tested in
+  `tests/test_coordinate_inputs.py`.

@@ -124,6 +124,27 @@ def test_reference_curve_removes_the_shape_every_gene_shares():
     assert real_prog[grid > .7].mean() - real_prog[grid < .5].mean() > 1.8
 
 
+def test_segment_profile_matches_the_curve_centring():
+    rng = np.random.default_rng(4)
+    rates = pd.DataFrame(rng.normal(5, 1, (200, 3)), columns=['S1', 'S2', 'S3'], index=[f'g{i}' for i in range(200)])
+    rates.loc[['g0', 'g1', 'g2'], 'S3'] += 3.                  # a program that is S3-high
+    rates.loc['g199', 'S2'] = np.nan                            # an unmeasured gene is dropped, not used
+    prof = pf.segment_profile(rates, ['g0', 'g1', 'g2', 'gX'])
+    assert prof.S3 - prof[['S1', 'S2']].mean() > 2.5
+    single = pf.segment_profile(rates, ['g5'])
+    c = rates.dropna().sub(rates.dropna().mean(axis=1), axis=0)
+    assert single.tolist() == pytest.approx((c.loc['g5'] - c.median()).tolist())
+    assert pf.segment_profile(rates, ['gX', 'g199']).isna().all()
+
+
+def test_within_segment_change_finds_a_switch_inside_s3():
+    u = np.linspace(.05, 2.95, 291)
+    y = -3 / (1 + np.exp(-(u - 2.3) / .05))
+    out = pf.within_segment_change(y, u)
+    assert abs(out['S1']) < .01 and abs(out['S2']) < .01 and out['S3'] == pytest.approx(-3, abs=.05)
+    assert out['steepest position'] == pytest.approx(2.3, abs=.02) and out['steepest slope'] < 0
+
+
 def test_shape_descriptors_classes():
     u = np.linspace(0, 3, 301)
     sharp = 1 / (1 + np.exp(-(u - 1.6) / .05))

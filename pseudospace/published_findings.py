@@ -260,6 +260,35 @@ def program_curve(curves, usable, *, reference=None, log=np.log(2), min_members=
     return np.median(y, axis=0) / log, len(y)
 
 
+def segment_profile(rates, members, *, segments=SEGMENTS, min_members=1):
+    """The cluster-resolution analogue of ``program_curve`` for one specimen or donor (log2 in and out).
+
+    ``rates`` is genes x segments. Each gene's segment levels minus its mean over the segments, centred by the median
+    gene per segment; the median over the ``members`` present. Genes missing a segment are dropped first."""
+    r = pd.DataFrame(rates)[list(segments)].dropna()
+    c = r.sub(r.mean(axis=1), axis=0)
+    c = c - c.median()
+    present = [g for g in dict.fromkeys(members) if g in c.index]
+    if len(present) < min_members:
+        return pd.Series(np.nan, index=list(segments))
+    return c.loc[present].median()
+
+
+def within_segment_change(curve, units, *, segments=SEGMENTS, n_end=3, trim=5):
+    """Per segment, the curve's change from its first to its last ``n_end`` grid points inside that segment, and the
+    position (segment units) and slope of the steepest point, ignoring ``trim`` grid points at each end (spline
+    edges). What a segment mean cannot show."""
+    y, u = np.asarray(curve, float), np.asarray(units, float)
+    out = {}
+    for k, seg in enumerate(segments):
+        inside = np.flatnonzero((u >= k) & (u < k + 1) & np.isfinite(y))
+        out[seg] = y[inside[-n_end:]].mean() - y[inside[:n_end]].mean() if len(inside) >= 2 * n_end else np.nan
+    slope = np.gradient(y, u)[trim:len(y) - trim]
+    i = int(np.nanargmax(np.abs(slope)))
+    out['steepest position'], out['steepest slope'] = float(u[trim + i]), float(slope[i])
+    return out
+
+
 def shape_descriptors(curve, units, *, flat=EFFECT, prominence=EFFECT / 2, inner=.2, min_rho=.9, sharp=.5,
                       gradient=1.):
     """Shape class, position and width of one curve on segment units (G)."""

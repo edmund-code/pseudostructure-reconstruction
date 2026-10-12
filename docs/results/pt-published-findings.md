@@ -898,6 +898,49 @@ share its sign. The section is descriptive: it has no test and no call, and it c
 controls, B2b raw and beyond flattening), `fig82c_program_classes` (Z programs × data set, classes; A3 functions'
 segment contrasts and peaks).
 
+## Notebook 83 · The cluster view beside the continuous view (figures; descriptive)
+
+Logic `83.published_findings_figures.1`. Each figure covers one published finding. Each row has two panels on one y scale:
+- **Left:** the cluster view, the way the paper's method sees the genes. One value per S1/S2/S3 cluster, for each
+  atlas donor (Census mouse, Lake human) and each of our specimens.
+- **Right:** the same genes along the pseudospace in our specimens.
+
+Both views use the same centring (`pf.segment_profile`, the cluster analogue of `pf.program_curve`). Nothing is
+fitted.
+
+The selection is post hoc, made after a draft of 16 candidates. A row is kept when:
+- the genes come from the paper;
+- our cluster view agrees with the atlas;
+- the two specimens of the species that carries the pattern agree.
+
+A triangle marks a steepest point that both specimens place within 0.25 segment units, at a slope of at least
+1 log2 per unit. Positions are fractions of a segment along the reconstructed order, not micrometres. They are bounded
+by the registration gap (0.37) and issue 22.
+
+| Figure | Cluster view (the paper's method; ours and the atlas agree) | Continuous view (what the clusters cannot show) |
+|---|---|---|
+| fig83a NaPi-IIa (Slc34a1) | mouse S1 ≈ S2 > S3 (ours +1.08, +0.87, −1.96; Census +1.40, +1.18, −2.59); human weak | Mouse is flat through S1 and S2. The whole loss, 17–26-fold (−4.1, −4.7 log2), happens inside S3, steepest at **S3 0.37** in both mice (S3 0.35, 0.39). The cluster mean of S3 averages its high start and low end, so it shows 8-fold. Human declines a little inside S3 (−0.5, −0.9) |
+| fig83a NaPi-IIc (Slc34a3) | mouse S1 ≫ S2 > S3, which reads as one gradient | In mouse it is two steps, not one gradient. First a **switch inside S1 at S1 0.69** (S1 0.70, 0.68; slope −10 to −11 log2 per unit; −3.7 and −5.1 log2 within S1). Then a flat S2 and a second decline inside S3 (−4.5, −5.3). Human is gentle, with no agreed steepest point |
+| fig83a PiT-1 (Slc20a1) | human S3 > S1/S2 (ours −0.42, −0.33, +0.74; Lake −0.24, −0.19, +0.52); mouse flat | The human rise is inside S3 (+1.4, +1.0 log2 within S3). The two sections disagree on where it is steepest (S3 0.35, 0.76), so there is no position claim. The human dip in mid-S1 is the issue-22 candidate and is not interpreted |
+| fig83b CellSpectra mouse-high S1 genes (S-M1, 96) | mouse S1 ≈ S2 > S3; human flat | The mouse program does not change at the S1/S2 boundary. It holds through S1 and S2, declining slowly, and its main fall is inside S3, steepest at **S3 0.13** (S3 0.19, 0.07). Notebook 81 confirmed this: a falling gradient, half done at S3 0.18, null match 0, landmark-confirmed. Human is flat |
+| fig83c CellSpectra mouse-high S3-only genes (U-M3, 44) | mouse S1 < S2 < S3; human flat | The mouse rise happens **inside S1** (+0.47, +0.67 log2 within S1), steepest at **S1 0.72** (S1 0.71, 0.73). It then creeps up through S2 and S3. The species difference that CellSpectra lists for S3 only is a mouse program already switched on by the end of S1. Notebook 81 confirmed this: rising, half done at S1 0.80, null match 0. Human is flat |
+
+**Reading.**
+- In every row, the cluster view of our specimens matches the atlas donors' cluster view. The figures therefore show
+  the papers' kind of data, and what the continuous coordinate adds to it.
+- For single genes, the continuous view locates sharp changes inside a segment: NaPi-IIa at S3 0.37 and NaPi-IIc at
+  S1 0.69, in mouse.
+- For programs, it shows that the segment named by a cluster DE call can differ from where the program changes.
+  Mouse-high "S1" genes fall in S3, and mouse-high "S3-only" genes rise in S1.
+- No human position is claimed.
+
+**Outputs.** `results/pt_published_findings_figures/`:
+- figures: `fig83a_phosphate_transport`, `fig83b_cellspectra_mouse_high_s1`, `fig83c_cellspectra_mouse_high_s3_only`;
+- tables: `readout.csv`, `cluster_values.csv`;
+- `run_record.json`.
+
+Notebook 82 now also writes `atlas_segment_rates.csv.gz` (a post hoc output; no readout changes).
+
 ## Combined readout by paper (notebooks 81 and 82)
 
 | Paper | Published | What our method adds, or finds they missed | Support |

@@ -358,3 +358,84 @@ Each of these is stated in the notebook summary and in the ledger. Nothing is tu
   - the 49 bootstraps (about 25 min, plus the secondary arm's gene bootstrap);
   - 48 B's 9,999-draw runs.
 - **Phase 2 waits** for notebook 70's export and the coordinator's fingerprint.
+
+## Notebook 73 results
+
+`analysis/notebooks/73_pt_package_label_comparison.ipynb` (logic version `73.package_labels.1`) writes to
+`results/pt_package_label_comparison/`. It followed the protocol above.
+- **Labels.** The confirmed pass-1 fingerprint is `efafc9ac2e99`: 18 clusters, 27,395 units, labels as assigned.
+- **Guards.** G1–G8 passed.
+  - G5: the native stage-01 route reproduces the export counts exactly.
+  - G8: the mt genes are 12 of the export's genes and carry a median 10.4% of a unit's library.
+
+**Code equivalence (scratch, before the package run).** The notebook's part functions were fed the old inputs:
+notebook 13's structures and reviewed labels, notebook 03's glomeruli, the 611/752 genes, and mt in the library.
+- They reproduced 47 published tables of notebooks 42, 43, 46, 47, 48 B, 49, 64 and 44 B. Every number matched;
+  three notebook-47 tables differ only in row-label wording.
+- The PT-expression function for notebook 64's paralog choice reproduces notebook 62's columns on notebook 62's units:
+  PT-expressed identical, log2 CP10k within 7 × 10⁻⁷.
+
+**Units.**
+
+| | Old (notebook 13) | Package |
+|---|---|---|
+| PT units | 12,866 | 11,947 |
+| Mouse S1/S2/S3 | 938/976/938, 873/1,017/918 | 965/849/830, 889/880/881 |
+| Human S1/S2/S3 | 1,890/908/640, 2,076/905/787 | 2,112/373/709, 2,372/259/828 |
+
+Human PT-S2 is less than half its old size. No rule was changed. The consequences:
+- **S2 − S1 loses power.**
+  - Genes classified in S2 − S1: 9,013 → 6,269.
+  - Human ÷ mouse amplitude: 0.58 → 0.43.
+  - S2 − S1 classes: 109/37/31/58 → 47/4/3/17 (conserved/reversal/mouse-only/human-only).
+  - Human S2 − S1 gradients correlate 0.63 with the old ones (mouse 0.97; human S3 − early 0.94).
+- **Still undefined.** The S2 − S1 index below the 80th strength percentile is undefined, as before: the human
+  ceiling cannot be estimated in 2 of 6 bins.
+- **Newly undefined.** S2 − S1 direction agreement below the 80th percentile: no gene there is zonated in both
+  species.
+
+**Material changes (primary arm, mt-free library).**
+
+| Rule | Old | New | Material |
+|---|---|---|---|
+| M1 human labels | weak support; human 0.712 (κ 0.54), mouse 0.868 | weak support; 0.720 (κ 0.51), 0.851 | no |
+| M2 anatomy | ρ 0.65 / 0.23; S1 OR at 10 µm 4.45 / 2.02 | ρ 0.63 / 0.24; OR 4.47 / 3.49 | no |
+| M3 index | 0.170 / 0.278 / 0.289; "largely different genes" | 0.193 / 0.271 / 0.291; same wording | no |
+| M4 D3 | no consistent asymmetry | same | no |
+| M5 strength | rule (i) holds; reword verdict | holds (gene and module); same verdict; top 1% 0.61 / 0.56 / 0.61 | no |
+| M6 claim | stands (max 0.31 / 0.38; without 611 genes 0.24 / 0.33) | stands (cross-fit 0.28 / 0.36; without pass-1 features 0.24 / 0.31; plus panel genes 0.23 / 0.30) | no |
+| M7 R3 statements | agreement 0.723; transporters 0.825; mouse-only Tyrosine metabolism | 0.786; 0.853; no mouse-only pathway named; human-only Cell Junction Organization (F11r, Jup, Pard6b) | **yes** (naming) |
+| M8 paralog swap | unaffected | affected: S2 − S1 human-only 17 → 21, S3 − early mouse-only 8 → 5; every |Δ index| ≤ 0.004 | **yes** |
+| M9 donor injury | percentile 0.50, within the normal range | 0.71, within | no |
+
+Contrast order in the M3 and M5 rows: S2 − S1 / S3 − early / S3c − early.
+
+**Matched units.** On the same matched units, the reference transfer agrees with the old reviewed labels and the
+package labels about equally:
+- human 0.722 against 0.719;
+- mouse microdissection 0.879 against 0.854.
+
+Old and package labels are identical on 81% of matched human units and 95% of matched mouse units.
+
+**Library arms.**
+- **What the library does not move.** The indices, the transfer and notebook 49's curves are identical with and
+  without mt reads: a library change shifts every gradient by a constant. Their changes from the old run come from
+  the units and labels.
+- **What it does move.** Class counts depend on it. The mt-free library moves the human S3 − early median gradient
+  from 0.25 to 0.11.
+  - Direction agreement: 0.723 old → 0.771 with mt in → 0.786 mt-free.
+  - Union species-only counts: old 41/76, mt in 13/61, mt-free 27/44 (mouse-only/human-only).
+
+**How the protocol was read.** Twelve points, listed in section 17 of the notebook:
+- the ortholog-map gene order;
+- the library-free 42 parts run once;
+- the scope of notebook 49's secondary arm;
+- notebook 47 (f)'s transferred labels;
+- the Glomerulus-family anchors;
+- the pass-2 features read from `pass2.h5ad`;
+- notebook 64's PT expression on the package units;
+- the Lake and Census route;
+- notebook 44 B's inputs;
+- the gene comparison restricted to S2 − S1 and S3 − early;
+- M7 compared by pathway names;
+- notebook 47's setting names.

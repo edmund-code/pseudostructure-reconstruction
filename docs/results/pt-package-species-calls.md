@@ -389,3 +389,177 @@ The notebook does not repeat the check, because it needs the old inputs.
   3.9 exports a clean table of the 83 calls with category, direction, segment and lead genes for it.
 - **O6 · Confirmed.** The coordinate-free peak (75's per-segment Δ/SE, 3.3 b) is primary. The coordinate peak in
   segment units (3.3 a) is the sensitivity.
+
+## Notebook 77 results
+
+`analysis/notebooks/77_pt_package_species_calls.ipynb` (logic version `77.package_species_calls.1`, by the coordinator's
+instruction) writes to `results/pt_package_species_calls/`. It followed the protocol above and refits no gene model.
+- New module `pseudospace/species_calls.py` holds the rules of notebooks 37 E3, 38, 43 §7, 47 (e) and 50.
+- Its tests are in `tests/test_species_calls.py` (9 tests). The full suite passes (529).
+- Cold run 155 s; the executed notebook reran from the stage cache in 81 s.
+
+**Guards.** G1–G7 passed:
+- the export contract and the pass-1 fingerprint `efafc9ac2e99`;
+- 71's universe (11,055 genes), sets (1,513) and units (11,383);
+- 71's cached model reproduces its T_spatial and z;
+- the 83 calls, and 75's 43 programs rebuilt exactly;
+- 72's transitions;
+- 73's confirmed run;
+- the Lake pseudobulk, which equals notebook 50's on the shared genes.
+
+**Code equivalence** (scratch, before the package run). Fed the old inputs (notebook 13 structures, reviewed labels,
+notebook 12/37 statistics, 43's classes, 37's transitions, 50's comparator), the module reproduces:
+- 43 §7's categories per pathway (26/3/0/7 of 36; 13/3/1/5 of the 22);
+- 47 (e)'s peaks and segment units (|Δ| ≤ 10⁻¹⁵);
+- 50's replication table to 2 × 10⁻¹⁶, with its decisions;
+- 50's conventional-only table;
+- 38's attenuation (0.859) and all 42 gene verdicts.
+
+**Material changes.**
+
+| Rule | Old | New | Material |
+|---|---|---|---|
+| M1 · categories | 13 of 17 resolved mouse summaries; 0 human-led | 73 of 82 (0.89); 1 human-led (KEGG Citrate cycle) | **yes** (the human-led clause only) |
+| M2 · direction by segment | human-high in S1; mouse-high S2–S3 | median segment human-high S2 (index 1.5: S1 14, S2 4, S3 18); mouse-high S3 (S1 17, S2 4, S3 26) | **yes** |
+| M3 · location reliability | 15 of 22 | 64 of 83 (0.77) | no |
+| M4 · replication | Census specific; p_random 10⁻⁴ both | Census and Lake specific; p_random 10⁻⁴ both | no |
+| M5 · beyond flattening | slope-free p vs comparator 0.26 / 0.13 | 0.35 / 0.63 | no |
+| M6 · lead genes | stories lead/lead/supporting/lead; Gatm top 0.14%; Acaa2, Dcxr, Ugt3a1 reversals | stories unchanged; Gatm top 0.11% (z); Acaa2 and Dcxr no longer reversals in 73's classes | **yes** (classes only) |
+| M7 · conventional-only | not supported once overlap is respected | same | no |
+
+**The list.** The 83 calls fall in 77 redundancy clusters and 43 programs. 12 of the old 22 are among them (Jaccard
+0.13), as are 24 of the old 36, 41 of the old 60 and 82 of notebook 69's 97. The 10 of the old 22 that are not called:
+Drug ADME, O-linked Glycosylation Of Mucins, Formation Of Cornified Envelope, Aspirin ADME, Chemical carcinogenesis,
+Retinol metabolism, Metabolism of xenobiotics by cytochrome P450, Steroid hormone biosynthesis, Vitamin digestion and
+absorption, and Nitrogen metabolism.
+
+**Categories (3.2).**
+
+| Count | Mouse summary / shared / mixed / unresolved / human-led |
+|---|---|
+| Calls | 73 / 4 / 4 / 1 / 1 |
+| Redundancy clusters | 67 / 4 / 4 / 1 / 1 |
+| Calls, 73's mt-in-library classes | 68 / 6 / 7 / 1 / 1 |
+
+- The calls still mostly summarise mouse zonation that the human sections do not share. The share is higher than
+  before: 0.89 of resolved calls, against 0.76.
+- 16 calls have a label-panel gene among their contributing members.
+
+**Where the species differ (3.3).** Coordinate-free (b, primary):
+
+| Peak segment | Human-high | Mouse-high |
+|---|---|---|
+| S1 | 14 | 17 |
+| S2 | 4 | 4 |
+| S3 | 18 | 26 |
+
+- Direction: 36 human-high, 47 mouse-high (old 10 / 12). The coordinate peak (a) agrees on the direction for 82 of 83
+  calls and on the segment for 64 (pooled transitions).
+- The old pattern (human-high in S1, mouse-high in late S2) does not hold. Most calls differ most in S3, in both
+  directions, and human-high calls split between S1 and S3.
+- Two standing limits bear on this:
+  - S3 compares human cortical S3 with mouse S3 that includes the outer stripe.
+  - Human PT-S2 is small (632 units), so S2 is rarely the peak.
+- Within-segment fractions are not read (C14). The human species mapping is undefined (section 4 of the reading).
+
+**Support and robustness (3.4; no refit).**
+
+| Check | Calls retained or called (of 83) |
+|---|---|
+| Segment F-test (75) | 71; 2 of the 12 misses are probe-sensitive |
+| NB joint step test (75) | 32 |
+| Steps on the spline (74) | 71 |
+| Beyond label steps, test A (74) | 61 |
+| Beyond coordinate steps, test B (74) | 68 |
+| Count split, arms a / c (72) | 59 / 61 |
+| All four winsor caps (71) | 79 |
+| Detected in both species | 75 |
+| Sex-unbiased | 60 |
+| Flagged genes removed | 82 |
+| Equal probe counts | 75 (8 probe-sensitive) |
+| Proteasome subunits removed | 83 |
+| **Core** (detected in both and sex-unbiased) | **60** |
+
+Old: 20 of 22 coordinate-free, 8 of 22 spline steps, 22 of 22 beyond steps; sex-unbiased 21 / 20.
+
+**External replication (3.5).** Matched random sets give p_random; the noise-call comparator has 26 sets (67
+relabeling calls of raw-T_spatial cameraPR, 41 of which are among the 83).
+
+| Reference, signed, matched | Mean z | p_random | p vs noise calls | Programs (label permutation) | Decision |
+|---|---|---|---|---|---|
+| Census − male mice | 1.27 | 0.0001 | 0.0008 | 0.0001 | specific |
+| Lake − male mice | 1.08 | 0.0001 | 0.0038 | 0.0004 | specific |
+| Census − female mice | 1.12 | 0.0001 | 0.021 | 0.0033 | specific |
+| Lake − female mice | 0.95 | 0.0001 | 0.045 | 0.0094 | specific (core: better than random only) |
+
+- **Selection-matched null (strata × z quintile):** not replicated in either atlas (p_random 0.35 and 0.64; old 0.0013
+  and 0.0057). The calls replicate no better than random genes with the same positional strength. Replication is a
+  property of strongly position-dependent genes, not of the call sets as such.
+- **Slope-free:** better than random (0.0015, 0.0055), but not better than the noise calls (0.35, 0.63; old 0.26,
+  0.13). Beyond the shared flattening, the calls show no set-specific replication.
+- **Per call (BH ≤ 0.10 within the list):** 13 and 13 of 83 with male mice, 4 and 9 with female mice (old 12 and 5 of
+  22; 5 and 3).
+- **Genes:** the top 10% by z agree with the atlas interaction at ρ 0.78 and 0.78. That is above expression-matched
+  random genes (median 0.56 / 0.58; 97.5th percentile 0.61 / 0.63) and now also above the most highly expressed genes
+  (0.70 / 0.70; old 0.64 / 0.72).
+- **Global slope:** ours −0.79, Census −0.85, Lake −0.88 (old −0.81, −0.86, −0.88).
+
+**Conventional-only (3.6).**
+- 199 conventional calls; 168 conventional-only sets tested.
+- Mann–Whitney p 1.7 × 10⁻³ (Census) and 1.8 × 10⁻⁸ (Lake).
+- Overlap-preserving: p 0.43 / 0.29 against random collections; D p 0.34 / 0.24.
+- Decision: not supported once overlap is respected (unchanged).
+
+**Lead genes (3.7).**
+
+| Gene | z rank, top % (old T_spatial %) | Ours human S3 − S1, mt-free (old) | 73 class (old) | Flags |
+|---|---|---|---|---|
+| Gatm | 0.11 (0.14) | −0.74 (−0.78) | indeterminate (same) | label panel, axis anchor |
+| Acadm | 0.33 (0.83) | −0.03 (−0.01) | indeterminate (conserved) | — |
+| Acaa2 | 0.32 (1.04) | −0.02 (+0.04) | indeterminate (reversal) | — |
+| Dcxr | 0.07 (1.05) | +0.86 (+0.97) | indeterminate (reversal) | — |
+| Ugt3a1 | 0.05 (0.52) | −0.60 (−0.62) | reversal (same) | — |
+| Rbp4 | 50.7 (0.08) | +2.41 (+2.46) | unclassified (same) | — |
+
+- Every gene verdict and every story verdict is unchanged: creatine lead, fao lead, detox supporting, reversal lead.
+  The attenuation is 0.854 (old 0.859).
+- Gclc ranks in the top 1.5%. Cyp2e1 (a label-panel gene and axis anchor) is at 36.7%, Slc7a13 at 7.1%.
+- Rbp4 is not expressed in mouse, so its positional F z is mid-ranked. R6 cites no rank for it.
+- The full-library sensitivity moves the human values by ≤ 0.1 (Gatm −0.65, Dcxr +0.89).
+
+**Programs and figures.**
+- **Largest programs:**
+  - Peroxisomal Lipid Metabolism (6 calls; mouse-high; S3; Figure 4e);
+  - Glycosaminoglycan degradation (6; human-high; S1; the Figure 5d heatmap);
+  - Bile Acid Metabolism (5; mouse-high; S3);
+  - Transport Of Inorganic Cations/Anions And Amino Acids/Oligopeptides (4; human-high; S3);
+  - Glutathione metabolism (4; human-high; S3).
+- **Figure files:** `fig5d_programs_by_segment`, `fig5d_program_heatmap`, `fig5e_lead_genes`, and supplementary
+  `supp_location_agreement_and_null` and `supp_lead_genes_coordinate`.
+- **Literature export:** `calls_for_literature.csv` has the 83 calls with category, direction, segment, up to 8 lead
+  genes with classes and flags, and old-list membership.
+
+**How the protocol was read** (also in `tables/how_the_protocol_was_read.csv`).
+1. The logic version is `77.package_species_calls.1`, by the coordinator's instruction; the protocol named
+   `77.species_calls.1`.
+2. **Human transitions.** The mean of the two sections crosses (HUK1_MED1, 72 C1), so the human segment-unit mapping
+   is undefined. Where the protocol asks for each species' own segment units, pooled transitions are used for both
+   species, and each species' label spans are marked. The mouse-transition sensitivity is reported (65 of 83 agree).
+3. **Categories.** They use contributing members without notebook 75's fewer-than-3 fallback, as 43 §7 did.
+   Contributing genes are 75's `nlargest` top 10% of z.
+4. **Program categories** take the most common category of their calls.
+5. **Gene-removal checks** recompute cameraPR's FDR over the subset's tested sets without a squeezeVar refit. The
+   effect is the members' mean z minus the mean of every other subset gene.
+6. **Winsorizing:** a call is kept when no cap lists it as lost.
+7. **Per-call replication** uses the exact-moment joint z from the collection run, not 37's Monte Carlo test.
+8. **Gene-level comparison scores:** the top 10% by mean expression and by NB T_level (71's cache).
+9. **Noise-call programs** use the call programs' rule.
+10. **Attenuation controls** need external contrasts from 38's old-universe table. Our contrasts use the mt-free
+    library.
+11. **The ours arm** uses every export gene on 71's units.
+12. **The literature export** flags membership of the old 60/36 lists, which the 2026-10-04 check covered.
+13. **Figure 5d heatmap program.** Figure 4e's program is Peroxisomal Lipid Metabolism (mouse-high), so the heatmap
+    shows Glycosaminoglycan degradation.
+14. **M2** reads the median of the segment index; a median between segments counts as "not S1".
+15. **M6** reads ranks as percentiles of 71's z.
+16. **Seeds:** 50 for the nulls, 12 for the gene draws, 38 for the attenuation bootstrap.

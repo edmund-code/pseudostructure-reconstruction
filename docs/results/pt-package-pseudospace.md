@@ -677,3 +677,52 @@ coordinator before any fit:
 2. **The comparison page's example genes and pathways.** Each notebook 69 example is kept only if it still meets its
    role's screen; otherwise the screen's top gene replaces it. The screens' thresholds (for example q < 0.01,
    |level| > 1.5) were set after seeing notebook 69, so the page labels the examples illustrative.
+
+
+## Notebook 71 results
+
+`analysis/notebooks/71_pt_pathways_package_pseudospace.ipynb` (logic version `71.package.1`) writes to
+`results/pt_pathways_package_pseudospace/`. It followed the protocol above. Every guard passed, including the
+confirmed pass-1 fingerprints. Its section 13 lists how the protocol was read:
+- notebook 69's human vs mouse sets were rebuilt with `pt_inputs`, because a rebuild from its gene list alone mismaps
+  symbols;
+- the Lake atlas uses notebook 37's cache, so new-universe genes are absent from that pair;
+- T_spatial and LR_spec were added to the gene tables.
+
+**Inputs.** Human vs mouse: 11,383 units, 11,055 genes, 1,513 sets. AKI: 14,048 units, 10,198 genes, 1,469 sets.
+
+**Material changes.** None of M1–M7 is met. The new calls are primary for both methods on both datasets.
+
+| Rule | Notebook 69 | Notebook 71 |
+|---|---|---|
+| M1 · positional F-test, human vs mouse | 97 calls; relabeled 0, 0; calibration 0.044 | 83 calls; relabeled 1, 0; NCDR 0.006; calibration 0.071 · **passes narrowly** |
+| M2 · positional F-test, AKI | passes relabeling, fails calibration (NCDR 0.13, 0.101) | 103 calls; relabeled 13, 29; NCDR 0.20; calibration 0.120 · same verdict |
+| M3 · clustering, fair null | relabeled 0, 0 and 2, 0 | 0, 0 on both datasets |
+| M4 · clustering level-dominance L1 (AKI); L2 | 0.704 (0.549); 0.083 (0.431) | 0.708 (0.563); 0.138 (0.349) |
+| M5 · Jaccard between the methods (redundancy clusters) | 0.175, 0.096 | 0.171, 0.121 |
+| M6 · 69's called clusters called again; five strongest calls | — | 76 of 90; all five kept |
+| M7 · null drift, human vs mouse | +0.001 | +0.006 |
+
+The clustering method calls 94 sets on human vs mouse (69: 132) and 459 on AKI (69: 455). Its list-based
+calibration share is 8 of 3,026 on human vs mouse in both runs (a coincidence of counts from different swap runs) and
+0.017 on AKI (69: 0.005).
+
+**Notebook 69 → 71** (descriptive).
+- Matched units: position Spearman 0.87–0.96 per specimen; segment labels agree for 80–82% of human units.
+- Gene z Spearman 0.83 (human vs mouse) and 0.88 (AKI).
+- Positional F-test calls are stable. Human vs mouse keeps 82, loses 15 (all with 69 FDR 0.013–0.048) and gains 1
+  (Jaccard 0.84); AKI Jaccard 0.72.
+- Clustering calls move more: Jaccard 0.42 (human vs mouse) and 0.66 (AKI). The list "Down · gradient toward S3",
+  which carried 107 of 69's human vs mouse calls, now carries none. Without the 8 proteasome subunits the clustering
+  calls fall from 94 to 43.
+
+**Secondary sections.**
+- **Swap rule** (S1): only the primary arm, shape with cameraPR, passes on human vs mouse. Every GSEA arm and every
+  level and total arm fails on both datasets; the level arms fail by wide margins (human vs mouse cameraPR: 20 calls,
+  relabeled 102 and 149).
+- **ssGSEA + limma** (S2) passes the swap rule on both datasets but calls most sets: 866 (shape) and 1,208 (level) of
+  1,513 on human vs mouse.
+- **Level gene list + ORA** (S3): 114 calls, 0 and 0 under the swaps.
+- **Atlas replication** (S7): 53–56% of our significant genes against 20–22% of matched uncalled genes; 0 of 75
+  clustering-only sets replicate.
+- **Winsorizing** (S9) keeps 79–83 of the 83 human vs mouse calls; no cap changes a verdict.

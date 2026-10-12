@@ -696,3 +696,291 @@ Memory stays below 16 GB.
 | CellSpectra caveat | Turned into a pre-specified gene-length sensitivity (human genomic span from the public Ensembl 110 cDNA headers; length-decile stratified rank-normal level t). It is cheap (a header parse) and covers the whole universe. A changed verdict is labelled "length-sensitive" | 1.3, 4a, 5.1 |
 
 Nothing is open. Phase 2 starts on the coordinator's go, after the commit.
+
+## Notebook 79 results
+
+`analysis/notebooks/79_pt_known_species_programs.ipynb` (logic version `79.known_programs.1`) writes to
+`results/pt_known_species_programs/`. It followed the protocol in `pt-known-programs.md` (commit b90a682); section 15
+of the notebook lists how the protocol was read.
+
+**Run.**
+- New module `pseudospace/program_localization.py`, with 11 synthetic tests in `tests/test_program_localization.py`.
+  The full suite passes (540).
+- 56 s wall. No gene model is fitted, and every per-gene statistic beyond the new pseudobulks is read from notebooks
+  71 and 75.
+
+**Guards.** All passed:
+- the export contract and the pass-1 fingerprint `efafc9ac2e99`;
+- 71's universe (11,055), sets (1,513) and units (11,383);
+- the 15 label/orientation genes equal the export's panels;
+- 71's cached model reproduces its T_spatial and z;
+- cameraPR on 71's z and on 75's segment z reproduces both notebooks' set tests in every partition;
+- the program files match their frozen sha256, every member is in the universe and none is excluded;
+- 72's transitions are reproduced (pooled cuts 0.473 and 0.605);
+- the Ensembl FASTA matches its sha256.
+
+### Calibration of the statistics (library sets, 75's swap rule)
+
+| Statistic | Calls (condition; relabelings) | NCDR | Calibration share | Verdict |
+|---|---|---|---|---|
+| Level t, S1 | 27; 21, 32 | 0.98 | 0.171 | fail |
+| Level t, S2 | 76; 6, 18 | 0.16 | 0.113 | fail |
+| Level t, S3 | 102; 62, 21 | 0.41 | 0.170 | fail |
+| Level t, PT | 33; 79, 154 | 3.53 | 0.210 | fail |
+| Segment F z (75) | 76; 0, 0 | 0 | 0.055 | pass |
+| Positional F z (71) | 83; 1, 0 | 0.006 | 0.071 | pass |
+
+The per-segment level t fails at every scope, as notebook 75's level arms did, so every replication p is the empirical
+p against the relabeled library sets. The between-segment and axis tests use nominal p.
+
+### Family S: CellSpectra species blocks (confirmatory)
+
+| Program (claim) | P at the claim's segment | Members with the claimed sign (all 4 pairs) | q | Relabeled p (1, 2) | Replication | P S1 / S2 / S3 | Between q | Localization (peak; margin) |
+|---|---|---|---|---|---|---|---|---|
+| S-H1 human-high S1 | +2.92 | 0.95 (0.94) | 0.0002 | 0.075, 0.95 | **replicated** | 2.92 / 2.81 / 2.59 | 2e-5 | graded (S1; 0.11) |
+| S-M1 mouse-high S1 | −1.82 | 0.85 (0.82) | 0.0003 | 7e-7, 1.00 | direction only | −1.82 / −1.74 / −1.21 | 4e-8 | graded (S1; 0.09) |
+| S-H2 human-high S2 | +2.89 | 0.93 (0.89) | 0.0002 | 0.035, 0.88 | direction only · length-sensitive | 2.89 / 2.89 / 2.97 | 2e-5 | graded (S3; 0.08) |
+| S-M2 mouse-high S2 | −1.93 | 0.90 (0.87) | 0.0002 | 0.031, 1.00 | direction only | −1.97 / −1.93 / −1.49 | 2e-5 | graded (S1; 0.05) |
+| S-H3 human-high S3 | +2.61 | 0.91 (0.89) | 0.0002 | 0.044, 0.97 | direction only · probe- and length-sensitive | 1.91 / 2.38 / 2.61 | 2e-6 | graded (S3; 0.23) |
+| S-M3 mouse-high S3 | −1.89 | 0.83 (0.80) | 0.0002 | 7e-5, 0.54 | direction only | −1.73 / −2.16 / −1.89 | 3e-6 | **localized to S2** (0.27) |
+
+P is the median over members of the centred human − mouse pseudobulk difference (log2). In the universe, 0.44–0.46
+of genes carry a given sign in all 4 pairs.
+
+- **Direction.** All six published directions hold, in every segment and in all 4 specimen pairs, with large effects
+  (1.2–3.0 log2).
+- **Replication class.** Only S-H1 is *replicated*. The other five are *direction only* because the program's own
+  relabeled one-sided p falls below 0.05 in relabeling 1: the two human sections, or the two mice, also differ for
+  these genes in a consistent direction. The relabeled effects are small, however (relabeled ratio ≤ 0.045 at the
+  peak).
+- **Localization.** The difference changes between segments for every block (between-segment q ≤ 2e-5), but by small
+  margins: 0.05–0.27 log2 on 1.2–3.0 log2 differences. Five blocks are *graded* and one (S-M3) is localized to S2.
+  The difference is present (≥ 0.25 log2 in all pairs) in S1, S2 and S3 for every block.
+  - The mouse-high S1 and S2 blocks weaken toward S3 (S-M1 −1.82 → −1.21; S-M2 −1.97 → −1.49).
+  - The human-high S3 block strengthens toward S3 (1.91 → 2.61).
+- **The peak segment is fragile.** Notebook 75's NB Δ_S puts the peak in the same segment for 3 of 6 blocks. The
+  coordinate peak agrees with the label peak for 6 of 6.
+- **Gene length.** The human-high blocks are long genes: member median human genomic span 229–281 kb, against 107–121
+  kb for the mouse-high blocks and 42 kb in the universe. With the level t rank-normalised within span deciles, all
+  six still pass, and two become *replicated* (S-H2, S-H3), so a length effect does not explain the reproduction.
+- **Equal probe counts.** 71–80 members per block remain. S-H3 becomes *replicated* and the others keep their class.
+- **Conventional comparator** (cameraPR on 75's DESeq2 Wald stat at the same scope): condition p 1e-22 to 1e-33. It
+  also fails relabeling 1 for the mouse-high blocks (p 1e-11, 8e-4, 1e-4).
+
+### Family Z: published zonation (confirmatory positive control; transfer is the added-information readout)
+
+| Program | Source species: contrasts (q) | Other species: contrasts (q) · transfer | Ratio other/source (genome-wide slope) | P S1 / S2 / S3 (human − mouse) | Localization (peak; margin) |
+|---|---|---|---|---|---|
+| Z-M1 Chen 2021 PTS1 | mouse 1.73, 2.14 (1e-127) zonated | human 0.25, 0.24 (2e-14) · attenuated | 0.13 (0.085) | −1.21 / −0.22 / +1.37 | localized to S1 (0.99) |
+| Z-M2 Chen 2021 PTS2 | mouse 0.41, 0.45 (2e-52) zonated | human 0.03, 0.06 (0.009) · absent | 0.11 (0.032) | −1.20 / −1.69 / −1.45 | graded (S2; 0.24) |
+| Z-M3 Chen 2021 PTS3 | mouse 0.76, 0.73 (2e-25) zonated | human −0.07, 0.03 (0.61) · absent | −0.03 (0.097) | −0.66 / −1.09 / −1.73 | localized to S3 (0.64) |
+| Z-H1 Hinze 2022 S1 | human 1.17, 1.24 (8e-100) zonated | mouse 0.84, 0.64 (1e-22) · **zonated** | 0.62 (0.22) | +1.35 / +1.25 / +1.48 | graded (S3; 0.13) |
+| Z-H2 Hinze 2022 S2 (6 genes) | human 0.40, 0.44 (2e-9) zonated | mouse −0.02, 0.44 (0.006) · absent | 0.50 (0.045) | +0.90 / +1.10 / +1.16 | not resolved (relabeled ratio 0.57) |
+| Z-H3 Hinze 2022 S3 | human 0.87, 0.86 (1e-50) zonated | mouse −0.03, 0.11 (0.08) · absent | 0.05 (0.25) | +0.92 / +1.33 / +1.93 | localized to S3 (0.60) |
+
+The contrasts are each specimen's program median of segment-vs-other-segments (log2).
+
+- **Positive control.** All six published zonation programs are zonated in their source species in both specimens.
+- **Transfer.**
+  - The mouse microdissection PTS2 and PTS3 programs are absent in the human sections, and the PTS1 program is
+    attenuated (one human section at 0.24).
+  - The human S1 program is zonated in mouse (conserved, ratio 0.62 against a genome-wide slope of 0.22). The human S3
+    program is absent in mouse.
+- **Localization reads the same way.**
+  - The species difference sits in the program's own segment for Z-M1 (mouse-high in S1), Z-M3 (mouse-high in S3)
+    and Z-H3 (human-high in S3).
+  - Z-M1 reverses: mouse-high in S1 (−1.21), human-high in S3 (+1.37).
+  - The conserved human S1 program (Z-H1) shows a near-uniform human-high offset (1.25–1.48), graded.
+- **Secondary zonation sources** (nominal p). The mouse S1 and S3 programs of Ransick 2019, Zhou 2023 and Chen 2025 are
+  all zonated in mouse and absent in human, and all six are localized to their own segment. Lake 2023's 8-gene human
+  S1 program transfers to mouse; its 11-gene S3 program does not.
+
+### Sensitivities that changed a class
+
+| Sensitivity | Change |
+|---|---|
+| Equal probe counts | S-H3: direction only → replicated (labelled probe-sensitive) |
+| Gene length (span-decile stratified) | S-H2 and S-H3: direction only → replicated (labelled length-sensitive); the length-stratified between-segment test keeps every program at p ≤ 6e-4 except Z-H2 (0.09) |
+| Mean instead of median | localization: S-H3 graded → localized to S3; Z-M2 graded → localized to S2; Z-H2 not resolved → graded; no replication class changes |
+| Untrimmed units | Z-M1 transfer attenuated → zonated; every other class is unchanged |
+| Coordinate (axis) | the curve peak agrees with the label peak for 12 of 12; no "changes along the axis but not between segments" flag |
+
+### Readout (protocol 5.4) and the abandonment rule
+
+- **Species family.** 6 of 6 blocks reach a resolved localization class (5 graded, 1 localized), so the abandonment
+  rule (fewer than 2) is not met. The information added is modest:
+  - the published per-segment differences are present in every segment;
+  - they change between segments by at most about 0.7 log2 (S-M1, S-H3);
+  - only one peak exceeds its neighbour by ≥ 0.25 log2.
+- **Zonation family.** 5 of 6 are resolved. The new information is the transfer: no published table compares the
+  S1→S3 profile between species. Mouse PTS2/PTS3 programs are absent in human, mouse PTS1 is attenuated, human S1 is
+  conserved and human S3 is absent in mouse, and the species difference sits at the program's own segment.
+- **Added-information lines.** One templated line per program is in `tables/added_information.csv`.
+
+### How the protocol was read
+
+- The logic version is `79.known_programs.1`, by the coordinator's instruction.
+- Equal probe counts follow 77's code: `mouse_probes == human_probes`.
+- The relabeled specificity of a replication test uses the program's relabeled one-sided p in the claimed direction,
+  nominal, as written.
+- **Family Z.**
+  - The localization sign d is the sign of the condition P at the program's own segment.
+  - The transfer class is evaluated in the order zonated, reversed, absent (the signs differ or both lie within
+    ±0.25), attenuated (both positive). A remaining case is read as absent.
+  - The genome-wide slope is the least-squares slope through the origin of the other species' contrast on the source
+    species' contrast over the universe.
+- The untrimmed arm keeps the analysed units' segment-F q and recomputes every pseudobulk quantity and its
+  calibration.
+- **Figures.**
+  - Heatmap rows are the first 40 members in the paper's order.
+  - Pair curves are centred by the pair's median gene at each grid point.
+  - The summary heatmap colours Q = d·P.
+- The stage cache stays empty, because no model is fitted.
+
+**Tables:**
+- `programs.csv` and `programs_members.csv`;
+- `pseudobulk_rates.csv.gz`;
+- `gene_level.csv`;
+- `calibration.csv`;
+- `program_tests.csv`;
+- `segment_summary.csv`;
+- `profiles.npz` and `profile_summaries.csv`;
+- `classes.csv` and `classes_secondary.csv`;
+- `added_information.csv`;
+- `sensitivity*.csv`;
+- `how_the_protocol_was_read.csv`;
+- `run_record.json`.
+
+**Figures:** `fig79a_species_programs`, `fig79b_zonation_programs`, `fig79c_summary_heatmap` and
+`supp79_secondary_heatmap`.
+
+## Notebook 80 results
+
+`analysis/notebooks/80_pt_known_injury_programs.ipynb` (logic version `80.known_programs.1`) writes to
+`results/pt_known_injury_programs/`. It followed the protocol in `pt-known-programs.md` (commit b90a682); section 15
+of the notebook lists how the protocol was read.
+
+**Run.**
+- The only model refit is notebook 75's segment F-test on U76 (3 partitions, 24 jobs, cached; about 3 min cold).
+- About 4 min wall.
+
+**Guards.** All passed:
+- the export contract, package 59da04b and the pass-1 fingerprint `bb4a80c1b484`;
+- U76 (10,701 genes), its 1,495 sets and the 14,048 analysed units equal notebook 76's;
+- the segment medians are ordered;
+- 76's cached model reproduces its T_spatial and z, and cameraPR on 76's z reproduces its set tests;
+- the program files match their frozen sha256;
+- the control cuts (0.349, 0.643) reproduce 76's segment units;
+- **G4:** on the 10,170 of 10,198 shared genes with equal α, the U76 refit reproduces 75's T_step, Δ_S and SE (max
+  difference 1e-10 relative to max(|value|, 1)).
+  - The comparison is restricted to genes converged and not separated in both runs.
+  - In a development run, three separated genes differed in HC3 SE by up to 0.6%, while their T_step and Δ_S agreed
+    to 1e-8.
+
+### Calibration (library sets, 75's swap rule)
+
+Every AKI statistic fails calibration, so every program p is empirical against the relabeled library sets (76's
+rule).
+
+| Statistic | Calls (condition; relabelings) | NCDR | Calibration share |
+|---|---|---|---|
+| Level t, S1 / S2 / S3 / PT / S1–S2 | 416–486; 72–209, 3–178 | 0.09–0.41 | 0.147–0.250 |
+| Segment F z (U76) | 43; 50, 18 | 0.79 | 0.133 |
+| Positional F z (76) | 106; 20, 30 | 0.24 | 0.144 |
+
+### Family I (confirmatory)
+
+| Program | Scope | P at scope | With the claimed sign (all 4 pairs) | q | Relabeled p (1, 2) | Replication | P S1 / S2 / S3 | Between q | Localization (peak; margin; relabeled ratios) |
+|---|---|---|---|---|---|---|---|---|---|
+| K-REP repairing (from 2 d) | PT | +0.23 | 0.68 (0.58) | 0.010 | 0.97, 0.97 | direction only (below 0.25) | 0.08 / 0.22 / 0.49 | 0.12 | not resolved (S3) |
+| K-INJ12 injured S1/2 (4–12 h) | S1–S2 | +0.54 | 0.88 (0.82) | 0.0005 | 0.73, 0.13 | **replicated** | 0.41 / 0.54 / 0.93 | 0.005 | **localized to S3** (0.39; 0.05, 0.01): outside the published segment |
+| K-INJ3 injured S3 (4–12 h) | S3 | +1.03 | 0.85 (0.79) | 0.0005 | 1e-8, 7e-10 | direction only | 0.38 / 0.74 / 1.03 | 0.007 | **localized to S3** (0.28; 0.22, 0.16): in the published segment |
+| K-SEV severe injured | PT | +0.23 | 0.67 (0.57) | 0.049 | 0.06, 2e-4 | direction only | 0.15 / 0.22 / 0.36 | 0.021 | not resolved (ratios 0.38, 0.43) |
+| K-FR failed repair (14 d–6 wk) | PT | +0.69 | 0.84 (0.76) | 0.002 | 9e-9, 1.0 | direction only | 0.57 / 0.79 / 0.70 | 0.11 | **uniform within resolution** (range 0.22) |
+| Z-IRI-UP core IRI up | PT | +0.96 | 0.84 (0.74) | 0.0006 | 0.018, 0.34 | direction only | 0.84 / 0.91 / 1.20 | 0.015 | **localized to S3** (0.29; 0.02, 0.06) |
+| Z-IRI-DN core IRI down | PT | −0.96 | 0.95 (0.94) | 0.0005 | 3e-16, 0.62 | direction only | −0.90 / −1.02 / −1.06 | 0.005 | not resolved (margin 0.05; ratios 0.35, 0.20) |
+| H-AKI-UP human AKI up | PT | +0.64 | 0.70 (0.57) | 0.0015 | 5e-18, 0.69 | direction only | 0.49 / 0.84 / 1.09 | 0.07 | not resolved (ratio 0.29) |
+| H-AKI-DN human AKI down | PT | −0.74 | 0.79 (0.72) | 0.0006 | 6e-4, 0.60 | direction only | −0.60 / −0.83 / −0.98 | 0.008 | not resolved (ratios 0.33, 0.31) |
+
+In the universe, 0.41 of genes carry a given sign in all 4 pairs.
+
+- **Direction.** Every published direction holds in all 4 IR × control pairs (calibrated q 0.0005–0.049).
+- **Replication class.**
+  - Only K-INJ12 is *replicated*.
+  - K-REP is specific but below the 0.25 log2 effect.
+  - The other seven fail the program-level relabeling check, mostly in relabeling 1 (the A2/A4 factor of notebook 76).
+- **Conventional comparator.** DESeq2 + cameraPR on the same scopes gives condition p 1e-4 to 1e-44 and fails the same
+  relabelings.
+- **Localization.**
+  - Every program differs most in S3 except K-FR (peak S2).
+  - Three are *localized to S3*: K-INJ12, K-INJ3 and Z-IRI-UP.
+  - The failed-repair program is *uniform within resolution*: 0.57–0.79 log2 in every segment.
+  - Five are *not resolved*, mostly because their relabeled profiles exceed 0.25 × the condition.
+- **Published locations.** Kirita's injured-S3 program peaks in S3, as published. Kirita's "injured S1/2" program
+  (healthy S1/S2 markers removed) also peaks in S3, outside its published segment: the injury-specific part of that
+  state follows the S3-concentrated injury here.
+- **Time point (wording only).** The one replicated Kirita state is the 4–12 h injured S1/2 state. The repairing state
+  (from 2 d) is specific but small, and the failed-repair state (14 d–6 wk) is not specific. This is read only as
+  "compatible with Kirita's acute injured states", never as a time-point claim.
+- **Secondary** (nominal p).
+  - **Gerhardt 2023, late repair** (4 wk and 6 mo): its "up" lists are not replicated or opposite in S1, S2 and S3,
+    and its "down" lists hold in direction. The S3 down-list is localized to S3, as published.
+  - **Dixon 2022 regional lists:** PTS3-TAL up and down are localized to S3, as published. PTS1-2 up is replicated,
+    with its largest difference in S1.
+  - **Same-state lists:** Gerhardt 2021's cycling list is replicated (peak S3, not resolved). The Vcam1+/Ccl2+ list
+    and Gerhardt 2023's FR-PTC list are localized to S3. Lake 2023's human adaptive-PT lists hold in direction and are
+    not resolved.
+
+### Sensitivities that changed a class
+
+| Sensitivity | Change |
+|---|---|
+| Mean instead of median | K-REP direction only → replicated; localization: K-SEV not resolved → localized to S3, Z-IRI-UP localized → graded, K-FR uniform → not resolved |
+| Untrimmed units (15,013) | none |
+| c19 arm (80 injured units back at their placed PT label) | none; S3 program medians move by ≤ 0.02 log2 |
+| Segment model check (the refit's Δ_S peak) | agrees for 8 of 9 (Z-IRI-DN: S2 against S3) |
+| Coordinate (axis) | the curve peak agrees with the label peak for 8 of 9 (K-FR: S3 against S2); no "axis but not between segments" flag |
+
+### Readout and the abandonment rule
+
+- 4 of 9 programs reach a resolved localization class (three localized to S3, one uniform), so the abandonment rule
+  (fewer than 3) is not met.
+- What position adds: the published injured-PT programs, which their papers report for the whole PT or a named state,
+  are S3-concentrated here. The acute injured programs (Kirita's injured S1/2 and S3 states, the core IRI response)
+  are largest in S3, and the failed-repair program is not segment-specific.
+- Two limits:
+  - The specimen-level specificity checks fail for most programs (the A2/A4 factor).
+  - The package drops the most injured units. Adding c19 back changes nothing; c15 is not added.
+
+### How the protocol was read
+
+- The logic version is `80.known_programs.1`, by the coordinator's instruction.
+- G4 is restricted to genes converged and not separated in both runs (see the guards).
+- The S1–S2 scope is the pseudobulk of S1 and S2 units together; 75 has no DESeq2 scope for it.
+- **The c19 arm.**
+  - The specimen of each placed unit is taken from 76's c19 placement rows, because the "onto PT" rows carry none.
+  - Their library follows `aki_inputs`' rule.
+  - The arm keeps the analysed units' segment-F q.
+- Relabeled specificity uses the program's relabeled one-sided p in the claimed direction, nominal.
+- **Figures.**
+  - Heatmap rows are the first 40 members in the paper's order.
+  - Pair curves are centred by the pair's median gene at each grid point.
+- Kirita state times are quoted for wording only.
+
+**Tables:**
+- `programs.csv` and `programs_members.csv`;
+- `gene_statistics_segment_u76.csv`;
+- `pseudobulk_rates.csv.gz`;
+- `gene_level.csv`;
+- `calibration.csv`;
+- `program_tests.csv` and `program_tests_secondary.csv`;
+- `segment_summary.csv`;
+- `profiles.npz` and `profile_summaries.csv`;
+- `classes.csv` and `classes_secondary.csv`;
+- `added_information.csv`;
+- `sensitivity*.csv`;
+- `how_the_protocol_was_read.csv`;
+- `run_record.json`.
+
+**Figures:** `fig80a_injury_programs`, `fig80b_summary_heatmap`, `supp80_secondary_heatmap` and
+`supp80_secondary_programs`.

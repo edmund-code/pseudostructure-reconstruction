@@ -610,7 +610,7 @@ program (Z-H1) falls the same way in both species. The mouse S1 and S3 programs 
 
 - **A1:** 3 of 6 unique programs supported. Not met.
 - **G:** 2 confirmed positions, both mouse gradients. Not met for mouse, met for human.
-- **B2b:** notebook 82.
+- **B2b:** notebook 82; it replicates (ρ 0.31, p 0.0001) and beyond flattening (partial ρ 0.19, p 0.0045). Not met.
 
 ### Recorded deviations (all after the first run, before writing this section)
 
@@ -634,3 +634,254 @@ program (Z-H1) falls the same way in both species. The mouse S1 and S3 programs 
 
 **Figures:** `fig81a_cellspectra_unique_core`, `fig81b_program_curves`, `fig81c_gene_hypotheses`, `fig81d_sex_bias`
 and `supp81_cellspectra_unique_curves`.
+
+## Notebook 82 results
+
+`analysis/notebooks/82_pt_published_findings_external.ipynb` (logic version `82.published_findings_external.1`) writes to
+`results/pt_published_findings_external/`. It followed the protocol in `pt-published-findings.md` (commit 0a44dec);
+section 14 of the notebook lists how the protocol was read.
+
+**Run.**
+- 19 s wall. No model is fitted and no stage cache is used.
+- Every rule comes from `pseudospace/published_findings.py`. The only notebook-local rule is the Cheval modal-unit
+  sensitivity (below).
+- The test suite passes (555) in the activated project environment. Two `test_program_localization.py` tests need R limma and fail rather than skip when R cannot find it (an unactivated shell); this is recorded as an issue.
+
+**Guards.** All passed:
+- the export contract and the pass-1 fingerprint `efafc9ac2e99`; 71's universe (11,055) and units (11,383); the 15
+  label/orientation genes equal the export's panels;
+- the recomputed specimen × scope pseudobulks equal 79's `pseudobulk_rates.csv.gz` (max difference 4e-15);
+- the program medians of our segment contrasts reproduce 79's source and transfer contrasts for the six Z programs;
+- the program files (79's `programs_hvm`, this protocol's `programs_lit`) and the Cheval and Census count files match
+  their frozen sha256; every member is in the universe and none is a label/orientation gene;
+- Census mouse: 6 male donors at 3–6 or 12 months, 330–1,513 cells per segment;
+- Lake: notebook 75's S1/S2/S3 normal-cortex cache, mapped to our symbols by 77's rule, equals the protocol's npz
+  exactly on all 26 normal-donor S1/S3 groups and 11,053 shared genes (sums, totals and nuclei). The 7 donors with
+  ≥ 50 nuclei in S1, S2 and S3 are notebook 38's primary donors (3 male), all "normal".
+
+### Cheval 2012 data
+
+| | Value |
+|---|---|
+| Table rows | 4,644 |
+| Rows without a mouse symbol (left out) | 258 |
+| Paired genes | 4,317 (69 listed in several rows) |
+| Eligible (≥ 10 tags over S1 and S3 in each species) | 270 |
+| Eligible and zonated in mouse / in human | 101 / 71 |
+| Eligible ∩ 71's universe, minus label genes (B2) | 185 |
+
+One tag, by the protocol's rule (the smallest non-zero value): human S1 0.18, human S3 0.21, mouse S1 0.10, mouse
+S3 0.10 per 10,000. The most frequent non-zero value is 0.23, 0.22, 0.12 and 0.13. Only 12, 2, 4 and 1 values lie
+below it. So the smallest value is not one tag in any column. The counts are inflated by 5–33%, which shifts the
+eligibility line and the SE. The modal-unit sensitivity reruns every Cheval readout; it changes no call.
+
+### B1 · Is the S1 → S3 contrast conserved in Cheval, and does conservation rise with strength? (no data of ours)
+
+**B1a.** The share of zonated genes with the same sign in the other species.
+
+| Selected in | [0.5, 1) | [1, 2) | [2, ∞) | Pooled | Trend p (rising) |
+|---|---|---|---|---|---|
+| mouse | 22/32 = 0.69 (p 0.025) | 26/42 = 0.62 (p 0.082) | 16/27 = 0.59 (p 0.22) | 0.63 (p 0.005) | 0.78 |
+| human | 9/15 = 0.60 (p 0.30) | 25/41 = 0.61 (p 0.11) | 10/15 = 0.67 (p 0.15) | 0.62 (p 0.028) | 0.35 |
+
+p is the one-sided binomial p against 0.5.
+
+- **Agreement above 0.5:** yes, in both directions (pooled 0.63 and 0.62).
+- **Rising with strength:** no, in either direction. In mouse-selected genes the share falls (0.69 → 0.59).
+- The hypothesis (above 0.5 and rising) is therefore half supported.
+
+**B1b.** Slopes through the origin (2,000-draw gene bootstrap, seed 81):
+
+| Slope | Genes | Estimate (95% interval) | Atlas value |
+|---|---|---|---|
+| human d on mouse d (mouse-zonated) | 101 | 0.09 (−0.12 to 0.31) | 0.12 |
+| mouse d on human d (human-zonated) | 71 | 0.11 (−0.24 to 0.41) | 0.62 |
+
+- The human-on-mouse slope is below the mouse-on-human slope, but only by 0.02, and both intervals include 0 and
+  overlap.
+- Both slopes are near 0.1. The mouse-on-human slope is far below the atlas value of 0.62. At SAGE depth, the
+  magnitude of one species' contrast predicts little of the other's in either direction. The data cannot separate
+  "human flatter" from noise. Under the modal unit both slopes are −0.01.
+
+### B2 · Cheval against our data
+
+185 genes (Cheval-eligible ∩ 71's universe, minus the label/orientation genes).
+
+| Readout | ρ | p | Claim |
+|---|---|---|---|
+| B2a mouse: Cheval d vs our mouse S3 − S1 | 0.46 | 6e-11 (Spearman) | positive control holds |
+| B2a human: Cheval d vs our human S3 − S1 | 0.14 | 0.057 (Spearman) | weak |
+| **B2b interaction (raw)** | **0.31** | **0.0001** (one-sided permutation, 10,000, seed 82) | **replicates** |
+| **B2b beyond flattening** (partial, given Cheval's and our mouse contrasts) | **0.19** | **0.0045** | **replicates beyond flattening** |
+
+- **Mouse positive control.** Our mouse S3 − S1 agrees with microdissected mouse S1 and S3 (ρ 0.46).
+- **Human positive control.** Our cortex-section human S3 − S1 agrees only weakly with microdissected human S1 and S3
+  (ρ 0.14, p 0.057). Human zonation is the weaker measurement in both data sets.
+- **The confirmatory test.** Our species × position interaction replicates in microdissected tissue (ρ 0.31), and the
+  replication survives the partial on both mouse contrasts (ρ 0.19). So it is not only shared mouse zonation times a
+  flatter human.
+- Once both mouse contrasts are partialled out, what remains of each interaction is mostly its human contrast. So
+  "beyond flattening" here means that the human-specific part of the S1 → S3 contrast agrees between Cheval's human
+  tissue and our human sections.
+- **Context.** The human-on-mouse slope through the origin on these 185 genes is 0.11 in Cheval and 0.14 in our data.
+  Both data sets show a flatter human.
+- The abandonment rule for B2b (the raw ρ fails) is not met.
+
+### B2c · Notebook 79's transfer calls in Cheval
+
+| Program | Members eligible | Mouse: class (m, s, p) | Human: class (m, s, p) | 79 transfer | Call |
+|---|---|---|---|---|---|
+| Z-M1 (Chen PTS1) | 7 of 100 | zonated (1.69, 1.00, 0.008) | attenuated (1.41, 0.71, 0.23) | attenuated | **replicates** |
+| Z-M3 (Chen PTS3) | 4 of 68 | not testable | not testable | absent | not testable |
+| Z-H1 (Hinze S1) | 3 of 39 | not testable | not testable | zonated | not testable |
+| Z-H3 (Hinze S3) | 0 of 61 | not testable | not testable | absent | not testable |
+
+m is the median own-segment member contrast (log2), s the share of positive members, p the sign-test p.
+
+- Only Z-M1 has the 5 eligible members needed. Its 7 eligible members are Gpx3, Slc4a4, Miox, Ass1, Slc39a5, Dcxr
+  and Lgmn.
+- Z-M1 is zonated in Cheval's mouse (the positive control) and attenuated in Cheval's human, as 79 found. Its call
+  replicates.
+- Caution: the human median is large (1.41). "Attenuated" here comes from the sign test (5 of 7 members positive,
+  p 0.23), not from a small median. In Cheval's human the S1 program is inconsistent across members rather than
+  smaller.
+- The other three calls cannot be tested at SAGE depth.
+
+### B3 · Notebook 79's zonation calls in the atlases (donors as replicates)
+
+Donors: Census mouse 6 (male, 3–6 or 12 months); Lake human 7 (normal cortex, ≥ 50 nuclei in S1, S2 and S3); Census
+human 6 (≥ 50 cells in both labels; 2 male, 4 female; S3 − PCT).
+
+| Program | Census mouse | Lake human | Census human | 79 (source; transfer) |
+|---|---|---|---|---|
+| Z-M1 (S1, mouse) | **zonated** 2.05 (6/6) | absent 0.08 | absent 0.24 (3/6) | zonated; attenuated |
+| Z-M2 (S2, mouse) | **zonated** 0.48 (6/6) | absent 0.02 | absent −0.25 | zonated; absent |
+| Z-M3 (S3, mouse) | **zonated** 0.85 (6/6) | absent 0.09 | absent −0.00 | zonated; absent |
+| Z-H1 (S1, human) | zonated 1.17 (6/6) | **zonated** 1.39 (7/7) | **zonated** 2.13 (6/6) | zonated; zonated |
+| Z-H2 (S2, human; 6 genes) | zonated 0.59 (5/6) | **zonated** 0.57 (6/7) | **zonated** 1.31 (6/6) | zonated; absent |
+| Z-H3 (S3, human) | absent 0.04 | **zonated** 0.97 (7/7) | **zonated** 1.35 (6/6) | zonated; absent |
+
+Bold is the source-species atlas (the positive control). Values are the donor median of the own-segment contrast
+(log2), with the donors ≥ 0.25. Every zonated class has Wilcoxon p 0.008–0.016.
+
+- **Positive controls.** All 12 source-species cells are zonated, in every atlas.
+- **Transfer: agreement with 79's class is 2 of 3 in each atlas** (6 of 9 in all).
+  - Agreeing: Z-H1 conserved in mouse (zonated); Z-H3 absent in mouse; Z-M2 and Z-M3 absent in both human atlases.
+  - **Z-M1** (mouse S1 program in human): absent in Lake (0.08) and in Census human (0.24, just below the 0.25 line).
+    79 called it attenuated (our two human sections 0.25 and 0.24). Both atlases put it at or below the border our
+    sections sit on.
+  - **Z-H2** (human S2 program in mouse, 6 genes): zonated in Census mouse (0.59, 5 of 6 donors). 79 called it absent
+    because our two mice disagree (−0.02 and 0.44).
+- The atlases confirm the main transfer pattern of 79. The mouse S1, S2 and S3 programs are not zonated in human. The
+  human S1 program is zonated in mouse. The human S3 program is not zonated in mouse.
+
+### A3 (atlas half) · Do CellSpectra's conserved PT functions peak in the same segment?
+
+Program median of the segment contrast (log2). "Range" is max − min over S1–S3.
+
+| Function | Species | Ours S1 / S2 / S3 (range) | Our peak (per specimen) | Atlas S1 / S2 / S3 (range) | Atlas peak (donors) | Same peak |
+|---|---|---|---|---|---|---|
+| F-LCFA | mouse | 0.08 / 0.08 / −0.11 (0.19) | S2 (S1, S2) | 0.07 / 0.21 / −0.21 (0.42) | S2 (4 of 6) | yes |
+| F-LCFA | human | 0.06 / −0.05 / −0.17 (0.22) | S1 (S1, S1) | 0.13 / −0.01 / −0.07 (0.20) | S1 (6 of 7) | yes |
+| F-ARG | mouse | −0.03 / −0.34 / −0.06 (0.31) | S1 (S1, S1) | −0.11 / −0.27 / 0.04 (0.31) | S3 (5 of 6) | no |
+| F-ARG | human | 0.07 / 0.03 / −0.01 (0.09) | S1 (S1, S3) | −0.24 / 0.05 / 0.14 (0.38) | S3 (5 of 7) | no |
+| F-PLB | mouse | −0.15 / 0.09 / −0.10 (0.24) | S2 (S2, S2) | 0.03 / 0.05 / −0.21 (0.26) | S2 (5 of 6) | yes |
+| F-PLB | human | −0.17 / −0.05 / 0.18 (0.35) | S3 (S3, S3) | 0.10 / −0.14 / −0.05 (0.24) | S1 (6 of 7) | no |
+| F-OAT | mouse | −0.11 / 0.07 / 0.01 (0.17) | S2 (S2, S2) | −0.05 / 0.04 / 0.01 (0.09) | S2 (5 of 6) | yes |
+| F-OAT | human | 0.01 / 0.04 / −0.01 (0.05) | S2 (S3, S2) | −0.01 / −0.00 / 0.01 (0.02) | S3 (3 of 7) | no |
+| F-TCY | mouse | −0.02 / 0.03 / 0.02 (0.05) | S2 (S3, S2) | −0.05 / −0.06 / 0.05 (0.10) | S3 (5 of 6) | no |
+| F-TCY | human | 0.02 / −0.05 / −0.04 (0.07) | S1 (S3, S2) | −0.06 / −0.04 / 0.09 (0.15) | S3 (6 of 7) | no |
+| F-LDL | mouse | 0.02 / −0.34 / 0.26 (0.60) | S3 (S3, S3) | 0.06 / −0.11 / 0.03 (0.17) | S1 (3 of 6) | no |
+| F-LDL | human | −0.08 / 0.19 / −0.32 (0.51) | S2 (S2, S2) | 0.02 / −0.23 / 0.04 (0.27) | S3 (3 of 7) | no |
+
+- The atlas peak equals our peak in **4 of 12** function × species cells: F-LCFA in both species, and F-PLB and F-OAT
+  in mouse.
+- Most of these functions barely change along the PT. In 15 of the 24 profiles the range is below 0.25 log2. F-OAT
+  (209 genes) and F-TCY are flat in every data set, so their peaks are not interpretable.
+- Where both data sets show a range ≥ 0.25, the peaks disagree (F-ARG mouse, F-LDL human). F-LDL is the clearest
+  case: our data show it in S3 in mice and in S2 in human, with both specimens agreeing in each species (ranges 0.60
+  and 0.51). The atlases show at most 0.27, with no consistent peak (3 of 6 and 3 of 7 donors).
+- Between species: the atlas peaks are the same for F-ARG and F-TCY (S3 in both). Our peaks are the same for F-ARG
+  (S1) and F-OAT (S2).
+- So the atlases do not confirm most of our within-species placements of these functions. The functions that
+  CellSpectra calls conserved are mostly flat along the PT in both kinds of data.
+
+### Sensitivities
+
+| Sensitivity | Change |
+|---|---|
+| Cheval modal unit (1 tag = the column's most frequent non-zero value; 236 eligible genes, 157 in B2) | No call changes. B1a pooled 0.61 and 0.64 (p 0.031 and 0.027); trend p 0.81 and 0.80. B1b slopes −0.01 and −0.01. B2a 0.44 and 0.11 (p 0.18). B2b 0.27 (p 0.0005) and partial 0.17 (p 0.019). Z-M1 still replicates |
+| Census human, the 6 male donors with no cell floor (S3 cells 2–287) | Z-M1 attenuated (0.32, 4 of 6) instead of absent, so it agrees with 79. Z-H3's positive control drops to attenuated (1.17, 4 of 6; p 0.31). Other classes unchanged |
+| Lake, the npz as given (S1 and S3 only; 12 normal donors with ≥ 50 nuclei in each) | Same classes as the primary Lake arm for Z-M1 (absent, 0.10), Z-M3, Z-H1 and Z-H3. S2 programs not testable |
+
+### Readout
+
+- **B1 (Cheval alone).** Human and mouse S1 → S3 contrasts agree in sign more often than chance (0.62–0.63), but the
+  agreement does not rise with gradient strength. Neither slope separates from 0 at SAGE depth.
+- **B2 (confirmatory).** Our species × position interaction replicates in microdissected tissue (ρ 0.31, p 0.0001),
+  and beyond flattening (partial ρ 0.19, p 0.0045). The mouse positive control is strong (0.46). The human one is weak
+  (0.14), which bounds any human-specific positional claim.
+- **B2c.** One of four 79 transfer calls is testable in Cheval (Z-M1), and it replicates.
+- **B3.** Every published zonation program is zonated in its source-species atlas. 79's transfer class matches the
+  atlas class in 6 of 9 transfer cells. Both mismatches are at the border of our own data: Z-M1 in human (our sections
+  0.25 and 0.24) and Z-H2 in mouse (our mice disagree).
+- **A3 (atlas half).** Atlas and our peaks agree in 4 of 12 cells. Most CellSpectra conserved functions are flat along
+  the PT, so "placement" is not resolvable for them in either data set.
+
+### How the protocol was read
+
+- **Census human donors.** The protocol names "6 male donors". The file has 6 male donors, but only 2 have ≥ 50
+  cells in both labels; the others have 2–28 S3 cells. The record's "Census human 6" (pt-gene-model-nb.md,
+  pt-package-pseudospace.md) is the 6 donors with ≥ 50 cells in both labels (2 male, 4 female), which 77's
+  `census_donors` rule gives. That set is primary. The 6 male donors with no floor are a sensitivity. The 2 male
+  donors with ≥ 50 cells are below `donor_class`'s minimum of 3.
+- **Lake.** The protocol's npz holds only S1 and S3 (groups `donor|PT-segment`, all diseases, no sex). The protocol's
+  donors need ≥ 50 nuclei in S2 as well (notebook 38's primary donors). So the primary arm uses notebook 75's
+  S1/S2/S3 normal-cortex cache of the same Lake pseudobulk, which equals the npz exactly on every shared group and
+  gene. "S2 optional" is read as: S2 programs are tested where the atlas has S2. The npz-only reading is a
+  sensitivity.
+- **Cheval pairing.** Rows without a mouse symbol in the authors' table are left out, B1 included. Within a gene and
+  species, rows with the same 8-structure values are one tag listed twice and count once; distinct rows are summed.
+  The unit (one tag) is each column's smallest non-zero value over all 4,644 rows.
+- **B1a.** "Agreement > 0.5": every non-empty bin above 0.5 and the pooled one-sided binomial p ≤ 0.05. "Rising": the
+  one-sided Cochran–Armitage p ≤ 0.05.
+- **B1b.** It is read on point estimates; the intervals are reported.
+- **B2.** Our S3 − S1 is centred per specimen by its median over the universe (79 section 3.2). This does not change
+  any Spearman statistic. The partial uses rank residuals on both mouse contrasts with residual permutation
+  (`permutation_spearman`).
+- **B3.**
+  - Atlas contrasts are centred per donor by their median over the universe genes measured in that atlas (79 section
+    3.4).
+  - Members are 79's members measured in the atlas, with no detection filter.
+  - Agreement is equality of classes; attenuated and absent agree only with themselves.
+- **A3.** Our peak is the argmax of the mean of the two specimens' program medians. The atlas peak is the argmax of
+  the per-segment donor median. Census human (two labels) is not used for A3. The range is shown as a descriptive size
+  only; the protocol fixes no peak threshold.
+
+**Tables:** `cheval_genes.csv`, `cheval_strength.csv`, `cheval_vs_ours.csv`, `cheval_programs.csv`,
+`atlas_donor_programs.csv`, `atlas_classes.csv` (B3 and A3 rows), `how_the_protocol_was_read.csv`; `run_record.json`.
+
+**Figures:** `fig82a_cheval_strength` (B1a by strength bin, both selection directions), `fig82b_cheval_vs_ours` (B2a
+controls, B2b raw and beyond flattening), `fig82c_program_classes` (Z programs × data set, classes; A3 functions'
+segment contrasts and peaks).
+
+## Combined readout by paper (notebooks 81 and 82)
+
+| Paper | Published | What our method adds, or finds they missed | Support |
+|---|---|---|---|
+| CellSpectra 2025 | per-segment human vs rodent DE lists | most listed genes differ in all three segments (74%); segment-only listings are segment-largest for human S1, human S3 and mouse S1, not human S2 | between-segment test (calibrated) |
+| CellSpectra 2025 | conserved PT functions | conserved as functions, but mostly flat along the PT; arginine metabolism and organic acid transport are mouse-zonated, flat in human; atlas peaks agree in 4 of 12 cells | calibrated between-segment, but small amplitudes |
+| Cheval 2012 | S1/S3 expression diverges between species | in their own data, S3 − S1 contrasts agree in sign (0.62–0.63), without a strength trend; our species × position interaction replicates in their microdissected tissue, beyond flattening | B2b confirmatory |
+| Raghubar 2022 | mouse cortex higher in energy and metabolism, human in structure | holds inside PT units and is uniform along the PT; F13b, Cela1 and S100g relocations reproduced; Acsm1 and Anpep not S3 in our mice | level (descriptive) and between-segment |
+| Fernandes 2026 | human phosphate uptake relies on SLC34A3 more than mouse | SLC34A1 is S1/S2-zonated in mouse (about 8-fold) but nearly flat in human; SLC34A3 relatively higher in human | single genes, descriptive |
+| Basit 2019 | MDR1, OCT3, OCTN1 not lower in human | MDR1 (Abcb1a) much higher in human; OCTN1 not | single genes, level |
+| Xiong 2023 | mouse PT sex programs, limited in human | mouse-only zonation is not enriched for male-biased genes (OR 0.77) | E1 (negative) |
+| Chen 2021, Hinze 2022 (via 79) | segment programs per species | the transfer pattern (mouse S1–S3 programs absent in human; human S1 conserved in mouse; human S3 absent in mouse) replicates in Lake and Census in 6 of 9 cells; Z-M1 in Cheval | atlas donors |
+
+**Continuous description.** Two gradual mouse gradients are specimen-agreed, program-specific and landmark-confirmed. No
+sharp switch and no human position is confirmed.
+
+**Bounds.**
+- The human positive control against microdissected tissue is weak (ρ 0.14).
+- The human-specific part of our zonation is therefore the least certain measurement. Even so, it is the part that
+  carries B2b beyond flattening.

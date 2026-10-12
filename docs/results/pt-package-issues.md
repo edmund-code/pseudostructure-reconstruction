@@ -73,3 +73,18 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
 20. The literature check of the 83 calls (untracked scratch) names candidate new species differences: sterol
     synthesis, glyoxylate/glycine cleavage and glutathione synthesis. Its Nt5e groups (G08, G37) were classed
     inconsistently.
+
+## From notebooks 81 and 82 (published findings re-read along the PT)
+
+20. **"No published table compares the S1→S3 profile across species" needs qualifying.** Cheval et al. 2012 (PMID
+    23056504) microdissected S1 and S3 in both human and mouse (SAGE). They report global divergence but no per-gene or
+    per-program profile comparison. Our species × position interaction replicates in their data (notebook 82, B2b).
+21. **Human zonation is the weakest measurement.** Against microdissected human S1/S3, our cortex-section human S3 − S1
+    agrees at ρ 0.14 (mouse 0.46).
+22. **Within-segment positions.**
+    - Raw within-species program curves carry a shape that random gene sets share; notebook 81 centres by the median
+      gene.
+    - After that, only two mouse gradients are confirmed, and no human position. Human mid-S1 turns may mark the old
+      S2 units the package labels as S1 (issue 6).
+23. **Two `test_program_localization.py` tests** fail instead of skipping when R cannot find limma (an unactivated
+    shell).

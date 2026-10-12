@@ -1,0 +1,9 @@
+# Notebook 70, AKI dataset: Caleb's mouse_kidney_aki samples on the local v4 segmentations (64,272 polygons;
+# his reference v4fix_* files hold 64,080). segmentation_path is relative to the data root. The mouse Visium HD
+# bins live outside the data root (data/README.md); the package expands $PSEUDOSPACE_VISIUM_ROOT, which notebook
+# 70 sets from --visium-root or the environment.
+sample,group,bins_dir,segmentation_path
+Ctrl1A2,Control,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A2/square_002um,Ctrl_1A2_v4.geojson
+Ctrl1A4,Control,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A4,Ctrl_1A4_v4.geojson
+IR2A2,IR,$PSEUDOSPACE_VISIUM_ROOT/IR_2A2/square_002um,IR_2A2_v4.geojson
+IR2A4,IR,$PSEUDOSPACE_VISIUM_ROOT/IR_2A4/square_002um,IR_2A4_v4.geojson

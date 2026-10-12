@@ -1,0 +1,9 @@
+# Notebook 70, human vs mouse dataset. Mouse: the AKI controls on the local v4 segmentations, bins under
+# $PSEUDOSPACE_VISIUM_ROOT (outside the data root; data/README.md). Human: the HUK1 v2 panoptic segmentations and
+# their bins under the data root. Both human slices are healthy cortex; "MED" is a misnomer kept from the file names.
+# Genes are mapped to shared 1:1 orthologs (mouse symbols) between stage 01 and stage 02 by notebook 70.
+sample,group,bins_dir,segmentation_path
+Ctrl1A2,Mouse,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A2/square_002um,Ctrl_1A2_v4.geojson
+Ctrl1A4,Mouse,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A4,Ctrl_1A4_v4.geojson
+HUK1_COR1,Human,HUK_COR_1/outs/binned_outputs/square_002um,HUK1_COR1_v2.geojson
+HUK1_MED1,Human,HUK_MED_1/outs/binned_outputs/square_002um,HUK1_MED1_v2.geojson

@@ -1,0 +1,51 @@
+# Notebook 70 (human vs mouse): the AKI config of analysis/package_configs/aki/dataset.yaml with three changes,
+# marked below: the name, the groups (reference Mouse, case Human) and qc.bin_area_px left to the package default
+# (derived per sample from the scale factors, because the human slides may differ). Gene names are mouse symbols:
+# notebook 70 maps human genes to shared 1:1 orthologs before stage 02, so gene_patterns and the panels apply to
+# both species.
+# Healthy human cortex vs healthy mouse kidney, 10x Visium HD, tubule cross-sections, shared 1:1 orthologs.
+name: human_vs_mouse_kidney          # CHANGED
+
+groups:
+  reference: Mouse          # CHANGED: label in samples.csv `group` of the reference group
+  case: Human               # CHANGED: label of the group compared with it
+
+gene_patterns:              # gene class -> regular expression on gene names (mouse symbols). Each class becomes
+  mt: '^mt-'                # a boolean `var` column and a `pct_counts_<class>` QC metric; genes of any class are
+  ribo: '^(Rpl|Rps|Mrpl|Mrps)'   # kept out of the variable-gene selection of stage 03.
+
+segmentation:               # how units are read from the GeoJSON (QuPath export)
+  coordinate_scale: 1.0     # polygons are drawn in the full-resolution pixel frame of the bins
+  id_property: id
+  class_property: classification
+  score_measurement: Score
+
+cohort:                     # stages 05-07 compare the units of ONE label family along the axis
+  column: broad_tubule_marker_call      # obs column holding the family of every unit (written by stage 03)
+  value: PT                             # proximal tubule
+
+gene_sets:                  # stage 07; files are user inputs, not shipped with the package
+  dir: mouse_vs_human/pathway_gene_sets   # CHANGED (notebook 70): our local libraries, relative to the data root
+  libraries:                # label -> file (.gmt or Enrichr-style .json)
+    Reactome: Reactome_2022.json
+    Hallmark: MSigDB_Hallmark_2020.json
+    KEGG: KEGG_2019_Mouse.json
+
+# Overrides of the package defaults, by stage. A stage that is not listed runs on defaults; an unknown
+# parameter name is an error. PIPELINE_GUIDE.md lists every parameter.
+parameters:
+  qc:
+    # bin_area_px: CHANGED, not set: the package default derives it per sample from spot_diameter_fullres
+    doublet_exempt_classes: [glomerulus]    # segmentation classes the doublet tiers are not evaluated on
+  integration:
+    backend: r                              # R harmony 2.0.5, the reference ('harmonypy' and 'none' also exist)
+    label_source: pass1                     # which pass's cluster labels flow downstream
+  curve:
+    n_dims: 50                              # all 50 dimensions of the integrated embedding
+  dpt:
+    run: true                               # CHANGED (notebook 70, coordinator 2026-10-12): the DPT baseline
+                                            # as a sensitivity coordinate (shipped: false)
+  count_model:                              # position bins of the reference run (derived defaults would give
+    bin_width: 0.001                        # 0.00119 / 0.0119 / 0.2976 on this axis)
+    bin_width_far: 0.01
+    far_from: 0.30

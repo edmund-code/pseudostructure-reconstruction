@@ -1,0 +1,178 @@
+# Marker panels and label vocabulary of the mouse kidney (nephron segments).
+# Everything a stage needs to know about the tissue is here; the library code holds no gene or label names.
+# Gene symbols are matched to the data case-insensitively.
+
+# =====================================================================================================
+# Stage 03: cluster labels
+# =====================================================================================================
+
+# Marker panels {label: [genes]}. A cluster takes the label of the panel with the highest mean score in it.
+# Order matters only for display (anatomical order along the nephron, then the non-tubule classes).
+# Gene symbols are matched case-insensitively. A gene may sit in several panels (e.g. pan-TAL, pan-DCT genes).
+label_panels:
+  Podocyte: [Nphs1, Nphs2, Podxl]
+  PT-S1: [Slc5a2, Slc5a12, Gatm]
+  PT-S2: [Slc22a6, Slc13a3, Cyp2e1]
+  PT-S3: [Slc7a13, Slc22a7, Cyp7b1]
+  DTL1: [Corin, Uncx, Slc14a2]
+  DTL2: [Fst, Cdh13, Stk32a]
+  DTL3: [Nr2e3, Dmkn]
+  ATL: [Clcnka, Sptssb, Akr1b3]
+  mTAL: [Slc12a1, Umod, Cldn10, Ptger3]
+  cTAL: [Slc12a1, Umod, Cldn16, Kcnj10]
+  Macula-densa: [Nos1, Ptgs2, Pappa2]
+  DCT1: [Slc12a3, Pvalb, Trpm6, Egf]
+  DCT2: [Slc12a3, Trpv5, Slc8a1, S100g]
+  CNT: [Calb1, Slc8a1, Aqp2, Rhcg]
+  CCD: [Aqp2, Aqp3, Kit]
+  OMCD: [Aqp2, Atp6v0d2, Rhcg]
+  IMCD: [Aqp2, Aqp4, Slc14a2, Wnt7b]
+  # non-epithelial / non-nephron classes
+  Vessel: [Pecam1, Cdh5, Kdr, Emcn, Flt1, Egfl7]
+  Stroma: [Col1a1, Col3a1, Col1a2, Dcn, Pdgfrb, Mgp]
+  SmoothMuscle: [Acta2, Myh11, Tagln, Rgs5, Pdgfra]
+  Immune: [Ptprc, C1qa, C1qb, Cd52, Lyz2, Cd74]
+
+# Fine label -> family. A label that is not listed (the non-tubule classes) is its own family.
+label_to_family:
+  Podocyte: Glomerulus
+  PT-S1: PT
+  PT-S2: PT
+  PT-S3: PT
+  DTL1: DTL
+  DTL2: DTL
+  DTL3: DTL
+  ATL: AL
+  mTAL: AL
+  cTAL: AL
+  Macula-densa: AL
+  DCT1: DCT
+  DCT2: DCT
+  CNT: CNT_CD
+  CCD: CNT_CD
+  OMCD: CNT_CD
+  IMCD: CNT_CD
+
+# Families / classes removed before pass 2. "Unassigned" (clusters no panel describes) and the replacement
+# labels of `rejected_labels` are always removed as well.
+drop_classes: [Glomerulus, Vessel, Stroma, SmoothMuscle, Immune]
+
+# Panel labels that are NOT trusted when assigned automatically: the cluster takes the replacement label and is
+# dropped. ATL: the cluster that wins this panel was inspected on the H&E (2026-09-21) and is not ascending thin
+# limb (keratin-high epithelium). A genuine cluster can be restored with `label_overrides`.
+rejected_labels:
+  ATL: Rejected_ATL
+
+# Genes added to the panel genes in the clustering feature space (and protected from the expression gene filter):
+# the markers of the heatmap panels that are not in a label panel. Cox2, Fxyd4, Nephrin and Podocin match no gene
+# of this probe set (aliases kept from the research code; they have no effect).
+extra_marker_genes: [
+  Aqp6, Atp6v1b1, Atp6v1g3, Ccdc3, Cox2, Foxi1, Fxyd4, Igfbp2, Insrr, Lrp2,
+  Nephrin, Podocin, Scnn1g, Shd, Slc1a1, Slc22a5, Slc26a4, Slc26a7, Slc34a1, Slc3a1,
+  Slc4a1, Slc4a4, Slc4a9, Slc5a1, Sycn, Tmem86a,
+]
+
+# Genes protected from the expression gene filter only (injury diagnostics; they must not shape the clustering).
+extra_protected_genes: [Vcam1, Dcdc2a, Krt20, Sox9, Havcr1, Lcn2, Spp1]
+
+# =====================================================================================================
+# Stage 02: region identity for the doublet tiers 1 and 2 (optional; without it those tiers are skipped)
+# =====================================================================================================
+qc_regions:
+  markers:                  # broad region -> marker genes
+    Proximal_Tubule: [Lrp2, Cubn, Slc5a2, Slc5a12, Slc13a3, Slc22a6, Slc34a1]
+    Thin_Limb: [Aqp1, Cldn10, Cryab, Tacstd2, Cldn1]
+    TAL: [Slc12a1, Umod, Cldn16, Egf, Casr]
+    DCT: [Slc12a3, Trpm6, Cnnm2, Pvalb]
+    CNT_CD: [Calb1, Aqp2, Aqp3, Scnn1b, Slc4a1, Slc26a4]
+  adjacency:                # regions that may legitimately share one polygon (neighbours along the nephron)
+    Proximal_Tubule: [Thin_Limb]
+    Thin_Limb: [Proximal_Tubule, TAL]
+    TAL: [Thin_Limb, DCT]
+    DCT: [TAL, CNT_CD]
+    CNT_CD: [DCT]
+
+# =====================================================================================================
+# Stage 04: direction and start of the axis
+# =====================================================================================================
+axis_anchors:
+  early: [Cyp2e1, Gatm, Slc13a3, Slc22a6, Slc5a12, Slc5a2]     # high at the start of the axis (PT-S1 / PT-S2)
+  late: [Aqp2, Aqp4, Atp6v0d2, Rhcg, Slc14a2, Wnt7b]        # high at its end (OMCD / IMCD)
+  start_family: PT                 # the root unit is taken from this label family
+
+# Anatomical order of the fine labels. Used only to SCORE an ordering (order_metrics.csv), never to fit it.
+segment_order: [Podocyte, PT-S1, PT-S2, PT-S3, DTL1, DTL2, DTL3, ATL, mTAL, cTAL, Macula-densa, DCT1, DCT2, CNT, CCD, OMCD, IMCD]
+
+# =====================================================================================================
+# Stage 05: zones of the cohort's stretch of the axis (optional; they name locations, they fit nothing)
+# =====================================================================================================
+zones:
+  markers:                  # one marker (or a few) per zone, in axis order; cut-points = where the reference
+    PT-S1: [Slc5a12]
+    PT-S2: [Slc13a3]
+    PT-S3: [Slc16a9]
+  short_names: {PT-S1: S1, PT-S2: S2, PT-S3: S3}   # names used in location labels
+
+# =====================================================================================================
+# Stage 06: genes whose signal in the cohort may come from neighbouring tissue (flagged, never removed):
+# curated markers of interstitial, immune, endothelial, glomerular and blood cells
+# =====================================================================================================
+elsewhere_genes: [
+  Col1a1, Col1a2, Col3a1, Col5a1, Col5a2, Col6a1, Col6a2, Col6a3, Col14a1, Dcn, Lum, Pdgfrb, Pdgfra,
+  Fbln1, Fbln2, Mgp, Sparc, Acta2, Tagln, Myh11, Postn, Fn1, Bgn, Eln, Ptprc, Cd68, Adgre1, Lyz2, C1qa,
+  C1qb, C1qc, Cd74, H2-Aa, H2-Ab1, H2-Eb1, Cd52, Coro1a, Lcp1, Tyrobp, Fcer1g, Cd3e, Cd79a, Ms4a1, S100a8,
+  S100a9, Pecam1, Emcn, Kdr, Cdh5, Plvap, Flt1, Tek, Ehd3, Nphs1, Nphs2, Podxl, Hba-a1, Hbb-bs, Hbb-bt,
+]
+
+# =====================================================================================================
+# Display only (figures and QuPath overlays)
+# =====================================================================================================
+display:
+  label_names:              # label -> name shown in figures
+    mTAL: M-TAL
+    cTAL: C-TAL
+    Macula-densa: MD
+  label_colors:
+    Podocyte: '#9E9E9E'
+    PT-S1: '#4C9BD3'
+    PT-S2: '#5B8E55'
+    PT-S3: '#D6B48A'
+    DTL1: '#B39DDB'
+    DTL2: '#9575CD'
+    DTL3: '#7E57C2'
+    ATL: '#26A69A'
+    mTAL: '#F58518'
+    cTAL: '#E8A33D'
+    Macula-densa: '#C7522A'
+    DCT1: '#D81B60'
+    DCT2: '#EC6EA5'
+    CNT: '#76B7B2'
+    CCD: '#4E79A7'
+    OMCD: '#9C755F'
+    IMCD: '#593C8F'
+  heatmap_rows:             # whole-axis marker heatmap: row label -> [gene, label whose colour the row takes]
+    PT-S1: [Slc5a12, PT-S1]
+    PT-S2: [Slc13a3, PT-S2]
+    PT-S3: [Slc16a9, PT-S3]
+    DTL: [Slc14a2, DTL]
+    ATL: [Clcnka, ATL]
+    TAL: [Slc12a1, mTAL]
+    DCT: [Slc12a3, DCT2]
+    CNT: [Slc8a1, CNT]
+    CCD: [Aqp2, CCD]
+  heatmap_strip_labels:     # fine label -> row label shown in the strip above the heatmap
+    PT-S1: PT-S1
+    PT-S2: PT-S2
+    PT-S3: PT-S3
+    DTL1: DTL
+    DTL2: DTL
+    DTL3: DTL
+    ATL: ATL
+    mTAL: TAL
+    cTAL: TAL
+    DCT1: DCT
+    DCT2: DCT
+    CNT: CNT
+    CCD: CCD
+    OMCD: CCD
+    IMCD: CCD

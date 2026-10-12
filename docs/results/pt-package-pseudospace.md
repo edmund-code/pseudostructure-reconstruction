@@ -176,6 +176,67 @@ flags, and the top 10 markers.
 
 No `label_overrides` are made without the coordinator's sign-off; doubtful labels are reported.
 
+## Notebook 70 results
+
+`analysis/notebooks/70_pt_package_pseudospace.ipynb` (logic version `70.package_pseudospace.1`) writes to
+`results/package_pseudospace/`. It followed the protocol above. No stop condition triggered: the package is 0.1.0 at
+59da04b with R harmony 2.0.5, PT-S1/S2/S3 are present and in order in every specimen, and both curves run S1 → S3 from
+a PT-S1 root in Ctrl1A4. The AKI run is identical to the scratch trial: same fingerprints and labels, maximum
+|Δ pseudospace| 0.
+
+**Implementation, beyond the protocol.**
+- Human vs mouse stage 02 ran through the package's Python route on ortholog-space copies of the bin matrices
+  (deviation 3); 15,567 shared one-to-one genes.
+- No segmentation file, mouse v4 included, has `properties.id`, so units are named `unit_<feature_index>`.
+- The mouse bins live outside the data root; the notebook takes `--visium-root` (`PSEUDOSPACE_VISIUM_ROOT`).
+- `pt_units.h5ad` holds every gene kept by QC; `var.in_pass2` marks the pass-2 genes.
+
+**Stage counts.**
+
+| Dataset | Polygons | With bins | After QC | On the curve | Clusters (pass 1 / 2) | PT-S1 / S2 / S3 |
+|---|---|---|---|---|---|---|
+| AKI | 64,272 | 43,984 | 36,445 | 32,939 | 20 / 18 | 4,965 / 6,069 / 3,979 |
+| Human vs mouse | 51,155 | 31,533 | 27,395 | 25,048 | 18 / 15 | 6,338 / 2,361 / 3,248 |
+
+Human PT-S2 has only 373 (HUK1_COR1) and 259 (HUK1_MED1) units.
+
+**Order and the PT stretch.**
+- Adjacent-segment AUCs along the curve, pooled (S1→S2, S2→S3): AKI 0.976, 0.985; human vs mouse 0.893, 0.975.
+  Per specimen: mice 0.95–0.99; HUK1_COR1 0.89, 0.94; HUK1_MED1 0.85, 0.96.
+- The PT occupies the start of the nephron-wide curve: raw 0–0.285 (AKI) and 0–0.202 (human vs mouse); 1.2% and 2.6%
+  of PT units lie beyond the PT stretch.
+
+**Agreement with the old coordinates** (matched PT units; descriptive).
+
+| | AKI vs mouse-only PT DPT | Human vs mouse vs SCF13 |
+|---|---|---|
+| Spearman, pooled (per specimen) | 0.888 (0.850–0.930) | 0.908 (mice 0.913, 0.957; human 0.870, 0.876) |
+| Spearman, package DPT baseline | 0.946 | 0.871 |
+| Labels identical / Cohen's κ | 89.7% / 0.84 | 87.4% / 0.80 |
+| Main label shifts | 15% of old S1 → S2; 11% of old S3 → S2 | 47% (COR) and 60% (MED) of old human S2 → S1; mice ≤ 6% |
+| Old PT structures on a new PT unit | 84.7% (13.6% removed by package QC) | 89.3% |
+| New PT units with an old structure | 96.5% | 96.2% |
+
+Mouse polygons in human vs mouse were matched from the kept-tubule files to the v4 files by mutual-best IoU ≥ 0.5:
+97.6% and 97.8% matched, median IoU 0.99. The human and AKI units come from the same files as the old structures, so
+they match by feature index with IoU 1.
+
+### Label checkpoint (coordinator, 2026-10-12)
+
+Every pass-1 cluster of both datasets was reviewed against its panel scores and top markers
+(`cluster_labels_for_review.csv`). All labels are confirmed as the package assigned them; no `label_overrides`. The
+confirmed pass-1 fingerprints are human vs mouse `efafc9ac2e99` (18 clusters, 27,395 units) and AKI `bb4a80c1b484`
+(20 clusters, 36,445 units). Flags kept on record:
+- **Human vs mouse c2 and c3, PT-S1, 94% human.** They score clearly S1 on the panel (margins 1.26 and 1.32; PT-S2
+  never above 0.36). Consequence: human PT-S2 is small, and about half of the old human S2 units are now S1.
+- **Human vs mouse c17, PT-S1, 481 units, 99% HUK1_MED1.** Heat-shock genes (Hspa1a/b, Dnajb1) lead its markers,
+  followed by PT-S1 markers (Aldob, Bhmt, Gatm). Kept as a section-specific state.
+- **AKI c19, "cTAL", 80 units, 94% IR.** Its markers (Havcr1, Spp1, Krt20, Lcn2, Slc6a18) are those of injured PT, so
+  these units leave the PT cohort. **AKI c15, Unassigned, 2,425 units, 72% IR** (Cryab, Tnc, Vim, Thbs1), is dropped.
+  Under the package's rule the most injured units therefore leave the AKI PT cohort; this is recorded as a limitation
+  of every AKI result.
+- **cTAL/mTAL near-ties** (human vs mouse c6 and c15, AKI c8) stay within one family and do not touch the PT.
+
 ## Notebook 71 protocol: notebook 69's PT pathway analysis, unchanged, on the package pseudospace
 
 Frozen on 2026-10-12, before any fit on the package pseudospace.

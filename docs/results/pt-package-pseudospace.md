@@ -15,7 +15,8 @@ DPT (AKI vs control), together with their unit sets and reviewed labels.
 
 Both protocols below were fixed before any fit they govern. Notebook 72 (validation of the package coordinate) and
 notebook 73 (the label-based species comparison on the package units) have their own documents:
-`pt-package-coordinate-validation.md` and `pt-package-label-comparison.md`.
+`pt-package-coordinate-validation.md` and `pt-package-label-comparison.md`. Notebook 75 (pathway methods and their
+specificity) is in `pt-package-pathway-methods.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets
 

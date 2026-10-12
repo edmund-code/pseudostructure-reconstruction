@@ -342,3 +342,130 @@ No existing module changes.
   (section 3).
 - **O5.** AKI gets the full refit set (9 runs). The criteria apply to human vs mouse only; AKI is reported descriptively
   against the same thresholds (section 5).
+
+## Notebook 72 results
+
+**Run.**
+- Notebook: `analysis/notebooks/72_pt_package_coordinate_validation.ipynb`, logic version
+  `72.package_coordinate_validation.1` (refits `72.refits.1`).
+- Output: `results/pt_package_coordinate_validation/`.
+- **Refits:** 19 package runs of stages 03–04 on perturbed stage-02 inputs: 9 per dataset, plus one 12-thread identity
+  run for human vs mouse. They ran at most 2 at a time, about 3–6 min each. Their large h5ad files were deleted after
+  extraction.
+- **Other fits:** 8 curve-only LOSO fits, and the three NB count-split arms on notebook 71's universe and gene sets.
+- New module `pseudospace/package_refits.py`, with `tests/test_package_refits.py` (6 tests). The full suite passes
+  (513).
+
+**Guards.**
+- Notebook 70's confirmed pass-1 fingerprints are in place: human vs mouse `efafc9ac2e99`, AKI `bb4a80c1b484`.
+- Both identity refits reproduce notebook 70 bit for bit (maximum |Δ| 0).
+- No withheld gene leaked into a fold refit's integration features.
+- **One refit failed the orientation guard:** human vs mouse fold 2. The curve runs through the mouse PT from S3 to S1
+  and through the human PT from S1 to S3. Its positions are NaN, by notebook 36's rule.
+- Unit-set instability (> 5% of base PT units missing from pass 2) was flagged in four refits: human vs mouse half B,
+  and AKI fold 1, half A and half B.
+
+**Package sensitivity found while building the refits (beyond the protocol; reported, not tuned).**
+- The package's stage 03 is chaotic. Two changes alone altered the pass-1 clustering and moved PT units:
+  - an equal-valued lognorm layer with unsorted column indices;
+  - 12 instead of the default BLAS/OpenMP threads.
+
+  In the shipped notebook, the 12-thread identity has within-segment ρ 0.98 against the base and a different
+  fingerprint.
+- The numerical floor (1e-16) gives within-segment ρ 0.96.
+- So the refits keep the package's own file layout and its default threads, as notebook 70 ran. Results of the
+  package depend on the machine's thread count.
+
+**How the protocol was read** (listed in `run_record.json`).
+1. **Library.** The library for P1/P1w/P4 and for equal depth is the total over every export gene. In human vs mouse
+   these are all shared orthologs, which is notebook 35's measured-in-both total.
+2. **Excluded genes.** Evaluation genes and positive controls exclude the 15 label/orientation genes (the PT panels
+   plus the axis anchors).
+3. **Label references.** P1's label reference is notebook 51's (labels coded 0/1/2 as a coordinate). The positive
+   controls' reference is notebook 35's S3 − early contrast.
+4. **Failed refits** are NaN. Medians and maxima ignore them (notebooks 36 and 51); their P4c cells count as not
+   positive.
+5. **Gap and noise** rescale each coordinate by notebook 71's rule within the context's units. The gap is 0.369 on all
+   PT units and 0.217 on M. C8 uses all PT units.
+6. **C12** counts as not met when the flag is raised. The label-based and external fractions are shown beside it.
+7. **LOSO** is computed for the package only (no DPT analogue). LRS-Z's gap uses its folds only. LCP's LOSO, and every
+   comparator's P2 ratio and downstream gate, are quoted from their own units.
+8. **Notebook 71's tables keep notebook 69's dataset names**: hvm = `human_vs_mouse`, aki = `aki_vs_control`. That
+   covers `gene_statistics_human_vs_mouse.csv`, `universe_{ds}.csv`, `gene_sets_{ds}.json`, `method_table.csv` and the
+   cached stage `gene_model_human_vs_mouse_species`.
+   - C10 reads `method_table.csv` (normalized · cameraPR, human vs mouse).
+   - C13 runs on 71's universe (11,055 genes) and gene sets (1,513), which equal the loader's. Its tested sets equal 71's.
+   - C12's percentile is 71's condition-split T_spatial.
+9. **A3 label amplitudes** are specimen pseudobulk log rates, the count analogue under D2.
+10. **P4c sensitivity.** A few PT units lie far along the nephron-wide curve, and the within-segment spline of P4c
+    extrapolates there: one mouse cell reaches −1.43. A common-support sensitivity is reported beside C15 and not used
+    for it.
+
+**Validation criteria, human vs mouse** (met or not met; none un-adopts the package).
+
+| # | Value | Verdict |
+|---|---|---|
+| C1 canonical order | HUK1_MED1 transitions cross (S1→S2 0.666 > S2→S3 0.590; human PT-S2 has 259 units); Slc7a13 and Slc22a7 rise in both mice (ρ 0.69–0.85) | not met |
+| C2 P1 on M | mouse 0.746 vs SCF13 0.746; human 0.295 vs 0.246 (labels 0.749 / 0.314) | met |
+| C3 P1w on M | mouse 0.367 vs DPT13 0.288; human 0.156 vs 0.130 | met |
+| C4 gene-fold | mouse 0.751; human 0.488 | not met |
+| C5 LOSO | 0.959 | met |
+| C6 P5 | 0.731; human S1 0.552 | not met |
+| C7 human S1 | gene-fold 0.516; P5 0.552 | not met (unresolved) |
+| C8 gap | 0.369, from half A (M 0.217; full fit 0.076) | not met |
+| C9 P2 | ratio 0.985; human ρ 0.922 | met |
+| C10 gate (71) | 83 calls; relabeled 1, 0; NCDR 0.006 | met |
+| C11 positive controls | 0.899 vs labels 0.959 | descriptive |
+| C12 A3 | flag raised: 0.829 of H genes are flatter in human (labels 0.829, external 0.771); 71 T_spatial percentile 0.943 | not met |
+| C13 count split | calls: a 66, b 81, c 66; median F b/a 1.22, c/a 1.06; z of a vs b ρ 0.52; 71's 83 calls kept by a / b / c: 59 / 73 / 61 | met |
+| C14 noise | 10 of 12 cells noise-dominated (median ratio 1.73) | not met |
+| C15 P4c | mouse 1/6, human 0/6 (common support 2/6, 0/6) | not met |
+
+The package DPT is reported alongside. It is weaker on most criteria (gene-fold 0.54 / 0.29; P5 0.70), and its gap
+reaches 0.96 in the half-A refit.
+
+**AKI (descriptive, against the same thresholds).**
+- Transitions are ordered in all four specimens.
+- P1: control 0.745, IR 0.363. P1w: control 0.300, IR 0.181.
+- Gene-fold: control 0.812, IR 0.705. LOSO 0.976. P5 0.890.
+- P2: ratio 0.984, IR ρ 0.961. IR − control gap 0.086.
+- Noise-dominated cells: 11 of 12. P4c > 0 cells: control 3/6, IR 3/6.
+
+**Comparators on M.**
+- **M (human vs mouse):** 11,488 of 11,947 package PT units (94.5–96.7% per specimen). 1,378 SCF13 PT structures have
+  no package PT unit.
+- **M (AKI):** 14,383 of 15,013 package PT units.
+
+| Metric | package | package DPT | SCF13 | DPT13 | LCP | LRS-Z |
+|---|---|---|---|---|---|---|
+| P1 mouse / human | 0.746 / 0.295 | 0.751 / 0.215 | 0.746 / 0.246 | 0.741 / 0.290 | 0.745 / 0.320 | 0.746 / 0.316 |
+| P1w mouse / human | 0.367 / 0.156 | 0.313 / 0.112 | 0.240 / 0.107 | 0.288 / 0.130 | 0.428 / 0.202 | 0.439 / 0.195 |
+| gene-fold mouse / human / human S1 | 0.760 / 0.487 / 0.516 | 0.540 / 0.287 / 0.300 | 0.537 / 0.229 / 0.195 | 0.634 / 0.590 / 0.601 | 0.962 / 0.820 / 0.647 | 0.933 / 0.965 / 0.979 |
+| P5 / human S1 | 0.739 / 0.556 | 0.696 / 0.506 | 0.658 / 0.550 | 0.842 / 0.749 | 0.982 / 0.652 | own units 0.976 / 0.980 |
+| count split A vs B | 0.255 | 0.205 | 0.071 | 0.394 | 0.887 | – |
+| gap (max over refits) | 0.217 | 0.984 | 0.352 | 0.334 | 0.292 | 0.072 (folds) |
+| LOSO | 0.963 | – | 0.935 | – | own units 0.99 | – |
+| noise-dominated cells (of 12) | 8 | 4 | 7 | 2 | 0 | 0 |
+| P4c > 0 cells mouse / human | 2 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 2 / 0 | 0 / 0 |
+
+- The quoted own-unit values (P2 ratio, downstream gate, notebook 53's summary) are in
+  `comparators_quoted_own_units.csv`.
+- The old-label sensitivity is in `comparators_matched_old_labels.csv`.
+- AKI on M (full data, not fold-protected): P1 control 0.747 / 0.750 / 0.752 for the package, package DPT and v5 DPT;
+  P1w control 0.326 / 0.296 / 0.266.
+
+**What the paper may claim.**
+- The package coordinate recovers external S3-versus-early zonation as well as the labels and SCF13 do.
+- Its within-segment slopes agree with external adjacent contrasts better than SCF13 and DPT13.
+- Notebook 71's positional calls pass its gate, and the count split does not create them.
+- An injected group-by-position effect is not absorbed, in either dataset.
+
+**What it may not claim.**
+- Stable within-segment order. Gene folds disagree (human 0.49), and one fold refit reverses the mouse PT.
+- Depth-invariant positions (P5 0.73; human S1 0.55, unresolved).
+- A stable species registration (gap 0.37).
+- Positional noise below the within-segment spread (10 of 12 cells).
+- Held-out-gene gains beyond segments plus coverage.
+
+The landmark coordinates (LCP, LRS-Z) remain more stable within segments on the same units. Continuous claims should
+rest on between-segment structure and specimen replication (notebook 74).

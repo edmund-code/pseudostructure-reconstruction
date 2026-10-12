@@ -13,7 +13,9 @@ DPT (AKI vs control), together with their unit sets and reviewed labels.
   (`pseudospace/package_inputs.py`). Every later analysis uses the NB gene model with the mt-free offset. The
   package's own DPT, on the same embedding, is the sensitivity coordinate.
 
-Both protocols below were fixed before any fit they govern.
+Both protocols below were fixed before any fit they govern. Notebook 72 (validation of the package coordinate) and
+notebook 73 (the label-based species comparison on the package units) have their own documents:
+`pt-package-coordinate-validation.md` and `pt-package-label-comparison.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets
 

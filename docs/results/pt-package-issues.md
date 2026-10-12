@@ -88,3 +88,13 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
       S2 units the package labels as S1 (issue 6).
 23. **Two `test_program_localization.py` tests** fail instead of skipping when R cannot find limma (an unactivated
     shell).
+24. **Mouse S1 units carry neighbour signal that human S1 units barely carry.** In both mice, S3 − S1 (centred) is
+    −3.3 to −5.0 for DCT genes (S100g, Slc12a3, Calb1, Pvalb, Slc8a1), −3.7 to −4.3 for podocyte Nphs2 and −2.0 to
+    −2.3 for Ren1. Our human sections show at most −1.2 for the same genes. TAL genes (Umod, Slc12a1) rise toward S3
+    in both species. This fits S1 at the vascular pole next to the DCT and glomerulus, and the 10 µm S1 odds ratio
+    (notebook 42).
+    - **Consequence:** S100g's mouse S1 signal (−5.0, −4.7) is absent in Census mouse PT (−0.07; notebook 82,
+      section 10b). Raghubar's S100g relocation is therefore not reproduced as PT biology.
+    - **Bound:** a gene's mouse-only S1 bias can be neighbour signal. B2b replicates in microdissected tissue, so
+      neighbour signal does not drive the program-level interaction. Single-gene positional claims should be checked
+      against an atlas, as section 10b does.

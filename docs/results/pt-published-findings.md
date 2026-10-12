@@ -546,11 +546,14 @@ Of 564 block members:
 | Slc22a4 (OCTN1) | not lower in human | not consistent (−0.1 to −0.6) |
 
 - **The new finding of this block:** the phosphate transporter NaPi-IIa (SLC34A1) is S1/S2-zonated in mouse (about
-  8-fold) and nearly uniform along the human PT. SLC34A3 is relatively higher in human. Together these give a
+  8-fold) and much weaker along the human PT. SLC34A3 is relatively higher in human. Together these give a
   positional picture of Fernandes's functional result: the human PT spreads phosphate uptake along the tubule and over
-  two transporters.
+  two transporters. **Corrected by notebook 82's post hoc section 10b:** "nearly uniform" overstates it. Every human data
+  set has SLC34A1 S1 > S3, by 1.5–2-fold (Cheval −1.04, Lake −0.62, Census −0.99 log2). Ours is the flattest (−0.21,
+  −0.68). The species difference itself replicates: mouse −3.0 (ours), −3.3 (Cheval), −4.0 (Census).
 - **Raghubar's segment relocations:** the S1/S2 ones (F13b, Cela1, S100g) are reproduced. The S3 ones (Acsm1, Anpep)
-  are not S3-zonated in our mice.
+  are not S3-zonated in our mice. **Qualified by section 10b:** Census mouse confirms F13b and Cela1 (6 of 6 donors),
+  but not S100g (−0.07). It also puts Acsm1 at S3 > S1 (+0.62, 6 of 6), where our mice are weak (+0.27).
 
 ### E1 · Mouse-only zonation and male androgen programs (Xiong)
 
@@ -814,6 +817,35 @@ Program median of the segment contrast (log2). "Range" is max − min over S1–
 | Census human, the 6 male donors with no cell floor (S3 cells 2–287) | Z-M1 attenuated (0.32, 4 of 6) instead of absent, so it agrees with 79. Z-H3's positive control drops to attenuated (1.17, 4 of 6; p 0.31). Other classes unchanged |
 | Lake, the npz as given (S1 and S3 only; 12 normal donors with ≥ 50 nuclei in each) | Same classes as the primary Lake arm for Z-M1 (absent, 0.10), Z-M3, Z-H1 and Z-H3. S2 programs not testable |
 
+### Section 10b (post hoc, outside the protocol) · The single-gene hypotheses in Cheval and the atlases
+
+This section was added after notebook 81. It asks whether notebook 81's single-gene species differences reflect species
+biology or our specimens. The values are S3 − S1 in log2 (Census human: S3 − PCT). Each is centred per specimen or
+per donor by the median over the analysed genes. Atlas entries give the donor median and the number of donors that
+share its sign. The section is descriptive: it has no test and no call, and it changes no pre-specified readout. Table:
+`posthoc_single_genes.csv`.
+
+| Gene | Ours, mouse (2) | Cheval mouse | Census mouse (6) | Ours, human (2) | Cheval human | Lake (7) | Census human (6) | Reading |
+|---|---|---|---|---|---|---|---|---|
+| Slc34a1 | −3.04, −3.03 | −3.26 (206 → 21 tags) | −4.00 (6/6) | −0.21, −0.68 | −1.04 (27 → 11) | −0.62 (6/7) | −0.99 (6/6) | species difference replicates: mouse 8–16-fold, human 1.5–2-fold; ours is the flattest human |
+| Slc34a3 | −5.99, −6.68 | — | −5.50 (6/6) | −2.17, −2.87 | — | −2.20 (7/7) | −3.45 (6/6) | S1-biased in both species, weaker in human; replicates |
+| Slc20a1 (PiT-1) | −0.41, −0.22 | — | +0.18 (5/6) | +0.99, +1.34 | — | +0.84 (7/7) | +1.06 (5/6) | rises toward S3 in human only; replicates in both human atlases |
+| Cela1 | −4.58, −4.83 | — | −4.21 (6/6) | +0.86, +1.84 | — | −0.03 (5/7) | −0.05 (5/6) | mouse S1 ≫ S3 replicates; our human values are noise (0% detection) |
+| F13b | −0.89, −1.08 | −3.12 (30 → 3) | −1.34 (6/6) | −2.13, +0.99 | 0 tags | −0.03 (6/7) | +0.01 (4/6) | mouse S1 > S3 replicates; human not PT-expressed |
+| S100g | −5.00, −4.70 | −3.17 (4 → 0) | −0.07 (5/6) | −0.73, +0.70 | 0 tags | −0.03 (5/7) | +0.02 (4/6) | **our mouse S1 signal is not in Census mouse** (issue 24) |
+| Acsm1 | +0.27, +0.27 | — | +0.62 (6/6) | −0.90, −1.02 | — | −2.03 (7/7) | −1.06 (5/6) | opposite directions in the two species in every data set; our mice are the weakest |
+| Slc34a2 | +1.48, +3.10 | — | +1.14 (6/6) | +3.26, +3.77 | — | +1.44 (4/7) | +0.23 (4/6) | S3 > S1 in both species |
+| Anpep, Slc20a2, Abcb1a, Slc22a4 | within ±0.9 | small tag counts | −0.07 to +1.23 | within ±0.9 | small tag counts | within ±0.6 | within ±0.6 | no consistent position; Slc22a4 S3 > S1 in Census mouse only (+1.23) |
+
+- **The species differences we report for single genes are mostly species biology, not our specimens.** SLC34A1,
+  SLC34A3, Cela1 and F13b show the same mouse–human contrast in independent tissue (Cheval) and in donor-replicated
+  atlases. The two places our data stand apart from the others are named. Our human SLC34A1 is flatter than every
+  other human data set. Our mouse S100g has an S1 signal that Census mouse lacks.
+- **One gene not in notebook 81's readout.** SLC20A1 (PiT-1) rises from S1 to S3 in human: ours +1.0 and +1.3,
+  Lake +0.84 (7/7), Census +1.06 (5/6). It does not rise in mouse: ours −0.4 and −0.2, Census +0.18. Fernandes
+  reports PiT-1 along the entire nephron in both species. This adds a species-specific S3 bias inside the PT,
+  at the mRNA level.
+
 ### Readout
 
 - **B1 (Cheval alone).** Human and mouse S1 → S3 contrasts agree in sign more often than chance (0.62–0.63), but the
@@ -859,7 +891,8 @@ Program median of the segment contrast (log2). "Range" is max − min over S1–
   only; the protocol fixes no peak threshold.
 
 **Tables:** `cheval_genes.csv`, `cheval_strength.csv`, `cheval_vs_ours.csv`, `cheval_programs.csv`,
-`atlas_donor_programs.csv`, `atlas_classes.csv` (B3 and A3 rows), `how_the_protocol_was_read.csv`; `run_record.json`.
+`atlas_donor_programs.csv`, `atlas_classes.csv` (B3 and A3 rows), `posthoc_single_genes.csv` (section 10b, post hoc),
+`how_the_protocol_was_read.csv`; `run_record.json`.
 
 **Figures:** `fig82a_cheval_strength` (B1a by strength bin, both selection directions), `fig82b_cheval_vs_ours` (B2a
 controls, B2b raw and beyond flattening), `fig82c_program_classes` (Z programs × data set, classes; A3 functions'
@@ -872,8 +905,8 @@ segment contrasts and peaks).
 | CellSpectra 2025 | per-segment human vs rodent DE lists | most listed genes differ in all three segments (74%); segment-only listings are segment-largest for human S1, human S3 and mouse S1, not human S2 | between-segment test (calibrated) |
 | CellSpectra 2025 | conserved PT functions | conserved as functions, but mostly flat along the PT; arginine metabolism and organic acid transport are mouse-zonated, flat in human; atlas peaks agree in 4 of 12 cells | calibrated between-segment, but small amplitudes |
 | Cheval 2012 | S1/S3 expression diverges between species | in their own data, S3 − S1 contrasts agree in sign (0.62–0.63), without a strength trend; our species × position interaction replicates in their microdissected tissue, beyond flattening | B2b confirmatory |
-| Raghubar 2022 | mouse cortex higher in energy and metabolism, human in structure | holds inside PT units and is uniform along the PT; F13b, Cela1 and S100g relocations reproduced; Acsm1 and Anpep not S3 in our mice | level (descriptive) and between-segment |
-| Fernandes 2026 | human phosphate uptake relies on SLC34A3 more than mouse | SLC34A1 is S1/S2-zonated in mouse (about 8-fold) but nearly flat in human; SLC34A3 relatively higher in human | single genes, descriptive |
+| Raghubar 2022 | mouse cortex higher in energy and metabolism, human in structure | holds inside PT units and is uniform along the PT; F13b and Cela1 relocations reproduced (also in Census mouse); S100g's only in our mice; Acsm1 and Anpep not S3 in our mice | level (descriptive) and between-segment |
+| Fernandes 2026 | human phosphate uptake relies on SLC34A3 more than mouse | SLC34A1 is S1/S2-zonated in mouse (8–16-fold) but only 1.5–2-fold in human, the same in Cheval and both atlases; SLC34A3 relatively higher in human; SLC20A1 rises toward S3 in human only (both human atlases agree) | single genes, descriptive (10b post hoc) |
 | Basit 2019 | MDR1, OCT3, OCTN1 not lower in human | MDR1 (Abcb1a) much higher in human; OCTN1 not | single genes, level |
 | Xiong 2023 | mouse PT sex programs, limited in human | mouse-only zonation is not enriched for male-biased genes (OR 0.77) | E1 (negative) |
 | Chen 2021, Hinze 2022 (via 79) | segment programs per species | the transfer pattern (mouse S1–S3 programs absent in human; human S1 conserved in mouse; human S3 absent in mouse) replicates in Lake and Census in 6 of 9 cells; Z-M1 in Cheval | atlas donors |

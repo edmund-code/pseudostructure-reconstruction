@@ -386,3 +386,226 @@ Total: about 2¼ h, or 3 h with the M arms.
     fold refits.
   - Last, behind G3 and G4, come the sections that read 75's tables (R2 comparisons, R3, R4 (iii)) or 72's tables (the
     count split, R6 noise and the claim tables).
+
+## Notebook 74 results
+
+**Run.**
+- Notebook: `analysis/notebooks/74_pt_package_continuous_vs_discrete.ipynb`, logic version `74.package.1`.
+- Output: `results/pt_package_continuous_vs_discrete/`.
+- Compute: 77 min uncached at 24 workers. Most of it was the R1 arms, R4 step nulls and comparator nulls; the placebo
+  refit took about 2.5 min. A cached rerun takes about 6 min.
+- New module: `pseudospace/within_segment_nb.py`, with `tests/test_within_segment_nb.py` (8 tests). The full suite
+  passes (520).
+- Data: the HGNC files are in `data/external/hgnc/` (sha256 asserted, downloaded 2026-10-12, `SOURCE.txt`).
+
+**Guards.**
+- The confirmed pass-1 fingerprints are in place (human vs mouse `efafc9ac2e99`, AKI `bb4a80c1b484`), and the package
+  is 0.1.0 at 59da04b.
+- G1: the builder reproduces 71's counts digest, universe (11,055) and sets (1,513); the AKI analogues pass too.
+- G2: 71's T_spatial is refitted to a relative difference of 7e-6.
+- G3: 75's segment tables cover 71's universe and sets.
+- G4: 72's C14 is recomputed and agrees.
+- G5: 72's half-B counts are reproduced exactly; the stage key of 72's G6 arm b matches.
+- df are asserted from the design ranks everywhere: R1 (6, 12/6), ladder (2, 4/2 and 5, 10/5), W tests (6, 6).
+
+**72's verdict sets the frame: C14 is not met.** 10 of 12 cells are noise-dominated. The species-mean fold noise ÷
+spread is 0.98–4.25 (old SCF13: 0.83–1.49), and only mouse S3 is below 1. By the protocol, every within-segment
+result below is descriptive: no within-segment claim is made. R1 test B, R4 (i), (ii) and (iv), R7, and the Fig 3e
+"beyond coordinate steps" category are all reported without a claim.
+
+### How the protocol was read (also in `run_record.json`)
+
+1. **Transitions out of order.** On P, D and E, HUK1_MED1's logistic S1→S2 transition lies after its S2→S3
+   transition (0.67 against 0.59 on P). This is 72's C1 failure. On the count-split coordinate both human sections are
+   out of order.
+   - 58's rule for such a specimen was applied: no segment units, so no onsets, extrema or boundary shifts there. Its
+     slopes are kept.
+   - Human (ii), human (iv) and all of R4 (iii) are therefore **not evaluable**.
+2. **Placebo refit.** The package keeps only variable genes as integration features (Seurat dispersion ≥ 0.5 in each
+   species). Non-zonal placebo genes are not variable: only 45 qualified, and stage 03 stopped (50 PCs need ≥ 50
+   features).
+   - The closest reading of notebook 53's placebo, which used its pipeline with the placebo genes as features, sets
+     `integration.hvg_min_disp` to −10⁹ for this refit only. This went through a copy of the tracked config
+     (`refits/placebo_config/`). The package code and every other parameter are unchanged.
+   - 977 of the 988 placebo genes became features. The refit kept 6,884 of 11,947 PT units in pass 2.
+   - The placebo does not order S1→S3 (Spearman with P 0.10). It was flipped, which changes neither slope agreement
+     nor WSR.
+   - The protocol's decile rule had a shortfall in the lowest-expression decile: 109 features had no eligible
+     universe gene.
+3. **WSR folds and units.**
+   - 72's human vs mouse fold-2 refit failed its orientation guard, so WSR uses folds 0 and 1 for every arm.
+   - It runs on the 6,884 units with a position in every arm. The placebo dropped the other units.
+4. **R3, E3's lead gene.** It uses 75's segment-F z, because 75 stores DESeq2 Wald statistics per scope.
+5. **R4 (iii) programs.** 75's programs carry no driver column, so drivers would be the members in the top 10% of 71's
+   z (61's rule). This is moot, because (iii) is not evaluable.
+6. **The remaining readings** are minor and listed in `run_record.json`:
+   - (iv) nulls use the point estimate;
+   - the transporter slope agreement needs > 20 genes;
+   - MC8 uses the M cells, where all six arms share one unit set;
+   - the within-species tests use genes with counts in both specimens.
+
+### R1 · Beyond-steps decomposition (57)
+
+| | Old (SCF13, Gaussian) | P (package) | D (package DPT) |
+|---|---|---|---|
+| Test A, beyond label steps (relabeled) | 79 (6, 0) | **64 (0, 0)** | 66 (0, 0) |
+| Arm A median test A (range); ratio | 40; **0.51** | 35 (21–46); **0.55** | 44 (30–56); 0.67 |
+| Test B, beyond coordinate steps (relabeled) | 67 (1, 0) | **74 (0, 0)** | 65 (0, 0) |
+| Arm medians, test B (arm A, arm B) | 9, 11 | 0, 7 | 0, 24.5 |
+| Floor (arm B test A, arm A test B) | 3–31 | **0, 0** | 0, 0 |
+| 57's case-only design, tests A, B | – | 83, 86 | – |
+| Label agreement of coordinate segments, mouse / human | 0.92 / 0.85 | 0.95 / 0.87 | 0.95 / 0.87 |
+
+- **Decision: label–coordinate discordance**, as before. About half of the beyond-label-steps signal is produced by
+  coordinate steps plus label noise.
+- **Test B** (74 calls) is far above both exact nulls, and the floor is gone with shared steps. 57's case-only design
+  gives 83 and 86 calls.
+- **All four tests pass 71's rule** on both coordinates (calibration 0.026–0.040).
+- **Within-segment candidates** (A and B on P and D): 49. Of them, 28 are strict, with P set z above every simulated z.
+  47 of the 49 are 71 calls.
+  - They include fatty acid and amino-acid metabolism, SLC-mediated transport, the inorganic cation/anion and organic
+    cation/anion transport sets, xenobiotic metabolism and glutathione conjugation.
+  - They are descriptive, because C14 is not met.
+
+### R2 · Continuous against discrete calls; ladder rows (61, 37)
+
+- **A (71) against S (75's segment F-test)**, both passing their rules:
+  - **71 adds 12 sets (12 redundancy clusters); the steps add 5.** Old: 13 and 3.
+  - All 10 of 71's additions with segment FDR ≤ 0.25 are near misses (0.052–0.225). Two are not:
+    glycolysis/gluconeogenesis (0.29) and the TCA cycle (0.45).
+  - 10 of the 12 are also called by test B.
+  - 11 of the 12 are called by no 75 segment ORA. Two are probe-sensitive (VLCFA β-oxidation and organic
+    cation/anion/zwitterion transport).
+  - The steps add drug metabolism, pantothenate/CoA, cellular hexose transport, Na⁺/Cl⁻ neurotransmitter transporters
+    and surfactant metabolism, each with 71 FDR 0.054–0.072.
+- **Ladder rows (NB, shared steps, mirrored denominators):**
+
+  | Row | Human vs mouse | AKI |
+  |---|---|---|
+  | Steps on the spline | 75 (69 clusters); 0, 0; calibration 0.049; pass | 53; 2, 7; 0.088; fail |
+  | Six bins | 101 (93); 1, 1; 0.048; pass | 97; 9, 13; 0.103; fail |
+
+  Old (human vs mouse, Gaussian): 16 (0, 0) and 49 (17, 0). The AKI rows fail calibration, as 71's AKI positional
+  F-test does.
+- **Fig 3e categories of 71's 83 calls** (sets; redundancy clusters):
+
+  | Category | Sets | Clusters |
+  |---|---|---|
+  | Also called by the segment F-test | 71 | 66 |
+  | Continuous-only | 12 | 12 |
+  | Beyond coordinate steps (test B; descriptive) | 68 | 65 |
+  | Sign change along the PT | 21 | 20 |
+
+  - Location of max |Δ|: S1 33 (22 human-higher), S2 10 (all mouse-higher), S3 40 (31 human-higher).
+
+### R3 · Worked examples (61's rules, NB; Fig 3a)
+
+| Rule | Pathway (sets meeting the rule) | Lead gene |
+|---|---|---|
+| E1 all agree | Hallmark Fatty Acid Metabolism (21) | Hao2 |
+| E2 segment F-test FDR > 0.05, curves structured | Phenylalanine and tyrosine metabolism (8; segment FDR 0.052) | Hpd |
+| E3 discrete-only | KEGG Oxidative phosphorylation (133) | Cox7a1 |
+| E4 sign change | Valine, leucine and isoleucine degradation (21) | Acadm |
+| E5 step-like | Hallmark Bile Acid Metabolism (13) | Gc |
+
+### R4 · Descriptors per specimen (58), on P with 10 + 10 step nulls
+
+- **(iv) Onset order in mouse S2, given r: 0.11 (−0.02 to 0.24)**, 401 genes.
+  - Inside the step nulls (maximum 0.34).
+  - Count split 0.39 (0.19–0.56), 140 genes.
+  - **Decision: inconclusive** (old 0.36, inconclusive).
+  - D gives 0.21 and E 0.14, also inside their nulls.
+- **(i) Within-segment slope agreement** (fold-protected; descriptive):
+
+  | Cell | Slope ρ (P) | Step-null max | Count split | Placebo |
+  |---|---|---|---|---|
+  | Mouse S1 | 0.38 | 0.30 | 0.16 | −0.01 |
+  | Mouse S2 | 0.37 | 0.21 | 0.16 | −0.03 |
+  | Mouse S3 | 0.49 | 0.14 | **0.38** | 0.00 |
+  | Human S1 | 0.46 | 0.14 | 0.07 | 0.07 |
+  | Human S2 | 0.09 | 0.12 | 0.01 | 0.01 |
+  | Human S3 | 0.18 | 0.12 | 0.10 | 0.03 |
+
+  - Five cells exceed every step-null replicate; human S2 does not (old: mouse S2 and human S1).
+  - (i-b), inside coordinate segments: mouse S1–S3 and human S1 exceed both nulls.
+  - The placebo carries no slope agreement anywhere (−0.03 to 0.07).
+  - Only mouse S3 also meets ρ ≥ 0.3 with count split ≥ 0.2.
+- **(ii) Interior extrema:** only mouse S3 exceeds the step nulls (333 against a maximum of 309). Mouse S1 and S2 fall
+  inside them. The human pair is not evaluable (reading 1). Old: human S1 only.
+- **(iii) Boundary shifts:** not evaluable (reading 1). Old: 5 genes, not claimed.
+- **Scale sensitivity** (log1p, `scale_sensitivity.csv`):
+  - The slopes are scale-free and unchanged.
+  - The mouse S3 extrema collapse from 333 to 7 and no longer exceed the nulls, so the (ii) result depends on reading
+    amplitudes on the natural-log scale, which inflates near-absent genes.
+  - (iv) rises to 0.41 (160 genes) and is still inside its nulls.
+
+### R5 · External mice (59; Census, 6 male adult donors, all ordered S1 < S2 < S3)
+
+- **Onsets: partial ρ 0.30 (donor bootstrap −0.00 to 0.43)**, 61 genes.
+  - **Decision: not replicated at the pre-specified level.** The estimate clears 0.2, but the interval touches 0.
+  - The raw Spearman of our onsets against external onsets is −0.21.
+  - D gives 0.33 (0.21–0.46); E 0.18.
+  - log1p sensitivity: 0.02 on P.
+  - Old: 0.10 (0.01–0.24).
+- **Within-segment slopes against the external donor median** (secondary):
+  - raw ρ 0.37–0.41;
+  - after removing the external S2−S1 and S3−S2 steps, partial ρ 0.17 (S1), 0.20 (S2) and 0.24 (S3) on P.
+  - Old: 0.06–0.19.
+
+### R6 · Resolution budget, placebo, WSR and the claim gates (60)
+
+- **Noise against information** (Fig 3d; 72's fold noise):
+  - over the 36 M cells (six arms on one unit set), Spearman of noise ÷ spread against slope agreement **−0.24**
+    (old −0.31);
+  - LCP and LRS-Z have the lowest noise on M (0.13–0.47).
+- **WSR**, P against the placebo:
+  - **P:** p ≤ 0.01 in both directions in mouse S1 and S3 and human S1–S3; mouse S2 misses at 0.0499.
+  - **Placebo:** never significant (smallest p 0.046), and P exceeds it in every cell and direction.
+- **Claims** (`cell_claims.csv`):
+  - **No cell meets either claim**, because C14 is not met.
+  - Without C14 and the per-cell noise gate, "replicated within-segment gradients" would hold in mouse S3, which is
+    also the only cell that is not noise-dominated.
+  - Without C14 and the noise gate, the held-out-genes claim would hold in mouse S1 and S3 and human S1–S3.
+
+### R7 · Solute transporters (Fig 3b)
+
+- **T:** 341 genes (44 SLC25, 32 ABC); 297 without SLC25.
+- **Zonated (W1 q ≤ 0.05):** 247 in mouse, 147 in human.
+- **Micro-gradient genes** (W2 and W3 q ≤ 0.05): mouse 115, human 62 (without SLC25: 103, 59). Across all universe
+  genes: 1,410 and 905.
+- **Calibration:** both tests are calibrated on their exact nulls (pooled share of p ≤ 0.05: W3 0.035, W2 0.032).
+- **Set test:** cameraPR of T on W3 z is Up in both species (mouse p 8e-8, human 1e-5; without SLC25 1e-8 and 1e-6).
+- **T-restricted slope agreement:** 0.29–0.75; beyond every step null in five of six cells (all but human S2; without
+  SLC25, all but human S3).
+- **Gate:**
+  - **Not met, because C14 is not met.** Its other three conditions hold: calibration, ≥ 10 genes, and mouse S3 beyond
+    the nulls in a non-noise-dominated cell.
+  - **Fig 3b is therefore the segment-level zonation heatmap**, with within-segment marks labelled descriptive and
+    noise-dominated cells hatched.
+
+### Material change from the old record (protocol section 5)
+
+| # | Old | New | Met |
+|---|---|---|---|
+| MC1 decision | 0.51, discordance | 0.55, discordance | no |
+| MC2 test B | 67 vs 9–11 | 74 vs 7; pass | no |
+| MC3 adds | 13 / 3 | 12 / 5 clusters; segment F-test passes | no |
+| MC4 gradients claim | mouse S2 | no cell (C14) | **yes** |
+| MC5 (iv) | inconclusive | inconclusive (0.11) | no |
+| MC6 (ii) | human S1 only | mouse S3 only; human not evaluable | **yes** |
+| MC7 (iii), R5 | 5 genes; 0.10 | not evaluable; 0.30 with interval touching 0 | no |
+| MC8 noise vs agreement | −0.31 | −0.24 | no |
+| MC9 lost only through new gates | – | mouse S3 (gradients); held-out genes in mouse S1, S3 and human S1–S3 | **yes** |
+
+**What changes for the paper text.**
+- **Still stands:**
+  - "continuous ≈ fine discretisation in calls; adds a few near-miss pathways" (12 against 5);
+  - the beyond-label-steps signal is half discordance;
+  - test B is real and step-specific.
+- **Becomes descriptive:**
+  - the within-segment-gradient statements (Fig 3c and 3d);
+  - the transporter micro-gradients (Fig 3b).
+
+  They replicate between specimens beyond step nulls and a placebo, and partly in external nuclei. But the package
+  coordinate's fold noise exceeds the within-segment spread in 10 of 12 cells, so the frozen rule forbids a
+  within-segment claim.

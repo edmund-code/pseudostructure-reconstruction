@@ -48,21 +48,28 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
 12. From the scratch trial (2026-10-11): `plain_log2fc_level` subtracts the typical-gene curve, unlike its
     documentation; stage 01 forks one worker per sample (about 22 GB RAM for four samples); the 150-gene cap on gene
     sets drops the mTORC1 and OXPHOS Hallmarks; the QuPath feature `id` is ignored and `Nphs1` is skipped silently.
+13. **The pass-2 PCA uses 631 genes, not the 763 it records.** Pass-1 clustering writes `var['highly_variable']`
+    (its 2,000 genes) onto the unit object; the pass-2 object inherits it, and scanpy 1.11.5's `sc.tl.pca` then uses
+    that column as its gene mask. Pass 2 therefore runs PCA on the 631 genes that are both integration genes and
+    pass-1 clustering genes, while `uns['pca']` says 763. Checked on the human vs mouse run (2026-10-12): a refit on
+    the 631 genes reproduces the stored PCs exactly; a refit on all 763 correlates 0.989–0.998 over PCs 1–5. The
+    effect on the embedding is small, but `X_harmony`, the curve and DPT all inherit it, and it should hold for the
+    AKI run and the reference run too (not checked). Not patched.
 
 ## Recorded deviations
 
-13. Local `*_v4.geojson` mouse segmentations instead of the reference `v4fix` (192 more polygons); raw
+14. Local `*_v4.geojson` mouse segmentations instead of the reference `v4fix` (192 more polygons); raw
     `HUK1_*_v2.geojson` for human; a nephron-wide curve with the PT as a stretch (notebook 70).
-14. The notebook 74 placebo refit lowered `integration.hvg_min_disp` in a config copy, because only 45 non-zonal genes
+15. The notebook 74 placebo refit lowered `integration.hvg_min_disp` in a config copy, because only 45 non-zonal genes
     passed the variable-gene filter.
-15. Notebook 76 loosened a reuse tolerance from 1e-6 to 1e-4 after seeing two dispersion values differ by 1.4e-5.
+16. Notebook 76 loosened a reuse tolerance from 1e-6 to 1e-4 after seeing two dispersion values differ by 1.4e-5.
 
 ## Not yet done
 
-16. The paper outline, figure plan, draft v0.6 and `pseudostructure-current-state.md` still quote SCF13-era numbers.
-17. Notebook 78 (paper figures) is not built.
-18. The method-comparison page shows notebook 71 only; the segment F-test and conventional DE rows of notebook 75 are
+17. The paper outline, figure plan, draft v0.6 and `pseudostructure-current-state.md` still quote SCF13-era numbers.
+18. Notebook 78 (paper figures) is not built.
+19. The method-comparison page shows notebook 71 only; the segment F-test and conventional DE rows of notebook 75 are
     not on it.
-19. The literature check of the 83 calls (untracked scratch) names candidate new species differences: sterol
+20. The literature check of the 83 calls (untracked scratch) names candidate new species differences: sterol
     synthesis, glyoxylate/glycine cleavage and glutathione synthesis. Its Nt5e groups (G08, G37) were classed
     inconsistently.

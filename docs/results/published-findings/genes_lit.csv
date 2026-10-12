@@ -1,0 +1,15 @@
+family,gene,source,pmid,published_statement,prediction,status
+C2,F13b,raghubar2022 (Supp Material Table 8),35872784,mouse PT S2 and S1; human DCT,"mouse: PT, S1/S2 above S3; human: low in PT",eligible
+C2,Cela1,raghubar2022 (Supp Material Table 8),35872784,mouse PT S1 and S2; human DCT and LOH,"mouse: PT, S1/S2 above S3; human: low in PT",eligible
+C2,Acsm1,raghubar2022 (Supp Material Table 8),35872784,mouse PT S3; absent in human (Wu 2018),mouse: S3 above S1/S2; human: low in PT,eligible
+C2,Anpep,raghubar2022 (Supp Material Table 8),35872784,mouse PT S3; human PT,mouse: S3 above S1/S2; human: PT-expressed,eligible
+C2,S100g,raghubar2022 (Supp Material Table 8),35872784,mouse pCT and nCT; absent in human,mouse: PT-expressed (convoluted part: S1/S2); human: low in PT,eligible
+D,Slc34a1,fernandes2026,42494142,mouse ~80% of Na-Pi uptake; human adults ~40%; mouse mRNA mostly S1 and S2,mouse: S1/S2 above S3; human: PT-expressed (segment profile unknown),eligible
+D,Slc34a3,fernandes2026,42494142,human adults ~40% of Na-Pi uptake; negligible in mouse; PT-restricted in mouse,human: PT-expressed; Slc34a3 - Slc34a1 log ratio higher in human than in mouse (level; probe-exposed),eligible
+D,Slc34a2,fernandes2026,42494142,human mostly thin limbs; NaPi-IIb protein in adult human PT BBM (females higher),descriptive,eligible
+D,Slc20a1,fernandes2026,42494142,along the entire nephron in both species,descriptive,eligible
+D,Slc20a2,fernandes2026,42494142,along the entire nephron in both species,descriptive,eligible
+F,Abcb1a,basit2019 (abstract),31123036,MDR1: one of 3 of 19 transporters not higher in rodents than human,relatively higher in human than the transporter background (level; probe-exposed),eligible
+F,Slc22a4,basit2019 (abstract),31123036,OCTN1: one of 3 of 19 transporters not higher in rodents than human,relatively higher in human than the transporter background (level; probe-exposed),eligible
+F,Slc22a3,basit2019 (abstract),31123036,OCT3: one of 3 of 19 transporters not higher in rodents than human,relatively higher in human (level; probe-exposed),not_in_universe
+F,Abcb1b,basit2019 (abstract),31123036,MDR1 (second mouse paralog),as Abcb1a,non_one_to_one

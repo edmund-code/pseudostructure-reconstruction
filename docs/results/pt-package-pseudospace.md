@@ -19,6 +19,7 @@ notebook 73 (the label-based species comparison on the package units) have their
 `pt-package-continuous-vs-discrete.md`, notebook 75 (pathway methods and their specificity) is in
 `pt-package-pathway-methods.md`, notebook 76 (AKI along the PT, Figure 6) is in `pt-package-aki.md`, and notebook 77 (the human vs mouse calls
 downstream) is in `pt-package-species-calls.md`.
+Notebooks 79 and 80 (published PT programs along the pseudospace, hypothesis-driven) are in `pt-known-programs.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

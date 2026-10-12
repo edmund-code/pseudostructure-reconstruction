@@ -1,0 +1,2 @@
+program_id,family,role,source,pmid,published_claim,direction,segment,scope,n_members,genes,n_listed,n_non_one_to_one,n_unmapped_symbol,n_not_in_universe,n_label_orientation_excluded,n_eligible,capped,non_one_to_one,unmapped_symbol,not_in_universe,label_orientation_excluded
+Z2-Lake-S2,zonation,secondary,lake2023 (KPMP; ST5 curated + ST8 NSForest snCv3),37468583,"Human PT-S2 marker (curated or NSForest, vs all other subclasses), not listed for another PT segment in these tables",S2-high (human),S2,S2,3,"Slc34a1, Slc5a10, Miox",3,0,0,0,0,3,False,,,,

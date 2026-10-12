@@ -435,3 +435,202 @@ Class-rule readouts (B1, B2c, B3), gene-level hypotheses (C2, D, F) and section 
   - the continuous descriptors and species agreement (section G);
   - the pathway label.
 - Notebook 79's functions are reused through `program_localization`.
+
+## Notebook 81 results
+
+`analysis/notebooks/81_pt_published_findings.ipynb` (logic `81.published_findings.1`) writes to
+`results/pt_published_findings/`. It runs in about 1 min and fits no model.
+
+**Guards.** All passed:
+- the export contract and fingerprint `efafc9ac2e99`;
+- 71's universe (11,055 genes), sets (1,513) and units (11,383);
+- 71's cached model reproduces its T_spatial and z;
+- the 8 frozen files match their sha256;
+- 72's transitions reproduce;
+- the pseudobulks and calibration equal notebook 79's.
+
+**Calibration** (equal to 79's): every level t fails (0.113–0.210); the segment F z passes (0.055); the positional F z
+passes (0.071).
+
+### A1 · CellSpectra's segment-specific species genes
+
+| Program | n | P S1 / S2 / S3 (log2) | Between q | Localization (peak; margin) | Readout |
+|---|---|---|---|---|---|
+| U-H1 human-high, S1 only | 21 | 2.50 / 2.36 / 1.45 | 7e-5 | graded (S1; 0.14) | supported |
+| U-H2 human-high, S2 only | 5 | 2.06 / 2.28 / 3.02 | 0.017 | localized to S3 (0.74) | not supported: largest in S3 |
+| U-H3 human-high, S3 only | 32 | 1.33 / 1.50 / 2.48 | 1e-8 | localized to S3 (0.97) | supported |
+| U-HC human-high, all three | 40 | 2.97 / 3.25 / 3.73 | 0.018 | localized to S3 (0.48) | core, not uniform |
+| U-M1 mouse-high, S1 only | 18 | −1.97 / −1.47 / −0.53 | 4e-6 | localized to S1 (0.51) | supported |
+| U-M2 mouse-high, S2 only | 8 | −1.78 / −2.14 / −0.64 | 0.14 | not resolved (S2) | not resolved |
+| U-M3 mouse-high, S3 only | 44 | −1.70 / −2.35 / −2.16 | 1e-8 | graded (S2; 0.18) | not resolved |
+| U-MC mouse-high, all three | 40 | −1.48 / −1.54 / −1.39 | 0.013 | graded (S2; 0.06) | core, near uniform |
+
+- **Supported:** 3 of the 6 segment-unique programs (U-H1, U-H3, U-M1) differ most in their own segment. The
+  "adds nothing" rule is not met.
+- **Not supported:** U-H2 (5 genes) differs most in S3, not S2. Every difference is present (≥ 0.25 log2) in all three
+  segments. Segment specificity is a matter of degree (0.5–1 log2 on 1.5–3 log2), not presence.
+- **The human-high core is not uniform.** It grows toward S3 (2.97 → 3.73 log2). Caveat: human S3 is cortical; mouse
+  S3 includes the outer stripe.
+- **Relabelings:** the relabeled ratios are ≤ 0.08 everywhere.
+- **Level (descriptive):** human-high programs replicate; mouse-high programs hold direction only (79's relabeling-1
+  pattern).
+
+### A2 · The genes behind the CellSpectra blocks
+
+Of 564 block members:
+
+| Class | Genes | Share |
+|---|---|---|
+| present in all segments | 420 | 74% |
+| restricted to the listed segment | 37 | 7% |
+| opposite somewhere | 56 | 10% |
+| not reproduced | 42 | |
+| elsewhere only | 9 | |
+
+- Unique members are restricted to their listed segment in 11% of cases; core members in 1%.
+- **What our data add:** CellSpectra's per-segment species lists mostly describe one PT-wide difference. The segment
+  listing is reproduced as segment-restricted for few genes:
+  - human: Mme and Slc16a9 (S1/S2); Rora, Nebl, Stox2, Tinag, Itpr2 and Ppara (S3);
+  - mouse: Dab2, Plcb1, Enpp2, Gldc, Maf and Dpyd (S1/S2); Osbpl8, Chrm3, Pipox and Kcnc3 (S3).
+- **Mouse-high genes that are human-high in at least one segment** in all 4 pairs include Pde4d, Fgfr2, Abcc2, Ptprd,
+  Nhs and Itch. This is a level reading, so probe-exposed.
+
+### A3 · CellSpectra's conserved PT functions: placement
+
+| Function | n | Peak segment (Ctrl1A2, Ctrl1A4, HUK1_COR1, HUK1_MED1) | Species × segment | Between q | Readout |
+|---|---|---|---|---|---|
+| long-chain fatty acid-CoA ligase | 10 | S1, S2, S1, S1 | not resolved | 0.44 | not resolved |
+| arginine metabolism | 8 | S1, S1, S1, S3 | localized to S3 | 7e-6 | placement differs |
+| regulation of phospholipid biosynthesis | 19 | S2, S2, S3, S3 | not resolved | 0.058 | placement differs |
+| organic acid transport | 209 | S2, S2, S3, S2 | graded (S2) | 6e-6 | placement differs |
+| transcytosis | 18 | S3, S2, S3, S2 | not resolved | 0.28 | not resolved |
+| LDL particle binding | 13 | S3, S3, S2, S2 | not resolved | 0.44 | placement differs |
+
+- **No function meets "placement conserved".**
+- Two show a calibrated species × segment change:
+  - **Arginine metabolism:** the human − mouse difference is largest in S3. In mouse the program dips in S2 (−0.40
+    and −0.27); in human it is flat.
+  - **Organic acid transport:** in mouse it is highest in S2 in both mice; in human it is nearly flat.
+- Within-species amplitudes are small (mostly |contrast| < 0.4 log2), so "placement" here means weak zonation.
+- **What our data add:** a function can be conserved as a PT function (CellSpectra's coordination) while its axial
+  placement differs between species. Both cases with a calibrated difference are mouse-zonated and flat in human.
+
+### C1 · Raghubar's whole-cortex species difference, inside the PT
+
+| Program | Q at PT (all 4 pairs) | P S1 / S2 / S3 | Level | Localization (between q) | Detected ≥ 10% in both human sections |
+|---|---|---|---|---|---|
+| R-ENERGY (mouse-high) | 1.30 | −1.34 / −1.58 / −1.38 | direction only | uniform within resolution (0.67) | 0.88 (universe 0.66) |
+| R-METAB (mouse-high) | 4.18 | −3.90 / −3.88 / −3.48 | direction only | graded, S1 (0.0067) | 0.36 |
+| R-STRUCT (human-high) | 3.05 | 3.06 / 3.04 / 3.19 | direction only | uniform within resolution (0.36) | 0.65 |
+
+- All three published directions hold inside PT units, in all 4 pairs. They fail the relabeling specificity, as
+  CellSpectra's mouse-high blocks do.
+- **Energy production:** the mouse-high difference is the same size along the PT. This fits Raghubar's own reading (a
+  global metabolic-rate or age difference) and equally a platform offset; it is not segment biology.
+- **Structural genes:** they are PT-expressed at the universe rate (0.65 against 0.66), so their human-high signal is
+  not only non-PT spots. It is uniform along the PT.
+- **Metabolic genes:** largest in S1–S2, and only 36% are detected in human PT. Many are mouse-only metabolic genes.
+
+### C2, D, F · Single-gene hypotheses
+
+| Gene | Published | Ours |
+|---|---|---|
+| F13b | mouse PT S1/S2; human DCT | mouse S1/S2 > S3 (both mice); human PT detection 0–1% (−7.0 to −7.9 log2); consistent |
+| Cela1 | mouse PT S1/S2; human DCT/LOH | mouse S1/S2 ≫ S3 (−4.2 log2); human PT detection 0%; consistent |
+| S100g | mouse pCT; absent in human | mouse S1/S2 ≫ S3 (−3.6 to −4.1); human 0%; consistent |
+| Acsm1 | mouse PT S3; absent in human | human absent (consistent); mouse **not** S3-high (+0.16, +0.20) |
+| Anpep | mouse PT S3; human PT | human PT 98% (consistent); mouse **not** S3-high |
+| Slc34a1 | mouse mostly S1/S2 | mouse S3 − S1/S2 −2.97 and −2.91 (consistent). **New: human almost flat (−0.24, −0.70)** |
+| Slc34a3 | larger share in adult human | human PT 45% and 38% detection (mouse 24–25%); Slc34a3 − Slc34a1 higher in human by 2.9–3.2 log2 in all 4 pairs (level, equal probe counts); both S1/S2-biased in both species, weaker in human |
+| Abcb1a (MDR1) | not lower in human | +4.3 to +4.9 log2 above the transporter median, all 4 pairs (level); human detection 57%/48% against mouse 4–7% |
+| Slc22a4 (OCTN1) | not lower in human | not consistent (−0.1 to −0.6) |
+
+- **The new finding of this block:** the phosphate transporter NaPi-IIa (SLC34A1) is S1/S2-zonated in mouse (about
+  8-fold) and nearly uniform along the human PT. SLC34A3 is relatively higher in human. Together these give a
+  positional picture of Fernandes's functional result: the human PT spreads phosphate uptake along the tubule and over
+  two transporters.
+- **Raghubar's segment relocations:** the S1/S2 ones (F13b, Cela1, S100g) are reproduced. The S3 ones (Acsm1, Anpep)
+  are not S3-zonated in our mice.
+
+### E1 · Mouse-only zonation and male androgen programs (Xiong)
+
+- **Primary, pooled:** male-biased share 0.066 among mouse-only zonated genes (n 1,570) against 0.089 among conserved
+  genes (n 529); OR_MH 0.77, p 0.92. **Not supported.**
+- **Per segment:** OR 1.28 (S1), 0.97 (S2), 0.65 (S3). The female-biased control is null.
+- **What this means:** the human–mouse zonation difference in our male cohort is not explained by the male-mouse
+  androgen program. Mouse-only zonated, male-biased genes carry a Xenobiotic Metabolism label (Abcc2, Asl, Bcat1, Crot,
+  Fmo3, Shmt2, Vnn1 and others).
+- **Conserved zonated genes** are labelled SLC-mediated transport. This is consistent with 49's "transporters
+  conserved".
+
+### G · Continuous description
+
+**What the first run showed.** Most programs' within-species curves had the same human trough at mid-S1 and peak at
+S3 0.5–0.75. A post hoc check found that size-matched random gene sets do the same. The curves are now centred by each
+specimen's median usable gene at each position (deviation 1 below). After that, size-matched random programs are mostly
+flat:
+- at sizes 20–50, human 79–99% and mouse 69–97% flat;
+- at size 10, 32–35% flat;
+- about 1–2% reach an agreed non-flat species statement.
+
+This post-fix null comes from `diag_null.py` in session scratch.
+
+**Agreed, program-specific (null match 0 of 200) and confirmed on LRS-Z: two statements, both in mouse.**
+- **CellSpectra mouse-high S1 genes (S-M1):** a gradual fall along the mouse PT, half done at early S3 (S3 0.18;
+  gradient). Flat in human.
+- **CellSpectra mouse-high, S3-only genes (U-M3):** a gradual rise in mouse, half done in late S1 (S1 0.80; gradient).
+  Flat in human.
+
+**Agreed and program-specific, not confirmed on LRS-Z (descriptive only):**
+- mouse: Z-M3 (Chen PTS3), an interior peak at S3 0.66; U-M1, a fall half done at the S2/S3 boundary;
+- human: Z-M1 and Z-H1, peaks at S1 0.48; Z-H3 and F-PLB, troughs at S1 0.5–0.6; S-H3, a rise half done at S1 0.91.
+
+The human mid-S1 positions sit where the package labels place 47–60% of the old human S2 units (issue 6). They may
+mark that hidden boundary rather than biology.
+
+**No sharp switch** (width ≤ 0.5 segment units) is confirmed in either species. The user's example kind of finding ("a
+pathway switches sharply at a specific part of S2") is therefore not supported here. In particular, human S2 positions
+are where the record is weakest (632 units; 74's slope agreement 0.09).
+
+**Species difference curves.** Size-matched random programs give interior extrema in about half of draws, clustered
+in S1 and at S3 0.5–0.75. Five difference curves exceed their null's 95th amplitude with ≥ 3 of 4 pairs:
+- U-H1, peak S1;
+- U-H3, peak S3;
+- U-M1, trough S3;
+- F-LCFA, peak S1;
+- F-ARG, peak S3.
+
+Their segments repeat the between-segment results; their within-segment positions are not interpretable.
+
+**The curve figure** (`fig81b_program_curves`) shows the zonation transfer of notebook 79 directly. The human S1
+program (Z-H1) falls the same way in both species. The mouse S1 and S3 programs (Z-M1, Z-M3) and the human S3 program
+(Z-H3) move only in their own species.
+
+### Readout against the "adds nothing" rules
+
+- **A1:** 3 of 6 unique programs supported. Not met.
+- **G:** 2 confirmed positions, both mouse gradients. Not met for mouse, met for human.
+- **B2b:** notebook 82.
+
+### Recorded deviations (all after the first run, before writing this section)
+
+1. **G within-species curves** are centred by the specimen's median usable gene at each grid point (`reference_curve`).
+   The protocol centred each gene only by its own mean. Size-matched random programs reproduced the shapes most
+   programs showed, so those shapes were shared, not program-specific.
+2. **The landmark-check unit score** subtracts each unit's median usable gene. The 0.5 floor otherwise carries the unit
+   library into every program score.
+3. **Post hoc null for agreed statements:** 200 size-matched random programs per agreed statement, with
+   "program-specific" meaning a null match ≤ 0.05.
+4. **Post hoc null for difference curves:** 300 size-matched random programs, with "reportable" meaning amplitude
+   above the 95th percentile and ≥ 3 of 4 pairs sharing the shape.
+5. **E1 excludes the 15 label/orientation genes** (protocol R3's reason). The result did not change (OR 0.75 → 0.77).
+
+**Tables:**
+- `classes.csv`, `program_tests.csv`, `a3_placement.csv`, `calibration.csv`;
+- `gene_classes_cellspectra{,_counts}.csv`, `gene_hypotheses.csv`;
+- `sex_bias{,_genes}.csv`, `labels.csv`;
+- `descriptors{,_species,_difference,_confirmed}.csv`, `landmark_check.csv`, `curves.npz`;
+- `summary_by_paper.csv`, `how_the_protocol_was_read.csv`, `run_record.json`.
+
+**Figures:** `fig81a_cellspectra_unique_core`, `fig81b_program_curves`, `fig81c_gene_hypotheses`, `fig81d_sex_bias`
+and `supp81_cellspectra_unique_curves`.

@@ -21,7 +21,9 @@ notebook 73 (the label-based species comparison on the package units) have their
 downstream) is in `pt-package-species-calls.md`.
 Notebooks 79 and 80 (published PT programs along the pseudospace, hypothesis-driven) are in `pt-known-programs.md`.
 Notebooks 81 and 82 (published human vs mouse findings re-read along the PT, and in Cheval 2012 and the atlases) are in
-`pt-published-findings.md`.
+`pt-published-findings.md` (notebook 83 draws its cluster-vs-continuous figures).
+Notebook 84 (pathways a segment-level analysis puts in one segment: where they sit inside it, on LRS-Z) is in
+`pt-within-segment-pathways.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

@@ -28,6 +28,8 @@ Notebook 85 is in `pt-transition-sharpness.md`. It asks whether segment-level pa
 along the elastic curve, and it corrects the mouse units of 81, 83 and 84.
 Notebook 86 (genes outside one-to-one orthology on the elastic curve: paralog families, species-specific genes, family
 units through 71's test, AKI genes outside 76's pool) is in `pt-non-one-to-one.md`; it replaces retired notebook 62.
+Notebook 88 (are 1:1 species differences carried by other paralogs: substitution, compensation, division of labour)
+is in `pt-paralog-substitution.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

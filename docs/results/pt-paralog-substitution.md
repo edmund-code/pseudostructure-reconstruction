@@ -114,3 +114,69 @@ species calls are themselves calibrated only at the set level. The tests run acr
 - 88a: P1: observed gains against the null; substituted pairs (human gene, kept mouse partner, substituting member).
 - 88b: P2: observed L against the null percentiles; examples where family sums agree and the kept pair does not.
 - 88c: P3: δ against the null; examples.
+
+## Notebook 88 results
+
+`analysis/notebooks/88_pt_paralog_substitution.ipynb` (logic `88.paralog_substitution.1`) writes to
+`results/pt_paralog_substitution/`. It followed the protocol frozen in 09184cc. Guards G1–G5 passed: 86's cached W runs
+list its PT-expressed genes, and 200 refitted mouse genes reproduce their curves. 87 grid points (curve position
+0.05–0.82) are covered by all four specimens.
+
+**Populations.** 93 of 71's species calls are kept pairs in multi-member orthogroups with both genes PT-expressed and
+probe-clean. The pre-freeze count of 106 had not applied the probe rule. 32 of the 93 have an alternative member in
+at least one species (24 in mouse, 18 in human).
+
+### Primary tests: none of the three holds
+
+| Test | Observed | Matched null | p | BH |
+|---|---|---|---|---|
+| P1 · substitution | 6 of 32 pairs | mean 7.5 (95th percentile 11) | 0.85 | 0.89 |
+| P2 · compensation | median percentile 0.57; 2 of 57 families with the difference halved | null mean 8.6 halved | 0.89 | 0.89 |
+| P3 · division of labour | sum beats best member for 2 of 22 anchors | mean 2.6 | 0.72 | 0.89 |
+
+**Reading.** On this curve, the human–mouse differences of the 1:1 analysis stand when the rest of the family is
+counted. Another paralog matches the partner's profile no more often than a random gene of the same expression and
+zonation does. Family sums close the difference no more than random additions do. A single-copy gene is not matched
+better by its co-orthologs' sum than by their best member.
+
+### Details
+
+- **P1, the six "substituted" pairs** (descriptive; per-pair empirical p in brackets):
+  - human ABCB1 is tracked by mouse Abcb1b (r 0.67), not the kept Abcb1a (0.01) (p 0.015);
+  - human AKR1C3 by Akr1c21 (0.73), not Akr1c18 (−0.58) (p 0.048);
+  - human ALDH3B1 by Aldh3b3 (0.95), not Aldh3b1 (−0.92) (p 0.055);
+  - mouse Zfp30 by human ZFP82 (p 0.08), Dhfr by DHFR2 (p 0.20), Tubb2a by TUBB2B (p 0.32).
+
+  Abcb1b and Akr1c21 come closest to a substitution, but the count as a whole is what random genes give.
+- **P2 · why sums rarely close the difference.** Adding random genes to the kept gene pulls a family sum toward the
+  typical gene's shape and shrinks the human–mouse difference (null median L −0.03 overall, down to −2.5 for the 7-member
+  Akr1c family). Real paralogs shrink it no more (median L −0.02). The 2 families whose difference halves (Akr1c18/AKR1C3
+  L −2.27; Clec2h/CLEC2D −1.32) halve it less than their pseudo-families do (−2.54, −1.59). This fits 86's finding that
+  paralogs co-position: summing a family adds more of the same profile.
+- **P3:** the two anchors whose sum beats its best member are Ugt2b34 (δ 0.02) and Ifitm2 (0.005). The human UGT2B7 is
+  matched by mouse Ugt2a3 (r 0.84) better than by the Ugt2b sum (0.44). The MT family (mouse 2, human 6 PT-expressed)
+  has negative r in every comparison: the human MT genes do not share the mouse Mt1/Mt2 profile, summed or not.
+- **P4 · position does not follow sequence** (descriptive): in 6 families with ≥ 2 members on both sides, the
+  positional pairing equals the sequence pairing in 1 of 12 pairs, against 4.4 by chance. Examples: Gnai3 pairs
+  positionally with GNAI1 (0.74), and Ugt2b34 with UGT2A3 (0.86).
+- **P5 · differences only the family units see:** 19 family units are called (relabeled p > 0.05 in both) with no
+  71-called kept pair. In most, the mouse family is zonated and the human one is not: Serpina1 (mouse Z 5.3, human
+  0.3), Ceacam (4.4 against 0.6), Isoc2, Ifitm. In the Oat-like Slc22 family both sides are zonated (Slc22a19 Z 5.0;
+  SLC22A24 2.6). In the other direction, human CYP2B6 is zonated (Z 3.4) while no mouse Cyp2b member is PT-expressed.
+  Family calls are not claimable one by one (86, issue 31).
+- **P6 is uninformative.** The curves are smooth (6-df splines), so on 87 grid points random human–mouse gene pairs
+  already reach |r| 0.83 (5th–95th percentile −0.84 to 0.83). The top match among about 10,000 genes always reaches
+  r ≈ 0.99, so "the gene in the other species at the same place" is not resolvable by profile correlation on this
+  curve.
+
+### Recorded readings
+
+1. The P1/P2 population applies the frozen probe rule (93 pairs, not the pre-count's 106).
+2. P6's lack of resolution was found after the run, from the spread of random-pair r; it is reported, not tested.
+3. Figure 88a's titles are on two lines.
+
+### Tables and figures
+
+- Tables: `p1_substitution.csv`, `p1_null_counts.csv`, `p2_compensation.csv`, `p3_division_of_labour.csv`,
+  `p4_positional_vs_sequence.csv`, `p5_family_only_differences.csv`, `p6_niches.csv`, `primary_tests.csv`.
+- Figures: 88a substitution, 88b compensation, 88c division of labour.

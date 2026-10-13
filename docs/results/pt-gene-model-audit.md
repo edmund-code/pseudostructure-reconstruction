@@ -191,3 +191,214 @@ fit.
 - 87b: NB diagnostics: zeros observed against expected, variance against mean, pooled randomized-quantile QQ,
   offset slopes, α by position third and by unit size.
 - 87c: parameters: ΔAIC, ΔBIC and held-out deviance by df; the variants' agreement with 71 and their calibration.
+
+## Notebook 87 results
+
+`analysis/notebooks/87_pt_gene_model_audit.ipynb` (logic `87.gene_model_audit.1`) writes to
+`results/pt_gene_model_audit/`. It followed the protocol above (0c8d28a), with the deviations listed at the end. The
+tradeSeq run took 30.6 min (11,055 genes × 7 fits plus the subset). The cached rerun takes 100 s.
+
+**Guards.**
+- G1: 71's 11,055 genes, 11,383 units and 1,513 sets; 71's knots (0.240, 0.410, 0.649) and grid recomputed exactly.
+- G-C (deviation 1): our code under 71's settings reproduces 71's T_spatial and LR_spec for ≥ 99.91% of genes in
+  every partition at 1e-4. 23 gene statistics differ more; the condition z keeps Spearman 0.9991. The 71 calls are
+  identical (83, with 1 and 0 relabeled).
+  - The cause is α. Re-estimating it changes it for 310 near-Poisson genes on a flat likelihood (median α of those
+    1e-8).
+  - This is the run-to-run floor that every variant in C2 is read against.
+
+### A · It is not tradeSeq, and tradeSeq is not calibrated on these units
+
+**A1.** Table A1 of the protocol was read from both codes and stands. The two models share:
+- the NB family, log link and log-library offset;
+- a per-gene dispersion without shrinkage;
+- cubic splines with about 6 basis functions and knots at position quantiles.
+
+They differ in:
+- **the penalty:** tradeSeq uses REML; ours has none;
+- **the test:** tradeSeq uses a Wald test; ours uses LR;
+- **conditionTest's target:** level + shape, against shape only in ours;
+- **the weights;**
+- **the unit of replication:** the unit in tradeSeq, the specimen in our F denominator.
+
+**A2b and A2c · Calibration and calls (human vs mouse, the two balanced relabelings).**
+
+| Method | Species genes (BH ≤ 0.05) | Relabeled genes | Relabeled share p ≤ 0.05 | Calibrated (≤ 0.075) |
+|---|---|---|---|---|
+| tradeSeq `conditionTest` (defaults) | 10,819 of 11,053 | 3,504, 5,339 | 0.476 | no |
+| tradeSeq + specimen `U` | 10,761 of 11,000 | 1,923, 4,024 | 0.360 | no |
+| ours: raw T_total LR (χ², 7 df) | 10,215 of 10,738 | 1,702, 1,717 | 0.274 | no |
+| ours: raw T_spatial LR (χ², 6 df) | 5,144 | 405, 372 | 0.139 | no |
+| **ours: positional F-test** | **3,526** | **0, 0** | **0.065** | **yes** |
+
+- **Any test that treats the tubule unit as the replicate is miscalibrated here, tradeSeq's and our own raw LRs
+  alike.** Under the relabelings, which put one human and one mouse specimen on each side, tradeSeq gives p ≤ 0.05
+  for 48% of genes (36% with the specimens in `U`).
+- Only the specimen-shape denominator (the positional F-test) brings the share to 0.065.
+- This is the pseudoreplication problem (Squair 2021; Zimmerman 2021). It is why the positional F-test exists, and why
+  it does not reduce to tradeSeq.
+
+**A2a · Ranking** (species split, Spearman of −log10 p with tradeSeq's `conditionTest`).
+
+| Ours | Spearman | Top-10% Jaccard |
+|---|---|---|
+| raw T_total LR (level + shape, its closest analogue) | 0.573 | 0.371 |
+| raw T_spatial LR | 0.294 | 0.163 |
+| positional F-test | 0.238 | 0.141 |
+
+`conditionTest` mostly ranks level differences. Most genes differ in level between the species and the probe panels,
+which is why it calls 98% of genes.
+
+**A2d · Within mouse,** where both methods ask the same question (is the gene positional?), they agree:
+- Spearman 0.821 between tradeSeq's `associationTest` and our spline-against-specimen LR, over 6,270 genes;
+- top-10% Jaccard 0.676;
+- BH ≤ 0.05: ours 4,178, tradeSeq 3,653.
+
+**A2e · The penalty** (subset G, 1,516 genes).
+- tradeSeq's REML leaves a median edf of 3.79 per condition smooth (IQR 2.28–4.84, maximum 6).
+  - 22% of smooths keep ≥ 5.
+  - edf rises with expression: from a median of 2.4 in the lowest decile to 5.0 in the highest.
+- **Mouse curves agree:**
+  - tradeSeq against 71: median r 0.88;
+  - RMS difference 0.063 ln, against a median range of 0.52.
+- **Human curves do not:**
+  - median r 0.15;
+  - RMS difference 0.26, against a range of 0.43.
+  - The difference is the offset, not the penalty (PH2 below).
+
+**Precedents** (protocol A3, PubMed-verified). Our construction is not new:
+- an NB GLM on an unpenalised regression spline in pseudotime, tested by LR at a fixed dispersion, is the construction
+  of Monocle 2's `differentialGeneTest` (`~sm.ns(Pseudotime, df=3)` against `~1`, VGAM NB, `lrtest`);
+- tradeSeq is the penalised NB-GAM version with Wald tests;
+- a sample-level denominator is the multi-sample principle of Lamian (Hou 2023).
+
+"Defensible" therefore means: a published model class, plus a replicate-aware test that tradeSeq lacks, shown here to
+be needed on these data. It does not mean "tradeSeq exactly".
+
+### B · The tubule units fit the NB well (subset G; 1,465 usable genes)
+
+| Check | Result | Misfit share (protocol rule) |
+|---|---|---|
+| B1 zeros: observed − NB expected (median) | −0.00003 (Poisson: +0.0011) | 0.3% |
+| B2 Pearson dispersion (median; 1 under the model) | NB 1.015; Poisson 1.030 | — |
+| B2 variance about the fitted mean ÷ NB variance, 20 bins of μ | 1.00–1.12 in 18 of 20 bins; 1.32 in one; 0.82 in the top bin (Poisson: 7.2 there) | — |
+| B3 randomized quantile residuals (median KS D) | 0.007 | 0.0% |
+| B4 library slope (median; 1 = offset correct) | 0.987 (IQR 0.94–1.02) | 3.4% |
+| B5 α by position third | tests mostly null | 3.1% |
+| B6 α by unit size tertile | falls with size: median slope of log α on log spots −0.31 | 1.5% |
+| B7 α human ÷ mouse (median) | 1.14 | — |
+
+- **Zero inflation:** none. The NB, and even the Poisson, predict the zeros.
+- **Overdispersion is small.**
+  - The median α is 0.037, and 10% of genes sit at the Poisson bound.
+  - The Poisson fails only for the most expressed genes (7.2-fold excess variance in the top bin); the NB does not.
+- **The log-library offset has the right slope.**
+- **Dispersion is effectively constant** along the curve and across unit sizes. The per-third α ratios are large for
+  weakly expressed genes (median max/min 8.0) because α is barely identified there, but the tests reject constancy for
+  only 3.1% of genes.
+- The direction of B6 (larger units, smaller α) is what aggregation of bins predicts, but the effect is weak.
+- **B8:** α against the mean follows α = 0.0037 + 0.0001 / mean (Spearman −0.39). With 11,383 units the DESeq2
+  shrinkage weight on each gene's own estimate is 1.0000, so shrinkage cannot matter here.
+
+None of the protocol's "change the model" thresholds is reached (zeros or residuals > 10%; slope off by ≥ 0.2;
+dispersion misfit > 25%).
+
+### C · The parameters
+
+**C1 · Fit by basis df** (species M_full; medians over G against df 6).
+
+| df | ΔAIC | ΔBIC | Δ held-out deviance | Genes better than df 6 (held-out) |
+|---|---|---|---|---|
+| 3 | −3.2 | −47.3 | −0.16% | 92% |
+| 4 | −2.7 | −32.1 | −0.11% | 93% |
+| 5 | −1.7 | −16.4 | −0.05% | 87% |
+| 6 | 0 | 0 | 0 | — |
+| 7 | +2.1 | +16.8 | +0.06% | 11% |
+| 8 | +4.2 | +33.5 | +0.12% | 3.5% |
+| 10 | +7.1 | +65.8 | +0.24% | 0.9% |
+| 12 | +10.6 | +98.7 | +0.35% | 0.5% |
+| 6, equal knots | +0.25 | +0.25 | +0.00002% | 50% |
+
+- Held-out, df 3 is best for 79% of genes; AIC picks it for 48% and BIC for 91%.
+- **PH1:** this holds for the genes the positional F-test calls too (median best df 3; 8% best at ≥ 6).
+- Gene curves along this curve are simple. The cost of df 6 is ≤ 0.16% of held-out deviance.
+- Knot placement does not matter.
+
+**C2 · Does the choice change 71's results?** Full universe, positional F-test and cameraPR. 71 has 83 calls with
+relabeled 1 and 0, calibration share 0.072.
+
+| Variant | z Spearman | Gene Jaccard | Calls (relabeled) | Calibration share | Call Jaccard | 71's rule |
+|---|---|---|---|---|---|---|
+| 71 as stored (run-to-run floor) | 0.999 | 0.997 | 83 (1, 0) | 0.071 | 1.00 | pass |
+| df 4 | 0.930 | 0.778 | 99 (2, 1) | 0.089 | 0.80 | **fail** |
+| df 5 | 0.962 | 0.868 | 87 (2, 1) | 0.069 | 0.93 | pass |
+| df 8 | 0.947 | 0.843 | 88 (1, 0) | 0.052 | 0.84 | pass |
+| df 10 | 0.909 | 0.787 | 95 (2, 3) | 0.043 | 0.80 | pass |
+| equal knots | 0.980 | 0.910 | 86 (1, 0) | 0.064 | 0.92 | pass |
+| unit weights (tradeSeq's) | 0.995 | 0.939 | 86 (1, 0) | 0.053 | 0.97 | pass |
+| trended α | 0.998 | 0.981 | 80 (1, 1) | 0.080 | 0.96 | **fail** |
+| shrunken α (DESeq2-style) | 0.999 | 0.994 | 83 (1, 0) | 0.072 | 1.00 | pass |
+| **TMM offset (tradeSeq's)** | **0.446** | **0.369** | **166 (2, 0)** | 0.058 | **0.25** | pass |
+| **poscounts offset (DESeq2's)** | **0.346** | **0.345** | **160 (5, 0)** | 0.077 | **0.15** | **fail** |
+
+- **Basis df, knots, weights and dispersion move the calls by 3–20%.** This is the size of a change of df by one or
+  two, and each choice keeps most of 71's list. df 5 to 8 all pass.
+- **The normaliser is the one choice that matters.** TMM or poscounts size factors double the calls and keep only 15–25%
+  of them.
+- **PH2 shows why.** tradeSeq's TMM factor trends along the curve in human (Spearman with position 0.525; the mean
+  log factor rises from −0.03 to +0.58–0.75 ln across position deciles) and not in mouse (0.037).
+  - A factor that moves with position in one species enters every gene's species × position term.
+  - It turns a normalisation difference into "shape" for most genes: 8,112 genes against 3,591.
+  - It is also why tradeSeq's human curves disagree with ours (A2e).
+- **Our library offset is supported at the unit level** (B4 slope 0.987). It is also the choice under which most genes
+  are not called, as expected if most genes keep their shape.
+  - The composition question is real: the human composition changes along the curve.
+  - 68, 76 and 81 already handle it for programs, by centring on the median gene's Δ.
+
+### Readout against the protocol's rules
+
+- **tradeSeq:** its relabeled share is 0.476 (> 0.075), and ours is 0.065. **Our test stays,** and the calibration is
+  the reason.
+- **NB:** no threshold is reached. **The NB with a constant per-gene α and a log-library offset is adequate** for these
+  units.
+- **Parameters.** By the frozen rule, a variant is better when it improves held-out deviance for most genes and keeps
+  71's rule. **df 5 meets it:**
+  - 87% of genes improve, by a median 0.05%;
+  - it passes the rule (calibration 0.069);
+  - it keeps 93% of the calls.
+
+  df 3 and 4 fit better still, but df 4 fails calibration and df 3 was not run downstream. The gain is negligible and
+  the call overlap is high, so df 6 stays unless the user decides otherwise. That would be a new protocol.
+  - Equal knots, unit weights and shrunken α change nothing material.
+  - The normaliser is the open question. The current choice is supported (B4). It is recorded as an issue for the
+    composition-aware analyses, not changed here.
+
+### Recorded deviations
+
+1. **G-C tolerance.**
+   - The protocol asked rtol 1e-6.
+   - Reproduction holds for ≥ 99.91% of genes at 1e-4. 23 gene statistics differ more, because α is re-estimated for
+     310 near-Poisson genes.
+   - The run stops when > 0.5% of genes differ. The floor is reported as "71 as stored".
+2. **tradeSeq p-values.** tradeSeq reports 1 − pchisq(W, df), which is exactly 0 below about 1e-16. The upper tail of
+   the same W is recomputed with `chi2.sf`. Shares and calls at 0.05 are unchanged; rankings are no longer tied.
+3. **B2's display.** The protocol's "variance against mean in 20 bins of μ" mixes genes within a bin, which inflates the
+   top bin. The figure and table show the mean squared deviation from each unit's own fitted mean, divided by the NB
+   (and Poisson) expectation.
+4. **The R run.** The first run lost a forked worker, probably to memory. The script now fits genes in chunks of 1,500
+   and retries a failed chunk once with half the workers. On synthetic data the chunked and whole-matrix outputs are
+   identical.
+5. **Post hoc PH1 and PH2** (above), added after the first complete run.
+
+### Outputs
+
+- `tables/`:
+  - `a1_side_by_side.csv`;
+  - `a2a_ranking.csv`, `a2bc_calibration_and_calls.csv`, `a2d_within_mouse.csv`, `a2e_penalty_and_curves.csv`;
+  - `b_diagnostics_subset.csv`, `b_summary.csv`, `b2_mean_variance_pooled.csv`;
+  - `c1_fit_by_df.csv`, `c1_best_df_shares.csv`, `c1_best_df_by_decile.csv`;
+  - `c2_variants.csv`;
+  - `guard_c_reproduction.csv`;
+  - `ph1_best_df_by_call.csv`, `ph1_heldout_change_by_call.csv`, `ph2_tmm_factor_along_curve.csv`.
+- `tradeseq/`: tradeSeq's per-gene tests, the subset's edf, θ, AIC and curves, the TMM offsets, the session.
+- `figures/`: `fig87a_tradeseq`, `fig87b_nb_diagnostics`, `fig87c_parameters` (png and pdf).

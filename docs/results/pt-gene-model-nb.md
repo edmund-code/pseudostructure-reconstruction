@@ -900,3 +900,9 @@ rising in the case group toward S3.
 - The offset now ignores mt reads entirely. The mt share still varies between structures within a specimen.
 - The relabelings mix the conditions, so they cannot see an artefact that follows the condition.
 - With two specimens per group, and one human donor, every result is descriptive.
+
+## Notebook 87 · audit against tradeSeq, the NB assumptions and the parameters
+
+See `pt-gene-model-audit.md`. In short: the model is not tradeSeq, but tradeSeq on these units is miscalibrated
+(relabeled share 0.476 against the positional F-test's 0.065); the NB fits the units (no zero inflation, library
+slope 0.987, constant α adequate); df, knots, weights and dispersion move calls by 3–20%, the normaliser by far more.

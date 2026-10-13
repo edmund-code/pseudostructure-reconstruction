@@ -1,0 +1,11 @@
+# Isolated R environment for notebook 87's tradeSeq comparison (never installed into kidney-pseudospace).
+# conda env create -p <prefix>/tradeseq-audit -f analysis/scripts/tradeseq_audit_environment.yml
+name: tradeseq-audit
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.4
+  - bioconductor-tradeseq=1.20.0
+  - r-mgcv=1.9.4
+  - r-matrix

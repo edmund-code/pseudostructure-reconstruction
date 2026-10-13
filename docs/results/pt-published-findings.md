@@ -915,7 +915,10 @@ The selection is post hoc, made after a draft of 16 candidates. A row is kept wh
 
 A triangle marks a steepest point that both specimens place within 0.25 segment units, at a slope of at least
 1 log2 per unit. Positions are fractions of a segment along the reconstructed order, not micrometres. They are bounded
-by the registration gap (0.37) and issue 22.
+by the registration gap (0.37) and issue 22. **Under C14 (notebook 74) every within-segment position here is
+descriptive.** The elastic curve's fold noise exceeds the within-segment spread in mouse S1 (4.2) and S2 (2.0), and
+only mouse S3 (0.98) is not noise-dominated. So the S3 positions (NaPi-IIa S3 0.37, S-M1 S3 0.13) are the
+best-resolved. The within-S1 positions (NaPi-IIc S1 0.69, U-M3 S1 0.72) sit in the noisiest cell.
 
 | Figure | Cluster view (the paper's method; ours and the atlas agree) | Continuous view (what the clusters cannot show) |
 |---|---|---|

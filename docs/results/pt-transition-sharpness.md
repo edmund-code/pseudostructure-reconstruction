@@ -87,6 +87,11 @@ Usable means 81's rule: 71's curve converged and not separated, and detection �
   units. A midpoint m must lie between the second and the second-to-last bin positions. The fit is an exhaustive grid
   over (m, w), linear in the amplitudes, then refined with bounded least squares from the best grid point.
 - **E2 · Model choice.** M2 when BIC(M2) ≤ BIC(M1) − 6 and both M2 edges reach |b| ≥ 0.25 log2; otherwise M1.
+  - **Amended before any fit:** M2 also needs its two edges separated: ≥ 3 bins between the midpoints and a distance
+    ≥ their mean width.
+  - Why: on a synthetic flat profile with noise 0.03, M2 fitted a one-bin spike with two large opposite edges. That
+    passed the frozen rule.
+  - The M2 grid holds only separated pairs. When refinement merges the edges, the grid fit is kept.
 - **E3 · Counted edges.** An edge counts when |b| ≥ 0.25 log2 (84's flat threshold). A profile without a counted edge
   is **flat**.
 - **E4 · Class** of an edge, from its width (81's thresholds):

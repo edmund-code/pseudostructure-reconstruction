@@ -1,0 +1,61 @@
+id,species,genes,kind,expected,source,pmid,evidence,note
+C01,mouse,Slc5a2;Slc5a1,order,increasing,L82 Q1,25304002;26739563,human IHC; mouse deposited microdissection,positive control: an ancient 1:1 paralog pair that splits S1 vs S2/S3
+C02,mouse,Slc7a9;Slc3a1,order,increasing,L81 Q1,26739563,mouse localisation,positive control: b(0+)AT highest in S1; rBAT in S3
+C03,mouse,Slc5a2,peak,S1,1B,33769951,deposited male microdissection,1:1 landmark
+C04,mouse,Slc5a1,peak,S2|S3,1B,33769951,deposited male microdissection,1:1 landmark (male PTS2 93; PTS3 39 TPM)
+C05,mouse,Kap,peak,S3,L07 Q9,12486089;2739660,ISH,mouse-only; S3 component androgen-independent
+C06,mouse,Kap,shoulder,yes,L01 L02 Q9,3153475;2739660,ISH,intact males: the androgen-induced cortical (S1/S2) component is present
+C07,mouse,Slco1a1,peak,S2,L51,37673062,RNAscope + multiome,male-specific S2 gene
+C08,mouse,Cyp2j13,peak,S2,L19,37673062,snRNA + RNAscope,male AR-dependent S2 gene
+C09,mouse,Cyp4a14,peak,S2,L10 Q10,31689386,RNAscope,called female-only; male microdissection 123 TPM in PTS2
+C10,mouse,Akr1c18,peak,S3,L27 Q10,31689386,zone-dissected scRNA,called female S3; male microdissection 956 TPM in PTS3
+C11,mouse,Cyp4a12a,peak,S3,1B,33769951;36758122,deposited male microdissection,male-specific 20-HETE synthase
+C12,mouse,Cyp4a10,peak,S2,1B,36758122,deposited male microdissection,
+C13,mouse,Cyp4a10;Cyp4a12a,order,increasing,1B Q5,36758122,deposited male microdissection,a pre-registered partial counterexample to co-positioning
+C14,mouse,Cyp2d26,peak,S1,1B,36758122,deposited male microdissection,
+C15,mouse,Cyp2d12,peak,S1,1B,36758122,deposited male microdissection,
+C16,mouse,Cyp2d9,peak,S2|S3,1B,36758122,deposited male microdissection,
+C17,mouse,Cyp2d26;Cyp2d9,order,increasing,1B Q5,36758122,deposited male microdissection,
+C18,mouse,Ugt2b34,peak,S1,1B,36758122,deposited male microdissection,
+C19,mouse,Ugt2b37,peak,S2,1B,36758122;17050650,deposited male microdissection,male-predominant
+C20,mouse,Ugt2b38,peak,S1|S2,1B,36758122,deposited male microdissection,
+C21,mouse,Ugt2b34;Ugt2b37,order,increasing,1B Q5,36758122,deposited male microdissection,
+C22,mouse,Akr1c14,peak,S2|S3,1B,36758122,deposited male microdissection,
+C23,mouse,Akr1c21,flat,yes,1B,36758122,deposited male microdissection,flat S1-S3 in male
+C24,mouse,Ces1e,peak,S1,1B,36758122,deposited male microdissection,
+C25,mouse,Ces1f,peak,S2|S3,1B,36758122,deposited male microdissection,
+C26,mouse,Ces1e;Ces1f,order,increasing,1B Q5,36758122,deposited male microdissection,
+C27,mouse,Ces2c,peak,S2,1B,36758122,deposited male microdissection,
+C28,mouse,Nat8f1,peak,S1|S2,1B Q12,36758122,deposited male microdissection,no published segment data for any Nat8f member
+C29,mouse,Nat8,peak,S2|S3,1B Q12,36758122,deposited male microdissection,
+C30,mouse,Nat8f5,peak,S2,1B Q12,36758122,deposited male microdissection,
+C31,mouse,Slc22a19,peak,S2|S3,L53 L54 1B,20865662;16150593,IHC; deposited male microdissection,strongest in S3 by IHC
+C32,mouse,Slc22a30,peak,S2|S3,1B E13,36758122;35821371,deposited male microdissection; scRNA,S3 identity marker
+C33,mouse,Slc22a29,peak,S1,1B,36758122,deposited male microdissection,
+C34,mouse,Slc22a28,flat,yes,1B,36758122,deposited male microdissection,
+C35,mouse,Cyp2j5,flat,yes,1B,36758122,deposited male microdissection,
+C36,mouse,Cyp2j11,peak,S2|S3,1B,36758122,deposited male microdissection,
+C37,mouse,Cyp4a31,peak,S2|S3,1B,36758122,deposited male microdissection,
+C38,mouse,Gsta2,peak,S1,1B Q18,36758122,deposited male microdissection,mouse alpha-GST (Gsta1's probe is excluded)
+C39,mouse,Gsta4,peak,S1,1B,36758122,deposited male microdissection,
+C40,mouse,Mt1,peak,S1,1B Q13,36758122;19486827,deposited male microdissection; rat IHC (PCT),
+C41,mouse,Gstm1,peak,S3,1B,36758122,deposited male microdissection,
+C42,mouse,Slc22a22,flat,yes,1B L57,36758122;20448048,deposited male microdissection; IHC (PCT + outer stripe),
+C43,mouse,Slc7a12,present,no,Q10 1B,31689386;36758122,RNAscope; deposited male microdissection,female S3 gene; near-absent in male PT
+C44,mouse,Gsta1,present,no,Q18 P11,,10x probe set,probe excluded by default (structural zero)
+C45,human,SLC5A2,peak,S1|S2,L82,25304002,IHC,positive control
+C46,human,SLC5A1,peak,S3,L82,25304002,IHC,positive control
+C47,human,CYP4A11,peak,S2|S3,L12,10660572,immunocytochemistry,only S2 and S3
+C48,human,CYP4F2,peak,S2|S3,L12,10660572,immunocytochemistry,only S2 and S3
+C49,human,SLC22A24,peak,S3,L60 Q11,31553721,snRNA re-analysis,human-only; low expression
+C50,human,CES2,peak,S1|S2,L33,12607608,IHC tissue array,highest in PCT
+C51,human,SLC22A11,present,yes,L63,15037815,IHC,apical PT; no rodent ortholog
+C52,human,SLCO1A2,present,no,L52,15632119,IHC,protein in the distal nephron not PT
+C53,human,SLC22A9,present,no,L61,20829431,liver studies,human members of the rodent Oat-like expansion are liver genes
+C54,human,SLC22A10,present,no,L62,38782905,comparative functional,human unitary pseudogene
+C55,human,GSTA1,present,yes,L40,7843118,IHC,alpha GST solely in PT
+C56,human,MT1X,present,yes,L70,8619255,IHC + RT-PCR,consistently expressed
+C57,human,MT2A,present,yes,L70,8619255,IHC + RT-PCR,consistently expressed
+C58,human,NAT8,present,yes,L43,20392701,genomic + expression,kidney and liver
+C59,human,SLC22A6,peak,S1|S2,L84,27053689,validated antibodies,1:1 control: OATs stronger in S1/S2 than S3
+C60,human,SLC22A8,peak,S1|S2,L84,27053689,validated antibodies,1:1 control

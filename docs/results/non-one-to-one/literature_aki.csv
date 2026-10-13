@@ -1,0 +1,20 @@
+id,gene,expected,source,pmid,note
+A01,Kap,down,E26,28931758,mouse-only; endogenous PT gene lost after IRI (bulk)
+A02,Slc7a12,up,E16,34183416,mouse-only; ectopic in male S3 after IRI
+A03,Slc22a30,down,E12,32571916,S3 identity marker lost in failed repair
+A04,Acsm2,down,E19,34279220,homeostatic PT marker lost in damage-associated PT
+A05,Saa3,up,E23,28931758,rises from zero; cell source unassigned
+A06,Saa1,up,E23,28931758,rises from zero
+A07,Mt1,up,E37,12760485,rat; outer medulla
+A08,Mt2,up,E37,12760485,rat; outer medulla
+A09,Cxcl1,up,E18,34279220,damage-associated PT (also interstitial)
+A10,Cxcl2,up,E18,34279220,damage-associated PT (also interstitial)
+A11,Ccl2,up,E15,34183416,Vcam1+/Ccl2+ PT
+A12,Ccl7,up,E14,32571916,failed-repair PT signalling
+A13,Serpina3n,up,E38,31316093,no IRI segment data; rat AKI-to-CKD
+A14,Sprr2f,up,E36,33017192,UUO; female
+A15,Havcr1,up,E01,32571916,1:1 at class level; positive control
+A16,Slc7a13,down,E12,32571916,1:1 terminal differentiation marker
+A17,Slc5a12,down,E12,32571916,1:1 terminal differentiation marker
+A18,Ifi27,up,E30,33115917,
+A19,Ifitm3,up,E30,33115917,

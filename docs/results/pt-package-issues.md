@@ -98,3 +98,10 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
     - **Bound:** a gene's mouse-only S1 bias can be neighbour signal. B2b replicates in microdissected tissue, so
       neighbour signal does not drive the program-level interaction. Single-gene positional claims should be checked
       against an atlas, as section 10b does.
+25. **Within-segment pathway positions (notebook 84) are not supported on the elastic curve.**
+    - Chen's segment-level pathways do not separate inside S1 or S2 beyond random gene groups (p 0.12, 0.13).
+    - PTS3 enriches too few pathways to test.
+    - Separation appears only when non-PT-specific genes enter, which is the neighbour-signal route of issue 24.
+    - Testing S3 needs another discrete source of PTS3 pathways, for example a single-nucleus atlas's S3 cluster or
+      the clustering method's S3 calls. That would be a new protocol.
+    - Peak-sorted heatmaps show a diagonal by construction, so they need the reportable marks.

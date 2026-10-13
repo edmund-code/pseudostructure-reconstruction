@@ -166,3 +166,88 @@ last third)? And do they differ more than random groups of the same segment's ge
 - `sensitivities.csv`
 - `how_the_protocol_was_read.csv`
 - `run_record.json`
+
+## Notebook 84 results
+
+Logic `84.within_segment_pathways.1`; 204 s; no stage cache. Guards G1–G3 hold. Integration features: 1,097 (953 in
+the universe) plus the 15 panel and anchor genes. Chen: 9,672 universe genes expressed in a PT segment.
+
+### D · What the segment-level analysis calls
+
+| Segment | cameraPR Up, FDR ≤ 0.05 | Pool genes | ≥ 5 core genes | Representatives |
+|---|---|---|---|---|
+| PTS1 | 16 | 287 | 9 | 5 |
+| PTS2 | 68 | 718 | 53 | 30 |
+| PTS3 | 6 | 348 | 1 | 1 |
+
+- **PTS2 carries most of the segment-level pathway signal.** Peroxisomal lipid metabolism, fatty acid degradation,
+  organic ion transport, PPAR signalling, xenobiotic metabolism, amino acid catabolism and others are enriched there
+  against the mean of PTS1 and PTS3.
+- **PTS3 is not testable.** Chen's PTS3 contrast enriches 6 pathways, and only one has 5 PT-specific core genes
+  (bile acid synthesis via 7α-hydroxycholesterol).
+
+### C3 · Tests (mouse; descriptive under C14)
+
+| Segment | Representatives | T (null median) | p | Holm | Reportable positions | Statement |
+|---|---|---|---|---|---|---|
+| S1 | 5 | 0.78 (0.23) | 0.124 | 0.25 | 3: first 1, middle 2 | no within-segment separation |
+| S2 | 30 | 0.153 (0.091) | 0.129 | 0.25 | 4: all last third | no within-segment separation |
+| S3 | 1 | – | – | – | 1 (middle) | not testable |
+
+### C4 · Positions
+
+- **S2.**
+  - 26 of the 30 representatives are flat inside S2 in at least one mouse. The median range inside S2 is
+    0.11–0.15 log2.
+  - The four that vary peak at the end of S2 in both mice, and all four are fold-protected: bile acid synthesis,
+    PPAR signalling, glutathione synthesis and cysteine/methionine metabolism. They rise through S2 and continue into
+    S3, so they mark the S2→S3 transition rather than a place inside S2.
+  - Over every PTS2 pathway (53), the 7 reportable positions are all in the last third.
+- **S1.**
+  - Basigin interactions peaks in the first third: range 1.6–2.1 log2, a fall from early S1 through S3.
+  - Folate biosynthesis and oxidative phosphorylation peak in the middle third (ranges 0.28–0.37; only
+    oxidative phosphorylation is fold-protected).
+  - S1 is the elastic curve's noisiest cell (fold noise ÷ spread 4.2).
+- **Figures.**
+  - In 84a–c, rows are sorted by peak position, so a diagonal "wave" appears by construction.
+  - The filled dots are the reportable positions. Most rows in 84b are open, meaning flat or not agreed between the
+    mice.
+
+### C5 · Human (descriptive)
+
+- S1: 3 representatives, T 0.083, p 0.026.
+- S2: 28 representatives, p 0.38.
+- S3: none.
+- Reportable: folate biosynthesis and basigin interactions, both in the middle third of S1.
+
+### Sensitivities
+
+| Sensitivity | S1 p | S2 p | S3 |
+|---|---|---|---|
+| No PT-specific filter | 0.0035 (9 reps; first, middle) | 0.0030 (31 reps; first, last) | 4 reps, p 0.12 |
+| Core t ≥ 3 | 0.124 | 0.139 | not testable |
+| Cores outside integration features | 0.96 | 0.011 (29 reps; last only) | not testable |
+| Unstratified permutation | 0.052 | 0.095 | not testable |
+
+### Reading
+
+- **The pre-registered answer is no in every testable segment.** Pathways that Chen's segment-level analysis puts in
+  one PT segment do not separate inside it along the elastic curve beyond random groups of that segment's genes
+  (S1 p 0.12, S2 p 0.13; Holm 0.25).
+- **The user's S3 example cannot be asked with this source.** Microdissected PTS3 enriches too few pathways.
+- **What the continuous view does show is descriptive.**
+  - Most PTS2 pathways are flat inside S2 on this curve.
+  - The ones that vary all rise toward S3: the transition, not a sub-region.
+- **The sensitivities point the other way, and why that does not count.**
+  - Without the PT-specific filter, the separation becomes significant in S1 and S2.
+  - The genes this adds are ones also expressed outside the PT, which is the neighbour-signal route of issue 24.
+    So that result is not evidence of within-PT position.
+  - The fold-protected S2 p of 0.011 has only "last third" positions behind it.
+- **Consistent with C14.** The elastic curve's within-segment resolution is limited, most in S1 and S2.
+
+**Outputs.** `results/pt_within_segment_pathways/`:
+- tables: `chen_segment_t.csv`, `segment_pathways.csv`, `positions.csv`, `tests.csv`, `sensitivities.csv`,
+  `how_the_protocol_was_read.csv`;
+- figures: `fig84a_s1_pathways`, `fig84b_s2_pathways`, `fig84c_s3_pathways`, `fig84d_examples` (S1, the only
+  segment with reportable positions in two thirds);
+- `run_record.json`.

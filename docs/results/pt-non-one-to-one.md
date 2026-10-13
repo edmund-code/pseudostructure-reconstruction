@@ -373,3 +373,141 @@ H7, H8a, H8b, H10, H11a, H11b and H11c. Each is reported raw and after BH over t
 - 86f: AKI: P̄ of PT-enriched non-1:1 and 1:1 genes; example curves.
 - 86g: section L's named genes on the curve, both mice.
 - 86h: H0's positive-control pairs and the thin-limb check genes on the curve (U_PT and U_all).
+
+## Notebook 86 results
+
+`analysis/notebooks/86_pt_non_one_to_one_orthologs.ipynb` (logic `86.non_one_to_one.1`) writes to
+`results/pt_non_one_to_one_package/`. It followed the protocol frozen in 6f54b8b. Every guard passed (G1–G6, plus the
+H7 and H11 moderation guards: 71's and 76's F are reproduced from their caches). Units: U_PT holds Ctrl1A2 1,737,
+Ctrl1A4 1,844, HUK1_COR1 2,625 and HUK1_MED1 2,636 PT-identity units. PT-expressed genes: mouse 10,773 (zonated 1,291,
+strong 440), human 11,574 (zonated 555, strong 153).
+
+### Primary tests
+
+| Test | Result | p | BH |
+|---|---|---|---|
+| H0 · 1:1 paralog control separates (mouse) | Slc5a2 → Slc5a1: Δ 2.05, 2.11 units; Slc7a9 → Slc3a1: 2.28, 2.24 | passes | |
+| **H1 · non-1:1 enriched in strong mouse zonation** | 8.2% against 3.8%; MH OR **2.24** | < 10⁻⁵ | < 10⁻⁴ |
+| H1b · human counterparts flat | zonated 8/41 against 82/380; OR 0.88 | 0.47 | 0.60 |
+| H2 · peak segment by class | non-1:1 S1/S2/S3 13/8/20 against 179/35/166 | 0.050 | 0.13 |
+| H3a · male bias among strong genes | 10/41 against 63/380; OR 1.62 | 0.15 | 0.25 |
+| H3b · sex moves the microdissection peak | 14/38 against 104/359; OR 1.43 | 0.20 | 0.31 |
+| **H3d · sex bias across PT-expressed genes** | 16.3% against 10.7%; MH OR **1.50** (male 1.90, female 1.16) | 0.001 | 0.004 |
+| H4 · paralog peak separation (mouse) | 0.73 against 1.08 units | 0.008 | 0.024 |
+| H4 · paralog shape dissimilarity (mouse) | 0.75 against 0.99 | 0.056 | 0.13 |
+| H5 · identity against similarity (mouse) | ρ 0.016 | 0.10 | 0.19 |
+| **H6 · tandem paralogs more similar** | median r 0.31 against 0.07 | 10⁻⁴ | 4 × 10⁻⁴ |
+| H6 · similarity falls with distance (tandem) | ρ −0.20 | 0.001 | 0.004 |
+| **H6b · tandem paralogs against non-paralog neighbours** | median r 0.31 against 0.04 | < 10⁻⁴ | 4 × 10⁻⁴ |
+| H7 · family units called against 1:1 genes | 35.4% (139/393) against 32.6%; OR 0.96 | 0.74 | 0.83 |
+| H8a · family sum beats best member | 0 of 1 | 1 | 1 |
+| H10 · agreement with microdissection | 26/40 against 254/363 | 0.59 | 0.71 |
+| H11a · AKI positional calls | 65/144 against 4,327/10,286; OR 1.42 | 0.081 | 0.16 |
+| H11b · AKI replicated loss | 33/54 against 596/896; OR 0.79 | 0.83 | 0.88 |
+| H11c · AKI loss in S3 | 24/33 against 476/596 | 0.37 | 0.52 |
+
+### What holds
+
+1. **H0 · The curve separates paralogs when they really split.** SGLT2 (Slc5a2) peaks in S1 and SGLT1 (Slc5a1)
+   rises toward S3, and b(0,+)AT (Slc7a9) falls while rBAT (Slc3a1) rises, in both mice by more than two segment
+   units. Human SLC5A2 and SLC5A1 peak in S1 and S3 labels. The co-positioning results below are therefore readable.
+2. **H1 · The mouse PT zonation that the 1:1 space misses is real and replicates 62 on the new curve.**
+   - Strong-zonation shares: 1:1 3.8%, 1:many 9.9%, many:many 14.2%, but many:1 only 1.7%. The excess sits in mouse
+     genes of **mouse-expanded** families, not in mouse single-copy genes whose human side expanded.
+   - MH OR 1.84–4.05 under every sensitivity (support ≥ 2 or ≥ 5, strict probes, U_all, native library).
+   - 41 strong probe-clean non-1:1 mouse genes, 25 of them outside the shared space. The largest Z: Cyp2d12, Nat8f5,
+     Slc22a19, Scd1, Cyp2d26, Ugt2b38, Serpina1a, Clec2h, Akr1c14, Ceacam2, Akr1c18, Ugt2b37, Ces1e, Ugt2b34, Cyp4a14,
+     Cyp4a12a, Slco1a6, Cyp4a10, Cyp2d9, Cyp2j13 and Slco1a1 (`w_calls_mouse.csv`).
+   - Human: OR 1.57, p 0.17 (not enriched at support ≥ 3; 1.85 and 2.69 at support ≥ 2 and ≥ 5).
+3. **H3d · Sex-biased mouse PT genes are enriched in non-1:1 families** (the literature's open question; never tested
+   in kidney). Over all PT-expressed probe-clean genes, against an expression-matched 1:1 background: any sex bias OR
+   1.50 (p 0.001), **male bias 1.90 (p 10⁻⁴)**, female bias 1.16 (p 0.40). The one gene-age study predicted no
+   enrichment (PMID 37917687). Sex bias comes from Xiong 2023's female-vs-male PT data, so our all-male cohort does not
+   confound it.
+   - H3c (descriptive): in our male mice, male-biased zonated genes peak late (median 2.17 units, early S3) and
+     female-biased ones early (0.57, S1), against 1.48 for unbiased genes (p 10⁻⁴ and 2 × 10⁻⁷). This fits the literature's S2/S3
+     location of the mouse sex program.
+4. **H6/H6b · Tandem paralogs share positions, and it is specific to paralogs.**
+   - Tandem pairs (< 1 Mb): median r 0.31 against 0.07 for dispersed paralogs and 0.04 for non-paralog neighbours
+     within 1 Mb (19,651 pairs). Human: 0.48 against 0.07 and 0.04.
+   - Within tandem pairs, similarity falls with distance (ρ −0.20 mouse, −0.21 human).
+   - In mouse, tandem status predicts shared position and sequence identity does not (rank regression t 3.7 against
+     0.5). Of the literature's competing hypotheses, co-regulation of tandem duplicates (D06) wins over a plain
+     neighbourhood effect (D07).
+5. **H4 · Paralogs sit closer together than matched random genes** (0.73 against 1.08 units, p 0.008), but their
+   shapes are not significantly more alike (p 0.056), so the frozen reading is "neither". 59% of zonated paralog pairs
+   share a peak segment against 40% by chance (D10, descriptive). Human: not run (2 families with ≥ 2 zonated
+   paralogs).
+
+### What does not hold
+
+- **H1b:** the human counterparts of strongly zonated mouse non-1:1 genes are zonated about as often as the human
+  partners of strong 1:1 genes (20% against 22%). Restricting to human members with ≥ 2 probes changes nothing.
+- **H5:** across 5,959 Ensembl paralog pairs, protein identity does not predict positional similarity in mouse
+  (ρ 0.016). It does among young pairs (dS < 2: ρ 0.17, interval 0.003–0.32) and in human (ρ 0.06, p 7 × 10⁻⁴;
+  dS < 2 0.52). Descriptive.
+- **H7 · Family sums through the 1:1 test are called as often as 1:1 genes** (35% against 33%). The family test also
+  fails calibration (relabeled share 0.089 > 0.075), so individual family calls are not claimable. H7c: no relation to
+  the expansion ratio (ρ 0.06).
+- **H7b · The 1:1 species calls barely depend on the paralog kept.** Of 122 genes 71 calls inside multi-member
+  orthogroups, 116 are called at the family level too; 6 are lost (Akr1c18, Gnai1, Zrsr2, Nr2f1, Ier3ip1, Slc52a2) and
+  32 families are called only as sums.
+- **H8:** only 4 families have a zonated single-copy gene and ≥ 2 PT-expressed co-orthologs; H8b was not run (n < 5).
+  Baseline B: 1:1 pairs with either gene zonated have median cross-species r 0.39, and 60% share a peak half.
+- **H10:** the curve's peak segment agrees with male microdissection for 65% of strong non-1:1 genes and 70% of 1:1
+  genes (p 0.59): paralogs are measured as reliably as 1:1 genes.
+- **H11 · AKI:** the 468 genes outside 76's pool fail gene-level calibration (0.114), so no gene claim. Non-1:1 genes are
+  not lost more often than 1:1 genes after injury (61% against 67% of PT-enriched genes), nor more often in S3.
+- **H13:** the top member carries a similar share of family PT counts in both species (median 0.72 mouse, 0.69 human).
+
+### Positions (H4b, H4c) and named claims (H12)
+
+- **Continuous against discrete (H4b′).** 16 of 39 zonated mouse paralog pairs separate on the curve; the S1/S2/S3 label
+  peaks separate 15 of the same 16. The curve adds one pair: Ugt2b38 (1.29 units) before Ugt2b37 (1.81) inside S2,
+  which matches male microdissection (Ugt2b38 S1+S2, Ugt2b37 S2).
+- **Handovers (H4c, descriptive).** Of the 16 separated pairs, most hand over gradually or graded: Ugt2b34 to
+  Ugt2b37/38 at the S1/S2 boundary (widths 0.65–0.93), Cyp2j13 to Cyp2j11 and Ceacam1 to Ceacam2 at S2/S3, Cyp4a12a to
+  Cyp4a10/14/31 inside S2 (0.60–0.71). Two are sharp: Acaa1b/Acaa1a inside S1 (0.44) and Ces1e/Ces1f in S3 (0.21).
+  The U_PT label steps are 0.18–0.31 wide.
+- **H12 · 48 of 60 literature claims are consistent, 4 are not, 8 are not measurable.**
+  - Consistent: Kap peaks in S3 with an S1 shoulder (the intact-male androgen pattern), Slco1a1 and Cyp2j13 in S2,
+    Akr1c18 rising into S3 in males, the Cyp2d, Ugt2b and Ces1 paralog orders, Nat8f1/Nat8f5/Nat8 (no segment data in
+    any publication before), Slc22a19 late, Gstm1 S3, Mt1 and Gsta4 S1, Slc7a12 absent in male PT, and on the human
+    side SLC5A2/SLC5A1, SLC22A24 in S3, CES2 in S1/S2, SLC22A6/A8 in S1/S2, SLCO1A2 and SLC22A9/A10 not PT-expressed.
+  - **Not consistent: the Cyp4a family.** Microdissection puts Cyp4a10 and Cyp4a14 in S2 and Cyp4a12a in S3; our curve
+    and our labels put Cyp4a12a in early S2 (1.19 units) and Cyp4a10/14/31 at the S2/S3 boundary (2.08–2.20). 62 found the
+    same order on the old coordinate, so the conflict is not the coordinate's. The male microdissection levels of
+    Cyp4a12a are low (9/26/55 TPM) and its probe status is "near" (one probe within 4–5 mismatches of a paralog).
+  - Not measurable: probe-ambiguous genes (Ces2c, Slc22a30, Gsta2, CYP4A11, CYP4F2), genes below detection (Slc22a29,
+    Slc22a28) and Gsta1 (no probe in our panel).
+- **Thin-limb check.** On U_all, Gstm2 and Gdf15 are zonated toward the end of mouse S3 (peak 2.87); on U_PT neither is
+  zonated. U_PT removes the thin-limb end, as intended.
+- **H11d · named AKI genes** (descriptive): consistent with the literature are Kap loss (P̄ −2.0, all four pairs),
+  Slc22a30, Acsm2 and Slc7a13 loss, and Mt1, Mt2, Cxcl1, Havcr1 and Ifitm3 gain. Slc7a12 is not gained (−0.73),
+  Slc5a12 and Ifi27 are not replicated, and Saa1/3, Ccl2/7, Serpina3n and Sprr2f are below detection.
+
+### Recorded deviations (after the first run)
+
+1. **H11's usable genes.** The first run's P̄ included genes whose specimen fits hit zero counts, giving P̄ values up to
+   ±10³ (for example Cxcl2, Vmn1r19, Nat8f3). 76 uses only converged, non-separated genes. The rerun applies 76's rule,
+   extended to every specimen fit: U76 10,597 of 10,701, new genes 457 of 468. H11b moved from 37/59 against 606/916
+   (OR 0.86, p 0.76) to 33/54 against 596/896 (OR 0.79, p 0.83); every verdict is unchanged.
+2. **H8b** needed ≥ 5 families for the Wilcoxon test; 4 qualified, so it was not run. The protocol named no minimum.
+3. **Figures:** Wilson intervals replace normal-approximation intervals in 86a; 86c gained a fourth panel (H6b's three
+   groups); 86f clips P̄ at ±8 for display.
+
+### Bounds
+
+Two male control mice, one male human donor, two male IR mice. The tests run across genes, not animals. Human
+positions are the weakest measurement, and the human transitions cross. Probe panels differ by species, so no level
+comparison across species is made. The sex statements rest on external female-vs-male data.
+
+### Tables and figures
+
+- Tables (`tables/`): `w_calls_{mouse,human}.csv`, `h0_positive_control.csv`, `h1_enrichment.csv`, `h1_by_class.csv`,
+  `h1_human_by_probe_count.csv`, `h1b_*`, `h3_tables.csv`, `h3b_moved_genes.csv`, `h3c_*`, `h3d_*`, `h4_*`,
+  `h4c_handovers.csv`, `h5_*`, `h6_*`, `h6b_*`, `h7_*`, `h7b_*`, `h8_*`, `h8d_*`, `h9_no_ortholog.csv`,
+  `h10_microdissection.csv`, `h11_*`, `h11d_named_aki_genes.csv`, `h12_literature_claims.csv`,
+  `h12_thin_limb_check.csv`, `h13_dominance.csv`, `primary_tests.csv`.
+- Figures (`figures/`): 86a inventory, 86b families, 86c paralogs, 86d family units, 86e sex, 86f AKI, 86g literature
+  genes, 86h controls.

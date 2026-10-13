@@ -127,3 +127,18 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
     - A perfect step reads 1.04 pooled units wide at the mouse S2/S3 boundary and 0.81 in S2, with up to 24% overshoot.
     - 81's "no sharp switch" and every width read from 71's curves (81, 83, 84) carry this floor.
     - Notebook 85 measures widths on 40 equal-count bins instead (floor 0.05).
+
+## From notebook 86 (genes outside one-to-one orthology)
+
+29. **The Cyp4a family disagrees with male microdissection.** Our curve and our labels put Cyp4a12a in early S2 (1.19
+    mouse units) and Cyp4a10, Cyp4a14 and Cyp4a31 at the S2/S3 boundary (2.08–2.20). Chen 2023's male microdissection has
+    Cyp4a10 and Cyp4a14 highest in PTS2 and Cyp4a12a in PTS3. 62 found the same order on the retired coordinate, so the
+    coordinate is not the cause. Cyp4a12a's probe status is "near", and its microdissection level is low (9/26/55 TPM).
+    Any Cyp4a positional statement needs an orthogonal check (ISH).
+30. **Genes with no included probe are structural zeros.** In our panels, mouse Gsta1, Nat8f6, Nat8f7 and Apol9b and
+    human UGT2B15 and AKR1C1 are absent. Gsta1 is the mouse partner of the canonical human PT marker GSTA1. A "human-only
+    alpha-GST" result would be a panel artefact.
+31. **Family sums fail the 1:1 test's calibration** (relabeled share 0.089 against the 0.075 limit; notebook 86, H7), and
+    the 468 AKI genes outside 76's pool fail gene-level calibration (0.114). Neither yields claimable gene or family
+    calls; only the class-level comparisons are reported.
+

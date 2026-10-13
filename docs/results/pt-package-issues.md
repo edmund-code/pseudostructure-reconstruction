@@ -105,3 +105,25 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
     - Testing S3 needs another discrete source of PTS3 pathways, for example a single-nucleus atlas's S3 cluster or
       the clustering method's S3 calls. That would be a new protocol.
     - Peak-sorted heatmaps show a diagonal by construction, so they need the reportable marks.
+
+## From notebook 85 (sharp or gradual transitions)
+
+26. **Pooled segment units misplace mouse positions.**
+    - Notebooks 79–84 read positions in units pooled over all four specimens (cuts 0.473, 0.605). The mouse's own
+      S1→S2 label transition is at 0.341, which is pooled S1 0.72.
+    - So 83's "switches inside S1" (NaPi-IIc S1 0.69, U-M3 S1 0.72) are at the mouse's own S1/S2 boundary (mouse units
+      S1 0.96, S1 1.00).
+    - 84's pooled "S2 thirds" were the second half of mouse S2.
+    - Within-species statements should use the species' own units. Human units are undefined, because the human
+      transitions cross (issue 6).
+27. **The last stretch of the mouse curve is thin-limb units labelled PT-S3.**
+    - From mouse S3 ≈ 0.3, the package's `primary_identity` turns Thin_Limb: 33–62% at S3 0.4 and 52–95% afterwards.
+    - In total, 425 and 547 mouse "PT" units carry it.
+    - 18 sharp-looking falls of PT pathways (S3 0.38–0.66) sit at this switch, and so does 83's NaPi-IIa switch (S3
+      0.36; 29% thin-limb units).
+    - Late-S3 positions are not within-PT statements until these units are separated. Like issue 7, this is a
+      labelling limit of the package.
+28. **71's 6-df spline cannot show a sharp switch near S2.**
+    - A perfect step reads 1.04 pooled units wide at the mouse S2/S3 boundary and 0.81 in S2, with up to 24% overshoot.
+    - 81's "no sharp switch" and every width read from 71's curves (81, 83, 84) carry this floor.
+    - Notebook 85 measures widths on 40 equal-count bins instead (floor 0.05).

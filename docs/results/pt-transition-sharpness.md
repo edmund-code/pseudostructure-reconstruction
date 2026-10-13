@@ -195,3 +195,133 @@ Every one of them is classified. There is no between-pathway test.
 - Every agreed main edge has the same class: the curve does not split Chen's segment classes by sharpness.
 - Q3 is above 0.5 at both boundaries and Q4 is unresolved in every segment: on this curve, sharp and gradual cannot be
   told apart, except where an edge is already sharp.
+
+## Notebook 85 results
+
+Logic `85.transition_sharpness.1`, run 2026-10-12 (74 s). All guards passed (G1–G4). The frozen readings are in the
+column `reading`. Section 7b's post hoc checks add `reading (post hoc)`, which the figures and the summary below use.
+
+### The curve's resolution (Q)
+
+| Reference | At S1 0.5 | S1/S2 | S2 0.5 | S2/S3 | S3 0.5 |
+|---|---|---|---|---|---|
+| Q1 spline step response (mouse units; Ctrl1A2/Ctrl1A4) | 0.32/0.31 | 0.46/0.47 | 0.59/0.58 | 0.70/0.70 | 0.43/0.41 |
+| PH3 the same in pooled units (81's units) | 0.23 | 0.30 | 0.81 | **1.04** | 0.41 |
+| Q2 binning step response | 0.05 (the lower bound) everywhere | | | | |
+| Q3 label step (Ctrl1A2/Ctrl1A4) | | 0.33/0.29 | | 0.31/0.26 | |
+
+- **The spline could not show a step near S2.** A perfect step at the mouse S2/S3 boundary comes out of 71's spline
+  1.04 pooled units wide, which is a "gradient" by 81's thresholds. In S2 it is 0.81, which is graded. The fit also
+  overshoots by up to 24%. So 81's "no sharp switch" was out of reach by construction near S2, and partly elsewhere.
+- **The curve resolves a discrete switch at both boundaries.** The package's own segment labels switch over 0.29–0.33
+  mouse units at S1/S2 and at S2/S3. A pathway that stepped at a label boundary would therefore look about 0.3 wide.
+- **Q4 failed as frozen.**
+  - The 5th percentile of agreed interior gene edges is the fit's lower bound (0.05) in all three segments.
+  - PH1 shows why. When each gene's mouse-A edges are paired with a random gene's mouse-B edges, many "agreed"
+    edges still appear: 17–30% at the 0.25 threshold, falling to 8–14% at 2 log2. Chance-agreed noise edges
+    are sharp.
+  - Q4′ keeps edges above the amplitude at which shuffled pairs give ≤ 10% of the observed count:
+    - S1: never reached (shuffled ÷ observed ≥ 0.13 at every amplitude). The S1 interior is unresolved.
+    - S2: A* = 1.5 log2, 163 edges, Q4′ = 0.47. Resolved, just under 0.5.
+    - S3: A* = 2.0 log2, 158 edges, Q4′ = 0.22. Resolved.
+
+### Late mouse S3 is where the units stop being PT (PH2)
+
+- From mouse S3 ≈ 0.3 onward, units that the package labels PT-S3 increasingly carry the package's `primary_identity`
+  Thin_Limb:
+  - 10–33% at S3 0.17–0.37;
+  - 62–78% at S3 0.46–0.49;
+  - 52–95% in every later bin.
+- Over the same stretch, PT identity falls from 0.8–1.0 to 0.02–0.25.
+- So the last roughly 0.5 mouse segment units of the curve are mostly thin-limb units. (The S3 label fraction is 1.0
+  from about S3 0.3 onward.)
+- **18 agreed pathway edges sit there:** S3 0.38–0.66, all falls, −0.30 to −1.04 log2. Twelve are sharp, five graded
+  and one gradual. They come from 18 PTS2 pathways: fatty-acid oxidation, peroxisome, xenobiotic, BCAA, selenoamino
+  acid and tryptophan.
+  - These edges are read "at the PT → thin-limb identity switch". They are not counted as changes inside the PT.
+- **The same applies to 83's NaPi-IIa switch** (S3 0.37 pooled = S3 0.36 mouse units). It sits where 29% of units have
+  thin-limb identity (S0 table).
+
+### S0 · Earlier positions in mouse units
+
+| Quoted | Pooled units | Mouse units | Reading |
+|---|---|---|---|
+| 83: NaPi-IIa switch | S3 0.37 | S3 0.36 | at the start of the thin-limb identity switch (29%) |
+| 83: NaPi-IIc switch | S1 0.69 | **S1 0.96** | at the mouse's own S1/S2 label boundary |
+| 83: U-M3 rise | S1 0.72 | **S1 1.00** | at the mouse's own S1/S2 label boundary |
+| 81: U-M3 half done | S1 0.80 | S2 0.14 | just after it |
+| 83, 81: S-M1 fall | S3 0.13, 0.18 | S3 0.11, 0.16 | inside S3, PT identity ≥ 0.9 |
+| 84: pooled S1/S2 and S2/S3 | 1, 2 | S2 0.48, S2 0.97 | 84's "S2 thirds" were the second half of the mouse's S2 |
+
+83's two "switches inside S1" are switches at the mouse's own S1/S2 label boundary.
+
+### Pathway edges (mouse; both mice agree)
+
+Main edge of each pathway (largest agreed amplitude), post hoc reading:
+
+| Chen segment | Pathways | Gradual (resolved) | Graded (resolved) | Sharp | Graded or gradual, unresolved (inside S1) | At the thin-limb switch | No agreed edge |
+|---|---|---|---|---|---|---|---|
+| PTS1 | 9 | 7 | 0 | 0 | 0 | 0 | 2 |
+| PTS2 | 53 | 18 | 1 | 1 | 13 | 3 | 17 |
+| PTS3 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
+
+All agreed edges inside the PT, not just main edges: 26 gradual and 1 graded (resolved), 2 sharp, 14 unresolved (inside
+S1).
+
+- **PTS2 pathways rise gradually across the S1/S2 boundary. They do not step at it.**
+  - Their 33 main rising edges (outside the thin-limb stretch) are half done at a median of S1 0.86.
+  - Median width 1.24 (IQR 1.03–1.70), against a label switch of about 0.3 at the same place.
+  - Examples: PPAR signalling (S1 0.99, width 1.74/1.66), fatty-acid degradation (S1 0.88, 1.48/2.13), mitochondrial
+    β-oxidation, glutathione synthesis, peroxisomal lipid metabolism.
+  - A segment-level analysis calls all of these "PTS2-enriched". On the curve, they ramp up from mid-S1 into S2.
+- **Bile acid synthesis via 7α-hydroxycholesterol** (called in PTS2 and PTS3) is the clearest gradual change.
+  - It rises by 3.6 log2 across the whole of mouse S2: half done at S2 0.77–0.81, width 1.4–2.5.
+  - Core: Cyp7b1, Akr1d1, Akr1c18, Acox2, Slc27a2 (and Amacr in the PTS2 call).
+- **PTS1 pathways fall gradually, late.** The falls of folate biosynthesis, oxidative phosphorylation, pentose and
+  glucuronate interconversions and mineral absorption are half done in S2 or at S2/S3 (S2 0.20 – S3 0.33), with
+  widths 1.3–2.4. So the "S1-enriched" signal is a slow decline through S2 into S3, not a drop at S1/S2.
+- **The sharp exception is Basigin interactions** (PTS1).
+  - Core: Slc7a9 (b0,+AT), Slc7a8 (LAT2), Slc7a7, Slc3a2 and Slc16a1.
+  - It steps down at the mouse S1/S2 boundary (S1 0.92; width 0.25/0.56; −1.6 log2), as sharply as the segment label.
+  - It then declines gradually through S2 into S3 (S3 0.09; width 1.22/1.31; −2.5 log2).
+  - So one pathway holds both kinds of change.
+- **The other sharp edge** is small: biosynthesis of unsaturated fatty acids rises at S1 0.74 (+0.43 log2; widths
+  0.28/0.06).
+- **Gene composition (G2)** is mostly "mixed" or "not evaluable". Single-gene edges are too noisy (PH1) to tell a
+  gene gradient from staggered gene switches.
+
+### Readout against the "adds nothing" rules
+
+- **Agreed edges exist:** 44 of 63 pathways have one. Not met.
+- **One class only:** nearly met inside the PT. Of the resolved main edges inside the PT, 26 are gradual, 1 graded and
+  1 sharp. The classification does split Chen's pathways, but mostly into "gradual". Sharp changes of segment-level
+  pathways are rare (Basigin's amino-acid exchangers at S1/S2). The sharp-looking late-S3 edges are an identity
+  switch.
+- **Resolution:** Q3 is 0.29–0.33 at both boundaries, and Q4′ resolves the S2 and S3 interiors. Not met. Sharp and
+  gradual can be told apart, except inside S1.
+
+### Recorded deviations (all after the first run)
+
+1. **PH1.** Q4 replaced by Q4′ (amplitude-filtered against shuffled gene pairing) in `reading (post hoc)`. The frozen
+   Q4 hit the fit's lower bound.
+2. **PH2.** Edges where ≥ 25% of units have thin-limb primary identity are read as the PT → thin-limb identity switch.
+3. **PH3.** The spline step response in pooled units.
+4. **Figure 85d** (rule-picked examples) and the identity strips in 85a and 85b.
+5. **Pathways are keyed by (segment, pathway).** Bile acid synthesis via 7α-hydroxycholesterol is called in both PTS2
+   and PTS3 with different cores. Found by guard G4.
+
+**Tables** (`results/pt_transition_sharpness/tables/`):
+- `pathway_edges.csv` (agreed edges, both readings), `pathway_edges_per_mouse.csv`, `pathway_models.csv`;
+- `resolution.csv`, `positions_in_mouse_units.csv`;
+- `gene_edges_agreed.csv.gz`;
+- `post_hoc_gene_edge_chance_agreement.csv`, `post_hoc_interior_reference.csv`,
+  `post_hoc_spline_step_pooled_units.csv`, `post_hoc_unit_identity_by_bin.csv`;
+- `profiles.npz`, `how_the_protocol_was_read.csv`.
+
+**Figures:**
+- `fig85a_pathway_transitions`:
+  - Chen PTS1/2/3 beside the curve, with a thin-limb identity strip.
+  - Marks: filled sharp, half graded, open gradual. Grey means unresolved. Diamonds mark the identity switch.
+- `fig85b_sharp_and_gradual`, the protocol's pick;
+- `fig85c_resolution`;
+- `fig85d_examples_post_hoc`: Basigin interactions, bile acid synthesis, fatty-acid degradation.

@@ -24,6 +24,8 @@ Notebooks 81 and 82 (published human vs mouse findings re-read along the PT, and
 `pt-published-findings.md` (notebook 83 draws its cluster-vs-continuous figures).
 Notebook 84 (pathways a segment-level analysis puts in one segment: where they sit inside it on the elastic curve) is in
 `pt-within-segment-pathways.md`.
+Notebook 85 is in `pt-transition-sharpness.md`. It asks whether segment-level pathways change sharply or gradually
+along the elastic curve, and it corrects the mouse units of 81, 83 and 84.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

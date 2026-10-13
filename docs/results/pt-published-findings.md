@@ -920,6 +920,17 @@ descriptive.** The elastic curve's fold noise exceeds the within-segment spread 
 only mouse S3 (0.98) is not noise-dominated. So the S3 positions (NaPi-IIa S3 0.37, S-M1 S3 0.13) are the
 best-resolved. The within-S1 positions (NaPi-IIc S1 0.69, U-M3 S1 0.72) sit in the noisiest cell.
 
+**Correction from notebook 85 (issues 26–28).** These positions are in pooled units: the mean of human and mouse label
+transitions. In the mouse's own units:
+- NaPi-IIc's switch (S1 0.69) is at S1 0.96, and U-M3's rise (S1 0.72) is at S1 1.00. Both sit at the mouse's own S1/S2
+  label boundary, not inside S1.
+- NaPi-IIa's switch (S3 0.37) is at S3 0.36. That is where the units begin to carry thin-limb identity (29% there,
+  52–95% beyond S3 0.46). It may mark the end of the PT units rather than a switch inside S3.
+- S-M1's fall (S3 0.11–0.16) is inside S3 with PT identity ≥ 0.9, so it stands.
+
+The "Reading" bullet below is superseded on these points. The steepest-point slopes come from 71's spline, which cannot
+show a step sharper than 0.3–0.7 mouse units (issue 28).
+
 | Figure | Cluster view (the paper's method; ours and the atlas agree) | Continuous view (what the clusters cannot show) |
 |---|---|---|
 | fig83a NaPi-IIa (Slc34a1) | mouse S1 ≈ S2 > S3 (ours +1.08, +0.87, −1.96; Census +1.40, +1.18, −2.59); human weak | Mouse is flat through S1 and S2. The whole loss, 17–26-fold (−4.1, −4.7 log2), happens inside S3, steepest at **S3 0.37** in both mice (S3 0.35, 0.39). The cluster mean of S3 averages its high start and low end, so it shows 8-fold. Human declines a little inside S3 (−0.5, −0.9) |
@@ -932,9 +943,11 @@ best-resolved. The within-S1 positions (NaPi-IIc S1 0.69, U-M3 S1 0.72) sit in t
 - In every row, the cluster view of our specimens matches the atlas donors' cluster view. The figures therefore show
   the papers' kind of data, and what the continuous coordinate adds to it.
 - For single genes, the continuous view locates sharp changes inside a segment: NaPi-IIa at S3 0.37 and NaPi-IIc at
-  S1 0.69, in mouse.
+  S1 0.69, in mouse. *(Superseded by notebook 85: NaPi-IIc's switch is at the mouse S1/S2 boundary, and NaPi-IIa's
+  at the thin-limb identity switch.)*
 - For programs, it shows that the segment named by a cluster DE call can differ from where the program changes.
-  Mouse-high "S1" genes fall in S3, and mouse-high "S3-only" genes rise in S1.
+  Mouse-high "S1" genes fall in S3, and mouse-high "S3-only" genes rise in S1. *(Notebook 85: the U-M3 rise is at the
+  mouse S1/S2 boundary.)*
 - No human position is claimed.
 
 **Outputs.** `results/pt_published_findings_figures/`:
@@ -958,7 +971,8 @@ Notebook 82 now also writes `atlas_segment_rates.csv.gz` (a post hoc output; no 
 | Chen 2021, Hinze 2022 (via 79) | segment programs per species | the transfer pattern (mouse S1–S3 programs absent in human; human S1 conserved in mouse; human S3 absent in mouse) replicates in Lake and Census in 6 of 9 cells; Z-M1 in Cheval | atlas donors |
 
 **Continuous description.** Two gradual mouse gradients are specimen-agreed, program-specific and landmark-confirmed. No
-sharp switch and no human position is confirmed.
+sharp switch and no human position is confirmed. Near S2, 71's spline could not have shown a sharp switch (issue 28).
+Notebook 85 measures widths without it.
 
 **Bounds.**
 - The human positive control against microdissected tissue is weak (ρ 0.14).

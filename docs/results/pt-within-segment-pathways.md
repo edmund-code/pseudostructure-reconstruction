@@ -251,3 +251,12 @@ the universe) plus the 15 panel and anchor genes. Chen: 9,672 universe genes exp
 - figures: `fig84a_s1_pathways`, `fig84b_s2_pathways`, `fig84c_s3_pathways`, `fig84d_examples` (S1, the only
   segment with reportable positions in two thirds);
 - `run_record.json`.
+
+**Correction from notebook 85 (issue 26).** The thirds above are in pooled units. For the mouse, pooled S1 [0, 1)
+covers the mouse's own S1 and the first half of its S2 (mouse units 0–1.48). Pooled S2 [1, 2) is the second half of
+mouse S2 (1.48–1.97). The four S2 pathways that "peak at the end of S2" are still rising there in mouse units. Notebook 85 measures three
+of them as gradual ramps:
+- bile acid synthesis via 7α-hydroxycholesterol across S2;
+- PPAR signalling and glutathione synthesis from mid-S1 into S2.
+
+Their mean widths are 1.5–2.2 mouse units. Cysteine/methionine metabolism has no agreed edge.

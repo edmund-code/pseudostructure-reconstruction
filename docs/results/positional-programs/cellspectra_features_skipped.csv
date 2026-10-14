@@ -1,0 +1,20 @@
+family,rank,term,reason
+prevalent KEGG,7,hsa04514 Cell adhesion molecules - Homo sapiens (human),not in library
+conserved,5,PT_GO.0046634.regulation.of.alpha.beta.T.cell.activation.BP,not in library
+conserved,7,PT_GO.0042043.neurexin.family.protein.binding.MF,MF term
+species-specific (human-more),1,PT_GO.0032964.collagen.biosynthetic.process.BP,not in library
+species-specific (human-more),3,PT_GO.0010712.regulation.of.collagen.metabolic.process.BP,not in library
+species-specific (human-more),6,PT_GO.0014888.striated.muscle.adaptation.BP,not in library
+species-specific (human-more),8,PT_GO.0042534.regulation.of.tumor.necrosis.factor.biosynthetic.process.BP,not in library
+species-specific (human-more),9,PT_GO.0042533.tumor.necrosis.factor.biosynthetic.process.BP,not in library
+species-specific (human-more),11,PT_GO.0032963.collagen.metabolic.process.BP,not in library
+species-specific (human-more),13,PT_GO.0140375.immune.receptor.activity.MF,MF term
+species-specific (rodent-more),7,PT_GO.0051590.positive.regulation.of.neurotransmitter.transport.BP,not in library
+species-specific (rodent-more),14,PT_GO.0097120.receptor.localization.to.synapse.BP,not in library
+species-specific (rodent-more),20,PT_GO.0001653.peptide.receptor.activity.MF,MF term
+species-specific (rodent-more),26,PT_GO.0008528.G.protein.coupled.peptide.receptor.activity.MF,MF term
+species-specific (rodent-more),35,PT_GO.0098801.regulation.of.renal.system.process.BP,not in library
+species-specific (rodent-more),37,PT_GO.0046906.tetrapyrrole.binding.MF,MF term
+species-specific (rodent-more),39,PT_GO.0019239.deaminase.activity.MF,MF term
+species-specific (rodent-more),40,PT_GO.0008235.metalloexopeptidase.activity.MF,MF term
+species-specific (rodent-more),41,PT_GO.0038024.cargo.receptor.activity.MF,MF term

@@ -142,3 +142,14 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
     the 468 AKI genes outside 76's pool fail gene-level calibration (0.114). Neither yields claimable gene or family
     calls; only the class-level comparisons are reported.
 
+## From notebook 89 (positional programs against a cluster-level view)
+
+32. **The S1-high pathway gradient (P1) may be partly neighbour signal.** Its sets are generic: ECM organisation, EMT,
+    focal adhesion, interferon-γ and TNF-α responses, hypoxia, mitotic spindle. Issue 24 found mouse S1 units carrying
+    neighbour signal. P1 falls at S2/S3 and inside S3 rather than at S1/S2, which argues against a pure S1 artefact, but
+    no positional claim for P1's immune and ECM members should be made without a neighbour-signal check.
+33. **E2's cluster-view threshold was mis-specified.** The protocol called a segment when its centred value reached
+    0.25 log2, the same number as the curve's amplitude (a range). A centred segment value is about half a range, so
+    the cluster view "missed" 120 of 123 sets largely by construction. Any future cluster-versus-curve comparison should
+    use a statistical cluster test (the segment F-test) or a range-matched threshold.
+

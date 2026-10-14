@@ -242,3 +242,163 @@ Two healthy male mice and two IR male mice (time point unknown), one male human 
 coordinate's fold noise exceeds the within-segment spread in mouse S1 and S2 (C14). CellSpectra's comparisons are
 human against rodents pooled, healthy and diseased cells pooled, and coordination rather than level; ours are level
 and position within one species.
+
+## Notebook 89 results
+
+`analysis/notebooks/89_pt_positional_programs.ipynb` (logic `89.positional_programs.1`) writes to
+`results/pt_positional_programs/`. It followed the protocol frozen in 35afb77. Guards G1–G7 passed. Wall time about 5
+min cold (T 104 s), 1.5 min cached.
+
+### T · The curve can show all four advantages (semi-synthetic)
+
+Realistic arm (generation on a fold refit, analysis on the primary coordinate), 100 programs of 15 genes per cell.
+
+| Shape (A = 1 log2 per gene) | Curve | Cluster view (S1/S2/S3, 0.25 in both mice) |
+|---|---|---|
+| Bump at S1/S2, w 0.25 / 0.5 / 1.0 | boundary program 0.88 / 1.00 / 0.52 | no call 1.00 / 1.00 / 0.99 |
+| Bump at S2/S3, w 0.25 / 0.5 / 1.0 | 0.97 / 0.93 / 0.05 | one segment 0.19 / 0.80 / 0.93 (S3) |
+| Matched steps (same cluster view as the bump) | false boundary call 0.00 everywhere | identical to the bump by construction |
+| Flat | 0.00 | no call 1.00 |
+| Step at S1/S2 (w 0.1) | classified sharp 0.99; recovered width 0.28; half-point error 0.01 | — |
+| Ramp at S1/S2 (w 1.5) | classified gradual 0.96; width 1.61; error 0.08 | — |
+| Local bump inside S1 or S2 (c 0.3, 0.7, 1.3, 1.7) | correct half-segment 1.00; peak error 0.05 | — |
+
+- **Showable (frozen rule): A1 at both boundaries, A2 and A3.** At A = 0.5 the boundary rule finds only 3–15% of bumps,
+  so the curve's floor is a per-gene bump of about 1 log2 shared by most members of a program.
+- **Limit of the statistic, not of the curve:** bumps of full width 1.0 fill the flanks, so the window-versus-flank
+  excess misses most of them (0.52 at S1/S2, 0.05 at S2/S3).
+- **What a cluster analysis sees.** A 1 log2 boundary bump of width ≤ 0.5 at S1/S2 gives no segment call at all. At
+  S2/S3 it is called "S3" (one segment): mislocated. Bump and matched step give the same cluster view.
+- The realistic arm uses folds 0 and 1 (reading 1). Their positions differ from the primary coordinate by a median
+  0.06–0.10 segment units, 90th percentile 0.16–0.31, with heavy tails.
+
+### H1 · No boundary programs (primary; does not hold)
+
+- 1,404 of 71's sets have ≥ 10 usable members. **C = 0** boundary programs; null mean 0.00 (1,000 permutations);
+  p = 1.0. Every sensitivity also gives 0 (window half-width 0.15 and 0.35, bins 0.2, built genes removed, U_all).
+- The closest sets (post hoc) reach an agreed excess of 0.22 (Reactome intrinsic pathway of fibrin clot formation, a
+  trough at S1/S2) and 0.11 next.
+- **Single genes (post hoc):** genes with an agreed boundary peak or trough are no more frequent than when each mouse's
+  bin order is shuffled (S1/S2 peak 35 against a null mean of 76, p 0.86; trough 91 against 94; S2/S3 peak 78 against
+  72, p 0.29; trough 60 against 94).
+- **Reading (frozen).** A1 is showable and H1 fails: on this curve there is no evidence of boundary-centred pathway
+  programs, at the set level or the gene level. Pathways "peaked between S1 and S2 and missed by clustering" are not
+  found.
+
+### E1 · Pathway positions reduce to two opposite gradients
+
+- 123 eligible sets (amplitude above their own permuted 95th percentile in both mice, r ≥ 0.5) in 80 redundancy
+  groups. Silhouette picks **K = 3** (0.70); two clusters have ≥ 3 representatives. **ARI between the mice 0.95**
+  (K = 6: 0.85): the programs replicate.
+- **P1 · S1-high, falling** (35 representatives, 40 sets): highest at the start of S1, half done at S2/S3 (1.98), with
+  the steepest part inside S3; amplitude 0.42 log2. Members: SLC-mediated transmembrane transport, hypoxia, ECM
+  organisation, focal adhesion, interferon-γ response, EMT, TNF-α via NF-κB, mitotic spindle.
+- **P2 · S3-high, rising** (44 representatives, 82 sets): half done in late S1 (0.84 mouse units), then a plateau
+  through S2 and S3; amplitude 0.39. Members: amino-acid metabolism, fatty-acid metabolism, biological oxidations,
+  xenobiotic metabolism, mTORC1, adipogenesis, proteasome and deubiquitination, steroid metabolism.
+- K = 6 (sensitivity) splits off small groups (3–4 sets each: an early-S1 group with ECM and complement; an S2-high
+  group with SLC transport, aspirin ADME and nitrogen metabolism) but keeps the same two large programs (28 and 43
+  representatives).
+- **What clustering says about them.** Chen's microdissection calls 23 of P2's representatives "PTS2" and 20 nothing;
+  it calls 5 of P1's "PTS1" and 29 nothing. On the curve, P2 switches on in late S1 rather than in S2, and P1 falls at
+  the S2/S3 boundary and inside S3, which an S1-versus-rest contrast barely sees.
+- **Human (descriptive):** P1 falls along the human curve too (gentler); P2 is nearly flat in human.
+- **IR mice (descriptive):** P1 keeps its shape (r 0.90, 0.94 with the controls) but its amplitude falls to 0.41 and
+  0.43 of the controls' (control pair 0.92). P2's amplitude ratio (0.75, 0.65) is no lower than the control pair's
+  (0.75); in IR2A2 it drops in S3 (r 0.59).
+
+### E2 · The cluster view at 0.25 calls almost none of these sets
+
+- Of the 123 eligible sets: agree 2, boundary 0, mislocated 1, **missed 120**.
+- **Post hoc, why:** the curve amplitudes are small (median 0.38 log2, IQR 0.31–0.58). The cluster view's centred
+  segment values are about half the end-to-end range (median largest |value| 0.13; 7% reach 0.25). So "missed" here
+  mostly reflects comparing a range with a centred value at the same threshold (reading 3). It is not, by itself,
+  evidence that clustering misses these sets. The fairer external comparison is Chen's statistical call: 34 of 123.
+
+### E3 · CellSpectra's programs along the healthy mouse PT
+
+| Program (CellSpectra) | Curve (mouse) | Nearest program | Cluster view |
+|---|---|---|---|
+| S-M1 mouse-high in S1 (95 genes) | flat through S1–S2, falls inside S3 (S3 −0.25) | P1 (r 0.90) | none |
+| S-M3 mouse-high in S3 (90) | rising, half done at 0.88 (late S1), width 1.9 | P2 (0.97) | none |
+| U-M1 mouse-high, S1 only (18) | falling, half done at 1.57 (mid-S2), width 1.6 | P1 (0.95) | S1 |
+| U-M3 mouse-high, S3 only (42) | rising, half done at 1.16 (early S2), width 2.1 | P2 (0.94) | S3 |
+| U-H3 human-high, S3 only (21; mouse side) | falling, half done at 1.96 | P1 (0.93) | none |
+| F-ARG arginine metabolism (5: Ass1, Asl, Arg2, Agmat, Ddah1 among 8) | interior peak at S1 0.75, amplitude 2.4, falls to S3 | P1 (0.93) | S1 |
+| F-LDL LDL particle binding (7) | interior peak in S3 (2.35), amplitude 0.93; mice r 0.44 | — | S3 |
+
+- CellSpectra's segment-labelled species lists, read in the mouse, are the two gradients: "S1" lists fall late (in S2 or
+  S3), and "S3" lists rise early (late S1 or early S2). The segment names say where a list is highest, not where it
+  changes.
+- No CellSpectra program is a boundary program. The largest agreed excess is 0.08 (KEGG complement and coagulation,
+  K4; permutation p 0.005), below the 0.25 effect.
+- Of the 44 disease features, most are flat in healthy mouse PT. The coherent exceptions are small sets near P1
+  (C4, C5, K1, K10, H4).
+
+### E4 · CellSpectra's PT disease features in the IR mice
+
+- 39 of 44 features have ≥ 5 members on the AKI universe (10,361 genes; 23 of 25 bins valid).
+- **Level change (IR − control):** 22 no change; 13 not resolved; 3 uniform along the PT (complement and coagulation
+  +0.28 to +0.47; positive regulation of fibroblast proliferation +0.52 to +0.61; taste transduction −0.31 to −0.41);
+  1 localized to S3 (positive regulation of adaptive immune response, 6 genes, +0.37 in S3). The four features named in
+  CellSpectra's main text barely change in level (|Δ| ≤ 0.09 for response to ischemia, HIF-1 and mTOR; TNF +0.22 to
+  +0.30, not resolved).
+- **Coordination (CellSpectra's R², by position, depth-matched):** IR mice are less coordinated with the controls than
+  the controls are with each other in 99% of feature × bin cells. Median ΔR² rises from S1 (0.19) and S2 (0.21) to S3
+  (0.36), but size-matched random gene sets rise the same way: the share of cells at the ≥ 90th percentile of random sets
+  is 0.45, 0.40 and 0.37. CellSpectra's features lose coordination more than random genes do everywhere along the PT
+  (expected share 0.10), and the extra loss in S3 is a property of injured S3 as a whole, not of these features.
+
+### Readout against the "adds nothing" rules
+
+| Rule | Result | Met |
+|---|---|---|
+| T: no advantage showable | all four showable | no |
+| H1 fails while A1 showable | H1 fails, A1 showable | **yes** |
+| E1 programs do not replicate | ARI 0.95 | no |
+| E2 < 10% boundary, mislocated or missed | 98%, but mostly a threshold artefact (reading 3) | no (not informative) |
+| E4 no localized or uniform feature | 3 uniform, 1 localized | no |
+
+**What this means for the paper.**
+- **The method claim stands on T.** On our own design and coordinate noise, the curve recovers boundary bumps,
+  sharp versus gradual edges, and positions inside S1 and S2 that S1/S2/S3 clusters cannot see.
+- **The biology claim is narrower.**
+  - Healthy mouse PT pathways do not form boundary programs.
+  - They form two broad opposite gradients. The curve gives their locations: P2 on by late S1, P1 falling at S2/S3
+    and inside S3. Clustering, and even microdissection, names these "PTS2" or nothing.
+  - IR flattens the S1-high gradient.
+  - CellSpectra's disease features lose coordination all along the PT rather than at one place.
+
+### Recorded readings
+
+1. **Fold refits.** The realistic arm uses folds 0 and 1. Fold 2 fails 72's S1→S3 orientation guard (72 also used
+   folds 0 and 1), so replicate r uses fold r mod 2 instead of r mod 3.
+2. **Post hoc section 9b** (single-gene boundary peaks against a bin-shuffle null; sets closest to the rule; E2's
+   threshold check and Chen's calls; coordination by segment) was added after the run. It changes no frozen readout.
+3. **E2's "missed" is not informative.** The protocol compared the curve's range with the cluster view's centred
+   segment value at the same 0.25. A fair cluster threshold would be about half the range. Recorded as issue 33.
+4. **E3's human r** is computed over bins valid in both sections. Two late-S3 AKI bins lack 20 units in some mouse
+   (23 of 25 valid).
+5. **Figures.**
+   - 89c shows the near-miss sets and the gene-level nulls, because no set is a boundary program.
+   - 89d leaves an empty category blank.
+   - Heatmaps carry colourbars.
+
+### Tables and figures
+
+- **Tables:**
+  - `t_operating_characteristics.csv`;
+  - `h1_set_calls.csv`, `h1_null_counts.csv`, `h1_boundary_programs.csv`, `h1_sensitivities.csv`;
+  - `e1_representatives.csv`, `e1_programs.csv`, `e1_sensitivity_k6.csv`, `e1_programs_in_ir_mice.csv`;
+  - `e2_cluster_vs_curve.csv`;
+  - `e3_cellspectra_programs.csv`;
+  - `e4_disease_features.csv`, `e4_coordination_by_bin.csv`;
+  - `posthoc_boundary_genes*.csv`, `posthoc_near_boundary_sets.csv`;
+  - `readout.csv`, `run_record.json`.
+- **Figures:**
+  - 89a showable;
+  - 89b positional programs;
+  - 89c boundary programs;
+  - 89d cluster view against the curve;
+  - 89e CellSpectra programs;
+  - 89f disease.

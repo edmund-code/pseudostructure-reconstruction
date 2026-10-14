@@ -72,6 +72,11 @@ gene**. It also gives the transient class that our edge fits lack.
 - Dubuis et al. 2013 (PMID 24089448) and Tkačik et al. 2015 (PMID 25361898): positional information and
   positional error.
 - Cross-specimen decoding as in Phoenix.
+- TIPS (Zheng et al. 2021, PMID 34370020) is a crude single-cell precedent. It rebuilds the trajectory from each
+  pathway's genes and correlates the result with the global pseudotime. Its score is sign-agnostic, so it keeps
+  pathways whose members move in opposite directions. It treats cells as replicates, and its reference axis shares
+  genes with the pathways. Bits decoded across specimens from held-out genes are the calibrated version of the same
+  question.
 
 **What it is.**
 - Decode position from a pathway's genes.

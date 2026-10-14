@@ -180,3 +180,11 @@ better by its co-orthologs' sum than by their best member.
 - Tables: `p1_substitution.csv`, `p1_null_counts.csv`, `p2_compensation.csv`, `p3_division_of_labour.csv`,
   `p4_positional_vs_sequence.csv`, `p5_family_only_differences.csv`, `p6_niches.csv`, `primary_tests.csv`.
 - Figures: 88a substitution, 88b compensation, 88c division of labour.
+
+### Relation to SAMap (added 2026-10-14, after the run)
+
+P1 is the "paralog substitution" analysis of SAMap (Tarashansky et al. 2021, *eLife*, PMID 33944782; full text read).
+SAMap calls a substitution when a paralog's expression correlation beats the ortholog's by more than 0.3. It has no null
+and does not treat specimens as replicates. P1 moves the question onto the PT curve and adds the matched random-gene
+null. Without that null, P6's smooth-curve correlations would have produced substitutions by chance. Cite SAMap if P1
+is reported. `non-one-to-one/samap_assessment.md` says why running SAMap itself would add no testable result here.

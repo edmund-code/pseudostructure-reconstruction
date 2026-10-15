@@ -263,3 +263,181 @@ mean of the last 8 bins minus the mean of the first 8, on that specimen's deviat
   - set cosines against the null, with calls;
   - the top reversed, conserved and species-dominant sets;
   - the injury-link check.
+
+## Notebook 91 results
+
+`analysis/notebooks/91_pt_positional_decomposition.ipynb` (logic `91.positional_decomposition.1`) writes to
+`results/pt_positional_decomposition/`. It followed the protocol frozen in 8b739ae. Guards G1–G3 passed. It runs in
+about 0.5 min cold. The module is `pseudospace/positional_decomposition.py`, tested by
+`tests/test_positional_decomposition.py` (8 tests).
+
+**How the protocol was read (also in `run_record.json`).** Three post hoc additions, labelled:
+1. **I1:** the level and location rules applied to each relabeling as the contrast, as a specificity count.
+2. **I5:** the set z of L and M recomputed under each relabeling with the same nulls, to calibrate the random-set
+   null.
+3. **I4:** each induced gene's early-S1 against S3 detection, after figure 91b showed two patterns. Panel e now orders
+   all 28 induced genes by this ratio, instead of the 12 most detected.
+
+### I1 · Level and location (10,361 shared genes)
+
+- **Level change:** 3,159 genes (2,897 level only, 262 with location too). Location change: 362 genes (100 location
+  only).
+- **Specificity:**
+  - With R1 or R2 as the contrast, the same rules (without the pair and replication parts) give 40 and 3 level
+    changes, against 3,159.
+  - They give 0 and 1 location changes, against 362.
+- **Injury shape** (ladder on the two IR mice's Δ). Non-flat genes number 6,737 for the condition, against 2,948 and
+  2,768 under the relabelings.
+- **Location-change genes are continuous:** 243 favour a continuous shape, 30 favour steps at the labels, and 89 are
+  undecided.
+  - Switches sit inside S2 (50), at S2/S3 (44) and inside S3 (31).
+  - Bumps sit inside S3 (15) and inside S1 (12).
+
+### I2 · Gradient survival (2,010 genes zonated in the controls)
+
+| Pooled survival | IR vs control | R1 | R2 |
+|---|---|---|---|
+| whole PT | **0.52** | 0.92 | 1.15 |
+| S1→S2 (1,739 genes) | 0.66 | 0.91 | 1.15 |
+| S2→S3 (1,493 genes) | **0.31** | 1.14 | 1.23 |
+
+- **Gene classes:**
+
+  | Class | IR vs control | Relabelings |
+  |---|---|---|
+  | reversed | 64 | 6, 12 |
+  | erased | 543 | 22, 18 |
+  | attenuated | 729 | – |
+  | kept | 658 | – |
+  | amplified | 16 | – |
+- **The S3 gradient is what injury removes.** Within S2→S3, under a third of the healthy contrast survives.
+- **Male-biased and S3 genes fall by level, not by shape.** Slc7a13 (L −4.56), Slco1a1 (−3.64) and Kap (−2.03) keep
+  their shape (A 1.0–1.1). Their loss is a drop along the whole PT, so they are "kept" here. Cyp7b1 and Slc22a7 fall
+  below 2% detection in IR and are in the lost program (I4).
+
+### I3 · Kidney-wide filter: uninformative
+
+- DCT and thin-limb units in the PT export follow the PT changes almost one to one:
+  - Spearman with L is 0.88 and 0.82, against 0.04–0.21 under the relabelings;
+  - the slope is 1.07 and 1.27.
+- 2,702 of 3,159 level-change genes are therefore "kidney-wide", and 10 are PT-only.
+- Non-PT units inside the PT support carry PT spill-over (the protocol's caveat), so the filter cannot separate a
+  whole-animal cause from PT injury here.
+- **Next step:** distal tubules from the whole section (the package's stage-01 units and pass-1 labels), with a
+  spill-over gauge (Havcr1 detection in distal units).
+
+### I4 · Induced and lost programs (unit level)
+
+- **Induced program:** 28 genes, off in both controls and on in ≥ 10% of both IR mice's PT units. The most detected
+  are Havcr1, Fgb, Krt20, Lcn2, Uhrf1, Mcm5, Smpdl3b, Timp1, Clcf1 and Sox9.
+- **The program is U-shaped along the PT:**
+  - early S1 0.27–0.35;
+  - minimum at 0.85 units, 0.08–0.12;
+  - end of S3 0.46–0.52.
+- **The dip replicates** in both IR mice at the same bin (excess 0.50–0.57 of the range), and holds without units
+  beyond the curve's start (0.40–0.43).
+- **Post hoc zones:**
+  - 22 genes are S3-high: the proliferation genes (Mki67, Top2a, Mcm5, Uhrf1, Ccne2, Rad51) plus Sox9, Sprr1a,
+    Lrp8 and Cbr3.
+  - 5 genes are along the whole PT with the dip: Havcr1, Lcn2, Krt20, Timp1, Crlf1.
+  - 1 gene is early-S1-high: Fgb.
+- **Lost program:** 12 genes (Cyp7b1, Ppp1r1b, Cyp2d9, Abca13, Serpina1d, Slc22a19, …). In controls they live in late
+  S2 and S3 (detected share rising from 0.05 to 0.47); in IR they are near 0.
+
+### I5 · Sets
+
+**Library sets** (1,449 sets; 261 non-redundant level groups, 121 location groups):
+- **Level up:** 507 sets.
+  - Top: E2F targets, Myc targets, EMT, DNA replication, mitotic anaphase, S phase, TNF-α/NF-κB, nuclear envelope
+    reassembly, programmed cell death.
+- **Level down:** 31 sets.
+  - Top: KRAS signalling (down), branched-chain amino-acid catabolism, valine/leucine/isoleucine degradation,
+    tryptophan catabolism, butanoate, bile acid metabolism, pantothenate and CoA, peroxisome, SLC transport.
+- **Location:** 236 sets. 114 of 121 non-redundant groups peak in S3.
+  - Gains peaking in S3: cell cycle, TNF-α, p53, apoptosis, inflammatory response, hypoxia.
+  - Losses peaking in S3: PPAR signalling, peroxisome, peroxisomal lipid metabolism, cholesterol metabolism and
+    biosynthesis, plasma lipoprotein assembly and remodelling, fatty-acid metabolism.
+  - Injury takes lipid handling and peroxisomal oxidation away specifically in S3, beyond its PT-wide level.
+- **Gradient survival:** 6 erased (mitotic and E2F sets, whose control gradients are small and whose relabeled ratios
+  are unstable), 0 kept. Set survival tracks the genome-wide 0.52 (sets: median 0.45, SD 0.18). The erasure is
+  genome-wide rather than pathway-specific.
+- **Calibration (post hoc):**
+
+  | | IR vs control | R1 | R2 |
+  |---|---|---|---|
+  | Median set z L | 1.37 | 0.44 | 0.08 |
+  | Sets with q L ≤ 0.05 | 554 | 205 | 175 |
+  | Sets with q M ≤ 0.05 | 466 | 33 | 51 |
+  | Full level rule | 538 | 15 | 1 |
+  | Full location rule | 236 | 0 | 0 |
+
+  The random-set null alone is anticonservative for L, because it ignores correlation between genes in a set. The
+  per-set relabeling clause carries the specificity, so every q in I5 is a ranking device.
+
+**External programs (own BH):**
+- **Sex:** the male-biased PT program (Xiong 2023, 496 genes) falls by level (L −0.44, z −12.5), the strongest
+  external signal. The female-biased program rises slightly (L +0.14) and is not a level set.
+- **Fasting:** fasting-up genes rise (L +0.37, z 5.8; also a location set peaking at 2.05) and fasting-down genes fall
+  (L −0.82, z −7.0). The IR mice carry a fasting signature.
+- **Time of day:**
+  - The ZT18-high (122 genes) and ZT6-high (85) programs do not change level (L 0.00, −0.03), and gene L correlates
+    with the time-of-day log2 FC at ρ 0.07 (relabelings 0.01, −0.06).
+  - The core clock genes do fall: Ciart −2.12, Nr1d1 −1.12, Dbp −1.10, Tef −1.03, Hlf −0.98; Cry1 rises +0.59.
+  - This argues against a large harvest-time difference between IR and control mice. It cannot exclude a small phase
+    offset, which would show first in the high-amplitude clock genes, or injury damping the clock.
+- **Published injury programs:** 27 of 30 are level sets in the published direction; 16 are also location sets,
+  peaking at 2.25–2.35.
+  - Kirita's injured S1/2 and S3, the core IRI set and Gerhardt's failed-repair and VCAM1 programs all rise most in
+    S3.
+  - Gerhardt 2023's S1-up list is the one miss (L −0.10).
+
+### Part II · Species
+
+- **Gene survival:**
+
+  | Class | Mouse-graded genes, in human (1,342) | Human-graded genes, in mouse (627) |
+  |---|---|---|
+  | reversed | 267 | 160 |
+  | erased | 640 | 143 |
+  | attenuated | 261 | 102 |
+  | kept | 154 | 141 |
+  | amplified | 20 | 81 |
+
+  "Reversed" here is A < −0.25 on species means, looser than 90's rule (both specimens graded).
+- **Sets: no calls.** Of 381 sets, none is reversed, conserved or species-dominant at q ≤ 0.05.
+  - The set cosines spread around the genome-wide 0.23 (z mean −0.20, SD 0.93).
+  - The most negative z are oxidative phosphorylation, xenobiotic metabolism, fatty acids, PPAR and tryptophan
+    (z −2.2 to −2.9, q > 0.4).
+  - Species gradient differences are gene-level, not pathway-coherent beyond random genes.
+- **Injury link (S3):** none. β for Δ_late is 0.012 (relabelings 0.069, −0.057), and the residual ρ is 0.055
+  (0.038, −0.035), as the scratch check found. Across sets, species cosine and injury survival correlate at ρ 0.20
+  (380 sets, no null): sets with robust gradients score higher on both.
+
+### Recovery checks (section 6)
+
+1. **Partial.** S2→S3 survival 0.31 is below S1→S2 0.66. Slc7a13 is "kept" (A 1.02): its loss is a PT-wide level drop.
+2. **Recovered.** The induced program has a replicated interior dip at 0.85 in both IR mice.
+3. **Not recovered.**
+   - The circadian sets are not level sets (Reactome L −0.05, KEGG −0.16), because their members move in opposite
+     directions.
+   - The time-of-day programs do not change.
+   - The clock genes are "kidney-wide", but I3 is uninformative.
+4. **Not recovered.** Hallmark hypoxia's species cosine 0.21 equals the genome-wide value.
+
+### What the screen gives the paper (descriptive)
+
+1. **A filter with a stated null.** Every gene and pathway gets a level, a location (with a continuous or stepped
+   shape) and a gradient survival. Relabeled specimens bound each call: 40 and 3 level genes and 0 and 1 location
+   genes under relabeling, against 3,159 and 362.
+2. **Injury erases the S3 gradient.** The IR PT keeps 0.52 of the healthy gradient overall and 0.31 from S2 to S3,
+   against 0.9–1.2 under relabeling.
+3. **Where injury acts is continuous and S3-centred.**
+   - Location-change genes favour continuous shapes 243 to 30.
+   - 114 of 121 location groups peak in S3: proliferation, TNF-α and p53 up; PPAR, peroxisome and lipoprotein
+     handling down.
+4. **Late S1 is the least injured stretch.** Injury switches on genes from zero along the whole PT, with a replicated
+   minimum at 0.85 units. Proliferation is concentrated in S3.
+5. **The external filters name non-injury contributors.** The male-biased program and a fasting signature shift in IR;
+   the time-of-day transcriptome does not. These go beside every AKI claim.
+6. **Null results:** no pathway-level species program beyond random genes; no mouse-injury pattern in the human
+   gradient; the kidney-wide filter needs whole-section distal units.

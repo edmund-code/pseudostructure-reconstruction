@@ -32,6 +32,9 @@ Notebook 88 (are 1:1 species differences carried by other paralogs: substitution
 is in `pt-paralog-substitution.md`.
 Notebook 89 (positional programs against a cluster-level view, CellSpectra's programs and PT disease features; what
 the curve can show, tested on synthetic programs) is in `pt-positional-programs.md`.
+Notebook 90 (six uses of the continuous axis from the literature review: gene shape classes against segment steps,
+pathway positions and sub-trends, positional information, level-free species comparison, change density, injury
+location) is in `pt-continuous-axis-experiments.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

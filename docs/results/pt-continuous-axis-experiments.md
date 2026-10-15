@@ -226,3 +226,184 @@ the median |Δ| of up and down genes along the PT with the relabeling band; segm
   blur by construction.
 - Figures carry plots only (no captions, step boxes or footnotes inside).
 - Anything added after the run is labelled post hoc.
+
+## Notebook 90 results
+
+`analysis/notebooks/90_pt_continuous_axis_experiments.ipynb` (logic `90.continuous_axis.1`) writes to
+`results/pt_continuous_axis_experiments/`. It followed the protocol frozen in 3f7d89d. Guards G1, G2, G3, G5 and G7
+passed. Wall time about 3.5 min cold and 1 min cached; a cold run and a cached run give identical readouts. Module
+`pseudospace/continuous_axis.py` with `tests/test_continuous_axis.py` (12 tests).
+
+**How the protocol was read (also in `run_record.json`).** Two readings were decided after the first run, and two
+post hoc analyses were added. Everything else is as frozen.
+1. **B, p values.** The p per mouse comes from the permutation z (normal), not the empirical p. With 2,000
+   permutations the empirical p cannot fall below 5 × 10⁻⁴, and BH over about 1,400 sets then cannot pass. The first
+   run gave 18 calls, and 0 on fold-protected members. The empirical p is kept as a column.
+2. **B, timeline.** Gradient members are left out, because the half-crossing of a straight line is always the middle
+   of the axis.
+3. **E, post hoc.** A reproducible change energy, Σ_g Δ_A·Δ_B. Chance agreement makes up 73–95% of the frozen
+   agreed-change counts at every position, and their power depends on how many units a bin holds. The product of the
+   two mice's changes has the true change as its expectation whatever the noise, so it needs no threshold.
+4. **F, post hoc.** The responsive rule applied to the two relabelings as contrasts: the specificity check the
+   protocol did not state.
+
+### A · Gene shape classes against segment steps
+
+| Class | All usable | Fold-protected | Same class in both single-mouse fits |
+|---|---|---|---|
+| discrete (steps at the labels) | 1,171 | 1,106 | 208 |
+| discrete + slope within segments | 544 | 462 | 209 |
+| gradient | 2,162 | 2,045 | 623 |
+| switch | 824 | 748 | 171 |
+| bump | 376 | 351 | 63 |
+| trough | 633 | 547 | 88 |
+| flat | 3,777 | 3,638 | – |
+
+- **Continuous against discrete (fold-protected, non-flat genes):**
+
+  | Reading | Data | Step truth (simulated) | Continuous truth (simulated) |
+  |---|---|---|---|
+  | continuous favoured (ΔBIC > 6) | 0.281 | 0.028 | 0.459 |
+  | steps favoured (ΔBIC < −6) | 0.027 | 0.219 | 0.003 |
+  | undecided | 0.692 | 0.753 | 0.538 |
+
+  Shares of the non-flat genes in each column. The data call continuous 10 times as often as a step world would, and
+  steps 8 times less often. Post hoc, as a two-component mixture of the simulated readings, the continuous share is
+  0.59 (from the continuous calls) to 0.89 (from the step calls). This rests on the simulations matching the data's
+  noise.
+- **Replication.** 0.283 of non-flat genes have the same class in both mice alone, against 0.172 by chance. Single-mouse
+  fits have half the points, so class agreement is a floor.
+- **Switches** concentrate in late S1 (0.8–0.9 mouse units), just before the S1/S2 label transition, and at the end of
+  the axis. Of the joint switches, 280 sit inside S1, 154 inside S2, 150 inside S3, 169 at S1/S2 and 71 at S2/S3.
+- **Bumps and troughs:** 1,009 in the joint fit, 141 replicated (same class in both mice, peaks within 0.3 units;
+  115 fold-protected). They sit inside S2 (57), at S1/S2 (45) and inside S1 (34). Among expressed genes (log2 CP10k
+  > 0), a mid-S2 peak (1.35–1.55 units) of lipid and peroxisomal enzymes: *Degs2, Hsd17b11, Abhd3, Aldh3a2, Acox3,
+  Dhrs4, Gmpr, Kyat1, Fhl1*. A segment analysis calls these "S2"; the curve shows a transient peak that falls before
+  S3. 89 found single-gene boundary peaks no more often than in shuffled bins, so the 45 "at S1/S2" are not read as
+  boundary programs.
+- **References.** *Cyp7b1* switches at S2/S3 (graded) in both mice, matching Ransick's sharp S2/S3 boundary at the
+  curve's resolution. *Cyp2e1* is discrete plus within-segment slope, with steps favoured (ΔBIC −26). *Slc34a1*
+  and *Slc5a2* have continuous shapes favoured (ΔBIC 86, 42). *Cyp7b1, Cyp2e1, Slc5a2* and *Slc22a7* built the labels,
+  so they illustrate the classifier and are not evidence.
+- Figure 90a.
+
+### B · Where pathways sit
+
+- **Positioned sets** (mean member centre of mass against expression-matched random sets, both mice, BH q ≤ 0.05):
+  30 of 1,404 (15 early, 15 late); 15 of 1,356 on fold-protected members.
+  - Early (S1-high): basigin interactions, mineral absorption, inorganic cation/anion and amino-acid transport,
+    hypoxia, oxidative phosphorylation, amino acids regulating mTORC1.
+  - Late (S3-high): peroxisome, peroxisomal lipid metabolism, PPAR signalling, bile acid metabolism, steroid
+    metabolism, vitamins and cofactors, pantothenate and CoA, cysteine and methionine.
+  - These match the known S1 transport and oxidative profile and the S3 peroxisomal and organic-anion profile. Set z
+    replicates between the mice (figure 90b, panel b).
+- **Sub-trends a median curve flattens: none beyond chance.** 19 sets meet the rule, against about 17 expected (5% of
+  the 343 sets with a flat median and members of both signs). Random gene sets also hold rising and falling genes
+  whose median cancels. A_al exceeds its null 95th percentile in 12.4% of all sets, almost all with a large median
+  amplitude too.
+- Figure 90b.
+
+### C · Positional information
+
+| Decoder (fold-protected genes, cross-mouse) | Bits | Within segments | Median error (units) |
+|---|---|---|---|
+| S1/S2/S3 labels | 1.123 | 0 | 0.177 |
+| all fold-protected genes (8,897) | 1.505 | 0.541 | 0.127 |
+| labels + all genes | 1.512 | – | – |
+| Fatty acid metabolism (Hallmark, 123 genes) | 1.367 | 0.458 | 0.120 |
+| Glutathione metabolism (KEGG, 29 genes) | 1.366 | 0.468 | 0.123 |
+| Xenobiotic metabolism (Hallmark, 129 genes) | 1.360 | 0.469 | 0.121 |
+
+- **26 single pathways localize a unit better than its segment label.** Glutathione metabolism does so with 29 genes
+  that did not build the coordinate. 132 of 1,356 sets exceed the 95th percentile of random genes of their size.
+- **The labels are worst at the boundaries.** Their position error peaks at 0.45 units at S1/S2 and S2/S3. The gene
+  decoders stay at 0.2–0.3 units there.
+- **Counts against an on/off code (Dubuis):** detection alone gives 0.25–0.51 bits for the top sets and 0.46 for all
+  genes, against 1.36–1.51 from counts.
+- The information is about the reconstructed coordinate, not about anatomy; fold protection keeps the genes that
+  built it out of the decoders.
+- Figure 90c.
+
+### D · Human against mouse without levels
+
+| r of the end contrast (7,971 genes; 7,516 fold-protected) | All | Fold-protected |
+|---|---|---|
+| mouse Ctrl1A2 vs Ctrl1A4 | 0.891 | 0.881 |
+| human HUK1_COR1 vs HUK1_MED1 (one donor) | 0.633 | 0.576 |
+| human × mouse pairs | 0.189–0.205 | 0.137–0.154 |
+| species means | 0.225 | 0.168 |
+| corrected for replicate noise | 0.264 | 0.203 |
+
+- **About a quarter of each species' reproducible PT gradient is shared.** This is a lower bound: donor variation
+  counts as species difference.
+- **Categories** (graded = |E| ≥ 0.5 in both specimens of a species, same sign):
+
+  | | Species | A2+COR1 \| A4+MED1 | A2+MED1 \| A4+COR1 |
+  |---|---|---|---|
+  | conserved | 189 | 189 | 189 |
+  | reversed | 74 (65 fold-protected) | 0 | 0 |
+  | mouse only | 229 | 6 | 8 |
+  | human only | 70 | 5 | 8 |
+
+  "Conserved" is the same under every split by construction (all four specimens graded with one sign).
+- **Conserved:** *Slc7a13, Slc6a18, Slc7a8, Slc5a2, Slc39a8, Prodh2, Slc22a7, Slc22a8, Psat1, Car2* among others.
+- **Reversed** (strongest first): *Apoc3, Gcat, Sh3gl2, Pdk4, Vnn1, Hpgd, Socs2, Oat, Lpar6, Ddit4, Abhd14a, Slc17a3,
+  Mme, Prom1, Lap3, Ugt3a1, Kcnk1, Notch1*. For example, *Apoc3* rises toward S3 in mouse (E ≈ +2.9) and falls in human
+  (E ≈ −3.1).
+- **Mouse only:** *Gldc, Alpl, Cyp51, Spp1, Ehhadh, Acsf2*. **Human only:** *Sel1l3, Serping1, Dpp4, Htra1, Pck1*.
+- Readings stay descriptive: one donor, and species registration is unstable (72's C8), so the end contrasts compare
+  the first and last 30% of each specimen's own curve.
+- Figure 90d.
+
+### E · Where along the PT the transcriptome changes
+
+- **Frozen counts:** agreed changes beyond chance peak at 0.8 (435 genes) and 0.9 (376) and at 2.1–2.2 (337–365).
+  At the label transitions themselves (1.0 and 2.0) they are 124 and 277. A step transcriptome would put its changes
+  at 1.0 (1,110) and 2.0 (1,081). 28.7% of the excess change sits more than 0.3 units from both boundaries, against
+  1.2% for steps; 45.5% of positions are that far from a boundary.
+- **Post hoc, reproducible change energy:**
+  - 28.3% inside segments (fold-protected 26.3%), against 1.3% for steps.
+  - A step transcriptome accounts for 76% of the observed change energy.
+  - The energy peaks in late S1 (0.8–0.9) and early S3 (2.1–2.2), flanking the label transitions where steps would
+    put it (1.0, 2.0).
+  - The late-S1 peak sits next to the curve's densest bin (0.7–0.8, 1.8–2 times the units of its neighbours), so its
+    exact place is not resolved. The early-S3 peak is in sparse bins.
+- **Pathways:** windowed enrichment (frozen) found 4 sets: EMT falling at 0.8–1.1; SLC transport and inorganic ion
+  transport falling at 1.7–2.0; non-homologous end joining rising at 0.5–0.8. The post hoc set energies (figure 90e,
+  panel d) show three change zones:
+  - late S1: amino-acid, ion, Na⁺/Cl⁻ and hexose transport, scavenging;
+  - late S2, 1.6–1.8: SLC transport, lipoprotein assembly and remodelling, LDL clearance, fat and vitamin uptake,
+    cholesterol metabolism;
+  - early S3: drug and xenobiotic metabolism, CYP450, bile salt transport, steroid biosynthesis, folate.
+- C14 applies inside S1 and S2: the zones are descriptive.
+- Figure 90e.
+
+### F · Where along the PT injury acts
+
+- **Responsive genes:** 4,456 (2,244 down, 2,212 up). The same rule with the relabelings as contrasts gives 335 and
+  281, so the rule is specific about 13-fold (post hoc).
+- **Location:** peaks fall in S3 for 1,205 down and 1,044 up genes, against 541/624 in S1 and 498/544 in S2. S3 is
+  20% of the axis. |Δ| rises with position (Spearman > 0.5) for 30% of responsive genes and falls for 5%.
+- **The injury effect is graded, not stepped.** The median Δ of the up and down genes grows steadily from mid-S2 to
+  the end of S3 (about 0.55 to 0.85 log2), with no jump at S2/S3. The relabelings stay near 0. This matches IRI's
+  outer-stripe S3 injury (76's priors) and shows the effect building through S2.
+- **What segment pseudobulks confuse.** Within S2 and S3, IR units sit 0.12–0.13 units later than control units
+  (S1 −0.05). In S2 51 genes and in S3 46 genes reach |log2 FC| ≥ 0.5 in the segment pseudobulk but < 0.25 at
+  matched position; 9 and 35 genes show the reverse. The two fold changes agree closely overall (r 0.98–0.99).
+- **Limitation:** the package drops much of the injured S3 (`pt-package-issues.md`, item 7), so S3 effects are
+  measured on the units it kept.
+- Figure 90f.
+
+### What to highlight (descriptive)
+
+1. **Most zonated PT genes change continuously.** A continuous shape beats segment steps for 28% of them, 10 times a
+   step world's rate; steps win for 3%, 8 times less than in a step world. Steps still capture about three quarters of
+   reproducible change energy, so segments are a good first approximation and the curve adds the rest (A, E).
+2. **Position is information the labels discard.** Single pathways not used to build the coordinate localize a unit
+   better than its S1/S2/S3 label, and genes carry half a bit inside segments that labels cannot (C).
+3. **A level-free species comparison** finds 74 genes with reversed PT gradients (none under either relabeling)
+   and shows that about a quarter of each species' reproducible gradient is shared (D).
+4. **Injury builds continuously from mid-S2 into S3,** and segment pseudobulks mistake within-segment position shifts
+   for expression change in about 100 genes (F).
+5. **Null results:** pathways whose median hides opposite sub-trends occur at chance (B), and windowed enrichment of
+   change is sparse (E).

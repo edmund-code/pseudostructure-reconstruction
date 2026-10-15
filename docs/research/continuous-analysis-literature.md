@@ -557,3 +557,9 @@ Each step needs a frozen protocol before any fit, under the project's rules.
 4. **Recommendation 4** (level-free species summaries with a mouse-vs-mouse baseline; an IR effect-location map after
    the unit-density check).
 5. **Recommendations 5 and 6** as supporting analyses.
+
+## Run in notebook 90 (2026-10-14)
+
+Recommendations 1–5 and the IR part of recommendation 4 were run in notebook 90, one figure each. Protocol and results
+are in `docs/results/pt-continuous-axis-experiments.md`. Recommendation 6 (MEFISTO) was not run: it would add a
+dependency for an exploratory method with no test, and notebook 89 already learned and replicated smooth programs.

@@ -37,6 +37,8 @@ pathway positions and sub-trends, positional information, level-free species com
 location) is in `pt-continuous-axis-experiments.md`.
 Notebook 91 (a discovery screen: injury split into level, location and gradient survival with kidney-wide and
 external-state filters; species gradient programs) is in `pt-positional-decomposition.md`.
+Notebook 92 (glucose handling along the PT for the SGLT2-inhibitor question: the healthy uptake handoff, injury, the
+drug's microdissected footprint, a glucose balance and the size of a drug experiment) is in `pt-glucose-handling.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

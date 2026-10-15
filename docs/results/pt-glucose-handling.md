@@ -365,3 +365,150 @@ renormalisation.
 - The balance model's length scale is the label axis, not micrometres.
 - The microdissected mice are DBA males treated for 2 weeks; ours are of unrecorded strain. The microdissected "S1" is
   SGLT2-positive early PT (S1 and part of S2), not a label-matched S1.
+
+## 8 · Notebook 92 results (logic `92.glucose_handling.1`)
+
+Run after the freeze (5fd8892). Guards G1–G9 passed: the frozen hashes, 90's universe and transitions, 91's cuts
+and L, the switch-only fit equal to the ladder's switch, and the end contrast equal to 90's. Tables are in
+`results/pt_glucose_handling/tables/`; figures 92a–92e are in `figures/`.
+
+**Deviations and post hoc additions** (also in `run_record.json`):
+- *Human axis.* The human label transitions are not ordered: HUK1_MED1 places S2→S3 before S1→S2. So human segment
+  units do not exist. The human axis is 90's 25 equal bins, the check the protocol named, and SP2 uses that rule in both
+  species.
+- *Mouse-only genes.* 90's end contrast exists only for genes measured in both species. SGLT1 and G6pc get the same
+  per-mouse end contrast here (guard: it reproduces 90's for SGLT2).
+- *Label-only check.* Detection by H&E label, which does not use the coordinate, because SGLT2 and SGLT1 helped build it.
+- *Drug programs.* The frozen program rule left the programs empty, so programs were also built with 91's
+  external-program rule (p ≤ 0.01, |log2FC| ≥ 0.5, unadjusted).
+- *Model.* A "literature step" version (SGLT2 only in S1–S2, SGLT1 only in S3), the published models' layout.
+
+### Healthy mouse map
+- **HP1 holds.** SGLT2, MAP17 and GLUT2 fall along the PT in both mice. **HP2** holds for SGLT1 (rises) and fails for
+  GLUT1, which has no gradient at 7–18% detection.
+- **HP3 holds for the uptake pair and fails for GLUT2.**
+  - SGLT2's midpoint is at 1.30–1.40 and MAP17's at 1.25–1.50, inside S2 in all eight fits. Their 10–90% widths are
+    0.86–1.17 and 1.17–1.59 units: a graded fade across late S1 and S2, not a step at a label.
+  - GLUT2 falls at 2.00–2.25, at S2/S3 or inside S3, about 0.8 units after SGLT2.
+- **HP4 holds.** MAP17's midpoint is within 0.05–0.15 units of SGLT2's in both mice and both exports.
+- **The handoff overlaps (open question).**
+  - SGLT1 switches on at 0.90–1.20, at the S1/S2 boundary, and stays on into S3: a switch, not a bump in S2.
+  - SGLT1's midpoint therefore comes 0.15–0.40 units before SGLT2's and 0.20–0.50 before MAP17's, in all four fits.
+  - **Without the coordinate (H&E labels only):**
+
+    | Gene | S1 units | S2 units | S3 units |
+    |---|---|---|---|
+    | SGLT2 | 0.98–1.00 | 0.52–0.54 | 0.18–0.19 |
+    | SGLT1 | 0.12–0.19 | 0.56–0.63 | 0.69–0.74 |
+
+    S2 carries both cotransporters, so the overlap is not an artefact of a coordinate that SGLT2 and SGLT1 helped build.
+- **HP5 is mixed.** G6pc, Pcx and Aldob fall along the PT; Pck1 and Fbp1 are flat; Hk1 does not rise.
+- **Shapes (90).** Continuous is favoured over segment steps for SGLT2 (ΔBIC 42), GLUT2 (28) and MAP17 (14); SGLT1 is
+  undecided (1.4).
+- **Sets (90).**
+  - Hallmark Hypoxia is positioned early, on all members and fold-protected members.
+  - PPAR signalling is positioned late, also on fold-protected members. Butanoate metabolism (ketone bodies) is late
+    on all members only.
+  - The glucose-metabolism sets are not positioned.
+
+### Human
+- **SP1.** SGLT2 (E −2.78) and GLUT2 (−1.66) fall along the human PT, as in mouse. **MAP17 is flat (−0.12): fails.**
+- **SP2 (descriptive).** On the equal-bin rule, human centres of mass sit later than mouse for SGLT2 (0.31 vs 0.20),
+  MAP17 (0.48 vs 0.34) and GLUT2 (0.37 vs 0.31). The human sections are cortex only, which shortens the human axis at
+  its S3 end.
+- Human SGLT1 is not testable (3% detection).
+
+### Injury
+- **IP1 holds.** SGLT2 falls PT-wide (L −0.66, level call).
+- **IP2 is direction only.** SGLT1 L −0.17, not replicated between the IR mice (r_P 0.24).
+- **IP3 fails on sign.** SGLT2's partner and exit do not fall with it:
+  - MAP17 L +0.11; GLUT2 L +0.41, a location call peaking at 2.25;
+  - yet their Δ(x) shapes track SGLT2's (r 0.86, 0.82).
+- **IP4 is direction only.** GLUT1 L +0.62, Δ late +1.32, no call.
+- **IP5 holds for level.**
+  - G6pc −1.28, Fbp1 −1.58, Pcx −1.20 and Aldob −0.96, all called.
+  - Pck1 is a location change in S3 (peak 2.35, Δ late −1.45).
+  - Gradients are kept except Pcx (A 0.60).
+  - Reactome Gluconeogenesis is a location set peaking at 2.25 (z M 2.5, q 0.02); its level z −2.0 has q 0.10 and is
+    not called.
+- **IP6 fails: no glycolytic switch.**
+  - Hk1 −0.61; Pfkfb3 −0.86 (a level call, down); Ldha flat.
+  - Pfkp +1.14 and Pkm +0.47 rise without calls.
+  - No glycolysis set is called.
+- **IP7.** MCT1 (Slc16a1) rises most in S3 (L +1.77, Δ late +3.47): holds. SMCT1 is direction only.
+- **IP8 holds, with the sham caveat.**
+  - Hmgcs2 rises +1.73 (level), weighted to S1/S2.
+  - The ketone-using enzymes fall: Bdh1 −2.13, Oxct1 −1.68 (level calls).
+  - Butanoate metabolism is a level-down set (z −4.1) with an S3 location (z 3.5).
+- **IP9.**
+  - Only Hypoxia is called, as a location set peaking in S3 (z M 8.7).
+  - Unpredicted: Hallmark mTORC1 is a level-up set (L +0.28, z 6.4). SGLT2 inhibitors lower PT mTORC1 (Kogot-Levin
+    2020; Schaub 2023).
+
+### The drug's footprint
+- **XP0 holds.** The microdissected S3 − S1 contrast correlates with our end contrast at ρ 0.43 (0.41–0.46) on 7,003
+  fold-protected genes. 90's label step gives 0.48. Five wild-type vehicle mice are in both tables.
+- **The frozen programs are empty.**
+  - Welch t on the public TPM tables gives min q 0.04–0.96. The non-diabetic dapagliflozin contrast has 12 genes at
+    p ≤ 0.01 in S1 (46 expected by chance) and 152 in S3 (97 expected).
+  - The papers' counts (2 and 838 genes) come from their own analysis of counts, which these tables do not reproduce.
+  - **XP2 is not testable**: under the post hoc rule the S3-up program has 1 gene, and the S3 programs are almost all
+    down.
+  - **XP3 fails**: ρ −0.03, against relabelings −0.19 and +0.05.
+- **Post hoc programs.** Their expected noise share is about 40–65%.
+  - Genes that diabetes lowers in the SGLT2-positive tubules (63) sit late on the healthy axis (z +4.8, +5.0), with a
+    healthy profile peaking in S2. They are an IR level-down set (L −0.87, z −6.3).
+  - Genes that dapagliflozin raises there in diabetic mice (93) do the same: z +2.7, +2.8; IR L −0.65, z −5.1.
+  - Across genes, the drug's S1 change in diabetic mice opposes diabetes' (ρ −0.67). The 28 shared genes include
+    Cyp2e1, Kap, Slc9a3 and Cyp4a12a.
+  - Most post hoc programs from either table sit late. A capture-composition effect is therefore live: how much S2 an
+    SGLT2-positive capture contains could differ with diabetes.
+
+### Glucose balance (illustration)
+- **MP1.** With SGLT2 absent, every frozen version puts 0.65 of reabsorption before S2/S3 (variants 0.65–0.67), against
+  0.58 from Sglt2−/− micropuncture. The post hoc literature step puts 0 there, which the micropuncture contradicts.
+- **MP2 is a null.** The continuous and segment-mean step versions differ by < 1% in SGLT1's share, the S3 share and
+  the S2/S3 concentration.
+- **Post hoc, at 90% inhibition and 8 mM:**
+
+  | Readout | Measured profiles (MAP17) | Literature layout |
+  |---|---|---|
+  | Share of the load taken up in S3 | 0.15 | 0.39 |
+  | Luminal glucose at S2/S3 | 10.0 mM | 14.1 mM |
+
+  - The layout matters; the continuous detail within a segment does not.
+  - The measured SGLT1 rests partly on a coordinate SGLT1 helped build, but the label-only detection says the same.
+
+### Experiment size
+- The per-mouse level SD runs 0.08–0.24 log2 across expression deciles.
+- For a mid-expression gene, the smallest detectable change (two-sided t-test, 80% power) is:
+
+  | Mice per group | α 0.05 | α 0.001 |
+  |---|---|---|
+  | 3 | 0.27 | — |
+  | 4 | 0.21 | — |
+  | 6 | 0.16 | 0.28 |
+
+  In the lowest decile it is 0.42 at 6 mice (α 0.05).
+- The smallest permutation p is 0.33 at 2 mice per group, 0.10 at 3, 0.029 at 4, 0.008 at 5 and 0.002 at 6.
+
+### What this gives the collaborators
+1. **The first measured axial map of the uptake handoff.**
+   - SGLT2 and its obligate partner MAP17 fade together across late S1 and S2.
+   - SGLT1 switches on at S1/S2, so the two overlap through S2.
+   - Glucose exit by GLUT2 outlasts SGLT2 uptake by about 0.8 units.
+2. **Why the overlap matters.** The published models put SGLT1 only in S3. The measured layout reproduces the Sglt2−/−
+   micropuncture and moves less of the inhibited load into S3 (0.15 against 0.39). The models' S3 workload shift, the
+   basis of the outer-medullary hypoxia argument, may therefore be overstated in mouse.
+3. **Injury reorganises PT fuel handling.**
+   - Gluconeogenesis is lost, Pck1 most in S3.
+   - SGLT2 falls while MAP17 and GLUT2 do not.
+   - MCT1 rises in S3.
+   - Ketogenesis rises while ketone use falls.
+   - mTORC1 rises PT-wide.
+   - There is no glycolytic switch at this time point.
+   - These are the readouts an SGLT2-inhibitor-in-AKI experiment would test.
+4. **A validated axis and a sized experiment.** The axis agrees with microdissection (ρ 0.43). With 5–6 mice per group
+   a permutation p reaches 0.002–0.008, and changes of 0.16–0.2 log2 become detectable.
+5. **Not supported here.** The public microdissected drug data gave no program that our screen could test against
+   injury.

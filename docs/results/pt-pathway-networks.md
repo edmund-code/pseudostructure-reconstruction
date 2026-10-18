@@ -333,4 +333,189 @@ seeds (1234, 93) and tolerances. A later check is labelled post hoc.
 
 ## Notebook 93 results
 
-Not yet run.
+`analysis/notebooks/93_pt_pathway_networks.ipynb` (logic `93.networks.1`) writes to `results/pt_pathway_networks/`.
+It followed the protocol, and guards G1–G7 passed.
+
+**How the protocol was read** (`how_the_protocol_was_read.csv`):
+- Row N tests and corrects only the sets with 10–300 members among the partition's usable genes.
+- When every criterion is within tolerance, the dominance verdict is "equal". No comparison ended there.
+- The 15% ancestor share counts all of a program's calls, Hallmark calls included.
+- Hub names use network degree (NET), then the smallest p.
+- C's driver genes are the package's overlap genes from the ORA rows with matched q < 0.05.
+
+**Post hoc (one addition, not judged).** The development run showed that A4's two case-specimen profiles share the
+reference-mean term, which inflates their correlation. A sensitivity pairs each case specimen with its own reference
+specimen (case k − reference k), with its own null. It is reported beside W3.
+
+**Segments.** The cuts are 0.343 and 0.605 (human vs mouse) and 0.343 and 0.647 (AKI) on 71's [0, 1] scale. The grid
+has 33/29/39 and 33/35/33 points in S1/S2/S3.
+
+### Q1 · Calling: row N against the F-test and clustering
+
+| | F-test, hvm | Clustering, hvm | Row N, hvm | F-test, AKI | Clustering, AKI | Row N, AKI |
+|---|---|---|---|---|---|---|
+| Calls (redundancy clusters) | 83 (77) | 94 (53) | 21 (20) | 103 (94) | 459 (257) | 134 (108) |
+| Relabeled calls | 1, 0 | 0, 0 | 0, 0 | 13, 29 | 0, 0 | 1, 1 |
+| V1 swap rule (calibration share) | pass (0.071) | pass (0.003) | pass (0.000) | fail (0.120) | pass (0.017) | pass (0.020) |
+| V2 reconstruction Jaccard (69 → 71) | 0.84 | 0.42 | 0.45 | 0.72 | 0.66 | 0.43 |
+| V3 probe exposure | 0.17 | 0.69 | 0.57 | — | — | — |
+| V4 calls kept without the 10 hub genes | 0.92 | 0.80 | 0.43 | 0.99 | 0.92 | 0.72 |
+| Offset-leaning share of calls | 0.01 | 0.69 | 0.05 | 0.17 | 0.92 | 0.61 |
+
+Row N selected 2,453 genes (hvm) and 2,854 (AKI).
+
+**Verdicts:**
+- Human vs mouse: worse than the F-test; mixed against clustering (equal V2, better V3, worse V4).
+- AKI: mixed against the F-test (it passes V1 where the F-test fails calibration, but loses on V2 and V4); worse than
+  clustering.
+
+Row N overlaps the F-test at Jaccard 0.20 (hvm) and 0.29 (AKI) over sets, and clustering at 0.08 and 0.18.
+
+**Reading.** scoranet's way of calling pathways (threshold genes, split them, run ORA) is not a better calling method
+here:
+- It is less stable across reconstructions than the F-test.
+- It depends more on a few hub genes than either comparator. On human vs mouse the hubs are Vnn1, Slc5a6, Ehhadh,
+  Enpp3, Coasy and Pank1, so 12 of its 21 calls rest on them. On AKI they are Pcna, Ccnd1, Cdkn1a, Myc, Cdk2 and Cdk4.
+- On AKI most of its calls lean to the offset.
+
+Its one advantage is that it passes the swap rule on AKI, where the F-test fails calibration. As 75 found for its
+q ≤ 0.05 module row, that specificity comes cheaply: the relabelings have almost no selected genes.
+
+### Q2 · Organising: the network against the current grouping
+
+Calls, programs (programs of ≥ 3 calls), and each criterion. The cell gives NET / NET-pos / OVL / RED.
+
+| Method · dataset | Programs | W2 coherence z | W3 replication z (post hoc pairs) | W4 ARI 69 → 71 | W5 program NCDR |
+|---|---|---|---|---|---|
+| F-test · hvm (83) | 16 (8) / 4 (3) / 43 (10) / 77 (1) | 2.0 / 7.2 / 0.6 / 0.3 | −0.5 (−0.4) / 4.2 (4.3) / 0.4 (−0.4) / 0.9 (0.9) | 0.82 / 0.75 / 0.79 / 1.00 | 0.03 / 0.13 / 0.01 / 0.01 |
+| Clustering · hvm (94) | 17 (4) / 6 (5) / 31 (7) / 53 (3) | 11.7 / 13.8 / 14.5 / 12.4 | 1.7 (1.5) / 1.3 (1.4) / −0.7 (−0.5) / −1.2 (−1.1) | 0.93 / 0.54 / 0.81 / 1.00 | 0 / 0 / 0 / 0 |
+| Row N · hvm (21) | 14 (2) / 5 (2) / 16 (2) / 20 (0) | 2.5 / 8.6 / 1.9 / 1.0 | 0.7 (0.7) / 0.9 (1.1) / 0.5 (0.6) / 0.4 (0.4) | 1.00 / 0.88 / 0.85 / 1.00 | 0 / 0 / 0 / 0 |
+| F-test · AKI (103) | 24 (9) / 5 (3) / 56 (12) / 94 (1) | 2.3 / 10.4 / −0.3 / −0.1 | 2.1 (1.4) / 4.3 (4.3) / −0.6 (−0.7) / −0.4 (−0.6) | 0.70 / 0.56 / 0.77 / 0.83 | 0.27 / 0.90 / 0.22 / 0.20 |
+| Clustering · AKI (459) | 31 (11) / 5 (3) / 121 (37) / 257 (33) | 16.4 / 19.5 / 9.5 / 10.5 | 2.3 (0.5) / 6.8 (3.2) / −1.2 (−0.1) / 0.0 (1.1) | 0.83 / 0.63 / 0.54 / 0.94 | 0 / 0 / 0 / 0 |
+| Row N · AKI (134) | 18 (10) / 3 (2) / 58 (17) / 108 (4) | 21.7 / 57.3 / 10.1 / 5.7 | 2.5 (2.4) / 4.1 (4.3) / 2.0 (1.9) / 1.3 (1.6) | 0.58 / 0.42 / 0.96 / 0.95 | 0.06 / 0.33 / 0.02 / 0.01 |
+
+NET-pos coherence is reported but not judged (circular).
+
+**Verdicts** (`grouping_verdicts.csv`):
+
+| | NET against OVL | NET against RED | NET-pos against OVL |
+|---|---|---|---|
+| F-test · hvm | mixed (worse W3) | mixed (worse W3, W4) | mixed (worse W5) |
+| Clustering · hvm | mixed (worse W2) | mixed (worse W2, W4) | mixed (worse W4) |
+| Row N · hvm | **better** | **better** | **better** |
+| F-test · AKI | mixed (worse W4) | mixed (worse W4, W5) | mixed (worse W4, W5) |
+| Clustering · AKI | **better** | mixed (worse W4) | **better** |
+| Row N · AKI | mixed (worse W4) | mixed (worse W4) | mixed (worse W4, W5) |
+
+**Settings sensitivity** (descriptive): NET programs move with the threshold and resolution.
+- Median ARI against the default is 0.51–0.83, and the F-test's programs range from 6 to 55 on human vs mouse.
+- OVL is steadier over its cuts (median 0.68–1.00).
+
+**Reading.**
+- **The network is a better summary in one respect:** it gives 1.1–3.9 times fewer programs than the current programs
+  (2.3–2.7 times on the F-test's calls). Its programs are positionally more coherent than random groupings of the same
+  calls (coherence z 2.0–21.7). On the F-test's calls, OVL and RED are not (z −0.3 to 0.6).
+- **It is not uniformly better.** It is less stable across reconstructions for the F-test on AKI and for row N on AKI,
+  and more sensitive to its own settings.
+- **Replication.** On the F-test's human vs mouse calls it replicates worse than OVL. The post hoc independent-pair
+  check removes that gap (−0.43 against −0.42).
+- **RED's** perfect reconstruction ARI holds by construction, because it depends only on set membership.
+- **NET-pos** links calls by where along the PT their difference lies. It reduces the F-test's 83 human vs mouse calls
+  to 4 programs, and those programs replicate (z 4.2). But its programs move between reconstructions (ARI 0.56–0.75)
+  and appear under relabeling on AKI (program NCDR 0.90).
+
+### Q3 · Discovery
+
+**F-test programs, human vs mouse** (NET; 83 calls → 16 programs). Each program lists the human − mouse positional
+difference, where it peaks, its position class, and its top driver genes.
+- Carbohydrate · amino-acid metabolism (19 calls): peaks in S3. Drivers: Aldh7a1, Aldh9a1, Echs1.
+- Fatty-acid metabolism (10): a small difference, its genes leaning toward S1. Drivers: Acox1, Acaa1a, Ehhadh, Hsd17b4.
+- Digestive system · SLC transport (10): human relatively higher late. Drivers: Slc6a19, Slc9a3, Slc3a2, Atp1a1.
+- Steroid metabolism (10): toward S1. Drivers: Cyp51, Hmgcr, Hmgcs1, Sqle.
+- Lysosomal GAG degradation (8): Gusb, Ids, Idua.
+- Glutathione / sulfur amino acids (6): Gclc, Gclm.
+- Vitamins · cholesterol uptake (6): Lrp2, Apob, Apoe, Ldlr.
+- Tyrosine / phenylalanine (5): Got1, Hpd.
+
+**F-test programs, AKI** (103 → 24). Each lists the AKI − control positional difference.
+- Amino-acid · fatty-acid metabolism (20): relatively lost late. Drivers: Ehhadh, Echs1, Hsd17b4.
+- Biological oxidations (15): GSTs gained late. Drivers: Gstm2, Gstp1, Gsta3.
+- SLC transport (11): Slc6a19, Slc6a18.
+- Respiratory electron transport (10): lost late. Drivers: Ndufa5, Cox6a1.
+- Lipoproteins and vitamins (8): Apoa4, Apob.
+- Sterol synthesis (7): gained late. Drivers: Cyp51, Dhcr7.
+- Lysosomal GAG degradation (6).
+- Hypoxia (3): gained late. Drivers: Vegfa, Ier3.
+- Platelet / Ca²⁺ response (3).
+- E2F targets (2).
+
+**Union network: do the methods find different biology?** Calls are F ∪ C ∪ N, with one gene rule for every set.
+
+| | Human vs mouse | AKI |
+|---|---|---|
+| Calls → programs | 161 → 23 | 535 → 27 |
+| Programs found by F / C / N | 11 / 17 / 6 | 17 / 20 / 18 |
+| Programs found by all three | 4 | 12 |
+| F-test – clustering Jaccard, programs (sets) | 0.22 (0.12) | 0.48 (0.08) |
+| F-test – row N Jaccard, programs (sets) | 0.31 (0.20) | 0.52 (0.29) |
+
+- **On AKI** the F-test and clustering mostly reach the same biology through different sets: program agreement 0.48
+  against a set Jaccard of 0.08. Clustering adds the proliferation programs, which the positional F-test does not
+  test for because they are level changes:
+  - Cell Cycle, Mitotic: 112 clustering calls against 1 F-test call;
+  - DNA repair and replication: 50 against 1.
+- **On human vs mouse** they still differ. Clustering's two large programs of its own are:
+  - a proteasome program, 43 calls (Degradation of AXIN, DVL, GLI…; hub name "KEAP1-NFE2L2 Pathway"; hub genes Ubc,
+    Psmc2, Psmb5, Psma4);
+  - a respiratory-chain program, 11 calls.
+
+  This is the proteasome repetition and level dominance already documented for clustering, now visible as one program
+  rather than 43 calls. The F-test's own human vs mouse programs are six single calls.
+
+### Application: notebook 91's injury screen
+
+| Class | Calls | Programs | Programs of ≥ 3 calls (share of calls) | Calls without driver genes |
+|---|---|---|---|---|
+| Level up | 507 | 17 | 10 (0.98) | 0 |
+| Level down | 31 | 12 | 4 (0.68) | 0 |
+| Location | 236 | 71 | 6 (0.72) | 57 |
+
+- **Level up** reads as about ten programs. The largest is a mixed signalling and immune program (198 calls), named
+  only by its hub (Epstein-Barr virus infection) because no ancestor covers it. The rest:
+  - Cell Cycle, Mitotic (103), whose top drivers are proteasome subunits (Psmb10, Psmb3, Psmb4, Psmb5, Psmd11);
+  - DNA repair (69);
+  - M phase (67; nucleoporins);
+  - tubulins (16);
+  - RHO GTPase / apoptosis (16);
+  - RNA metabolism / translation (15);
+  - nucleotides (7).
+- **Level down:** amino-acid catabolism (11 calls; Bckdha, Bckdhb, Aldh6a1), peroxisomal import (4), bile acids (3),
+  sulfonation (3).
+- **Location:** M phase (44), cell cycle (40), DNA repair / replication (33), lipoproteins (25; Apob, Apoe) and
+  steroids · fatty acids (21; Ehhadh, Acox2). 57 location calls have no member with a gene-level location call, so
+  they stay single.
+
+### What this answers
+
+- **Is it a better way than the F-test or clustering? Not as a calling method.** Position-split ORA loses to the
+  F-test on stability, probe exposure and hub genes on human vs mouse, and to clustering on stability and hub genes on
+  AKI.
+- **As a way to read results, it helps but does not dominate.** It collapses 83–459 calls into 16–31 programs that
+  are positionally coherent beyond chance. It shows that the F-test and clustering agree at the program level on AKI.
+  It turns clustering's unique human vs mouse calls into one proteasome program, and makes 91's 507 level-up calls
+  readable as about ten. But it is settings-sensitive and only mixed against the current programs on the F-test's
+  calls.
+- **Recommendation.** Keep the positional F-test as the calling method. Use NET as a descriptive layer for figures
+  and tables, always with its settings sweep, and never as evidence.
+
+### Open issues
+
+1. **Naming fails for large mixed programs.** The ancestor rule needs ≥ 15% of a program's calls under one node of at
+   most 4% of the hierarchy. The 162- and 198-call programs fall back to an uninformative hub name (Epstein-Barr virus
+   infection).
+2. **A4's replication shares the reference mean** (see the post hoc check). A future protocol should use independent
+   pairs.
+3. **NET is settings-sensitive** (median ARI 0.51 for the F-test's human vs mouse calls). A figure built on it should
+   show the sweep or use a consensus over settings.
+4. **Driver genes differ by method,** so W2 and W3 compare groupings within a method, never methods with each other.
+   The union network uses one gene rule for that reason.

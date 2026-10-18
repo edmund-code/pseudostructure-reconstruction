@@ -141,6 +141,8 @@ lists (Dataset S2), never its counts.
 - Sets: notebook 71's AKI gene sets (sizes 10–300 in E), notebook 76's sets and notebook 91's sets. They are
   library sets with the same identifiers. Each set is tested once on its members in E.
 - A signed set z is Φ⁻¹(1 − p/2) carrying camera's direction. |location| has only an "Up" call.
+- Programs (claim checks, S-P80) are tested on their members in E when they keep ≥ 5 of them (amended before any
+  fit: the library-set size rule cannot apply to programs such as the 12-gene lost program).
 
 **Time-point alignment.**
 - For each t, Spearman's ρ over E ∩ notebook 91's shared genes, between our L (notebook 91, condition) and the external
@@ -156,7 +158,8 @@ Every gene or set gets one internal level sign and one internal location sign fr
 need not be signed.
 - **Genes:** level sign = sign(L). Location sign = sign(Δ late − L), meaning the late-PT effect beyond the PT-wide level.
 - **Sets:** level sign = sign of 91's set L. Location sign = sign of 91's set P averaged over the bins centred at
-  ≥ 2.1 (late S3, 91's LATE).
+  ≥ 1.8 (91's LATE, the bins its genes' Δ late uses). *Amended before any fit: the frozen text said 2.1 and called it
+  91's LATE, but 91's LATE is 1.8; the rule's intent (91's LATE, the same bins for genes and sets) is kept.*
 - A gene or set absent from 91 is scored only on the unsigned location axis.
 
 ## 5 · The call lists (frozen)
@@ -166,7 +169,7 @@ need not be signed.
 | G-L91 | 91 `level change` genes | genes | level |
 | G-M91 | 91 `location change` genes | genes | location |
 | G-F71 | 71 condition gene q ≤ 0.05 (the positional F-test's gene step) | genes | unsigned location |
-| G-C71 | clustering condition run (71's cache, as read in 93): genes in the `up` and `down` groups | genes | level |
+| G-C71 | clustering condition run (71's cache, as read in 93): selected genes with `direction` Up or Down (crossover excluded) | genes | level |
 | S-F71 | 71 positional F-test calls (cameraPR Up, FDR ≤ 0.05) | sets | unsigned location |
 | S-F76 | 76 positional F-test calls on U76 | sets | unsigned location |
 | S-C71 | clustering calls (93's table, method `clustering`) | sets | level |

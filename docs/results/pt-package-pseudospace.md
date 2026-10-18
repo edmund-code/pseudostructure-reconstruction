@@ -41,6 +41,8 @@ Notebook 92 (glucose handling along the PT for the SGLT2-inhibitor question: the
 drug's microdissected footprint, a glucose balance and the size of a drug experiment) is in `pt-glucose-handling.md`.
 Notebook 93 (scoranet's over-representation networks with positional additions, tested against the positional F-test
 and clustering as a calling row and as a way to organise calls into programs) is in `pt-pathway-networks.md`.
+Notebook 94 (an independent IRI benchmark, Kirita 2020, on which every AKI call list is scored) is in `pt-external-iri.md`.
+Notebook 95 (regulator and signalling footprints, CollecTRI and PROGENy, against member sets) is in `pt-regulator-activity.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

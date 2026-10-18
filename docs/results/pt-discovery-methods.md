@@ -51,6 +51,7 @@ names.
 | Change density along the axis (90 E) | Change concentrates beside, not at, the label transitions | Descriptive; keep |
 | Level-free species comparison (90 D, 91 S) | 74 reversed gradients; about a quarter of the gradient shared; no pathway-level species program | Keep; species differences are gene-level |
 | Positional programs against a cluster view (89) | Broad opposite gradients, no boundary programs | Keep for the continuous claim |
+| Phase decomposition with an external time course (Kirita as a ruler; 99) | Acute/sustained present, repair partial, late absent: our IR ≈ 12 h–2 d; acute injury S3-weighted (H1) beyond the controls' spread | **New and useful**: dates a single-time-point dataset and locates each phase |
 | Tissue location (depth, neighbours; 96) | Nephron position organises injury; depth adds nothing; injury graded per tubule | Supports the nephron coordinate as sufficient |
 
 ## Current recommendation (2026-10-18)
@@ -72,5 +73,3 @@ names.
 
 1. **Spatial repair niches.** Cell-cycle and transport-loss residuals cluster among neighbouring tubules beyond
    position and depth (96, secondary). A frozen test of niche structure, and of what neighbours share, is the follow-up.
-2. **Time-point projection:** where along Kirita's time course each of our programs sits (12 h for level, 2 d for the
-   cell cycle).

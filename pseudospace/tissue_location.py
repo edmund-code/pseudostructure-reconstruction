@@ -11,6 +11,8 @@
 * ``knn_weights``, ``morans_i``, ``moran_null``: row-standardised k-nearest-neighbour weights, Moran's I and its null
   permuting values within position bins.
 * ``mixture_bic``: BIC of one against two Gaussian components.
+* ``gene_effects``: ``program_score`` and ``position_expectation`` for every gene at once (notebook 99): each gene's
+  standardised expression minus its control expectation at the unit's position.
 """
 from __future__ import annotations
 
@@ -140,3 +142,45 @@ def mixture_bic(values, *, seed=96):
     order = np.argsort(g2.means_.ravel())
     return {'bic 1': float(g1.bic(v)), 'bic 2': float(g2.bic(v)), 'weights': g2.weights_[order].tolist(),
             'means': g2.means_.ravel()[order].tolist()}
+
+
+def _interp_weights(x, centres):
+    """Sparse units x centres weights of linear interpolation (flat beyond the end centres), as np.interp."""
+    x, c = np.asarray(x, float), np.asarray(centres, float)
+    j = np.clip(np.searchsorted(c, x, side='right') - 1, 0, len(c) - 1)
+    j2 = np.minimum(j + 1, len(c) - 1)
+    span = np.where(j2 > j, c[j2] - c[j], 1.)
+    w2 = np.where(j2 > j, np.clip((x - c[j]) / span, 0, 1), 0.)
+    rows = np.r_[np.arange(len(x)), np.arange(len(x))]
+    return sparse.csr_matrix((np.r_[1 - w2, w2], (rows, np.r_[j, j2])), shape=(len(x), len(c)))
+
+
+def gene_effects(expression, reference, x, specimen, reference_specimens, *, floor=.25, width=.05):
+    """Units x genes: (expression - reference mean) / max(reference SD, floor), minus the control expectation at x.
+
+    The expectation follows ``position_expectation`` gene by gene: binned means (``width``) of the reference units,
+    interpolated; reference units are cross-fitted from the other reference specimens.
+    """
+    X = np.asarray(expression.toarray() if sparse.issparse(expression) else expression, float)
+    ref = np.asarray(reference, bool)
+    x, specimen = np.asarray(x, float), np.asarray(specimen)
+    Z = (X - X[ref].mean(axis=0)) / np.maximum(X[ref].std(axis=0, ddof=1), floor)
+    edges = np.arange(0, 1 + width, width)
+    edges[-1] = max(edges[-1], x.max() + 1e-9)
+    idx = np.clip(np.searchsorted(edges, x, side='right') - 1, 0, len(edges) - 2)
+    refs = list(reference_specimens)
+    out = np.empty_like(Z)
+
+    def expect(builders, targets):
+        bins = np.unique(idx[builders])
+        sums = np.vstack([Z[builders & (idx == b)].mean(axis=0) for b in bins])
+        centres = .5 * (edges[bins] + edges[bins + 1])
+        return _interp_weights(x[targets], centres) @ sums
+
+    is_ref = np.isin(specimen, refs) & ref
+    others = ~np.isin(specimen, refs)
+    out[others] = Z[others] - expect(is_ref, others)
+    for s_ in refs:
+        own = specimen == s_
+        out[own] = Z[own] - expect(np.isin(specimen, [r for r in refs if r != s_]) & ref, own)
+    return out

@@ -54,3 +54,19 @@ def test_morans_i_and_null_and_depth_and_mixture():
     two = np.r_[rng.normal(0, .3, 300), rng.normal(3, .3, 100)]
     b = tl.mixture_bic(two)
     assert b['bic 2'] < b['bic 1'] - 10 and b['weights'][1] == pytest.approx(.25, abs=.05)
+
+
+def test_gene_effects_match_the_program_path():
+    rng = np.random.default_rng(7)
+    n = 600
+    x = rng.uniform(0, 1, n)
+    spec = np.repeat(['c1', 'c2', 'k'], 200)
+    X = np.c_[np.sin(3 * x), x ** 2, rng.normal(size=n)] + rng.normal(0, .2, (n, 3))
+    X[spec == 'k'] += [1., 0., -.5]
+    ref = np.isin(spec, ['c1', 'c2'])
+    E = tl.gene_effects(X, ref, x, spec, ['c1', 'c2'], floor=.25, width=.05)
+    for g in range(3):
+        score = tl.program_score(X[:, [g]], ref, floor=.25)
+        e = score - tl.position_expectation(x, score, spec, ['c1', 'c2'], width=.05, cross_fit=True)
+        assert np.allclose(E[:, g], e)
+    assert E[spec == 'k', 0].mean() > 1. and abs(E[spec == 'k', 1].mean()) < .3

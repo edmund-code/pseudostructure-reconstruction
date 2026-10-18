@@ -8,6 +8,7 @@
   segment centroid of each nucleus by Spearman correlation (the assigned-nuclei sensitivity).
 * ``replicated``: an item replicates when the external q passes and the external sign equals the item's sign.
 * ``matched_null``: random lists drawn from a pool with the list's per-stratum counts kept; the null number replicated.
+* ``matched_means``: the same draws, returning the mean of continuous per-item statistics (notebook 99).
 """
 from __future__ import annotations
 
@@ -140,6 +141,25 @@ def matched_null(hit, pool_strata, list_strata, *, n=1000, seed=94):
         chosen = np.argpartition(keys, count - 1, axis=1)[:, :count]
         out += hit[members][chosen].sum(axis=1)
     return out
+
+
+def matched_means(values, pool_strata, list_strata, *, n=1000, seed=99):
+    """Mean of ``values`` (pool items x statistics) over ``n`` random lists with the list's per-stratum counts."""
+    values = np.asarray(values, float)
+    if values.ndim == 1:
+        values = values[:, None]
+    pool_strata, list_strata = np.asarray(pool_strata), np.asarray(list_strata)
+    if values.shape[0] != len(pool_strata):
+        raise ValueError('Need one stratum per pool item.')
+    rng = np.random.default_rng(seed)
+    total = np.zeros((n, values.shape[1]))
+    for stratum, count in zip(*np.unique(list_strata, return_counts=True)):
+        members = np.flatnonzero(pool_strata == stratum)
+        if len(members) < count:
+            raise ValueError(f'Stratum {stratum!r} holds {len(members)} pool items for {count} list members.')
+        chosen = np.argpartition(rng.random((n, len(members))), count - 1, axis=1)[:, :count]
+        total += values[members][chosen].sum(axis=1)
+    return total / len(list_strata)
 
 
 def null_summary(k, null):

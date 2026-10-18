@@ -101,3 +101,88 @@ Per gene and time t, *up_t* means q ≤ 0.05 and coefficient ≥ 1, and *down_t*
   cost of size.
 - The deepest injured S3 units are under-represented in our export (notebook 76). Notebook 96's placed-unit arm did
   not change its location verdicts, and this notebook does not repeat it.
+
+## Notebook 99 results
+
+`analysis/notebooks/99_pt_injury_phases.ipynb` (logic `99.phases.1`) writes to `results/pt_injury_phases/`. It
+followed the protocol frozen in 1a92c73. G1 passed: 14,048 units, with control cuts 0.343 and 0.647. New helpers are
+`tissue_location.gene_effects` and `external_replication.matched_means`, each with a test. The `gene_effects` test
+checks it against notebook 96's per-program path.
+
+**How the protocol was read.**
+- Kirita's coefficients and q are notebook 94's.
+- The time mixture has no intercept.
+- The deciles come from the controls' mean log1p CP10k.
+- The profile peak is the bin with the largest signed effect.
+- One post hoc section (5.1).
+
+**Phase programs (Kirita only; members scored among 10,683 genes):**
+
+| Program | Members | Mean log2 FC (4 h, 12 h, 2 d, 14 d, 6 wk) |
+|---|---|---|
+| ACUTE-up | 320 | 1.16, 1.27, −0.22, −0.08, −0.07 |
+| REPAIR-up | 223 | −0.36, −0.30, 1.97, 0.62, 0.45 |
+| LATE-up | 16 | −0.45, −0.34, −0.01, 2.02, 0.77 |
+| SUSTAINED-up | 257 | 2.51, 3.06, 2.79, 2.81, 1.54 |
+| ACUTE-down | 473 | −1.16, −1.63, 0.23, 0.04, 0.10 |
+| REPAIR-down | 19 | 0.33, 0.16, −2.05, −0.74, −0.79 |
+| SUSTAINED-down | 48 | −2.36, −3.04, −2.45, −1.72, −0.70 |
+
+LATE-down (1 gene) is not scored.
+
+**A1 · Which phases our IR mice carry** (level z against matched random programs; IR2A2, IR2A4 | controls):
+
+| Program | IR | Controls |
+|---|---|---|
+| ACUTE-up / -down | 5.7, 4.2 / −9.0, −7.4 | 0.1, 0.0 / ±4.7 |
+| REPAIR-up / -down | 2.4, 3.6 / −2.9, −3.2 | ±1.0 / ±0.8 |
+| LATE-up | −1.0, −1.1 | ±3.3 |
+| SUSTAINED-up / -down | 26.1, 24.4 / −8.6, −8.7 | ±10.1 / ±1.7 |
+
+- **Present:** ACUTE and SUSTAINED.
+- **Not present:** REPAIR (IR2A2's up version, at 2.4, misses the threshold of 3) and LATE.
+- **Time mixture** (non-negative least squares of our L on Kirita's five time points; R² 0.38 over 10,017 genes):
+  12 h 0.57, 2 d 0.43, nothing at 4 h, 14 d or 6 wk.
+- **Our IR mice sit between 12 h and 2 d after IRI.** They carry the acute and sustained responses fully, the 2-day
+  repair response partly, and none of the late or failed-repair response.
+
+**A2 · Where along the PT each phase acts** (S3−S1 z; IR2A2, IR2A4):
+
+| Program | S3−S1 z | Per unit of level | Peak x |
+|---|---|---|---|
+| ACUTE-up | **7.9, 4.5** | 1.75 (IR2A4) | 0.93, 0.88 |
+| ACUTE-down | **−6.2, −3.5** | – | 0.98, 0.98 |
+| SUSTAINED-up | 20.4, 18.8 | 0.98 | 0.88, 0.88 |
+| SUSTAINED-down | −6.0, −7.1 | 0.61 | 0.83, 0.88 |
+| REPAIR-up (not present) | 2.7, 6.9 | 2.16 (IR2A4) | 0.78, 0.88 |
+| REPAIR-down (not present) | −2.4, −3.3 | – | 0.78, 0.78 |
+
+- **H1 holds.** Acute injury is S3-weighted in both IR mice, in both directions.
+- **H2 is not judged,** because repair is not present. Descriptively, the partial repair response is the most
+  S3-weighted per unit of level (IR2A4 2.16, against 1.75 for acute).
+- **The up programs share the shape of notebook 91's induced program,** an observation not specified in advance:
+  - raised in early S1;
+  - a dip in late S1 around x ≈ 0.3, the same dip 91 found for its induced program;
+  - a rise through S2 into late S3.
+
+**Post hoc 5.1: IR against the control mice's own spread.**
+- The cross-fitted controls are not at 0, because of the A2/A4 factor: SUSTAINED-up level control z ±10.1, ACUTE S3−S1
+  control z ±3.7.
+- Against the larger control |z|, these still put both IR mice beyond the controls:
+  - ACUTE (up and down), level and S3−S1;
+  - SUSTAINED (up and down), level and S3−S1;
+  - REPAIR, level only.
+- H1 survives this calibration. IR2A4's ACUTE-down S3−S1 is the narrowest margin: −3.54 against 3.45.
+
+**What this answers.**
+1. **Time point.** Our IR mice match 12 h to 2 d after an 18-min bilateral IRI: the acute and sustained programs, part
+   of the 2-day repair program, nothing later. This narrows `pt-package-issues.md` item 10 from "unknown" to an early
+   repair window. The cell-cycle program's 2-day signature (notebook 94, K2) fits the repair share.
+2. **Acute injury is S3-weighted along the continuous axis,** in both directions and both mice, beyond the controls'
+   spread. This is the textbook S3 vulnerability (Bonventre & Yang), measured gene-program by gene-program on a
+   continuous coordinate, with the phase defined in an independent experiment.
+3. **The late-S1 dip is a feature of every injury phase,** not of one program. Late S1 is the least responsive
+   stretch of the PT in both directions, as notebook 91 found.
+4. **As a method,** an external time course used as a ruler turns a single-time-point spatial dataset into a phase
+   decomposition, with location per phase. It needs the external experiment and the matched null, and it should be
+   read against the controls' own spread.

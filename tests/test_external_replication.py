@@ -68,3 +68,14 @@ def test_replicated_and_matched_null():
         er.matched_null(hit, strata, ['a'] * 21)
     s = er.null_summary(4, null)
     assert s['p'] == pytest.approx((1 + (null >= 4).sum()) / 2001) and s['null low'] <= s['null mean'] <= s['null high']
+
+
+def test_matched_means_keep_strata():
+    values = np.r_[np.zeros(50), np.ones(50) * 10.]
+    strata = np.r_[np.zeros(50, int), np.ones(50, int)]
+    m = er.matched_means(values, strata, [0, 0, 1, 1], n=500, seed=1)
+    assert m.shape == (500, 1) and np.allclose(m, 5.)            # two from each stratum: always 5
+    rng = np.random.default_rng(2)
+    v = rng.normal(size=(200, 2))
+    m = er.matched_means(v, np.zeros(200, int), np.zeros(20, int), n=2000, seed=3)
+    assert np.allclose(m.mean(axis=0), v.mean(axis=0), atol=.02) and m.std(axis=0)[0] < v.std(axis=0)[0] / 3

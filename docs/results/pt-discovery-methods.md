@@ -11,7 +11,7 @@ names.
 ## The yardsticks (in order of weight)
 
 1. **External replication.** Does the call hold in independent data?
-   - AKI: Kirita 2020's IRI time course, 18 mice (notebook 94).
+   - AKI: Kirita 2020's IRI time course, 18 mice (notebook 94), and human AKI biopsies from KPMP (notebook 98).
    - Human vs mouse: the cell atlases (Lake/KPMP, Census) and microdissection (Chen 2021).
 2. **Internal specificity.** Calls under balanced specimen relabeling against the condition: NCDR and calibration
    share.
@@ -28,17 +28,17 @@ names.
 
 | Method | Question | Specificity | External | Other | Verdict |
 |---|---|---|---|---|---|
-| **Positional F-test** (NB T_spatial, moderated F, cameraPR; 71) | Does the shape of the difference along the PT differ? | hvm pass (0.071); AKI fails calibration (0.120; 76: 0.144) | AKI shape calls replicate 6.8–8.0× the matched null; set ranking ρ 0.54 with IRI shape (94). hvm atlas replication not set-specific (77). | Reconstruction Jaccard 0.84 / 0.72; probe exposure 0.17; hub robustness 0.92 / 0.99 (93) | **Primary for positional differences** |
+| **Positional F-test** (NB T_spatial, moderated F, cameraPR; 71) | Does the shape of the difference along the PT differ? | hvm pass (0.071); AKI fails calibration (0.120; 76: 0.144) | AKI shape calls replicate 6.8–8.0× the matched null; set ranking ρ 0.54 with IRI shape (94). Human AKI: partly (genes 1.4×, sets not; location unmeasurable in biopsies, 98). hvm atlas replication not set-specific (77). | Reconstruction Jaccard 0.84 / 0.72; probe exposure 0.17; hub robustness 0.92 / 0.99 (93) | **Primary for positional differences** |
 | Segment F-test (S1/S2/S3 steps; 74, 75) | The same, with steps | hvm pass (76 calls, 71 shared); AKI fails | – | The spline adds 12 sets, the steps 5 | Discrete twin; continuous adds little set-level |
-| **Clustering** (package gene groups and clusters, matched ORA; 71) | Which sets sit in up, down or shape gene groups? | passes both | AKI: replicates as **level** (1.5×), not as shape (0.5×) (94) | Reconstruction Jaccard 0.42 / 0.66; probe exposure 0.69 | **Complementary level layer**; not for shape |
-| **Level / location screen** (L, M, A; 91) | Whole-PT level change, location beyond level, gradient survival | relabeling bounds per call (level 40, 3 against 3,159 genes) | AKI level sets the most consistent level list: 0.57, 1.7×, ties clustering. Location sets 5.3× at 12 h (94). | Filters show the male-biased and fasting-down programs fall in IRI too (94) | **Best AKI level description** |
+| **Clustering** (package gene groups and clusters, matched ORA; 71) | Which sets sit in up, down or shape gene groups? | passes both | AKI: replicates as **level** (1.5×), not as shape (0.5×) (94); sets do not generalise to human AKI (1.06×, 98) | Reconstruction Jaccard 0.42 / 0.66; probe exposure 0.69 | **Complementary level layer**; not for shape |
+| **Level / location screen** (L, M, A; 91) | Whole-PT level change, location beyond level, gradient survival | relabeling bounds per call (level 40, 3 against 3,159 genes) | AKI level sets the most consistent level list: 0.57, 1.7×, ties clustering. Location sets 5.3× at 12 h (94). Best of our lists in human AKI (sets 1.55×, 98). | Filters show the male-biased and fasting-down programs fall in IRI too (94) | **Best AKI level description** |
 | Position-split ORA (scoranet-style row N; 93) | Gene-first ORA, split up/down × segment | passes | AKI location 5.0× (94) | Reconstruction Jaccard 0.45 / 0.43; hub robustness 0.43 / 0.72 | Not better than the F-test (93) |
 | DESeq2 + ORA, whole PT or per segment (75) | Level differences | passes | – | hvm probe exposure 0.60–0.71 | Not for species; level only |
 | cameraPR or GSEA on raw T_spatial, ssGSEA, DE + signed GSEA (66, 75) | various | fail | – | – | Rejected |
 | Regulon activity (CollecTRI, ulm; 95) | Which regulators' targets change? | AKI 0.62 relabeled per call, against member sets' 0.34 | at chance (1.17×) | Mouse zonation regulons rarely carry to human | **Worse than member sets**; names are hypotheses only |
 | Co-expression conservation (Crow 2022's partner AUROC, level-free; 97) | Does a gene keep its co-expression partners across species? | within-species median 0.67 (bimodal) | rewiring replicates in the atlases (ρ 0.30; 0.34 for reproducible genes) | reversed-gradient genes most rewired; only xenobiotic metabolism rewired at set level | Not shown useful genome-wide; **supporting level-free cross-check** of species gene lists |
 | Signalling footprints (PROGENy, ulm; 95) | Which signalling pathways act? | 3 AKI calls | EGFR, MAPK, PI3K replicate (z 5.3–7.8) | KEGG ErbB and MAPK miss them; footprints miss p53, hypoxia, JAK-STAT | **Add-on for signalling only** |
-| Published programs re-read (79–82) | Do published findings hold along our PT? | per program | AKI programs replicate 2.0× at 12 h (94, Kirita's own excluded) | – | Hypothesis-driven checks; keep |
+| Published programs re-read (79–82) | Do published findings hold along our PT? | per program | AKI programs replicate 2.0× at 12 h (94, Kirita's own excluded) and best of all lists in human AKI (13/22, 19.9×; 98) | – | Hypothesis-driven checks; keep |
 
 ## Organising and describing calls
 
@@ -72,6 +72,5 @@ names.
 
 1. **Spatial repair niches.** Cell-cycle and transport-loss residuals cluster among neighbouring tubules beyond
    position and depth (96, secondary). A frozen test of niche structure, and of what neighbours share, is the follow-up.
-2. **Human injury states (KPMP aPT, dPT) as a second external benchmark** for the AKI calls, across species.
-3. **Time-point projection:** where along Kirita's time course each of our programs sits (12 h for level, 2 d for the
+2. **Time-point projection:** where along Kirita's time course each of our programs sits (12 h for level, 2 d for the
    cell cycle).

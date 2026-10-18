@@ -140,7 +140,7 @@ for 11,055 genes on 0.050–0.950, with cuts 0.304 and 0.620. Module `pseudospac
   - 11 pairs are handoffs in both species, against 0.55 by chance, with none reversed:
     - amino acids: B0AT1 → B0AT3 (Slc6a19 → Slc6a18), and b0,+AT, LAT2 and y+LAT1 → AGT1 (Slc7a9, Slc7a8 and Slc7a7
       → Slc7a13);
-    - organic anions: OAT3 → OAT2, URAT1 and OAT5/Slc22a13 (Slc22a8 → Slc22a7, Slc22a12, Slc22a13), and Slc22a23 → the
+    - organic anions: OAT3 → OAT2, URAT1 and OAT10 (Slc22a8 → Slc22a7, Slc22a12, Slc22a13), and Slc22a23 → the
       same three;
     - sugars: SGLT2 → SGLT5 (Slc5a2 → Slc5a10).
 - **The handoffs overlap and sit inside S2.**

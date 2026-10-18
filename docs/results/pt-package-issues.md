@@ -40,6 +40,7 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
 9. **The AKI screens fail calibration:** 0.120 (notebook 71) and 0.144 (notebook 76's universe). No AKI call list can
    be presented as a discovery list.
 10. **The IRI time point is unknown.** The cell-cycle program reads as "undetermined" between division and arrest.
+    *Update (notebook 99, 2026-10-18):* against Kirita 2020's IRI time course, our IR mice carry the acute (4–12 h) and sustained programs, part of the 2-day repair program and no late program; a time-mixture fit gives 12 h 0.57 and 2 d 0.43. The window is about 12 h to 2 d after an 18-min bilateral IRI (`pt-injury-phases.md`).
 
 ## The package itself (worth telling Caleb)
 

@@ -166,3 +166,121 @@ Per family and layer:
   under a regulator's name. Activity is not proof of a regulator's action.
 - One human donor: "human positional" is replication across two sections.
 - Injury location has no relabeled control, so it stays descriptive.
+
+## Notebook 95 results
+
+`analysis/notebooks/95_pt_regulator_activity.ipynb` (logic `95.regulators.1`) writes to `results/pt_regulator_activity/`.
+It followed the protocol frozen in d64bfd1. Guards G1–G2 passed and t* is 12 h. Runtime is 25 s. Module
+`pseudospace/regulator_activity.py` with `tests/test_regulator_activity.py` (3 tests).
+
+**How the protocol was read.**
+- **Correction:** G1's edge count. The frozen 64,978 was `wc -l` minus the header, but the file's last line has no
+  newline, so it holds 64,979 rows. The 1,209 sources match.
+- **Post hoc, not judged:** section 7.1, threshold-free agreement per family.
+- Network sha256: CollecTRI `fb2dec0ffda1…`, PROGENy `a1a0f938211d…`.
+
+**Sources.**
+
+| Family | Z (7,971 genes) | I (10,361 genes) |
+|---|---|---|
+| REG (CollecTRI regulons) | 322 | 390 |
+| FOOT (PROGENy) | 14 | 14 |
+| HALL (Hallmark) | 50 | 50 |
+| MEM (KEGG, Reactome) | 1,292 | 1,399 |
+
+**Scorecard** (protocol section 5):
+
+| | REG | FOOT | HALL | MEM |
+|---|---|---|---|---|
+| Z · between-mouse ρ | 0.929 | 0.657 | 0.925 | 0.909 |
+| Z · mouse-positional sources (scorable), replicated in Kirita's sham | 27, 1 | 0, 0 | 3, 2 | 22, 8 |
+| Z · mouse external enrichment | 11.9 (p 0.08) | – | – (< 5) | 58.1 (p < 0.001) |
+| Z · human-positional sources | 1 | 2 | 3 | 3 |
+| I · q ≤ 0.05 (condition; mean of relabelings) | 135; 83 | 8; 5 | 33; 22.5 | 514; 173.5 |
+| I · specificity (relabeled / condition) | 0.615 | 0.625 | 0.682 | **0.338** |
+| I · pair agreement | 1.00 | 1.00 | 1.00 | 1.00 |
+| I · called; replicated in Kirita at 12 h | 35; 8 | 3; 3 | 8; 7 | 205; 133 |
+| I · external enrichment | 1.17 (p 0.37) | – | 1.46 (p 0.09) | **1.87 (p < 0.001)** |
+
+**Verdicts** (dominance):
+
+| Comparison | Zonation | Injury |
+|---|---|---|
+| REG vs MEM | worse | worse |
+| REG vs HALL | equal | mixed |
+| FOOT vs HALL | worse | better* |
+| FOOT vs MEM | worse | worse |
+| HALL vs MEM | equal | worse |
+
+\*FOOT against HALL on injury rests on specificity alone (0.625 against 0.682). FOOT's external enrichment is undefined
+with 3 calls.
+
+**Post hoc: threshold-free agreement** (Spearman ρ over each family's sources, not judged):
+
+| | REG | FOOT | HALL | MEM |
+|---|---|---|---|---|
+| Z · Ctrl1A2 vs Ctrl1A4 | 0.929 | 0.657 | 0.925 | 0.909 |
+| Z · COR1 vs MED1 (one donor) | 0.738 | 0.899 | 0.760 | 0.479 |
+| Z · mouse vs Kirita sham | 0.638 | 0.868 | 0.586 | 0.576 |
+| Z · human vs Census | 0.400 | 0.640 | 0.415 | 0.359 |
+| Z · mouse vs human | 0.174 | −0.055 | 0.133 | 0.231 |
+| I · L vs Kirita 12 h | 0.621 | 0.719 | 0.721 | 0.688 |
+| I · R1 vs Kirita 12 h / 14 d | 0.380 / 0.491 | 0.367 / 0.662 | 0.227 / 0.651 | 0.228 / 0.592 |
+| I · R2 vs Kirita 12 h / 14 d | −0.038 / −0.208 | 0.398 / −0.262 | 0.113 / −0.362 | 0.222 / −0.224 |
+
+**What the families find.**
+- **Zonation, mouse.** Few sources pass q ≤ 0.05 in both mice, although their rankings agree at ρ 0.91–0.93. The
+  per-specimen end contrasts are heavy-tailed, so a mean-based ulm t is small for most sources.
+  - MEM recovers notebook 90's positioned sets. S1-high: amino-acid, inorganic-ion and SLC transport, basigin, mineral
+    absorption. S3-high: PPAR signalling, peroxisome, peroxisomal lipid metabolism, butanoate.
+  - REG adds regulator names. S1-high: HNF1A, KLF15, VDR, NR1I2 and NR1I3 (PXR, CAR), SMAD3, MITF, TBX2. S3-high: PPARA,
+    BHLHE40/41, MECP2, REST.
+  - In human only NR1I3 (S1-high in both species) is positional, and in Kirita's sham mice only KLF15 replicates.
+- **Injury level.**
+  - MEM calls 205 sets, 133 of which replicate in Kirita.
+  - REG calls 35 regulons, 28 of them up. Only 8 replicate (DMTF1, HMGA2, HR, POU4F1, TBP, TCF4, TCF7L2, ZBTB17),
+    which is no better than all regulons.
+  - HALL calls 8, of which 7 replicate: androgen response, G2-M, IL-6/JAK/STAT3, mitotic spindle, PI3K/AKT/mTOR, ROS
+    and UV response up.
+  - FOOT calls 3 and all 3 replicate: **EGFR, MAPK, PI3K**.
+- **PROGENy against its named sets (injury z; Kirita z at 12 h).**
+  - **Footprints see what member sets miss** for receptor-tyrosine-kinase signalling:
+    - EGFR 10.6 (Kirita 7.8), against KEGG ErbB 1.6;
+    - MAPK 8.4 (6.8), against KEGG MAPK 1.9.
+
+    This is Schubert's rationale: these pathways act post-translationally, so their members barely change while their
+    targets do.
+  - **Footprints miss what response sets see:**
+    - p53 −0.2, against Hallmark 3.9 and KEGG 3.9;
+    - hypoxia −0.8, against Hallmark 3.2;
+    - JAK-STAT −0.2, against Hallmark IL-6/JAK/STAT3 6.1;
+    - androgen −2.0, against Hallmark 3.0;
+    - Trail −0.1, against KEGG apoptosis 5.5.
+  - TNFα, NF-κB and TGFβ are strong in all three.
+- **Recovery checks (Kirita's regulons).**
+  - RC1 holds for HNF1B (down, z −3.2). It fails for HNF4A (+1.2) and runs opposite for PBX1 (+4.1).
+  - RC2 holds in direction for NFKB and RELB (z 8.9; Kirita z about 9 at every time). They fail the call rule,
+    because relabeling 1 is large.
+  - RC3: TCF7L1 has fewer than 10 targets, so it is not a source.
+  - RC4 holds: MYC is up (z 7.0; Kirita z 5–6 at 4–12 h).
+- **mRNA.** Of 24 REG calls with a mapped TF gene, 67% move in the activity's direction.
+
+**What this answers.**
+1. **Target-based activity is not a better way to call PT biology here.**
+   - Regulons are less specific than member sets on injury (0.62 against 0.34 relabeled per condition hit).
+   - They replicate externally no better than chance (1.17×, against 1.87× for member sets).
+   - Their zonation calls rarely carry to human or to Kirita.
+   - Under the frozen scorecard both footprint families are "worse" than KEGG and Reactome membership.
+2. **Footprints add one specific, replicated piece of biology:** EGFR, MAPK and PI3K signalling rise in the injured
+   PT. Each is called (pairs agree, relabelings small) and replicated in Kirita (z 5.3–7.8), and member sets miss
+   EGFR and MAPK. Use PROGENy beside the sets for signalling, not instead of them.
+3. **Regulator names are hypotheses, not calls.** The positional regulons are HNF1A, KLF15, VDR and PXR/CAR toward
+   S1, and PPARA toward S3. They sit on the same transporter and peroxisome genes as the member sets, so they restate
+   the sets' biology under a regulator's name.
+4. **Post hoc: relabeling 1 resembles injury itself.** IR2A2 + Ctrl1A2 against IR2A4 + Ctrl1A4 correlates with
+   Kirita's IRI response at ρ 0.23–0.38 at 12 h and 0.49–0.66 at 14 d, in every family. Relabeling 2 correlates near 0
+   or negatively.
+   - The A2 sections share an injury- or repair-like program in both conditions, as the cohort memory noted for
+     stress genes.
+   - So the AKI calibration failures (0.120, 0.144) partly count real, shared biology as false calls. This fits notebook
+     94: calls that fail internal calibration replicate externally.

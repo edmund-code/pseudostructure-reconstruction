@@ -78,8 +78,9 @@ Protocol frozen on 2026-10-18, before any co-expression was computed on these da
   labels 1,000 times.
 
 **Q3 · Does it add to the gradient comparison?**
-- Notebook 90's level-free gradient divergence over the shared genes: 1 minus the cosine of the end contrasts of the
-  species means.
+- Notebook 90's level-free gradient divergence over the shared genes: |E mouse − E human|, the absolute difference of
+  the species-mean end contrasts (log2). *Amended before any computation: the frozen text said "1 minus the cosine",
+  which is undefined for one end contrast per gene.*
 - ρ between D and that gradient divergence.
 - D by 90's categories (conserved, reversed, mouse only, human only, none), with a Mann–Whitney test of reversed
   against conserved.

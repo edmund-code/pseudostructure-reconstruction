@@ -47,6 +47,8 @@ Notebook 96 (nephron position or tissue location: depth and neighbours behind in
 Notebook 97 (co-expression conservation between human and mouse PT, level-free) is in `pt-coexpression-conservation.md`.
 Notebook 98 (do the mouse AKI calls hold in human AKI: a KPMP benchmark) is in `pt-human-aki-benchmark.md`.
 Notebook 99 (injury phases borrowed from Kirita's time course, and where along the PT each acts) is in `pt-injury-phases.md`.
+Notebook 100 (planted truth: power and false calls of the pathway calling methods) is in `pt-planted-benchmark.md`.
+Notebook 101 (transporter handoffs along the PT: a family-wide screen) is in `pt-transporter-handoffs.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

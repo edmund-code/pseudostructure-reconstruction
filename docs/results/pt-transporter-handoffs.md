@@ -106,3 +106,62 @@ A miss is reported, not tuned. Slc5a2 helped build the coordinate (notebook 92),
   handoff, not a proven functional one.
 - Genes that built the coordinate make their own positions partly circular. Notebook 90's fold-protected flag is
   reported per gene.
+
+## Notebook 101 results
+
+`analysis/notebooks/101_pt_transporter_handoffs.ipynb` (logic `101.handoffs.1`) writes to
+`results/pt_transporter_handoffs/`. It followed the protocol frozen in 66afdb6 and ran in 5 s. G1 passed: 71's curves
+for 11,055 genes on 0.050–0.950, with cuts 0.304 and 0.620. Module `pseudospace/handoffs.py` with
+`tests/test_handoffs.py` (2 tests).
+
+**How the protocol was read.**
+- A transporter in two HGNC groups keeps its first group.
+- Chen's ratio uses the mean TPM over the replicates.
+- Census uses the 6 donors with ≥ 50 cells of both types.
+- The random comparison pairs are non-transporter genes.
+
+**Eligible transporters.**
+- 479 transporters have a one-to-one ortholog, in 77 families. 237 are eligible in each species.
+- Mouse: 50 early and 46 late. Human: 31 early and 24 late.
+- Transporters are graded far more often than genes overall: 0.41 against 0.17 in mouse, 0.23 against 0.08 in human.
+
+| Question | Mouse | Human | Holds |
+|---|---|---|---|
+| Q1 within-family handoff pairs (null mean, p) | 52 (78.1, 0.95) | 20 (24.9, 0.72) | **no** |
+| Q2 direction confirmed (Chen; Census) | 50 / 52 = 0.96 | 16 / 20 = 0.80 | yes |
+| Q3 conserved pairs (expected by chance) | 11 (0.55); reversed 0 | | descriptive |
+| Q4 crossings inside a segment (random pairs) | 0.60 (0.67) | 0.50 (0.72) | descriptive |
+| Q4 overlapping handoffs, width < 0 (random) | 0.64 (median width −0.07; random 0.00) | 0.95 (−0.15; random −0.03) | descriptive |
+
+- **Q1 fails.** Within a family, early and late members do not co-occur more than chance. They co-occur *less*, so
+  families tend to share one direction. Handoffs are not a family-wide design principle of the PT.
+- **Specific handoffs are real and conserved.**
+  - Microdissection confirms 96% of the mouse pairs, and the atlas 80% of the human pairs.
+  - 11 pairs are handoffs in both species, against 0.55 by chance, with none reversed:
+    - amino acids: B0AT1 → B0AT3 (Slc6a19 → Slc6a18), and b0,+AT, LAT2 and y+LAT1 → AGT1 (Slc7a9, Slc7a8 and Slc7a7
+      → Slc7a13);
+    - organic anions: OAT3 → OAT2, URAT1 and OAT5/Slc22a13 (Slc22a8 → Slc22a7, Slc22a12, Slc22a13), and Slc22a23 → the
+      same three;
+    - sugars: SGLT2 → SGLT5 (Slc5a2 → Slc5a10).
+- **The handoffs overlap and sit inside S2.**
+  - Mouse crossings run from x 0.30 to 0.66, almost all between the two cuts. Median x\* is 0.50 in mouse and 0.56 in
+    human.
+  - Most handoffs overlap: the late member rises before the early one falls (64% in mouse, 95% in human).
+  - A segment view puts both members' changes into "S2" and cannot show where, or how wide, the handoff is.
+- **Recovery checks missed.**
+  - R1 GLUT2 → GLUT1: Slc2a2 is early in both species, but Slc2a1 is not late in either. Its gradient does not
+    replicate in our mice (E −0.44, 0.83) and is flat in human.
+  - R2 and R3 SGLT2 → SGLT1: Slc5a1 is not in notebook 90's eligible table, so it was not testable here. Notebook 92
+    studied it separately.
+  - Instead, SGLT2 hands off to SGLT5 (Slc5a10) in both species.
+
+**What this answers.**
+1. **Transporter gradients are common, but handoffs within a family are not a general rule.** Transporters are 2–3
+   times more often graded than other genes, and family members tend to share a direction. The design principle "an
+   early paralog hands off to a late one" is not supported genome-wide.
+2. **A small set of conserved, microdissection-confirmed handoffs exists,** in amino-acid, organic-anion and sugar
+   transport. They overlap rather than switch, and they sit inside S2. Only a continuous axis can show where and how
+   wide each handoff is, so these are concrete "micro-gradients in solute handling" for the paper. The claim should be
+   these pairs, not a general principle.
+3. **As a method:** a family-wide screen with a label-permutation null separated a general claim (rejected) from
+   specific findings (11 conserved pairs against 0.55 by chance), with external confirmation.

@@ -44,6 +44,7 @@ and clustering as a calling row and as a way to organise calls into programs) is
 Notebook 94 (an independent IRI benchmark, Kirita 2020, on which every AKI call list is scored) is in `pt-external-iri.md`.
 Notebook 95 (regulator and signalling footprints, CollecTRI and PROGENy, against member sets) is in `pt-regulator-activity.md`.
 Notebook 96 (nephron position or tissue location: depth and neighbours behind injury between tubules) is in `pt-injury-tissue-location.md`.
+The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

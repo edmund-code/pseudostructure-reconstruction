@@ -39,6 +39,8 @@ Notebook 91 (a discovery screen: injury split into level, location and gradient 
 external-state filters; species gradient programs) is in `pt-positional-decomposition.md`.
 Notebook 92 (glucose handling along the PT for the SGLT2-inhibitor question: the healthy uptake handoff, injury, the
 drug's microdissected footprint, a glucose balance and the size of a drug experiment) is in `pt-glucose-handling.md`.
+Notebook 93 (scoranet's over-representation networks with positional additions, tested against the positional F-test
+and clustering as a calling row and as a way to organise calls into programs) is in `pt-pathway-networks.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 
 ## Notebook 70 protocol: the package pseudospace for both datasets

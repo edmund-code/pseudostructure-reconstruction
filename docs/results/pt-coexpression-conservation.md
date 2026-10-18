@@ -122,3 +122,87 @@ shows it is non-redundant or Q4 replicates more sets than chance.
   partners. The residual layer removes position.
 - Atlas nuclei are sparse, so their Spearman networks are noisy. Aggregation across donors is Crow's remedy.
 - The atlases are other people's tissue, sex mix and platform. Agreement is a lower bound.
+
+## Notebook 97 results
+
+`analysis/notebooks/97_pt_coexpression_conservation.ipynb` (logic `97.coexpression.1`) writes to
+`results/pt_coexpression_conservation/`. It followed the protocol frozen in 137fd92, amended before any computation in
+590b6c5. G1 passed: the export fingerprint is notebook 70's, and `hvm_inputs` rebuilds 71's 11,055-gene universe.
+Runtime is 3 min, almost all of it the atlas networks. Module `pseudospace/coexpression_conservation.py` with
+`tests/test_coexpression_conservation.py` (3 tests).
+
+**How the protocol was read.**
+- Our expression is `hvm_inputs`' Y, and atlas expression is log1p CP10k on the per-nucleus total.
+- The atlas halves alternate donors.
+- The residual layer has no atlas twin, so Q2 is judged on the total layer.
+- Q5 settings are as listed.
+- One post hoc section (5.1).
+- Figure 97c was redrawn from `genes.csv` after execution to rotate overlapping tick labels. The notebook source
+  carries the fix.
+
+**Inputs.**
+- Units: Ctrl1A2 2,436, Ctrl1A4 2,557, HUK1_COR1 3,073, HUK1_MED1 3,317.
+- Atlas donors with ≥ 300 nuclei: mouse 28 (59,277 nuclei), human 7 (15,059).
+- G holds 3,679 genes. 6,019 pass our detection rule and 4,612 the atlases'.
+
+**Per-gene scores (medians).**
+
+| Layer | W_m | W_h | X | D | share D > 0 |
+|---|---|---|---|---|---|
+| total | 0.670 | 0.675 | 0.488 | 0.202 | 0.98 |
+| residual | 0.668 | 0.622 | 0.515 | 0.133 | 0.88 |
+| atlas | 0.969 | 0.887 | 0.591 | 0.292 | 0.99 |
+
+W is bimodal in our data: on the total layer, the quartiles of W_m are 0.595 and 0.962.
+
+**Questions.**
+
+| Question | Value | Holds |
+|---|---|---|
+| Q1 reproducible neighbourhoods (median W_m ≥ 0.7, total) | 0.670 | **no** |
+| Q2 rewiring confirmed in the atlases (ρ(D, D_atlas) ≥ 0.2, p ≤ 0.01) | ρ 0.297 (null 99% 0.037), p 0.001 | yes |
+| Q3 non-redundant with gradient divergence (\|ρ\| ≤ 0.5) | 0.377 | yes |
+| Q4 more replicated sets than chance | 1 rewired (Xenobiotic metabolism) and 1 conserved (mRNA processing), against 0.04 and 0.01 expected; the atlas calls only 1 set each way | yes, formally |
+
+- **Method verdict (frozen): "not shown useful".** Q1 fails narrowly, because the median gene's neighbourhood
+  reproduces at 0.67 between two mice.
+- **Other results:**
+  - Cross-species X is 0.49 in ours against 0.59 in the atlases.
+  - Residual co-expression (beyond position) reproduces as well as total within species (0.668), but crosses species
+    at near chance (0.515), and ρ(X residual, X atlas) is only 0.066.
+- **Rewiring agrees with gradient reversal.** Median D by notebook 90's categories:
+  - reversed 0.761 (31 genes);
+  - human only 0.397;
+  - mouse only 0.304;
+  - conserved 0.213;
+  - none 0.193.
+
+  Reversed against conserved: Mann–Whitney p < 10⁻¹⁰.
+- **Post hoc, genes reproducible in both species** (W_m and W_h ≥ 0.7; 868 genes):
+  - ρ(D, D_atlas) is 0.342 against a null of 0.080 (99%);
+  - ρ with gradient divergence is 0.278.
+  - **Rewired in both**, top decile of D in ours and in the atlases (25 genes): Dst, *Mme*, Gclm, *Sh3gl2*, *Lap3*,
+    Mgll, Plekha5, Napsa, *Hpgd*, Mfap3l, Atp6v1b2, Glg1, Aplp2, Ctsh, Slc16a9, Agpat3, Slc41a2, Ccdc88c, Larp4b,
+    *Slc17a3*, Acot12, Acox2, Ndfip2, *Ugt3a1*, Celsr1. Italics mark genes on notebook 90's independent list of
+    reversed gradients.
+  - **Conserved in both** (16 genes): Sptan1, Fam151a, Slc4a4, Itpr2, Apoe, Tpp1, Cotl1, Dpep1, Iyd, Gpx3, Tbx2, Lgmn,
+    Slc6a19, Slc7a8, Atp6v0c, Gnptg. These are core PT transport and handling genes; Slc7a8 is also a 90 "conserved"
+    gradient.
+- **Q5, residual modules.** The largest module (489 genes) is fatty-acid and xenobiotic metabolism (ORA fdr ~10⁻¹⁹).
+  Tubules at the same position co-vary in their lipid and drug-metabolism programs, a tubule-level program beyond
+  position. Its cross-species conservation is near chance (0.53).
+
+**What this answers.**
+1. **As a genome-wide method, co-expression conservation is not shown useful** by its frozen rule: the median gene's
+   neighbourhood reproduces between two mice at 0.67, below 0.7.
+2. **Where it is measurable, it confirms and extends the gradient comparison.**
+   - Species rewiring of a gene's partners replicates in independent atlases (ρ 0.30, and 0.34 for reproducible
+     genes).
+   - It is only moderately related to gradient divergence (0.28–0.38).
+   - It converges on the same genes: six of the 25 doubly rewired genes are reversed-gradient genes from notebook 90,
+     found by a different, level-free readout.
+3. **Pathway-level rewiring:** only xenobiotic metabolism replicates, consistent with notebooks 62 and 86's
+   rodent-expanded drug-metabolism families. This confirms 91's finding that species divergence is gene-level, not
+   pathway-level.
+4. **Use in the paper:** a supporting, level-free cross-check of the species gene lists, not a discovery method of its
+   own.

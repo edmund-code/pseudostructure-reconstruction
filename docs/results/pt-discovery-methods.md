@@ -36,6 +36,7 @@ names.
 | DESeq2 + ORA, whole PT or per segment (75) | Level differences | passes | – | hvm probe exposure 0.60–0.71 | Not for species; level only |
 | cameraPR or GSEA on raw T_spatial, ssGSEA, DE + signed GSEA (66, 75) | various | fail | – | – | Rejected |
 | Regulon activity (CollecTRI, ulm; 95) | Which regulators' targets change? | AKI 0.62 relabeled per call, against member sets' 0.34 | at chance (1.17×) | Mouse zonation regulons rarely carry to human | **Worse than member sets**; names are hypotheses only |
+| Co-expression conservation (Crow 2022's partner AUROC, level-free; 97) | Does a gene keep its co-expression partners across species? | within-species median 0.67 (bimodal) | rewiring replicates in the atlases (ρ 0.30; 0.34 for reproducible genes) | reversed-gradient genes most rewired; only xenobiotic metabolism rewired at set level | Not shown useful genome-wide; **supporting level-free cross-check** of species gene lists |
 | Signalling footprints (PROGENy, ulm; 95) | Which signalling pathways act? | 3 AKI calls | EGFR, MAPK, PI3K replicate (z 5.3–7.8) | KEGG ErbB and MAPK miss them; footprints miss p53, hypoxia, JAK-STAT | **Add-on for signalling only** |
 | Published programs re-read (79–82) | Do published findings hold along our PT? | per program | AKI programs replicate 2.0× at 12 h (94, Kirita's own excluded) | – | Hypothesis-driven checks; keep |
 
@@ -71,9 +72,6 @@ names.
 
 1. **Spatial repair niches.** Cell-cycle and transport-loss residuals cluster among neighbouring tubules beyond
    position and depth (96, secondary). A frozen test of niche structure, and of what neighbours share, is the follow-up.
-2. **Co-expression conservation across species.** It is level-free, so probe panels do not matter (Crow & Gillis-style
-   neighbour voting). Species differences were gene-level, not pathway-level (91), so gene neighbourhoods may show
-   rewiring that sets cannot.
-3. **Human injury states (KPMP aPT, dPT) as a second external benchmark** for the AKI calls, across species.
-4. **Time-point projection:** where along Kirita's time course each of our programs sits (12 h for level, 2 d for the
+2. **Human injury states (KPMP aPT, dPT) as a second external benchmark** for the AKI calls, across species.
+3. **Time-point projection:** where along Kirita's time course each of our programs sits (12 h for level, 2 d for the
    cell cycle).

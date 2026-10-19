@@ -58,6 +58,7 @@ Notebook 107 (position-resolved differential variability under injury) is in `pt
 Notebook 108 (disease genetics and drug targets along the PT) is in `pt-disease-genetics.md`.
 Notebook 109 (a cell-type specificity filter for neighbour-structure markers) is in `pt-neighbour-marker-filter.md`.
 Notebook 110 (repair niches of proliferating and transport-losing tubules) is in `pt-repair-niches.md`.
+Notebook 111 (the androgen program and the loss of S3 identity after IRI) is in `pt-androgen-s3.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

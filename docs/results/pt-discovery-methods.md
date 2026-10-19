@@ -68,6 +68,7 @@ names.
 | Disease genetics and drug targets along the axis (PanelApp, GWAS Catalog, literature positions; 108) | Mendelian proximal-tubulopathy genes sit toward S1 in both species (mean E −1.47 / −0.56, beyond matched nulls); GWAS transporter sets no more graded than transporters; 25 of 27 literature positions reproduced, incl. OCT2 S3-rising in mouse but flat in human; distal-disease genes graded inside PT units are neighbour RNA that survives the core rebuild (a limit of 104) | **Useful**: hypothesis-driven, checkable validation and translational biology |
 | Neighbour-marker filter (atlas specificity in Kirita and KPMP, combined with 104's edge enrichment; 109) | Atlas rule alone flags 7–28% of lists (near the null); with edge enrichment, 0–8% are suspect, mostly thick-limb and collecting-duct genes at the human S3 end (SLC12A1, UMOD, EGF, KCNJ1, AQP2); handoffs, literature positions, programs and mouse reversed genes are clean; the two checks agree (AUC 0.65, 0.78) | **Keep as a standard filter** before publishing gene lists |
 | Repair-niche models (neighbour injury and lineage-resolved peritubular pools, stratum-preserving permutation, touching-pair split; 110) | No niche: neighbours' injury and interstitial lineages do not predict proliferation beyond position and depth (fibroblast niche absent); IR proliferation clustering (Moran 0.36–0.43) is the late-S3 wave; transport loss is shared by touching neighbours only (k 3) | **Useful negative**: separates position from neighbourhood; raw Moran's I misleads |
+| Causal instrument for a hormone program (per-segment Ar knockout tables; matched nulls, a gradient-adjusted regression, an external male-against-female test; 111) | AR-maintained S3 genes fall 0.33 log2 beyond matched genes, and the knockout effect predicts the injury change beyond gradient and transport; the fall is male-specific in an independent dataset; no switch to the female program; the extra loss is early (4–12 h) and gone by 2 d | **Useful**: splits the S3 loss into a sex-independent part and a male AR program; use knockout sets, not sex-bias lists |
 
 ## Current recommendation (2026-10-18)
 
@@ -92,4 +93,4 @@ names.
 ## Still to try (queue)
 
 1. **Spatial repair niches:** done (notebook 110; no niche at tubule resolution 12 h–2 d).
-2. **Androgen program and S3 identity:** literature review running; frozen test next.
+2. **Androgen program and S3 identity:** done (notebook 111).

@@ -125,3 +125,59 @@ This list is canonical and was chosen without a literature check; it is descript
 - GSE144622 female PT responds much less at 24 h (497 against 4,101 genes), which is why P4 uses a difference in
   differences against matched controls.
 - Our IR effect is a level change over the whole PT. Position is reported, not modelled.
+
+## Notebook 111 results
+
+`analysis/notebooks/111_pt_androgen_s3.ipynb` (logic `111.androgen_s3.1`) writes to `results/pt_androgen_s3/`. It
+followed the protocol frozen in f7ce719 and ran in 10 s.
+
+**Guards.**
+- G1: Ar is the top S3 knockout gene (log2FC −8.59). AR-maintained and AR-repressed genes per segment: S1 18 and 25,
+  S2 200 and 153, S3 306 and 387.
+- G2: 10,301 genes are in both notebook 91 and the S3 knockout table: 186 AR-maintained and 244 AR-repressed.
+- G3: Kirita PTS3 pseudobulks hold 16 of 18 mice with at least 30 PTS3 nuclei, 281 AR-maintained genes and 235
+  matched identity genes.
+- G4: the sign of GSE144622 is confirmed (Ddx3y +5.6 male-high), with 23,856 genes in both injury contrasts.
+
+| Test | Result | Holds |
+|---|---|---|
+| **P1 AR-maintained S3 genes fall** | mean L **−0.47**, against a gradient- and abundance-matched null of −0.14 (5th percentile −0.24) and relabelings +0.05 and −0.02 | **yes** |
+| P1 AR-repressed S3 genes rise | +0.03 against a null of −0.05 (95th percentile 0.03); relabeling R1 +0.07 | **no** |
+| P1 switch to the female program | | **no** |
+| P1, S2 sets (secondary) | AR-maintained −0.81 (null −0.24); AR-repressed **+0.34** (null 95th percentile 0.18; relabelings +0.09 and −0.10) | descriptive |
+| **P2 knockout effect predicts the injury effect beyond gradient, abundance and transport** | coefficient **0.107** (p 0.0005; null 95th percentile 0.022); relabelings 0.004 and −0.004 | **yes** |
+| P3 Kirita gap (AR genes minus matched identity genes, in PTS3 nuclei) | 4 h −0.40, 12 h −0.58, 2 d −0.11, 14 d −0.04, 6 wk +0.39 | **no**: present at 4 h, gone by 2 d |
+| **P4 male-specific fall in GSE144622 at 24 h** | AR-maintained S3: male −0.31 (matched null +0.07, 5th percentile −0.01); female +0.02 (null +0.03); difference in differences −0.37 | **yes** |
+| P5 glucocorticoid-response genes, L | Fkbp5 +0.15; Tsc22d3 −1.33, Zbtb16 −2.03, Dusp1 −1.71, Sgk1 −1.30, Klf9 −0.96, Per1 −0.56, Errfi1 −0.28 | descriptive |
+
+**Genes.**
+- The AR-maintained genes that fall most are Slc7a13 (−4.56), Acsm3 (−3.96), Slco1a1 (−3.64), Slc22a22 (−3.20),
+  Cyp2e1 (−2.62) and Slc22a30 (−2.51).
+- Among AR-repressed genes, those that rise most are injury and fasting genes (Spp1, C3, Pdk4, Cyp4a14), while others
+  fall (Cyp2d12, Dpys, Scd1). This is the injury confound the review warned about.
+
+**What this answers.**
+1. **Part of the S3 identity loss in our male mice is the loss of the AR-maintained male program.**
+   - AR-maintained S3 genes fall about 0.33 log2 more than genes with the same control gradient and expression.
+   - The knockout effect predicts each gene's injury change after gradient, abundance and transport membership are
+     accounted for, and the relabelings give no such effect.
+   - In an independent experiment (GSE144622, sorted PT at 24 h), the same genes fall in male mice and not in female
+     mice.
+2. **It is not a switch to the female program.** The AR-repressed S3 set does not rise as a whole. Its rising members
+   are injury and fasting genes, and the S2 set's rise is secondary only.
+3. **It does not look like a slow hormone withdrawal.**
+   - In Kirita's identity-retaining PTS3 nuclei, the extra loss of AR-maintained genes is already there at 4 h
+     (−0.40) and 12 h (−0.58).
+   - It is nearly gone at 2 d and 14 d, while testosterone stays low after injury (Soljancic 2013).
+   - So the early, male-specific loss looks like an acute shutdown of androgen-dependent S3 genes beside the
+     sex-independent identity loss.
+   - The loss of AR regulon activity in Kirita's own output fits this.
+4. **The glucocorticoid-response genes fall rather than rise** (Tsc22d3, Zbtb16, Dusp1, Sgk1, Per1, Klf9), so there is
+   no sign of a stress-steroid surge at harvest. Several of these genes are also circadian, like the clock genes in
+   notebook 91, so a time-of-day difference between the groups remains possible.
+5. **For the paper:**
+   - The S3 loss after injury has two separable parts: a sex-independent loss of late-PT identity, seen in female
+     mice too (Dixon 2022), and, in males, an additional loss of the AR-maintained S2/S3 program.
+   - Male-only cohorts, like ours and Kirita's, mix the two.
+   - S3 markers that depend on AR (Slc7a13, Cyp7b1, Slco1a1, Acsm3) should not be used as sex-neutral identity
+     markers after injury.

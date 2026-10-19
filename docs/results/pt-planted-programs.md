@@ -78,3 +78,50 @@ counts had been seen; no grouping of its calls had been computed.
 - Only the positional F-test's calls are grouped. Notebook 93's driver rule exists for clustering too, but would need
   clustering's per-list overlap genes for every replicate.
 - The planted programs are disjoint by construction. Real programs overlap, so separation here is an upper bound.
+
+## Notebook 102 results
+
+`analysis/notebooks/102_pt_planted_programs.ipynb` (logic `102.planted_programs.1`) writes to
+`results/pt_planted_programs/`. It followed the protocol frozen in 81b1dd0.
+- G1–G2 passed.
+- G4 passed: the rebuilt F-test calls equal notebook 100's on all 8 checked replicates, with the same planted sets.
+- 128 planted replicates (2 arms × 4 scenarios × 2 amplitudes × 8).
+- The first run's figure call used a renamed matplotlib argument. It was fixed before execution, and the results are
+  unchanged.
+
+**Baseline (29 calls, no planting):** NONE 29 programs, RED 27, OVL 20, NET 7.
+
+**At A = 1** (means over 8 replicates; separation 1 = each called planted set in its own program):
+
+| Arm · scenario | Calls | Programs NONE / RED / OVL / NET | False programs RED / OVL / NET | Separation RED / OVL / NET | Calls inside true programs, NET |
+|---|---|---|---|---|---|
+| 15 sets · shape | 690 | 690 / 437 / 112 / 9.5 | 422 / 97 / **2.6** | 1.00 / 1.00 / 0.46 | 0.96 |
+| 15 sets · located | 660 | 660 / 406 / 108 / 9.6 | 391 / 93 / **1.8** | 1.00 / 1.00 / 0.52 | 0.98 |
+| 15 sets · bump | 689 | 689 / 438 / 116 / 9.0 | 423 / 101 / **1.8** | 1.00 / 1.00 / 0.48 | 0.95 |
+| 3 sets · shape | 244 | 244 / 155 / 53 / 7.9 | 152 / 50 / **5.3** | 1.00 / 1.00 / **0.88** | 0.66 |
+| 3 sets · located | 196 | 196 / 140 / 46 / 9.1 | 137 / 43 / **6.3** | 1.00 / 1.00 / **0.96** | 0.66 |
+| 3 sets · bump | 234 | 234 / 163 / 52 / 8.6 | 160 / 49 / **5.9** | 1.00 / 1.00 / **0.92** | 0.63 |
+
+The F-test calls no planted set in the level scenarios, so those rows hold the baseline calls only.
+
+**Readings (frozen rule: the fewest false programs with separation ≥ 0.8).**
+- **Low dose (3 sets, the dose of one or a few programs):** NET wins every scenario at both amplitudes. Hundreds of
+  called sets become 8–9 programs.
+  - The planted programs stay separate (0.83–1.0).
+  - About 5–7 false programs remain. That is the baseline's own 7 NET programs, so NET adds almost nothing beyond the
+    baseline.
+- **Heavy dose (15 sets):** OVL wins by the rule. NET collapses about 690 calls into 9–10 programs with only 2–3 false
+  ones, but it merges the 15 planted programs (separation 0.46–0.52). RED and OVL keep planted sets apart but leave 93–420
+  false programs.
+
+**What this answers.**
+1. **Counting called sets overstates findings by one to two orders of magnitude.** Every grouping helps, and RED, the
+   grouping used so far, helps least: it removes about 40% of the spilled calls.
+2. **Driver-gene networks (NET) are the best way to read a call list at realistic doses.** They recover one program
+   per planted program and add almost no false programs beyond the baseline. This upgrades notebook 93's verdict on
+   NET, which was "mixed, settings-sensitive" without a truth.
+3. **NET's limit:** when many strong programs change at once, it merges distinct programs. OVL keeps them apart at the
+   cost of about 6 false programs per planted program. Read NET's programs beside OVL's when a contrast is very strong,
+   as the AKI condition is.
+4. **For the paper:** report positional F-test calls as NET programs, with OVL as the finer view. Never quote raw set
+   counts as numbers of findings.

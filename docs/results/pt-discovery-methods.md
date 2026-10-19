@@ -46,6 +46,7 @@ names.
 |---|---|---|
 | Overlap programs (75) and redundancy clusters (71) | Groups of calls sharing genes | Current grouping; F-test calls not coherent beyond chance |
 | Pathway networks (scoranet's Jaccard + Leiden, with positional additions; 93) | 1.1–3.9× fewer programs, coherent beyond chance | Settings-sensitive; **descriptive layer**, shown with its sweep |
+| Groupings scored against a planted truth (RED, OVL, NET; 102) | Planted programs spill into 200–690 called sets; NET returns 8–10 programs with ≈ the baseline's false programs and keeps 1–3 planted programs separate (0.88–0.96), but merges 15 strong programs (0.5); OVL separates always but leaves ~6 false programs per planted one; RED removes only ~40% of spill | **NET is the best grouping at realistic doses; OVL beside it for very strong contrasts; never count raw sets** |
 | Gene shape classes against segment steps (90 A) | Continuous favoured for 28% of non-flat genes against 3% for steps | Supports continuous over discrete at gene level |
 | Positional information decoders (90 C) | 26 single pathways localise a unit better than its label | Novel methods number; keep |
 | Change density along the axis (90 E) | Change concentrates beside, not at, the label transitions | Descriptive; keep |

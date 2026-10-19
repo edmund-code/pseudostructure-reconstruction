@@ -10,6 +10,7 @@ the edge, so a statistic can be recomputed on the interior bins only.
 * ``unit_aggregate``: units x genes sums of the bins kept.
 * ``size_matched_sample``: for each unit, as many of its bins, drawn uniformly, as a given mask keeps in it.
 * ``contact_share``: per unit, the share of its edge bins touching each neighbour class.
+* ``peritubular_ring``: for each bin outside every polygon, the nearest polygon's label within a distance (notebook 110).
 * ``class_markers``: genes much higher in a reference profile than in the PT interior (and than other references).
 * ``nonnative_fraction``: the share of a unit's counts attributable to a class from its marker share.
 * ``log_cp10k``, ``end_contrast``: pooled log2 CP10k and the late-minus-early contrast of pooled units.
@@ -134,3 +135,15 @@ def end_contrast(counts, x, *, lo=.3, hi=.7, pseudo=.5):
     x = np.asarray(x, float)
     m = sparse.csr_matrix(counts)
     return log_cp10k(m[x >= hi], pseudo) - log_cp10k(m[x <= lo], pseudo)
+
+
+def peritubular_ring(rows, cols, labels, *, max_dist=3.0):
+    """For each bin with label -1 (in tissue, no polygon): the label of the nearest polygon bin if it lies within
+    ``max_dist`` bins, else -1. Bins inside polygons get -1."""
+    rows, cols, labels = (np.asarray(v) for v in (rows, cols, labels))
+    grid = _raster(rows, cols, labels)
+    dist, (ir, ic) = ndimage.distance_transform_edt(grid < 0, return_indices=True)
+    r, c = rows + 1, cols + 1
+    nearest = grid[ir[r, c], ic[r, c]]
+    out = np.where((labels == -1) & (dist[r, c] <= max_dist), nearest, -1)
+    return out.astype(int)

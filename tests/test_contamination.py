@@ -58,3 +58,12 @@ def test_contact_markers_fraction_and_contrast():
     with np.errstate(divide='ignore'):
         e = ct.end_contrast(m, [0., .1, .9, 1.], pseudo=0)
     assert e[0] == pytest.approx(-2) and np.isposinf(e[1])         # late pool: 5 of 20 counts; gene 1 absent early
+
+
+def test_peritubular_ring():
+    rows, cols, labels = _two_squares()
+    ring = ct.peritubular_ring(rows, cols, labels, max_dist=2)
+    at = lambda i, j: ring[(rows == i) & (cols == j)][0]
+    assert at(0, 5) == 0 and at(5, 0) == 0                 # outside bins one step from the big square
+    assert at(5, 14) == 1 and at(5, 15) == -1              # 2 bins and 3 bins from the small square
+    assert (ring[labels >= 0] == -1).all()                 # bins inside polygons are not ring bins

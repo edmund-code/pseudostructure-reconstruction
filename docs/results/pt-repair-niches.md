@@ -131,3 +131,75 @@ predictor of interest among units within position-decile × depth-tercile strata
   counts.
 - Two IR mice. The late-S3 interstitial rise is seen in one (IR2A2).
 - T and B cells are not measurable (Cd3e and Ms4a1 are about 0), and are not tested.
+
+## Notebook 110 results
+
+`analysis/notebooks/110_pt_repair_niches.ipynb` (logic `110.repair_niches.1`) writes to `results/pt_repair_niches/`. It
+followed the protocol frozen in 5e3df08 and ran in 49 s from cache. Processing the bins took about 2 min.
+
+**Guards.**
+- G1: 14,048 units carry notebook 96's scores.
+- G2: all lineage and hypoxia markers are on the panel.
+- The pixel size is 0.441 µm in every specimen.
+
+**How the protocol was read.**
+- Residuals for G2M, E2F, hypoxia and core CYC follow notebook 96's recipe.
+- Predictors are z-scored within each mouse.
+- The stratified permutation keeps each position-decile × depth-tercile stratum, so in IR mice the null for a
+  neighbour term is centred away from 0. The test asks whether neighbours add to what strata already explain.
+
+| Reading | Ctrl1A2 | Ctrl1A4 | IR2A2 | IR2A4 | Holds |
+|---|---|---|---|---|---|
+| D1 neighbour injury → own CYC, k 3 (null 95%) | +0.03 | +0.02 | −0.08 (0.05 to 0.11) | +0.11 (0.14 to 0.18) | **no** (also at k 6, 12, 24) |
+| D1 neighbour injury → own transport, k 3 (null 95%) | −0.01 | −0.00 | **−0.30** (−0.23 to −0.17) | **−0.12** (−0.11 to −0.06) | k 3 yes, k 6 no: **not met** |
+| D2 fibroblast pool → CYC | +0.03 | +0.05 | −0.03 | −0.05 | **no** (expected winner) |
+| D2 myeloid pool → CYC | +0.08 | +0.03 | +0.05 | +0.02 | same in controls |
+| D2 neutrophil pool → CYC | −0.01 | +0.02 | −0.03 | +0.02 | null |
+| D2 endothelial pool → CYC | +0.06 | +0.08 | +0.04 | +0.03 | same in controls |
+| D2 own hypoxia → CYC | +0.23 | +0.19 | +0.18 | +0.14 | same in controls |
+| D3 non-touching neighbour injury → CYC | −0.01 | +0.01 | −0.14 | +0.07 | **no** |
+| Moran's I of CYC, all pairs → without touching pairs | 0.06 → 0.03 | 0.08 → 0.04 | 0.36 → 0.33 | 0.43 → 0.41 | descriptive |
+| Moran's I of transport | 0.05 → 0.02 | 0.06 → 0.03 | 0.38 → 0.35 | 0.14 → 0.12 | descriptive |
+
+**Controls.**
+- **C1 · CYC is epithelial.**
+  - The CYC genes are not edge-enriched (median ε 0.02–0.05).
+  - CYC rebuilt from interior bins tracks the full score (ρ 0.81–0.85).
+  - D1 on core CYC gives the same null.
+- **C2 · Entry and division look alike.**
+  - E2F and G2M residuals both rise from mid-PT to late S3: E2F to 0.86–0.91 and G2M to 0.61–0.62 at x 0.7–0.9, from
+    0.03–0.17 at x 0.2–0.4.
+  - Neither half has a neighbour effect.
+- **C3 · Timing.**
+  - Mki67 is detected in 15–18% of IR units against 1.4–1.7% in controls; Top2a in 15–19% against 0.9%.
+  - Proliferation is under way, which places our mice in the later part of the 12 h–2 d window, as notebook 99
+    inferred.
+
+**What this answers.**
+1. **There is no repair niche at tubule resolution 12 h–2 d after IRI.**
+   - A tubule's proliferation is not predicted by its neighbours' injury once its own injury, position and depth are
+     known. The IR coefficients sit inside or below the stratum-preserving null, with opposite signs in the two mice.
+   - Non-touching neighbours carry nothing.
+   - No interstitial lineage in the peritubular pool marks proliferating tubules beyond what it does in the controls.
+     The predicted fibroblast niche is absent (slightly negative in IR).
+   - This fits the literature:
+     - clones do not cluster across tubules (Rinkevich 2014, Berger 2014);
+     - macrophage dependence starts at day 3–7 (Lee 2011, Lin 2010);
+     - Xuanyuan 2025 saw every neighbourhood's cell-cycle score rise together at day 2.
+2. **The strong spatial clustering of proliferation in IR is position, not neighbourhood.**
+   - Moran's I is 0.36–0.43 against 0.06–0.08 in controls.
+   - Both cell-cycle halves rise toward late S3, the outer-stripe wave that Witzgall 1994 and Humphreys 2008
+     describe.
+   - Removing touching pairs barely changes I. Notebook 96's excess clustering beyond position strata (0.08–0.11) is
+     therefore small next to this positional component.
+3. **Transport loss has a short-range component.** Touching neighbours share it beyond position and depth in both IR
+   mice (k 3: −0.30 and −0.12), but not at k 6. This is consistent with:
+   - all-or-none dedifferentiation per tubule (Witzgall 1994);
+   - downstream injury within a nephron (Bordoni 2023);
+   - adjacent sections of one tubule.
+   It is not a tissue niche.
+4. **Hypoxia, myeloid and endothelial RNA covary with both programs in every mouse, controls included.** These are
+   shared tubule-quality or composition factors, not injury niches.
+5. **As a method:** an explicit neighbour model with stratum-preserving permutation, a touching-pair split and
+   lineage-resolved peritubular pools separates position from neighbourhood. A raw Moran's I would have read the
+   positional proliferation wave as a niche.

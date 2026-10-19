@@ -229,3 +229,23 @@ The contamination-sensitive genes look like what the test should catch.
 5. **For the paper:** a methods paragraph and a supplementary figure.
    - The bin-level core rebuild is a general check for any segmentation-aggregated Visium HD analysis.
    - It can say "our gradients are not neighbour RNA" with numbers.
+
+## Literature context (added after the run)
+
+These papers were read in full by the methods scout (`docs/research/methods-scout-contamination-networks-variability-evolution.md`)
+after the protocol was frozen. None changed the analysis.
+- **Visium HD diffusion is short-range** (Oliveira et al. 2025, Nat Genet, Fig. 2e, colon FFPE):
+  - 1.0–1.7% of marker UMIs fall in the adjacent mask;
+  - mislocalised UMIs move a median 3–6 µm.
+  - Our core rule (≥ 6 µm inside the edge) sits just beyond that median. Our edge-to-core ratio of 2–4× matches a
+    signal concentrated in the outer 2 µm.
+- **Spillover can create false positional biology** (Mitchel et al. 2026, Nat Genet, preprint read). Goblet cells
+  "up-regulate" stem and transit-amplifying markers in crypts and enterocyte markers on villi. This is the
+  precedent for the risk tested here.
+- **Swapped transcripts decay across boundaries like gradients** (Ni et al. 2022, Nat Commun, SpotClean; Visium v1).
+  Decontaminating Visium counts with SoupX or DecontX creates false spatial patterns. This supports diagnosing by
+  rebuilding units rather than correcting the counts.
+- **Further checks the scout proposes** (not run):
+  - a neighbour-expression covariate in the gene model (smiDE, Vasconcelos et al. 2026);
+  - an overlap-ratio filter;
+  - a planted-contamination arm at 1–4%.

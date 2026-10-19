@@ -26,6 +26,24 @@ Frozen on 2026-10-18, before any expression statistic of either dataset was comp
 - median UMI per spot is 11–27k for the quiescent and 12 h sections, and 1.1–15k on day 1, where two sections are
   shallow.
 
+## Amendment 1 (2026-10-18, before any R statistic was computed)
+
+The frozen PT-dominance rule (PT weight ≥ 0.6) selects **no spot** in the three 12 h sections. It selects 0–503 spots
+elsewhere (≥ 0.75: 0–93).
+
+Diagnostic (weights only; no expression statistic was computed):
+- The NNLS weights put 32–48% of every section on the immune type, quiescent kidneys included.
+- They put almost nothing on PTS1 (≤ 0.01).
+- Nuclei profiles and whole-tissue Visium spots differ, so absolute weights are not purities.
+- Their ranking within a section still orders spots by how PT-like they are, injured PT (NewPT) included.
+
+**Changed:**
+- A PT-dominant spot is now one in the **top 40% of its section by PT weight** (PTS1 + PTS2 + PTS3 + NewPT).
+- The sensitivity arm is the top 25%.
+
+Everything else is unchanged. The deconvolution position x_seg stays as the frozen sensitivity position. With PTS1
+near 0, it reduces in practice to the S3 share of S2 + S3. The positional gene rule leaves 24 early and 19 late genes.
+
 ## 1 · Labels and inputs
 
 - Notebook `analysis/notebooks/105_pt_external_spatial_iri.ipynb`; logic `105.external_spatial.1`; seed 105.

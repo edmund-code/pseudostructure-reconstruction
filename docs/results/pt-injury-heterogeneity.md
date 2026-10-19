@@ -123,7 +123,7 @@ universe holds 10,198 genes.
   - TPT: −0.83 and 0.10.
   - INJ: 0.22 and −0.20. INJ's p(1 − p) is near 0 everywhere, because almost all units respond.
 - **Global variability:** under injury, the dispersion trend at a mean of 1 count per unit is higher by 0.41 log units
-  on average (bins: +0.20 to +0.75). All genes vary more between tubules in IR. This may be biological or technical
+  on average (bins: +0.20 to +0.61). All genes vary more between tubules in IR. This may be biological or technical
   (section quality), and it is removed from the gene and program readings.
 - **R3, genome-wide:** 549 genes up and 668 down beyond both relabelings, against 462–496 per direction for each
   relabeling. That is a modest 1.2–1.4× excess. The top genes are noisy single genes and are not interpreted.

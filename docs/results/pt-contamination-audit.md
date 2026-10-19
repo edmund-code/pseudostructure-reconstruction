@@ -249,3 +249,14 @@ after the protocol was frozen. None changed the analysis.
   - a neighbour-expression covariate in the gene model (smiDE, Vasconcelos et al. 2026);
   - an overlap-ratio filter;
   - a planted-contamination arm at 1–4%.
+
+## A limit found later (notebook 108, post hoc)
+
+Distal-disease genes graded inside PT units follow the neighbours, yet their gradients survive the core rebuild:
+- SLC12A1 is late in both species;
+- SLC12A3 is early in mouse;
+- AQP2, KCNJ1 and SCNN1A are late in human.
+
+They are edge-enriched (human ε 1.0–1.8). So for highly expressed neighbour markers, core survival does not prove PT
+origin: enough RNA reaches 6 µm inside the polygon, or the polygon includes neighbour cells. Any gene-level claim
+should also pass a specificity filter, meaning it should not be a neighbour-structure marker in an external atlas.

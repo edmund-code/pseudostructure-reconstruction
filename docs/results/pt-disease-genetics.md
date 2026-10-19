@@ -103,3 +103,95 @@ expression decile (`matched_means`).
   - SLC22A11 (OAT4) has no mouse ortholog;
   - human MATE2-K has no separate mouse gene;
   - mouse Slc2a9 is distal.
+
+## Notebook 108 results
+
+`analysis/notebooks/108_pt_disease_genetics.ipynb` (logic `108.disease_genetics.1`) writes to
+`results/pt_disease_genetics/`. It followed the protocol frozen in f5cfe25 and ran in 4 s.
+
+**Sets** (all genes / in the 1:1 universe):
+
+| Set | Genes | In universe |
+|---|---|---|
+| PROX | 28 | 23 |
+| DIST | 20 | 11 |
+| eGFR | 688 | 295 |
+| URATE | 328 | 144 |
+| UMET | 467 | 200 |
+| Transporters | 527 | 237 |
+| UMET transporters | 47 | 24 |
+| eGFR transporters | 26 | 15 |
+
+**How the protocol was read.**
+- Panel genes are matched on the HGNC symbol.
+- GWAS mapped-gene strings are split on commas, semicolons and " - ".
+- Curves are notebook 71's specimen curves in log2, averaged within a species.
+- Post hoc (section 3.1): notebook 104's edge enrichment and core verdicts are joined for the DIST genes and the H4
+  misses.
+
+| Test | Mouse | Human | Holds |
+|---|---|---|---|
+| **H1** mean E of Mendelian proximal tubulopathy genes (null 5–95%) | **−1.47** (−0.25 to 0.35) | **−0.56** (−0.28 to 0.03) | **yes, both species** |
+| PROX share graded | 0.70 (null ≤ 0.39) | 0.43 (≤ 0.26) | descriptive |
+| DIST share graded | 0.45 (≤ 0.36) | 0.36 (≤ 0.27) | descriptive: above the null (see below) |
+| **H2** mean \|E\| of urine-metabolite GWAS transporters, among transporters | 1.28 (0.70–1.55) | 0.64 (0.39–0.83) | **no** |
+| eGFR GWAS transporters (comparator) | 1.31 (0.61–1.69) | 0.77 (0.33–0.95) | descriptive |
+| **H3** urate GWAS genes reversed or species-only | 0.076 (null 0.03–0.09) | | **no** |
+| **H4** named positions | 25 of 27 met; 2 missed | | |
+
+**H4, gene by gene.**
+- **Met, both species:**
+  - SGLT2 (SLC5A2) is early;
+  - SLC7A13 and SLC22A7 are late;
+  - OAT1 and OAT3 (SLC22A6, SLC22A8) peak inside the axis and fall at the S3 end;
+  - LRP2 and CUBN are not graded, though their protein and function are S1-weighted;
+  - GATM and NBCe1 (SLC4A4) are early, and EHHADH is not early.
+- **Met, one species:**
+  - SLC3A1 is late in mouse;
+  - SLC5A11 is late in human (Schlosser 2020's S3 claim);
+  - URAT1 (SLC22A12) is late in human;
+  - OCT2 (SLC22A2) is late in mouse and **not graded in human**, the predicted species divergence.
+- **Missed:**
+  - SLC3A1 in human is not graded (E +0.45, just short);
+  - mouse Glut9 (Slc2a9) is graded early (E −0.92), though Preitner 2009 placed the protein in the DCT and CNT.
+    Its PT signal is not edge-enriched (ε −0.14, 0.19), so it is PT mRNA rather than neighbour RNA.
+
+**PROX genes, in detail.**
+- Early in both species: SLC2A2, SLC34A3, SLC4A4, SLC5A2, SLC6A19, SLC7A7, SLC7A9 and GATM.
+- Early in mouse only: ALPL, CTNS, SLC34A1 and AMN.
+- Late: EHHADH and SLC3A1 (mouse) and HNF1B (both species).
+- Not graded: LRP2, CUBN, HNF4A, OCRL, CLCN5 and VDR.
+
+**Post hoc: the distal genes graded inside PT units are neighbouring-structure RNA.**
+- The pattern follows the neighbours:
+  - SLC12A1 (NKCC2, thick limb) is late in both species;
+  - SLC12A3 (NCC, DCT) is early in mouse;
+  - AQP2, KCNJ1 and SCNN1A are late in human.
+- Each matches who lies next to S3 (outer-stripe thick limbs and collecting ducts) and next to S1 (DCT in the
+  cortical labyrinth).
+- These genes are edge-enriched (human ε 1.0–1.8). Yet their gradients survive notebook 104's core rebuild.
+- **This is a limit of notebook 104:**
+  - For neighbour genes expressed at very high levels, enough RNA reaches 6 µm inside a PT polygon (or the polygon
+    includes neighbour cells) for the gradient to persist in the core.
+  - So core survival is necessary but not sufficient evidence of PT origin.
+  - The check needs a gene-specificity filter as well (a neighbour marker in an external atlas).
+
+**What this answers.**
+1. **The genes of inherited proximal tubulopathies sit toward S1 in both species.**
+   - Their mean gradient is far below an expression-matched null (mouse −1.47, human −0.56).
+   - So the Mendelian genetics of PT failure concentrates where the PT's transport capacity is largest. This is the
+     long-held physiological claim (Zhuo & Li 2013), now shown on gene expression along a continuous axis in human.
+   - The exceptions are informative. EHHADH points toward S3, which fits Forst 2021. The endocytic receptors are
+     flat in mRNA.
+2. **Kidney-trait GWAS genes have no positional signature beyond what transporters already have.**
+   - Urine-metabolite and eGFR transporters are as graded as other transporters. Notebook 101 showed transporters as
+     a whole are graded 2–3 times more often than other genes.
+   - Urate genes do not change pattern between species more than chance.
+3. **The literature's single-gene positions are reproduced, 25 of 27, from an unsupervised axis.** This includes
+   two species-specific predictions:
+   - OCT2 (the cisplatin uptake transporter) rises toward S3 in mouse but is flat in human. This qualifies the
+     rodent-based account of cisplatin's S3 toxicity for human.
+   - URAT1 and SLC5A11 rise toward S3 in human.
+   - Both are concrete, citable "micro-gradients in solute handling" with pharmacological relevance.
+4. **As a method:** a frozen list of literature predictions scored on the continuous axis is a strong, cheap
+   validation. Reviewers can check each line, and the misses are informative.

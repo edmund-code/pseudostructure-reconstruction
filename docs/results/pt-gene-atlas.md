@@ -262,8 +262,7 @@ more likely to be a gene the field has already named than a gene drawn at random
 - **The AKI strict core is one coherent program:** peroxisomal and mitochondrial fatty-acid and amino-acid
   catabolism falling together with S2/S3 identity — Csad, Pank1, Fmo5, Amacr, Dao, Crot, Agps, Scp2, Acadm, Abat,
   Hgd, Haao, Kyat3, Mccc1, Acy3, Glyat, Aldh1l1, Pipox, Cth, Grhpr, Aspa — against a small induced set (Anxa2,
-  Anxa3, Krt8, Tgm2, Zwint, Stmn1, Cdk2). Of the 57 genes at ≥ 7 lines, the most common injury location is **at the
-  S2/S3 boundary**, not inside S3.
+  Anxa3, Krt8, Tgm2, Zwint, Stmn1, Cdk2).
 - **The species strict core is a reversal list:** Slc16a9, Lap3, Mme, Hpgd, Slc17a3, Slc5a12, Slc27a2, Vnn1,
   Acot12, Gclm, Napsa, Slc9a8, Slc38a10, Slc6a6, Abcc4, Pdk4, Sfxn4, Spats2l, Pitpnc1, Larp4b, Ninl, Sulf2,
   Tmem243 — 12 of the 23 carry a mouse gradient that the human does not share (zonation class "reversal" or
@@ -274,6 +273,20 @@ more likely to be a gene the field has already named than a gene drawn at random
   peroxisomal or sulfur-amino-acid enzymes), which is a hint that "unanchored" here means under-curated rather
   than novel.
 
+**Where the best-supported genes change (post hoc, from `aki_atlas.csv.gz`).** The share of each injury location
+among all genes carrying one, and among the core lists:
+
+| injury location | background | k ≥ 3 | k ≥ 5 | k ≥ 6 | k ≥ 7 | k ≥ 7 vs background |
+|---|---|---|---|---|---|---|
+| inside S1 | 30.4% | 23.1% | 18.6% | 17.0% | 12.5% | **0.41×** |
+| at S1/S2 | 24.5% | 21.4% | 14.8% | 14.2% | 6.2% | **0.25×** |
+| inside S2 | 26.0% | 28.5% | 29.3% | 27.0% | 15.6% | 0.60× |
+| at S2/S3 | 10.8% | 14.4% | 18.6% | 18.4% | 37.5% | **3.48×** |
+| inside S3 | 8.2% | 12.6% | 18.8% | 23.4% | 28.1% | **3.41×** |
+
+The convergence ranking was built from gene-level calls that carry no position of their own, so this is an
+independent recovery of the late-PT weighting of injury.
+
 ### What this answers
 
 1. **The convergence count is a usable quality score, and it should be read at k ≥ 5, not k ≥ 3.** It survives the
@@ -282,8 +295,11 @@ more likely to be a gene the field has already named than a gene drawn at random
 2. **There is no single best screen; there are two.** The positional F-test finds the most, the level and location
    screens are right most often, and they overlap at phi 0.17–0.28. Running both and intersecting is what the atlas
    actually rewards — which is what the scoreboard already recommends, now with a gene count attached.
-3. **The S2/S3 boundary, not S3, is where the strongest AKI genes are located.** 57 genes carried by seven or more
-   independent lines put their change at or around the S2/S3 transition.
+3. **Convergence recovers the late-PT weighting of injury without a new fit.** Among all genes with a location,
+   10.8% are at the S2/S3 boundary and 8.2% inside S3; among the k ≥ 5 core these rise to 18.6% and 18.8%, and
+   among k ≥ 7 to 37.5% and 28.1% (3.5× and 3.4× the background), while "inside S1" and "at S1/S2" fall to 0.25–0.41×.
+   The ranking that the atlas produces agrees with notebook 99's acute S3 weighting and notebook 105's external
+   sections, by a route that shares none of their statistics.
 4. **The 104 and 109 filters are cheap and nearly method-neutral.** They remove 7–16% of every list and do not
    change the ranking of the methods.
 5. **For the paper:** the k ≥ 5 strict core is the gene-level table to carry, with the line-by-line calls beside

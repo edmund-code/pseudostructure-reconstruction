@@ -49,6 +49,7 @@ Notebook 98 (do the mouse AKI calls hold in human AKI: a KPMP benchmark) is in `
 Notebook 99 (injury phases borrowed from Kirita's time course, and where along the PT each acts) is in `pt-injury-phases.md`.
 Notebook 100 (planted truth: power and false calls of the pathway calling methods) is in `pt-planted-benchmark.md`.
 Notebook 101 (transporter handoffs along the PT: a family-wide screen) is in `pt-transporter-handoffs.md`.
+Notebook 102 (grouping planted calls into programs: RED, OVL, NET against a planted truth) is in `pt-planted-programs.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

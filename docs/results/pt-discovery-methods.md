@@ -10,6 +10,8 @@ names.
 
 ## The yardsticks (in order of weight)
 
+0. **Planted truth** (notebooks 100, 102, 103): power and false calls on our own data with known pathway-level differences. This is the only yardstick with a ground truth; it shows what each method can see, not whether a real call is right.
+
 1. **External replication.** Does the call hold in independent data?
    - AKI: Kirita 2020's IRI time course, 18 mice (notebook 94), and human AKI biopsies from KPMP (notebook 98).
    - Human vs mouse: the cell atlases (Lake/KPMP, Census) and microdissection (Chen 2021).
@@ -28,9 +30,9 @@ names.
 
 | Method | Question | Specificity | External | Other | Verdict |
 |---|---|---|---|---|---|
-| **Positional F-test** (NB T_spatial, moderated F, cameraPR; 71) | Does the shape of the difference along the PT differ? | hvm pass (0.071); AKI fails calibration (0.120; 76: 0.144) | AKI shape calls replicate 6.8–8.0× the matched null; set ranking ρ 0.54 with IRI shape (94). Human AKI: partly (genes 1.4×, sets not; location unmeasurable in biopsies, 98). hvm atlas replication not set-specific (77). | Reconstruction Jaccard 0.84 / 0.72; probe exposure 0.17; hub robustness 0.92 / 0.99 (93) | **Primary for positional differences** |
-| Segment F-test (S1/S2/S3 steps; 74, 75) | The same, with steps | hvm pass (76 calls, 71 shared); AKI fails | – | The spline adds 12 sets, the steps 5 | Discrete twin; continuous adds little set-level |
-| **Clustering** (package gene groups and clusters, matched ORA; 71) | Which sets sit in up, down or shape gene groups? | passes both | AKI: replicates as **level** (1.5×), not as shape (0.5×) (94); sets do not generalise to human AKI (1.06×, 98) | Reconstruction Jaccard 0.42 / 0.66; probe exposure 0.69 | **Complementary level layer**; not for shape |
+| **Positional F-test** (NB T_spatial, moderated F, cameraPR; 71) | Does the shape of the difference along the PT differ? Planted: finds shape, S3-only and S2-bump changes at 0.5 log2 (≥ 0.96), blind to pure level (≤ 0.06); 5–12 BH-driven clean false sets when signal is present (100). | hvm pass (0.071); AKI fails calibration (0.120; 76: 0.144) | AKI shape calls replicate 6.8–8.0× the matched null; set ranking ρ 0.54 with IRI shape (94). Human AKI: partly (genes 1.4×, sets not; location unmeasurable in biopsies, 98). hvm atlas replication not set-specific (77). | Reconstruction Jaccard 0.84 / 0.72; probe exposure 0.17; hub robustness 0.92 / 0.99 (93) | **Primary for positional differences** |
+| Segment F-test (S1/S2/S3 steps; 74, 75) | The same, with steps. Planted: matches the positional F-test, S2 bump included (100). | hvm pass (76 calls, 71 shared); AKI fails | – | The spline adds 12 sets, the steps 5 | Discrete twin; continuous adds little set-level |
+| **Clustering** (package gene groups and clusters, matched ORA; 71) | Which sets sit in up, down or shape gene groups? Planted: finds level at 0.5 log2 (0.92), shape only at 1 log2; 0–5 clean false sets (100). | passes both | AKI: replicates as **level** (1.5×), not as shape (0.5×) (94); sets do not generalise to human AKI (1.06×, 98) | Reconstruction Jaccard 0.42 / 0.66; probe exposure 0.69 | **Complementary level layer**; not for shape |
 | **Level / location screen** (L, M, A; 91) | Whole-PT level change, location beyond level, gradient survival | relabeling bounds per call (level 40, 3 against 3,159 genes) | AKI level sets the most consistent level list: 0.57, 1.7×, ties clustering. Location sets 5.3× at 12 h (94). Best of our lists in human AKI (sets 1.55×, 98). | Filters show the male-biased and fasting-down programs fall in IRI too (94) | **Best AKI level description** |
 | Position-split ORA (scoranet-style row N; 93) | Gene-first ORA, split up/down × segment | passes | AKI location 5.0× (94) | Reconstruction Jaccard 0.45 / 0.43; hub robustness 0.43 / 0.72 | Not better than the F-test (93) |
 | DESeq2 + ORA, whole PT or per segment (75) | Level differences | passes | – | hvm probe exposure 0.60–0.71 | Not for species; level only |

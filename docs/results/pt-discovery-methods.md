@@ -66,6 +66,7 @@ names.
 | Sequence evolution against gradient conservation (dN/dS, close paralogs, LOEUF; 106) | Reversed and conserved gradients are equally constrained (AUC 0.49–0.51; CMH OR 0.78); reversals hit conserved proteins (Pdk4, Ddit4, Oat); an artefact forest cannot separate the groups (AUC 0.54) | Negative result; guards the reversed list, no sequence prior |
 | Position-resolved differential variability (residual over-dispersion per bin, relabeling-calibrated; 107) | Injury markers are raised in 95–100% of IR tubules and add no variability (graded); proliferation is patchy (5 of 8 bins); transport loss is patchy in S1/S2 and near-universal in late S3; gene-level DV only 1.2–1.4× relabeling | **Useful at program level** ("how many tubules"); not at gene level |
 | Disease genetics and drug targets along the axis (PanelApp, GWAS Catalog, literature positions; 108) | Mendelian proximal-tubulopathy genes sit toward S1 in both species (mean E −1.47 / −0.56, beyond matched nulls); GWAS transporter sets no more graded than transporters; 25 of 27 literature positions reproduced, incl. OCT2 S3-rising in mouse but flat in human; distal-disease genes graded inside PT units are neighbour RNA that survives the core rebuild (a limit of 104) | **Useful**: hypothesis-driven, checkable validation and translational biology |
+| Neighbour-marker filter (atlas specificity in Kirita and KPMP, combined with 104's edge enrichment; 109) | Atlas rule alone flags 7–28% of lists (near the null); with edge enrichment, 0–8% are suspect, mostly thick-limb and collecting-duct genes at the human S3 end (SLC12A1, UMOD, EGF, KCNJ1, AQP2); handoffs, literature positions, programs and mouse reversed genes are clean; the two checks agree (AUC 0.65, 0.78) | **Keep as a standard filter** before publishing gene lists |
 
 ## Current recommendation (2026-10-18)
 
@@ -84,7 +85,8 @@ names.
   - treat regulator names as hypotheses.
 - **Validation:** for AKI, external replication (Kirita) is the arbiter, since the internal relabeling contains
   injury-like biology. For positional AKI claims, the external spatial sections are the arbiter (105).
-- **Standard check:** rebuild units from interior bins before any claim rests on a gene (104).
+- **Standard check:** rebuild units from interior bins before any claim rests on a gene (104), and drop genes that are
+  both atlas neighbour markers and edge-enriched (109).
 
 ## Still to try (queue)
 

@@ -56,6 +56,7 @@ Notebook 105 (positional injury effects in independent spatial IRI data) is in `
 Notebook 106 (sequence evolution and the conservation of PT gradients) is in `pt-gradient-evolution.md`.
 Notebook 107 (position-resolved differential variability under injury) is in `pt-injury-heterogeneity.md`.
 Notebook 108 (disease genetics and drug targets along the PT) is in `pt-disease-genetics.md`.
+Notebook 109 (a cell-type specificity filter for neighbour-structure markers) is in `pt-neighbour-marker-filter.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

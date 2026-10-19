@@ -9,11 +9,15 @@
 * ``replicated``: an item replicates when the external q passes and the external sign equals the item's sign.
 * ``matched_null``: random lists drawn from a pool with the list's per-stratum counts kept; the null number replicated.
 * ``matched_means``: the same draws, returning the mean of continuous per-item statistics (notebook 99).
+* ``h5_group_sums``: per-label sums of rows of an AnnData h5 CSR matrix (``raw/X``), streamed in row chunks (notebook 98's
+  KPMP pseudobulks; notebook 109).
 """
 from __future__ import annotations
 
 import gzip
 from pathlib import Path
+
+import h5py
 
 import numpy as np
 import pandas as pd
@@ -167,3 +171,27 @@ def null_summary(k, null):
     null = np.asarray(null, float)
     return {'null mean': float(null.mean()), 'null low': float(np.quantile(null, .025)),
             'null high': float(np.quantile(null, .975)), 'p': float((1 + (null >= k).sum()) / (1 + len(null)))}
+
+
+def h5_group_sums(path, rows, labels, *, key='raw/X', chunk=20000):
+    """genes x labels sums of the CSR rows ``rows`` (with one label each) of the matrix at ``key`` in an h5ad file."""
+    rows = np.asarray(rows)
+    lab = pd.Index(sorted(set(labels)))
+    code = pd.Series(lab.get_indexer(labels), index=rows)
+    with h5py.File(path, 'r') as f:
+        X = f[key]
+        indptr = X['indptr'][:]
+        n_rows, n_genes = X.attrs['shape']
+        out = np.zeros((n_genes, len(lab)))
+        for start in range(0, n_rows, chunk):
+            stop = min(start + chunk, n_rows)
+            want = code[(code.index >= start) & (code.index < stop)]
+            if want.empty:
+                continue
+            lo, hi = indptr[start], indptr[stop]
+            block = sparse.csr_matrix((X['data'][lo:hi], X['indices'][lo:hi], indptr[start:stop + 1] - lo),
+                                      shape=(stop - start, n_genes))
+            sub = block[want.index.to_numpy() - start]
+            ind = sparse.csr_matrix((np.ones(len(want)), (want.to_numpy(), np.arange(len(want)))), shape=(len(lab), len(want)))
+            out += (ind @ sub).T.toarray()
+    return pd.DataFrame(out, columns=lab)

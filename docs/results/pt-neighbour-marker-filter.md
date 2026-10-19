@@ -83,3 +83,88 @@ rest a claim on a flagged gene without saying so.
   neighbour RNA.
 - The 4× rule is fixed, not tuned. Some genuine PT genes with higher expression elsewhere (for example in thick limb)
   will be flagged, and that is the conservative direction.
+
+## Notebook 109 results
+
+`analysis/notebooks/109_pt_neighbour_marker_filter.ipynb` (logic `109.neighbour_filter.1`) writes to
+`results/pt_neighbour_marker_filter/`. It followed the protocol frozen in c55224c and ran in 8 s. Streaming the KPMP
+atlas took 15 s.
+
+**Atlases and guards.**
+- G1: the mouse atlas has 13 broad Kirita types.
+- G2: the human atlas holds 104,490 KPMP reference nuclei over 14 subclasses.
+- By the frozen rule, 2,848 of 27,133 mouse atlas genes and 2,186 of 35,432 human ones are neighbour markers.
+  SLC12A1, SLC12A3 and UMOD are flagged in both species; LRP2 and SLC34A1 are not.
+
+**How the protocol was read.**
+- Mouse lists use the Kirita atlas and human lists use KPMP.
+- Expression deciles come from notebook 62's inventories.
+- R2 uses notebook 104's human vs mouse run.
+- A first scratch run cached the atlas type labels as an object array that could not be reloaded. The cache was
+  rebuilt with string labels; the numbers are unchanged.
+- **Post hoc (section 5.1):**
+  - R1 flagged 7–28% of most lists, close to the expression-matched null.
+  - So a stricter "suspect" class is added: a neighbour marker that is also edge-enriched in notebook 104 (ε ≥ 1 in
+    both specimens of the species, or in all four AKI mice).
+
+**R1 · Neighbour markers by the frozen atlas rule** (share flagged, null mean in brackets; clean when ≤ 5%):
+
+| List | Mouse atlas | Human atlas |
+|---|---|---|
+| Graded early | 0.28 (0.19) | 0.16 (0.10) |
+| Graded late | 0.14 (0.19) | 0.19 (0.11) |
+| Conserved | 0.26 (0.19) | 0.18 (0.10) |
+| Reversed | 0.28 (0.19) | 0.16 (0.10) |
+| Mouse only / human only | 0.16 / 0.26 | 0.07 / 0.14 |
+| Conserved handoff genes | **0.00: clean** | **0.00: clean** |
+| Named literature positions (H4) | 0.07 | **0.00: clean** |
+| AKI level / location calls | 0.20 / 0.21 (0.20 / 0.19) | – |
+| Programs INJ / TPT / CYC | 0.30 / **0.02: clean** / 0.11 | – |
+
+The atlas rule alone is broad. A gene expressed four times more in any other cell type is flagged even when it has a
+real PT gradient, so most lists sit near the null. Graded genes, especially in human, carry 1.5–1.8 times more
+neighbour markers than expression-matched genes.
+
+**R2 · The two contamination checks agree.** Notebook 104's edge enrichment is higher for neighbour markers:
+- AUC 0.65 in mouse (median ε 0.25 against 0.04);
+- AUC 0.78 in human (0.52 against 0.02).
+
+**R3 · Exposure of each method's driver genes to neighbour markers:** 1.10–1.23 times the null. The positional
+F-test is highest (1.22 and 1.23), against 1.10–1.17 for clustering and 1.14–1.16 for position-split ORA. This ranking
+is the reverse of notebook 104's edge exposure, so the two yardsticks disagree on method order. Both put the
+differences between methods within about 1.1–1.9 times.
+
+**Post hoc · Suspect genes** (neighbour marker and edge-enriched):
+
+| List | Suspect | Genes |
+|---|---|---|
+| Graded early (mouse) | 8 / 729 (1.1%) | Egfl7, Ifi44, Svep1, Exoc3l2, Dlc1, Itga9, Igfbp3, Synpo |
+| Graded late (mouse) | 1 / 583 (0.2%) | Rerg |
+| Graded early (human) | 13 / 376 (3.5%) | FN1, CALB1, FLT1, MGP, RHCG, HSD11B2, SLC8A1, ACTA2 and others |
+| **Graded late (human)** | **20 / 250 (8.0%)** | **SLC12A1, UMOD, EGF, KCNJ1, AQP2, WFDC2, STK39** and others |
+| Conserved (human atlas) | 11 / 189 (5.8%) | SLC12A1, EGF, UMOD, CALB1, RHCG, HSD11B2, MGP and others |
+| Reversed | 0 / 72 (mouse); 2 / 74 (human: NAV2, SFRP1) | |
+| Conserved handoffs, H4 positions, INJ, TPT | 0 | |
+| AKI level calls | 37 / 3,078 (1.2%) | collagens, Fbn1, Sparc, Kdr, H2-Aa, H2-Eb1 (interstitium, endothelium, MHC II) |
+| AKI location calls | 1 / 353 | Igfbp3 |
+
+**What this answers.**
+1. **Neighbour-structure RNA reaches a small, identifiable set of gradient genes.**
+   - It is most visible at the human S3 end: thick-limb and collecting-duct genes (SLC12A1, UMOD, EGF, KCNJ1, AQP2)
+     are 8% of human late genes.
+   - It also reaches a few early genes: DCT/CNT genes (CALB1, SLC8A1) and vascular genes (FLT1, MGP, ACTA2).
+   - The "conserved" list holds 11 such genes, because the anatomy that places the thick limb next to S3 is conserved
+     too. These are conserved neighbours, not conserved PT gradients.
+2. **The findings the paper relies on are clean:**
+   - the 11 conserved transporter handoffs;
+   - the literature positions;
+   - the transport program;
+   - the injury program;
+   - the reversed gradients in mouse (0 of 72);
+   - AKI location calls (1 of 353).
+   - The AKI level calls carry 37 interstitial and immune genes (1.2%), the expected infiltrate and matrix signal.
+3. **As a method:**
+   - Atlas specificity and bin-level edge enrichment agree (AUC 0.65 and 0.78), and each alone is too broad or too
+     narrow.
+   - The combination flags 0–8% of a list. It should be applied before any gene list is published.
+   - The flagged genes are in `flags.csv` and `posthoc_suspect.csv`.

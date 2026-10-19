@@ -79,3 +79,17 @@ def test_matched_means_keep_strata():
     v = rng.normal(size=(200, 2))
     m = er.matched_means(v, np.zeros(200, int), np.zeros(20, int), n=2000, seed=3)
     assert np.allclose(m.mean(axis=0), v.mean(axis=0), atol=.02) and m.std(axis=0)[0] < v.std(axis=0)[0] / 3
+
+
+def test_h5_group_sums(tmp_path):
+    h5py = pytest.importorskip('h5py')
+    from scipy import sparse
+    X = sparse.csr_matrix(np.array([[1, 0, 2], [0, 3, 0], [4, 0, 0], [0, 0, 5]]))
+    path = tmp_path / 'm.h5'
+    with h5py.File(path, 'w') as f:
+        g = f.create_group('raw/X')
+        g.attrs['shape'] = X.shape
+        for k in ('data', 'indices', 'indptr'):
+            g.create_dataset(k, data=getattr(X, k))
+    out = er.h5_group_sums(path, [0, 2, 3], ['a', 'a', 'b'], chunk=2)
+    assert out['a'].tolist() == [5, 0, 2] and out['b'].tolist() == [0, 0, 5]

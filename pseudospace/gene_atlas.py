@@ -6,6 +6,8 @@
   every line's size and its expression advantage and destroys gene-specific agreement.
 * ``line_similarity``: pairwise Jaccard and phi between lines, on the genes testable on both.
 * ``yield_profile``: per calling method, the clean / supported / anchored / unique shares and the two yields.
+* ``evidence_model``: an L2 logistic fit of "this gene is in a named set" on the line calls (notebook 113), giving
+  each line a weight on one scale and a scorer for held-out genes.
 
 Ponytail: lines are binary and unweighted, so a strong and a marginal call count the same; the upgrade is a
 weighted count using each line's standardized statistic.
@@ -116,3 +118,26 @@ def yield_profile(calls, testable, methods, *, clean, supported, anchored, min_l
             'novel yield': int((su & ~anchored & (n_lines >= min_lines)).sum()),
         })
     return pd.DataFrame(rows)
+
+
+def evidence_model(features, outcome, *, C=1.0, seed=0):
+    """(coefficients, score): an L2 logistic fit of ``outcome`` on the numeric frame ``features``.
+
+    ``score`` takes a frame with the same columns and returns the linear predictor, so a model fitted on one set of
+    genes can rank another. Columns that are constant in the training genes get a zero coefficient.
+    """
+    from sklearn.linear_model import LogisticRegression
+
+    cols = list(features.columns)
+    X = features[cols].to_numpy(float)
+    y = np.asarray(outcome, int)
+    keep = X.std(axis=0) > 0
+    fit = LogisticRegression(C=C, solver='liblinear', max_iter=2000,      # liblinear is L2 by default
+                             random_state=seed).fit(X[:, keep], y)
+    coef = pd.Series(0., index=cols)
+    coef[np.array(cols)[keep]] = fit.coef_[0]
+
+    def score(frame):
+        return frame[cols].to_numpy(float) @ coef.to_numpy() + fit.intercept_[0]
+
+    return coef, score

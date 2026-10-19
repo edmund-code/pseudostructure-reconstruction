@@ -100,3 +100,117 @@ statistic is computed on the expression data.
 - The species atlas has only seven lines, two of which are small (rewired 25, handoff 58), so its coefficients will
   be imprecise.
 - Everything inherits the 2-vs-2 design and the single human donor.
+
+## Notebook 113 results
+
+`analysis/notebooks/113_pt_evidence_model.ipynb` (logic `113.evidence_model.1`) writes to
+`results/pt_evidence_model/`. It followed the protocol frozen in b629793 and ran in 56 s. Most of its frozen tests
+fail, two of them because the protocol itself was wrong; what survives is a sharp ranking of the lines.
+
+**Two flaws in the frozen design, found on the first run.**
+
+1. **Three of the five AKI annotation sources cannot be held out.** The fold rule tests on genes that are positive
+   in no training source, and transporters, positional markers and named positions are almost entirely nested
+   inside the literature and disease sources. Held-out positives: transporters 0, positional markers 4, named
+   positions 0. Only the literature programs (877), disease genes (395) and androgen sets (341) are testable, and
+   the species atlas leaves only two.
+2. **The leakage rule was too narrow.** It dropped a line only in the fold where its own source is held out, so the
+   all-sources coefficient fit still scored the androgen line against the androgen sets. That line's coefficient was
+   4.94 — by far the largest — and falls to **0.32** once the androgen sets are removed from the outcome. All
+   coefficients below are from the corrected fit; the leaking values are kept in `coefficients.csv` beside them.
+   The species atlas is unaffected: every handoff gene is also a transporter, so removing the handoff source
+   changes nothing.
+
+### Q1 · The lines do add to expression, where the question can be asked
+
+| source | held-out positives | expression only | count model | full model | full − expression |
+|---|---|---|---|---|---|
+| AKI literature programs | 877 | 0.630 | 0.763 | 0.745 | **+0.115** |
+| AKI disease genes | 395 | 0.517 | 0.553 | 0.549 | +0.032 |
+| AKI androgen sets | 341 | 0.507 | 0.681 | 0.612 | **+0.106** |
+| species literature programs | 912 | 0.685 | 0.743 | 0.695 | +0.010 |
+| species disease genes | 420 | 0.630 | 0.572 | 0.599 | −0.031 |
+
+- **Q1 fails as written** (it asked for three of five AKI sources at ≥ 0.05 AUC, and only three sources exist).
+  **Two of the three testable sources clear the bar**, the AKI mean gain is +0.084, and the species mean is −0.011.
+- The honest reading: on the AKI axis the evidence pattern predicts recognition well beyond expression; on the
+  species axis it does not, where expression alone already reaches 0.63–0.69.
+
+### Q2 · The plain count beats the fitted weighting — a useful negative
+
+- **Q2 fails.** The count model (notebook 112's line count plus the same expression deciles) is above the fitted
+  model on three of the four testable folds: AKI literature +0.018, AKI androgen +0.068, species literature +0.049;
+  only species disease genes go the other way (−0.027).
+- Fitting nine weights on one set of curated sources does not transfer to another. **Notebook 112's unweighted
+  count is the statistic to use**, which is the simpler recommendation and the one already in the scoreboard.
+
+### Q3 · Which lines carry information about recognised biology
+
+Coefficients from the corrected fit, with 1,000-gene-bootstrap intervals:
+
+| line | calls | coefficient | 95% interval |
+|---|---|---|---|
+| A7 injury phase (Kirita as a ruler, 99) | 1,010 | **0.79** | 0.63 to 0.94 |
+| A2 location screen (91) | 362 | **0.76** | 0.51 to 1.02 |
+| A4 position-split selection (93) | 2,719 | 0.60 | 0.46 to 0.75 |
+| A6 human AKI, KPMP (98) | 2,461 | 0.40 | 0.29 to 0.52 |
+| A5 mouse IRI, Kirita 12 h (94) | 3,899 | 0.40 | 0.29 to 0.51 |
+| A1 level screen (91) | 3,159 | 0.38 | 0.27 to 0.50 |
+| A9 androgen instrument (111) | 195 | 0.32 | −0.11 to 0.69 |
+| A8 variability (107) | 1,217 | 0.25 | 0.08 to 0.43 |
+| **A3 positional F-test (71)** | **4,244** | **0.05** | **−0.09 to 0.19** |
+
+- **The frozen prediction was wrong.** I predicted the external replication lines would carry the most. They sit in
+  the middle (0.40). The phase assignment and the location screen carry twice as much.
+- **The positional F-test carries no measurable information about whether a gene is recognised biology.** It makes
+  the largest number of calls (4,244, the largest of any line) and its interval covers zero. Beside notebook 112,
+  where it had the largest yield, this is the sharp result: **the F-test finds the most genes and says the least
+  about which of them are real.**
+- The two lines at the top are the two that place a change in *time* (phase) or in *space* (location) rather than
+  measuring its size. Specificity about where and when beats volume.
+- Species: F-test 0.88, zonation-class disagreement 0.64, atlas level 0.54, handoff 0.40, level screen 0.25,
+  rewired 0.19 (interval crosses zero), reversed gradient −0.20 (crosses zero). The species F-test is the opposite
+  of the AKI one: there it is the most informative line.
+
+### Q4 · The relabeled control is weak by construction
+
+- **Q4 fails as framed.** Of the four lines with stored relabelings, location collapses cleanly (362 calls → 0 and
+  1, coefficient 0.76 → 0.00 and −0.05) and variability collapses (0.25 → −0.02 and −0.17), but the level line
+  keeps 40 and 3 calls and its coefficient *rises* to 0.49 on R1. A logistic coefficient is not comparable across
+  list sizes: a 40-gene list that happens to be well curated gets a large weight.
+- **The scale-free version of the control holds but only just:** the relabeled model's mean held-out AUC is 0.627
+  against the condition model's 0.635.
+- **Why it is weak:** only four of the nine lines have stored relabelings, and the model's information comes mostly
+  from the other five (phase, position-split, the two external lines, the F-test). A full control would need every
+  notebook to store its relabeled statistic, which most do not.
+
+### Q5 · The prioritised unanchored list
+
+The corrected model scored on clean genes in no named set. Top of the AKI list, all falling after injury:
+
+- **Peroxisomal and lipid**: Pipox, Far1, Hsd17b4, Cideb, Lpgat1, Chpt1, Acss2, Idh2.
+- **Sulfur and one-carbon amino acid**: Cdo1, Cth, Gss, Aspa, Thnsl2, Aldh8a1.
+- **Other**: Hps5, Bphl, Susd3, Tmem205, Tmem106b, Fmo2, Cdhr5, Fuca2, Csrp2.
+- **Regulators**: Rorc, Zfp36, Lrrk2.
+
+Top of the species list: Zbtb20, Acaa1a, Acss2, Igfbp4, Nfib, Rgl1, Selenop, App, Rhobtb1, Ctsb, Tmem64, Rtn4,
+Bhmt2, Bicdl1 — eight of the fourteen carry a mouse gradient the human does not share.
+
+The AKI list is the same catabolic program as notebook 112's strict core, which is a consistency check rather than
+a new finding: the model ranks highly the genes that sit beside the curated members of a program without being
+curated themselves. Post hoc, that is what "unanchored" means here — under-curated company, not new biology.
+
+### What this answers
+
+1. **Count, do not weight.** The unweighted convergence count of notebook 112 generalises across annotation sources
+   better than a fitted model. This closes the question the atlas opened.
+2. **Volume and information are different axes, and the positional F-test sits at opposite ends of them.** It
+   delivers the most supported genes (notebook 112) and carries no information about which genes the field
+   recognises (here). It should be used to find candidates, never to rank them.
+3. **The most informative lines are the ones that localise a change** — the injury phase and the location screen —
+   not the ones that measure its size, and not external replication.
+4. **The species and AKI axes rank their methods differently.** The positional F-test is the least informative line
+   on AKI and the most informative on human vs mouse, which matches the scoreboard's existing split (the F-test is
+   the only calibrated species test and fails calibration on AKI) and is now measured on one scale.
+5. **For the paper:** use the k ≥ 5 convergence core from notebook 112 as the gene table; quote the line
+   coefficients here as the justification for which screens the paper runs; do not present a fitted gene score.

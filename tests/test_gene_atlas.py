@@ -55,3 +55,19 @@ def test_similarity_and_yield_profile():
     assert prof.loc['M1', 'called'] == 3 and prof.loc['M1', 'yield'] == 2      # a and c
     assert prof.loc['M1', 'novel yield'] == 0                                  # c has one line only
     assert prof.loc['M2', 'yield'] == 1 and prof.loc['M1', 'unique share'] == pytest.approx(1 / 3)
+
+
+def test_evidence_model_weights_the_informative_line_and_ranks_held_out_genes():
+    rng = np.random.default_rng(3)
+    n = 1200
+    informative = rng.random(n) < .3
+    noise = rng.random(n) < .3
+    truth = rng.random(n) < np.where(informative, .6, .1)            # only the first line carries the outcome
+    X = pd.DataFrame({'informative': informative.astype(float), 'noise': noise.astype(float),
+                      'constant': np.ones(n)})
+    train, test = slice(0, 800), slice(800, None)
+    coef, score = ga.evidence_model(X.iloc[train], truth[train], seed=0)
+    assert coef['informative'] > 1.0 > abs(coef['noise'])
+    assert coef['constant'] == 0                                      # constant column is dropped, not fitted
+    held = score(X.iloc[test])
+    assert held[truth[test]].mean() > held[~truth[test]].mean()

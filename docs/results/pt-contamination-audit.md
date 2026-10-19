@@ -141,3 +141,91 @@ reported separately.
   "edge-dependent" for a biological reason. A contamination-sensitive gene is therefore edge-dependent, not proven
   contamination.
 - Ambient RNA spread evenly is invisible to the core test.
+
+## Notebook 104 results
+
+`analysis/notebooks/104_pt_contamination_audit.ipynb` (logic `104.contamination.1`) writes to
+`results/pt_contamination_audit/`. It followed the protocol frozen in 465e253. Processing the bins took 4 min for 8
+specimen runs; the notebook ran from cache in 12 s.
+
+**Guards.**
+- G1: summing each export PT unit's bins reproduces its export counts exactly in all 8 specimen runs. This holds for
+  HUK1_MED1 too, whose bins exist only as an MTX folder.
+- G2: AKI 14,048 units; human vs mouse 11,383.
+- G3: the pooled end contrast agrees with notebook 90's curve contrast at ρ 0.81 and 0.83 (mouse) and 0.78 and 0.73
+  (human).
+- G4: edge enrichment tracks non-native RNA. The median ε of the class markers is 1.0–1.6, and that of the 50 most
+  expressed PT genes is −0.25 to −0.02.
+
+**How the protocol was read.**
+- The references pool the core bins of each species. In the AKI run they pool all four mice.
+- Contact classes are PT, AL, DCT, CNT_CD, Glomerulus, outside and other.
+- A scratch run first computed the Q2 depth reading on the fractions f instead of the marker shares s_k. The f values
+  subtract the pooled PT-interior share, so they sit near 0 in the core by construction. This was corrected to the
+  protocol's s_k before the notebook was executed.
+- Post hoc: mean F is added beside the frozen median.
+- The random aggregates are size-matched to the depth-≥-3 core. At depth ≥ 4 and ≥ 5, the ladder's sensitive shares
+  include count loss.
+
+**Markers** (own data, ≥ 20 × the PT interior and ≥ 2 × every other reference):
+- AL: 23–30 genes, among them Umod, Slc12a1, Clcnka and Cldn16.
+- DCT: 21–26 genes, among them Slc12a3, Klk1, Calb1 and S100g.
+- CNT_CD: 55–71 genes, among them Aqp2, Hsd11b2 and Scnn1g.
+- Glomerulus: 198–221 genes, among them Nphs2, Podxl, Ren1 and Emcn.
+- Outside: few, because outside bins mix everything.
+  - mouse: Tnc and Myh11;
+  - human: immunoglobulins (Igkc, Ighg1, Ighm, Jchain), Myh11 and Pln.
+- RC2 met: Umod, Slc12a3, Aqp2 and Nphs2 are markers of their class in both species.
+
+| Reading | Result |
+|---|---|
+| Q1 non-native fraction F per unit | median −0.05 to 0.08 (relative to the pooled interior); mean −0.01 to 0.14; 2–24% of units have F ≥ 0.2 |
+| Q2 marker share at the edge (layer 0) against the core (layers ≥ 3) | 1.9–4.5 ×; **not met in every specimen** (Ctrl1A2 1.87 and 1.98, short of 2) |
+| Q2 contact with class k predicts f_k (ρ > 0 in every specimen) | AL 0.25–0.53, DCT 0.16–0.48, CNT_CD 0.05–0.33, outside 0.00–0.12: **yes**; Glomerulus: no (one NaN) |
+| Q3 change from early to late PT (f, late − early) | AL +0.01 to +0.11; DCT −0.14 to +0.00; outside +0.27 in IR2A2 and +0.07 to +0.09 in human |
+| Q3 AKI, IR − control | mean f_outside +0.072, mean F +0.013 |
+| **Q4 gradients contamination-sensitive** | **mouse 28 / 1,342 (2.1%); human 22 / 627 (3.5%): native** |
+| **Q5 AKI calls contamination-sensitive** | **level 47 / 3,159 (1.5%); location 1 / 362 (0.3%): native** |
+| RC1 Egf, Klk1, Muc1 edge-enriched in both control mice | **missed**: ε 0.64 and 1.01, 0.53 and 0.97, 0.28 and 1.10 (edge-enriched in Ctrl1A4 only) |
+| RC3 human ALB, TTR not edge-enriched (expected miss) | met: ε −0.98 to −0.26 |
+
+**Q6 · Contamination exposure of the calling methods** (share of the calls' driver genes that are edge-enriched,
+against expression-matched random genes):
+
+| Contrast | Method | Driver genes | Exposure | Null | Ratio | p |
+|---|---|---|---|---|---|---|
+| AKI | positional F-test | 1,685 | 0.015 | 0.013 | 1.18 | 0.21 |
+| AKI | clustering | 1,578 | 0.016 | 0.015 | 1.04 | 0.46 |
+| AKI | position-split ORA | 1,041 | 0.014 | 0.016 | 0.88 | 0.74 |
+| Human vs mouse | **positional F-test** | 1,038 | **0.074** | 0.052 | **1.44** | 0.001 |
+| Human vs mouse | clustering | 527 | 0.091 | 0.054 | 1.69 | 0.001 |
+| Human vs mouse | position-split ORA | 249 | 0.112 | 0.060 | 1.89 | 0.001 |
+
+The contamination-sensitive genes look like what the test should catch.
+- **Human gradients:** Calb1, Klk1 and Slc8a1 (DCT/CNT markers).
+- **Mouse gradients:** Plat, Cxcl14 and Clu.
+- **AKI level calls:** interstitial and immune genes (Kdr, C1s1, Serping1, Cd74, Ltbp4, Gdf10).
+
+**What this answers.**
+1. **Contamination is real, and it follows the anatomy.**
+   - Non-native marker RNA is 2–4 times higher in the outermost bin of a unit than in its interior.
+   - Each class's signal in a unit rises with how much of the unit's edge touches that class.
+   - Along the PT, the signal tracks the neighbours: AL RNA rises toward S3, which lies beside the thick ascending
+     limbs, while DCT and glomerular RNA are highest in early S1.
+   - In the more injured IR mouse, interstitial RNA rises steeply in late S3.
+   - Human S3 units carry immunoglobulin RNA.
+2. **The positional findings and the AKI calls are native.**
+   - Rebuilt from bins ≥ 6 µm inside the edge, 98% of mouse and 96.5% of human gradients survive, beyond the
+     size-matched random bins. So do 98.5% of the AKI level calls and 99.7% of the location calls.
+   - Every frozen "native" reading is met. Contamination makes a few dozen genes, not the gradients.
+3. **A new yardstick:**
+   - The human vs mouse calls of every method are enriched for edge-enriched genes.
+   - The positional F-test is the least exposed (1.44×, against 1.69× for clustering and 1.89× for position-split
+     ORA).
+   - No AKI method is exposed.
+   - The flagged genes (`method_exposure.csv`) should be read as neighbouring-structure RNA wherever they drive a call.
+4. **The hand-flagged genes are partly confirmed.** Egf, Klk1 and Muc1 are edge-enriched in one control mouse and
+   short of the cut in the other (RC1 missed). Klk1 is contamination-sensitive in human.
+5. **For the paper:** a methods paragraph and a supplementary figure.
+   - The bin-level core rebuild is a general check for any segmentation-aggregated Visium HD analysis.
+   - It can say "our gradients are not neighbour RNA" with numbers.

@@ -51,6 +51,7 @@ Notebook 100 (planted truth: power and false calls of the pathway calling method
 Notebook 101 (transporter handoffs along the PT: a family-wide screen) is in `pt-transporter-handoffs.md`.
 Notebook 102 (grouping planted calls into programs: RED, OVL, NET against a planted truth) is in `pt-planted-programs.md`.
 Notebook 103 (the planted benchmark on the human vs mouse data) is in `pt-planted-benchmark-hvm.md`.
+Notebook 104 (a bin-level contamination audit of the PT units) is in `pt-contamination-audit.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

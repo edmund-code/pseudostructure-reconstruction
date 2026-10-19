@@ -97,3 +97,49 @@ program would contradict notebook 96 and is reported as such.
   genes cluster in a program. TPT is steep along x, so read its ε with care.
 - The deep S3 units the package dropped (notebook 96) are absent, which biases IR variance down at the S3 end.
 - Two IR mice; balanced relabeling gives only two alternative groupings.
+
+## Notebook 107 results
+
+`analysis/notebooks/107_pt_injury_heterogeneity.ipynb` (logic `107.heterogeneity.1`) writes to
+`results/pt_injury_heterogeneity/`. It followed the protocol frozen in dea5f8e and ran in 19 s. G1: 14,048 units; the
+universe holds 10,198 genes.
+
+**How the protocol was read.**
+- R3 uses complete cases: a gene enters a bin's comparison only when all four specimens have a finite ε, so every
+  grouping scores the same genes. A scratch run had let relabelings score more genes than the condition.
+- **Post hoc:** for R2 on TPT, a unit "responds" when its score is below the controls' 5th percentile. The frozen
+  rule (above the 95th) is meaningless for a lost program.
+- INJ has a finite ε for only 3–5 of its 18 markers per bin. The others average < 0.5 counts per unit in some
+  specimen, so its R1 rests on few genes.
+
+| Program | Bins where injury raises residual variability (of 8) | Size-restricted | Share of IR units responding, by bin | Reading |
+|---|---|---|---|---|
+| INJ | 1 | 0 | 0.95–1.00 everywhere | **graded**: essentially every PT unit is injured; no excess variability (as notebook 96 found) |
+| CYC | **5** (Δε 0.31–0.85) | 4 | 0.24–0.99; lowest at x 0.25–0.4 | **heterogeneous**: proliferation is patchy among tubules |
+| TPT | **3** (mid-PT and late S3) | 3 | 0.14–0.42 in S1/S2, rising to 0.64–0.98 in late S3 | **heterogeneous** where the loss is partial; universal in late S3 |
+
+- **R2** (does excess variability follow p(1 − p) of responding units across the 8 bins?): not supported.
+  - CYC: ρ −0.19 and −0.12.
+  - TPT: −0.83 and 0.10.
+  - INJ: 0.22 and −0.20. INJ's p(1 − p) is near 0 everywhere, because almost all units respond.
+- **Global variability:** under injury, the dispersion trend at a mean of 1 count per unit is higher by 0.41 log units
+  on average (bins: +0.20 to +0.75). All genes vary more between tubules in IR. This may be biological or technical
+  (section quality), and it is removed from the gene and program readings.
+- **R3, genome-wide:** 549 genes up and 668 down beyond both relabelings, against 462–496 per direction for each
+  relabeling. That is a modest 1.2–1.4× excess. The top genes are noisy single genes and are not interpreted.
+
+**What this answers.**
+1. **At 12 h–2 d, injury itself is uniform across PT tubules, but repair and transport loss are not.**
+   - INJ is raised in 95–100% of IR units at every position and adds no tubule-to-tubule variability.
+   - Proliferation is patchy at 5 of 8 positions: only 24–99% of tubules exceed the control range.
+   - Transport loss is patchy in S1/S2 (14–42% of units below the control range) and nearly universal in late S3
+     (64–98%).
+   - So the S3-weighting of transport loss is partly a change in *how many* tubules lose transport, not only how
+     much each loses.
+2. **This fits notebook 96's spatial results.** Proliferation and transport loss cluster in neighbourhoods; the
+   injury markers do not.
+3. **As a method:** residual over-dispersion per position bin is calibrated against balanced relabeling at the
+   program level, with a unit-size check. It answers "how many tubules" next to "how much", which means-based tests
+   cannot.
+   - Gene-level differential variability is not interpretable at 2 vs 2. The excess over relabeling is only 1.2–1.4×.
+   - Coordinate error inflates variance for steep genes, which applies to TPT.

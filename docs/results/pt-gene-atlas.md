@@ -146,3 +146,20 @@ and the hand-named genes of 108's `h4_named`.
   not the fact that an abundant gene is called more confidently by every method.
 - A gene absent from the core list is not a negative result; it may be testable on only one line.
 - The atlas inherits every caveat of its sources, in particular the 2-vs-2 design.
+
+## Protocol amendment 1 (2026-10-19, before any join was run)
+
+Loading the source tables showed that three of the frozen rules name a column that does not hold a call. Only column
+names, dtypes and the value sets of categorical columns were read; no statistic, count or gene list was evaluated.
+
+- **S1 (species level).** `direction` in `pt_species_level_control/gene_level` is a numeric statistic, not a
+  category. The operational level call in notebook 68 is **\|L\| ≥ 1**, the threshold of its criterion (ii). S1
+  becomes \|L\| ≥ 1 with `converged` and not `separated`.
+- **S4 (atlas replication).** Read as notebook 68's criterion (ii) per gene: `atlas_strong` **and** the atlas
+  coefficient `A` sharing the sign of `L`.
+- **S5 (co-expression rewiring).** `category` in notebook 97's `genes.csv` is the gradient category, not a rewiring
+  class. S5 becomes membership of notebook 97's doubly rewired set: `post_hoc_gene_lists.csv` with
+  `group == "rewired in both"`.
+- **Readings (not changes).** A1 and A2 are the boolean columns `level change` and `location change`. A7 is a
+  `phase_programs` program beginning with ACUTE or SUSTAINED. F3 flags a gene whose mean edge enrichment over the
+  relevant specimens is above the 95th percentile **of its own expression decile**.

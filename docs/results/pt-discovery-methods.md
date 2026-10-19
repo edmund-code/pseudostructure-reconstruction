@@ -15,6 +15,8 @@ names.
 1. **External replication.** Does the call hold in independent data?
    - AKI: Kirita 2020's IRI time course, 18 mice (notebook 94), and human AKI biopsies from KPMP (notebook 98).
    - Human vs mouse: the cell atlases (Lake/KPMP, Census) and microdissection (Chen 2021).
+   - Position under AKI: public Visium IRI sections from two independent labs (Cheung 2022, Gharaie 2023;
+     notebook 105).
 2. **Internal specificity.** Calls under balanced specimen relabeling against the condition: NCDR and calibration
    share.
    - AKI caveat (notebook 95): the A2/A4 relabeling correlates with the IRI response itself (ρ 0.23–0.66). Relabeled
@@ -60,6 +62,7 @@ names.
 | Family-wide transporter handoff screen (label-permutation null, microdissection and atlas confirmation; 101) | Handoffs are not a family-wide principle (Q1 fails); 11 conserved, confirmed handoffs (amino acids, organic anions, SGLT2→SGLT5), overlapping and inside S2 | **Useful**: separates a general claim from specific, confirmed micro-gradients |
 | Tissue location (depth, neighbours; 96) | Nephron position organises injury; depth adds nothing; injury graded per tubule | Supports the nephron coordinate as sufficient |
 | Bin-level contamination audit (core rebuild against size-matched random bins; 104) | Neighbour RNA is 2–4× higher at unit edges and follows the anatomy along the PT (AL toward S3, DCT and glomerulus in early S1, infiltrate in late IR S3), but 96.5–98% of gradients and 98.5–99.7% of AKI calls survive the core rebuild; human vs mouse calls are 1.4–1.9× enriched for edge genes (F-test least), AKI calls not | **Keep as a standard check**; flags the few dozen neighbour-RNA genes |
+| External spatial replication of position (injury-stable positional genes place Visium spots on our axis; 105) | Injury rises toward S3 in every IR section of two independent labs (Cheung 12 h ρ 0.41–0.66, Gharaie 24 h 0.45–0.46; controls −0.22 to 0.17); S2→S3 gradient survives less than S1→S2 (0.18–0.20 against 0.36–0.46); 91's location calls agree 81–86% | **New and useful**: the only external test of position; transfers the axis to 55 µm data |
 
 ## Current recommendation (2026-10-18)
 
@@ -77,7 +80,8 @@ names.
   - add PROGENy for signalling;
   - treat regulator names as hypotheses.
 - **Validation:** for AKI, external replication (Kirita) is the arbiter, since the internal relabeling contains
-  injury-like biology.
+  injury-like biology. For positional AKI claims, the external spatial sections are the arbiter (105).
+- **Standard check:** rebuild units from interior bins before any claim rests on a gene (104).
 
 ## Still to try (queue)
 

@@ -156,3 +156,69 @@ least one of Cheung day 1 or Gharaie 24 h.
 - Ranking x within a section assumes each section samples the PT axis similarly. A section missing the outer stripe
   compresses S3.
 - The 19 and 30 min clamps differ from ours.
+
+## Notebook 105 results
+
+`analysis/notebooks/105_pt_external_spatial_iri.ipynb` (logic `105.external_spatial.1`) writes to
+`results/pt_external_spatial_iri/`. It followed the protocol frozen in 9f23ca4 with amendment 1 (96bbba3), and ran in
+12 s from cache. The Kirita reference took 5 min.
+
+**Inputs and guards.**
+- G1: every Cheung barcode maps onto the v1 grid.
+- G2: the Kirita reference holds 16 broad types from the control, 12 h and 2 d files.
+- PT-dominant spots: 683–1,114 per section (top 40%; median PT weight 0.41–0.63).
+- Positional genes: 24 early and 19 late. All programs are fully covered in both datasets.
+- INJ-PT is 11 of the 18 INJ markers: Havcr1, Krt20, Krt8, Cd44, Vcam1, Sox9, Cdkn1a, Atf3, Hmox1, Sprr1a and
+  Tnfrsf12a. The other 7 (Lcn2, Spp1, Krt18, Clu, Mt1, Mt2, Timp1) are at least as high in Kirita's injured thick limb.
+- G5 (reported), in control sections:
+  - the expression axis agrees with the deconvolution segment position (ρ 0.63–0.86);
+  - the expression axis rises with anatomical depth (ρ 0.11–0.36);
+  - so x runs from outer cortex toward the outer stripe.
+
+**How the protocol was read.**
+- Amendment 1: PT dominance by within-section rank.
+- R3 is reported as not testable when fewer than 10 genes are control-graded. In Cheung, 0–1 genes pass the 0.5
+  cut, because 55 µm mixtures dilute the contrast between thirds.
+- Figure 105a was redrawn from `spots.csv` after the run, with each section's own colour range; the executed
+  version saturated the IR panel.
+
+| Reading | Cheung 12 h (3 IR vs 3 quiescent) | Cheung day 1 (3 vs 3) | Gharaie 24 h (2 vs 2) |
+|---|---|---|---|
+| **R1** ρ(injury residual, x): IR / control | **0.53, 0.41, 0.66 / 0.17, −0.22, −0.10: replicates** | 0.54, 0.19, 0.03 / same controls: no | **0.46, 0.45 / −0.03, 0.00: replicates** |
+| R1, INJ-PT only | **0.53, 0.43, 0.69 / 0.07, −0.03, −0.07: replicates** | 0.56, 0.15, −0.07: no | **0.51, 0.50 / −0.00, 0.04: replicates** |
+| R1 sensitivity, top 25% of spots | replicates | no | replicates |
+| R1 sensitivity, deconvolution position | replicates (0.53–0.73) | replicates (0.12–0.49) | no (0.17, 0.18; margin 0.18 < 0.2) |
+| R2 ρ(transport residual, x): IR / control | −0.60, −0.41, −0.59 / 0.24, −0.49, −0.57: **no** | no | **−0.33, −0.14 / −0.11, 0.06: replicates** |
+| R3 survival S1→S2 against S2→S3 | not testable | not testable | **0.46 vs 0.18 and 0.36 vs 0.20: replicates** (26 genes per step) |
+| R4 notebook 91's location calls, sign agreement | 0.60 (p 1e-4): just short of 0.6 | **0.81 (p 1e-34)** | **0.86 (p 7e-46)** |
+
+**Overall (frozen):** R1 replicates at Cheung 12 h and at Gharaie 24 h, so **our positional injury claim replicates
+in two independent labs' spatial data.**
+
+**Descriptive.**
+- Mean injury residual along x in 10 bins:
+  - Cheung 12 h rises steadily, from 3.2 to 4.5;
+  - Gharaie 24 h rises from 2.4 to 4.1 by mid-PT, then plateaus.
+- Notebook 99's late-S1 dip does not appear at 55 µm.
+- In the 12 h map, injury is strongest along the inner cortex, at the junction with the outer stripe, and weakest
+  under the capsule.
+- Day 1 fails R1 because two of its three sections are shallow (median 2,113 and 1,133 UMI). The deep section gives
+  ρ 0.54.
+- R2 fails at Cheung 12 h for a different reason. All three IR sections lose transport toward S3 (ρ −0.41 to −0.60),
+  but two quiescent sections carry the same trend: their cross-fitted residuals differ between control sections.
+
+**What this answers.**
+1. **The central positional AKI claim replicates externally.** At 12–24 h after ischaemia, injury rises along the PT
+   toward S3.
+   - Two labs, five IR mice and five controls, measured on a different platform (Visium v1).
+   - It holds with PT-restricted injury genes, and with a stricter PT selection.
+   - This is the first external test of position. Kirita's nuclei and human biopsies could not provide one.
+2. **The "S3 identity erased" claim (91's I2) replicates where it can be tested.** In Gharaie, the S2→S3 gradient
+   survives at 0.18–0.20, against 0.36–0.46 for S1→S2, close to our 0.31 against 0.66.
+3. **Notebook 91's location calls carry over gene by gene.** 81–86% sign agreement at day 1 and 24 h, and 60% at
+   12 h.
+4. **Transport loss toward S3 is seen in every IR section** but separates from controls only in Gharaie. It replicates
+   in one of the two labs.
+5. **For the paper:** the S3-weighting of acute injury is no longer a two-mouse observation. The method is
+   injury-stable positional genes from our continuous axis, used to place spots of a public dataset. It transfers the
+   axis to 55 µm Visium without segmentation.

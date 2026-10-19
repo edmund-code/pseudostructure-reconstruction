@@ -61,6 +61,7 @@ Notebook 110 (repair niches of proliferating and transport-losing tubules) is in
 Notebook 111 (the androgen program and the loss of S3 identity after IRI) is in `pt-androgen-s3.md`.
 Notebook 112 (one row per gene across every per-gene result, and which method yields the most) is in `pt-gene-atlas.md`.
 Notebook 113 (which lines of evidence predict recognised biology) is in `pt-evidence-model.md`.
+Notebook 114 (where the injury response sits along the PT, and how it moves) is in `pt-injury-geography-over-time.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

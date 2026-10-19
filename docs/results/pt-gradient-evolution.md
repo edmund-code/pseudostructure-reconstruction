@@ -97,3 +97,43 @@ matched for detectability and reliability.
 - 74 against 189 genes gives modest power (z ≈ 2.5 at AUC 0.6). P1b carries most of it.
 - dN/dS comes from one mouse–human comparison: lineage-specific change cannot be placed on either branch.
 - "Close paralog" at ≥ 50% identity is a proxy for recent duplication. Ensembl's TSV has no duplication node.
+
+## Notebook 106 results
+
+`analysis/notebooks/106_pt_gradient_evolution.ipynb` (logic `106.gradient_evolution.1`) writes to
+`results/pt_gradient_evolution/`. It followed the protocol frozen in d4f04d4 and ran in 15 s.
+- G1: notebook 90's categories.
+- G2: dN/dS for 6,845 of 7,971 genes (dS cap 1.08); LOEUF for 7,710.
+
+| Test | Result | Holds |
+|---|---|---|
+| P1 log dN/dS, reversed against conserved | AUC 0.51 (null 95% 0.55), p 0.29; 70 vs 158 genes | **no** |
+| P1 sensitivity, 100 − % identity | AUC ≈ 0.5 | no |
+| P1b reliability-corrected r(E_mouse, E_human) per dN/dS quartile, low to high | 0.33, 0.38, 0.56, 0.43; lowest − highest −0.09 (null 95% 0.17) | **no**: the most constrained quartile is the *least* conserved |
+| P2 close paralog (≥ 50% identity) | 16% of reversed against 19% of conserved; CMH OR 0.78, p 0.50 | **no** |
+| P3 LOEUF | AUC 0.49, p 0.41 | **no** |
+| Artifact control: random forest on probe counts, detection, expression | cross-validated AUC 0.54 | readable (≤ 0.6) |
+
+- Species-only genes against conserved give the same picture (AUC 0.44–0.48 for dN/dS and LOEUF).
+- Median dN/dS is 0.10 for reversed genes and 0.11 for conserved ones.
+- Several of the strongest reversals are in highly constrained proteins:
+  - Pdk4 (ω 0.06, 93% identity);
+  - Ddit4 (0.05);
+  - Oat (0.07);
+  - Socs2 (0.09);
+  - Hpgd (0.13).
+- Fast-evolving ones exist too: Apoc3 (0.46), Slc17a3 (0.44).
+
+**What this answers.**
+1. **Gradient reversal between human and mouse is not explained by protein evolution, duplication or
+   loss-of-function constraint.**
+   - Reversed genes are as constrained as conserved ones.
+   - Strand's brain-region result does not carry over to a positional shape measure. Liao & Zhang's null for
+     shape divergence does.
+   - The reversals hit conserved proteins, which points to changes in regulation along the nephron. Examples are
+     PPARα/fasting targets such as Pdk4, and stress-response genes such as Ddit4.
+2. **The reversed category is not a panel artefact.** Probe counts, detection and expression cannot tell reversed
+   from conserved genes (AUC 0.54). This is a new, independent check on notebook 90's species result.
+3. **As a method:** sequence features add no prior for which gradients to trust across species. Do not weight
+   species calls by conservation of the protein. For the paper, this is a negative result and a guard on the
+   reversed-gradient list.

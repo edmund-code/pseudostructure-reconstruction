@@ -63,6 +63,7 @@ names.
 | Tissue location (depth, neighbours; 96) | Nephron position organises injury; depth adds nothing; injury graded per tubule | Supports the nephron coordinate as sufficient |
 | Bin-level contamination audit (core rebuild against size-matched random bins; 104) | Neighbour RNA is 2–4× higher at unit edges and follows the anatomy along the PT (AL toward S3, DCT and glomerulus in early S1, infiltrate in late IR S3), but 96.5–98% of gradients and 98.5–99.7% of AKI calls survive the core rebuild; human vs mouse calls are 1.4–1.9× enriched for edge genes (F-test least), AKI calls not | **Keep as a standard check**; flags the few dozen neighbour-RNA genes |
 | External spatial replication of position (injury-stable positional genes place Visium spots on our axis; 105) | Injury rises toward S3 in every IR section of two independent labs (Cheung 12 h ρ 0.41–0.66, Gharaie 24 h 0.45–0.46; controls −0.22 to 0.17); S2→S3 gradient survives less than S1→S2 (0.18–0.20 against 0.36–0.46); 91's location calls agree 81–86% | **New and useful**: the only external test of position; transfers the axis to 55 µm data |
+| Sequence evolution against gradient conservation (dN/dS, close paralogs, LOEUF; 106) | Reversed and conserved gradients are equally constrained (AUC 0.49–0.51; CMH OR 0.78); reversals hit conserved proteins (Pdk4, Ddit4, Oat); an artefact forest cannot separate the groups (AUC 0.54) | Negative result; guards the reversed list, no sequence prior |
 
 ## Current recommendation (2026-10-18)
 

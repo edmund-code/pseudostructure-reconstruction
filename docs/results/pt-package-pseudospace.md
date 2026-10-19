@@ -53,6 +53,7 @@ Notebook 102 (grouping planted calls into programs: RED, OVL, NET against a plan
 Notebook 103 (the planted benchmark on the human vs mouse data) is in `pt-planted-benchmark-hvm.md`.
 Notebook 104 (a bin-level contamination audit of the PT units) is in `pt-contamination-audit.md`.
 Notebook 105 (positional injury effects in independent spatial IRI data) is in `pt-external-spatial-iri.md`.
+Notebook 106 (sequence evolution and the conservation of PT gradients) is in `pt-gradient-evolution.md`.
 The running scoreboard of every way of finding biology tried so far, with its verdict, is `pt-discovery-methods.md`.
 Open issues after the switch are listed in `pt-package-issues.md`.
 

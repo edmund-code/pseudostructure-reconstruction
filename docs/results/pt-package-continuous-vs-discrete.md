@@ -3,6 +3,16 @@
 Part of the switch to the package pseudospace; see `pt-package-pseudospace.md`. Frozen on 2026-10-12, before any
 fit of notebook 74. Notebook 74 runs after notebooks 71, 72 and 75 and reads their outputs.
 
+> **Scope note added 2026-10-20.** A separate continuous-axis round on the **human-vs-mouse** contrast reached the
+> opposite verdict on that axis, and the record is `docs/paper/hvm-continuous-discovery-round.md` §4: of the five
+> surviving gene-level species findings, 5 of 5 are findable by a discrete pure-S1-vs-pure-S3 contrast and 0 of 5
+> need the continuous axis, four of four continuous-only claim families failed, and the centre-of-mass family of
+> statistics was *worse* than neutral because it reads curve amplitude as position. Nothing in notebook 74 is
+> retracted — 74's evidence is gene-shape classes, positional information and change density, not centre of mass —
+> but the cross-species application of a continuous location statistic is now out of scope for the
+> continuous-beats-discrete argument, and a within-group reproducibility null plus an amplitude surrogate are
+> required for any such statistic.
+
 ## Notebook 74 protocol: what continuous analysis along the PT adds to S1/S2/S3
 
 **Question.** On the package pseudospace, what does a continuous analysis along the PT show that the S1/S2/S3 segment

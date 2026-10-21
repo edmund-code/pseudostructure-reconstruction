@@ -61,6 +61,16 @@ with the injury response itself (ρ 0.23–0.66), so for AKI external replicatio
 - **The honest limit, which must be in the paper:** at set level the segment F-test matches the positional F-test
   (74, 75); the spline adds 12 sets and the steps add 5. Continuous wins at gene and position resolution, not at
   pathway-count resolution.
+- **Amended 2026-10-20 after the continuous-axis species round** (`hvm-continuous-discovery-round.md`): on the
+  **species** axis, continuous did **not** beat discrete. Of the five surviving gene-level findings, 5 of 5 are
+  findable by a discrete pure-S1-vs-pure-S3 contrast and 0 of 5 need the continuous axis; four of four
+  continuous-only claim families failed; and the discreteness count that framing rested on measures **1 of 29**, not
+  21 of 29, when the end contrasts are read instead of the category labels. The defensible species-axis claim is a
+  **screening-and-QC advantage** — the continuous fit supplies the per-gene quality machinery (within-species curve
+  reproducibility, amplitude floors, monotonicity, edge-mass and endpoint-pinning diagnostics, 11,055 genes → a
+  95-gene testable core) that says which discrete calls to trust, and it is what exposed the human arm's
+  attenuation. The bullets above are AKI-axis and gene-shape evidence and are **not** affected; keep them, and keep
+  the species axis out of the detection-advantage argument.
 *Why it matters:* this is the paper's second title claim, and reporting the limit is what makes the rest credible.
 
 ### M4 · A planted-truth benchmark of the calling methods
@@ -144,9 +154,20 @@ transporters over-represented among conserved genes (33 of 43 zonated transporte
 zonated genes — written by notebook 47, so open item 18 is closed). The 22 position-dependent pathways mostly
 summarise mouse zonation the human sections do not share.
 *Keep as its own section; do not let it carry the validation argument (see §0).* The species axis is treated in
-depth in `human-mouse-paper-ready.md`, which supersedes this entry: after the package switch the species result is
-**gene-level, not pathway-level**, the reversed-gradient list is the strongest claim on that axis, and the
-conservation-by-strength number above is the last one still computed on the retired coordinate.
+depth in `human-mouse-paper-ready.md` and `hvm-continuous-discovery-round.md`, which supersede this entry on three
+points: the defensible structural statement is that **set calls add nothing beyond their member genes' positional
+strength and the 381-set screen has no per-set power** (13 of 83 sets do replicate at BH ≤ 0.10); the best-supported
+claim on that axis is the **conserved transport core**, not the reversed-gradient list, which was circular and is
+now demoted to five genes on a pure-compartment contrast; and the conservation-by-strength numbers above have a
+package re-run (notebook 73), so nothing here is still blocked on the retired coordinate.
+
+**One finding on this axis outranks the ranked biology and is not in the list above.** The human arm's gradients are
+systematically shallower than the mouse arm's — median amplitude ratio 0.633, 75.8% of core genes flatter, 99% of
+478 inter-gene gaps closing — and our own committed validation already flags it (`criteria_hvm.csv` C12 "A3: no
+attenuation flag", fraction 0.829, **not met**). Its cause is not separable in a 2-vs-2 design, and it is either the
+paper's headline species result or a Limitations paragraph that invalidates every published magnitude. The stain
+that decides it (open items 31–32) should run before any magnitude is published on either axis, because both arms
+share the human-side machinery.
 
 ### B8 · Two hypothesis-driven results that read as translational
 - **Transporter handoffs are not a family-wide principle** (Q1 fails), but 11 conserved handoffs are confirmed in
@@ -226,6 +247,13 @@ Ship it as an example rather than a stage.
    units. Pin threads and record them, or refits do not reproduce.
 2. The elastic curve is weak within segments. Any within-segment claim needs the zone-landmark ratio or an
    equivalent, and the package should say so at the point where it returns the coordinate.
+3. **Added 2026-10-20.** Any centre-of-mass or quantile statistic computed from a fitted curve is an **amplitude**
+   readout as much as a position one: Spearman(|COM − 0.5|, curve amplitude) is 0.891 in mouse and 0.956 in human,
+   and regressing one species' COM on the other's returns a fit whose fixed point is the measurement grid's midpoint
+   to four decimals. If the package ships such a statistic, it must ship (a) the amplitude surrogate as a required
+   null — rescale one arm's curves to the other arm's per-gene amplitude, inject zero movement, and read the
+   statistic — and (b) a **within-group** reproducibility null, because a balanced relabelling that mixes one
+   specimen from each group into every arm cannot see a group-level amplitude asymmetry at all.
 
 ## 5 · What is still missing before any of this can be submitted
 

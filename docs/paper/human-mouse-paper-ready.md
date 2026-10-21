@@ -9,6 +9,17 @@ Written 2026-10-20. The species-axis companion to `paper-ready-results.md`, whic
 > than the one this page named as blocking. The headline sections below are rewritten; the record of what was wrong
 > is in §7 so the mistakes are not silently absorbed.
 
+> **Second round, 2026-10-20: continuous-axis discovery on our own data only.** Six continuous-axis analyses,
+> each attacked three ways, recorded in **`hvm-continuous-discovery-round.md`**. Outcome: the gene-level
+> reversal claim survives, but **only as a sign flip of a pure-S1-versus-pure-S3 contrast in five genes**
+> (Ugt3a1, Dcxr, Slc17a3, Abhd14a, Abhd17b) — not as re-timing, displacement or compression. Four of four
+> continuous-only claim families failed, because the softmax centre of mass reads curve amplitude as position
+> (Spearman with amplitude 0.891 mouse / 0.956 human) and the human arm is systematically flatter (median
+> amplitude ratio 0.633; our own C12 attenuation flag is recorded **not met**). Two statements this page's
+> author made are retracted there: "COM is probe/depth-safe by algebra" (true for an offset, false for scale)
+> and "21 of 29 re-timing events are invisible to the endpoint contrast" (the end contrasts themselves give
+> 16 of 29 **opposite-sign** and exactly 1 genuinely invisible). §1 S1 and §4 R6 below are updated.
+
 Sources: `docs/results/pt-package-issues.md`, `pt-package-species-calls.md` (77),
 `pt-package-continuous-vs-discrete.md` (74), `pt-coexpression-conservation.md` (97), `pt-non-one-to-one.md` (86),
 `pt-positional-decomposition.md` part II (91), `pt-gene-atlas.md` and `pt-evidence-model.md` (112, 113),
@@ -79,11 +90,32 @@ The other two "independent" strands also fail:
   Sh3gl2, Lap3, Mgll, Hpgd, Mfap3l, Slc16a9, Slc41a2, Slc17a3, Acot12, Ugt3a1), not 7. An 11-of-25 overlap against
   a 0.8% base rate is the best available *proof that S5 and S6 are one line*, not two.
 
-**What survives:** one level-free method — co-expression neighbourhood rewiring — separates reversed from conserved
-genes in our own specimens (0.761 / 0.213 on the total layer, 0.386 / 0.295 with position removed). There is also a
-per-gene external corroboration the auditor found while trying to refute the claim, which the original page did not
-cite and which is stronger than what it did cite; it is recorded in `pt-coexpression-conservation.md` and is set
-aside here because the user has scoped the current work to our own data.
+**What survives — rewritten after the second round.** Five genes, and a registration-free statistic. In each
+specimen, contrast mean log1p(observed rate per 10k) between the axis bins that are ≥ 90% PT-S1 and those that are
+≥ 90% PT-S3: no spline, no knots, no cross-species registration, no centre of mass. Fourteen called reversals flip
+there with 4-of-4 specimen agreement, stable at purity 0.90 / 0.95 / 0.99, and five survive every artefact filter:
+
+| gene | mouse S3−S1 (Ctrl1A2 / Ctrl1A4) | human S3−S1 (COR1 / MED1) | detection m/h | amplitude ratio h/m |
+|---|---|---|---|---|
+| Ugt3a1 | +1.168 / +1.289 | −0.789 / −0.832 | 0.754 / 0.497 | 0.755 |
+| Dcxr | −0.536 / −0.565 | +1.064 / +1.194 | 0.868 / 0.778 | 1.743 |
+| Slc17a3 | +0.605 / +0.714 | −0.886 / −0.907 | 0.931 / 0.700 | 1.310 |
+| Abhd14a | −0.198 / −0.429 | +1.220 / +1.294 | 0.415 / 0.261 | 2.656 |
+| Abhd17b | +0.208 / +0.214 | −0.341 / −0.371 | 0.354 / 0.352 | 1.178 |
+
+Four of the five have human amplitude *larger* than mouse, so the species-wide attenuation cannot produce them, and
+all five reverse again in notebook 90's two-bin per-specimen end contrasts. The null that carries them is
+**within-species**, which this project had not been running: trend-sign flips are 0 of 85 mouse-vs-mouse and 0 of 93
+human-vs-human among genes with a real trend, against 15 of 95 cross-species. Nine of the fourteen are dropped with
+reasons in `hvm-continuous-discovery-round.md` §3 — including Miox and Cox7a1, which are `fold-protected = False`,
+i.e. coordinate-construction genes that cannot be independent evidence about their own position.
+
+The word **"monotone"** must go from the reversal wording: only 1 of the 14 has both limbs at monotonicity ≥ 0.80,
+and it is Rhoq, the gene to drop. The co-expression rewiring strand stands only as recorded above (0.386 / 0.295 on
+the residual layer, below its own reproducibility gate); the one passing rewiring verdict is the external arm and is
+out of scope here. There is also a per-gene external corroboration the auditor found while trying to refute the
+claim, recorded in `pt-coexpression-conservation.md` and set aside because the current work is scoped to our own
+data.
 
 **And the repo's own calibration ranks this last.** In notebook 113 the two species lines carrying this headline are
 the only two whose coefficients are indistinguishable from zero: rewired 0.188 [−0.486, 0.887] and reversed
@@ -190,8 +222,13 @@ count is 43–53.
 | R3 | **The conserved transport core**: the de-circularised convergence core, the 11 handoffs, 33 of 43 transporters, disease genes toward S1 | 112 (de-circularised), 97, 101, 108, 47 | **promoted** from R4 |
 | R4 | **Non-1:1 orthology and the sex program inside it** | 86 | **promoted** from R5 |
 | R5 | Conservation rises with gradient strength | 49 **and 73's package re-run** | no longer blocked |
-| R6 | Reversed gradients, on one level-free line of evidence, with the circularity stated | 90 D, 91 S, 97 residual layer | **demoted** from R3 |
-| R7 | Negatives: no per-set power in the 381-set screen; no sequence prior; co-expression below its own reproducibility bar; paralog substitution fails all three tests | 91 S2, 106, 97, 88 | — |
+| R6 | Five reversed gradients as a pure-compartment sign flip, with the circularity and the attenuation stated | pure-compartment contrast, 90 D, 91 S, 97 residual layer | **demoted** from R3; rewritten after round 2 |
+| R7 | Negatives: no per-set power in the 381-set screen; no sequence prior; co-expression below its own reproducibility bar; paralog substitution fails all three tests; **movement and rewiring are independent (movers 2.28× vs non-movers 2.30×)**; **the human arm is the flatter arm and its cause is not separable here** | 91 S2, 106, 97, 88, round 2 F2/F4 | — |
+
+**One section this table does not yet hold.** Round 2's F2 — the human arm's systematically shallower gradients,
+median amplitude ratio 0.633 with C12 recorded not met — is either a Results section of its own (if the stain in
+H3/H4 shows it is biology) or a Limitations paragraph that invalidates every magnitude in the paper (if it shows it
+is measurement). That experiment should run before any species magnitude is published.
 
 ## 5 · What to package, revised
 
@@ -243,6 +280,9 @@ Kept so the corrections are traceable.
 | 33 of 43 transporters is a hand count | notebook 47 writes it |
 | "replication supports genes, not gene sets" | 13 of 83 sets replicate at BH ≤ 0.10; three in all four references |
 | species anchored share rises to 0.870 at the highest k | 0.870 is k ≥ 5; it falls to 0.800 at k ≥ 6 |
+| (round 2) "COM is probe/depth-safe by algebra" | true for an additive per-gene per-species offset, false for scale; the operative species asymmetry is scale (amplitude), and Spearman(&#124;COM−0.5&#124;, amplitude) is 0.891 mouse / 0.956 human |
+| (round 2) "21 of 29 re-timing events are invisible to the endpoint contrast" | 16 of 29 have opposite-sign end contrasts, 12 differ by 1.5–7.0×, and exactly 1 (Hao2) is invisible; the 13 "never scored" are unlabelled by a &#124;E&#124; ≥ 0.5 threshold, not unmeasured |
+| (round 2) "the human PT runs the same genes on a positionally compressed axis, b = 0.457" | the fit's fixed point is the grid midpoint (0.5005 vs 0.49999) and the reverse slope is 1.0003 where a real 2.19× compression demands 2.1895; no compression is consistent with the data |
 | landmark gene-fold 0.93–0.97 | LRS-Z only; LCP 0.820 human, 0.647 human S1 |
 | human neighbour bound "at most −1.2" | −1.4 per specimen |
 | 11 handoffs "confirmed in microdissection and in the atlases" | 11/11 mouse, 9/11 human |

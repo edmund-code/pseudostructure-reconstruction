@@ -119,6 +119,35 @@ it. Resolved items from the earlier list are summarised at the end.
 25. **Unrecorded downloads.** Record URLs, dates and checksums for the GEO, KTEA and Xiong downloads
     in `docs/`, not only in gitignored `SOURCE.txt` files.
 
+## C′. Added 2026-10-20 by the continuous-axis species round
+
+Full record in `docs/paper/hvm-continuous-discovery-round.md`. These are scientific blockers, not bookkeeping.
+
+31. **The human arm's gradient attenuation, cause unresolved — the highest-value item in this file.** Median
+    human/mouse curve amplitude 0.633 (0.73–0.79 on raw binned rates), 75.8% of core genes flatter, and
+    `criteria_hvm.csv` C12 ("A3: no attenuation flag") recorded **not met** at fraction 0.829. Biology and
+    measurement are perfectly confounded with species in a 2-vs-2 design, and both arms of both balanced
+    relabelling refits carry the asymmetry identically, so no internal control can separate them. **Closed by:**
+    RNAscope on one human block measuring S1-vs-S3 fold change for Nt5e, Miox and Slc34a3 against the mouse values.
+    Until it is closed, no species magnitude should be published — and the AKI axis shares the human-side
+    machinery, so it is not a species-only item.
+32. **No positional positive control in the human arm.** Megalin and cubilin have essentially no axial gradient in
+    our human sections (amplitudes 0.170 and 0.197, the lowest checked; LRP2's two human sections anti-correlate at
+    ρ −0.168), against a literature expectation of S1/S2-weighted endocytosis. **Closed by:** megalin IHC on the
+    same block — which also answers item 31 in one stain.
+33. **The reversal wording must drop "monotone".** Only 1 of the 14 called reversals has both limbs at monotonicity
+    ≥ 0.80, and it is the gene to drop. Affects any draft text and figure legend naming monotone gradient reversal.
+34. **Two coordinate-construction genes were carried as reversal evidence.** Miox and Cox7a1 are
+    `fold-protected = False` in `d_end_contrasts.csv.gz` (only 5.7% of genes are), i.e. they helped fit the axis
+    they are being positioned on. Decide whether to exclude unprotected genes from every species claim by rule, and
+    state the rule in Methods.
+35. **No sentence may name a human PT segment.** Human PT-S2 has segment length 0.0609 in HUK1_COR1 and **−0.0769**
+    in HUK1_MED1, with S2→S3 (0.5895) occurring before S1→S2 (0.6665); human S1 spans 0.543–0.666 of the axis
+    against mouse 0.342/0.339. Sweep the drafts for "human S2" and "S3-ward in human".
+36. **The collaborators' SGLT2→SGLT1 question cannot be answered with this panel.** Slc5a1 has detection_human
+    0.061 and is a mouse neighbour marker (ratio 7.12); Slc5a2–Slc2a2 is flat. Tell them, and scope any SGLT2i work
+    to an assay that detects SGLT1 in human.
+
 ## D. Figures (round 3 and later)
 
 26. **Figure 5.** The coordinator's gene set is drawn. Recommendations:

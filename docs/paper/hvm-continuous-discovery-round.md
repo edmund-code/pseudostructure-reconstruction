@@ -165,6 +165,49 @@ than the fitted curves, and the full filter stack on all 121. **Umod is in the l
 gene**, so the neighbour-marker filter is the test case for this set — if it does not remove Umod, the set needs
 a stricter contamination gate before anything is published from it.
 
+#### F2c · The contamination gate, run: the list was contaminated and the result was not
+
+2026-10-21, `analysis/scripts/sharpening_set_admixture_human_vs_mouse.py`. Umod's presence was the right thing to
+worry about, and the test has to be a measurement on our own units rather than a lookup in someone else's atlas —
+an external atlas answers where a gene sits in *that* cohort and cannot see ours. So: build a per-bin
+distal-identity score from thick-limb, distal-convoluted and collecting-duct markers (`Umod`, `Slc12a1`, `Kcnj1`,
+`Slc12a3`, `Pvalb`, `Calb1`, `Aqp2`, `Aqp3`, `Scnn1g`, `Atp6v1g3`, `Atp6v0d2`, `Foxi1`, `Slc26a4`) out of the
+model-free binned rates, and ask which genes ride it. **The sign is the test**: admixture adds a distal gene's
+signal where the distal tissue sits, so the hypothesis predicts a *positive* correlation. A strongly negative one
+is what a genuinely proximal gene does.
+
+| | mouse Ctrl1A2 / Ctrl1A4 | human COR1 / MED1 |
+|---|---|---|
+| ρ(distal score, bin index) | −0.618 / −0.388 | **+0.389 / +0.397** |
+| ρ(proximal-identity score, bin index) | −0.812 / −0.854 | **−0.062** / −0.565 |
+| distal score agreement within arm | +0.741 | +0.830 |
+
+So the precondition the attack needs is present: the distal signal inside our units is axially structured, it
+reproduces within each arm, and **it points the opposite way in the two species**. The consequences for the set:
+
+- **Positive riders (ρ > +0.5 in both sections) are enriched 6.3×**: 38 of 121 (31.4%) against 72 of 1,429 (5.0%)
+  of the clean set. On the mouse score the same count is 5 of 121.
+- **83 of 121 survive** dropping positive riders; 64 survive dropping riders of either sign.
+- **But the phenomenon is not made of admixture.** Across the clean set, sharpening barely tracks the score:
+  ρ(log2 amplitude ratio, ρ_distal) = **+0.174** in both human sections, +0.056/+0.079 in mouse. Admixture-created
+  sharpening would show a strong positive dependence here.
+
+**Out of the headline**, with their human scores: Umod +0.594, Ppp1r1a +0.667, Ddr1 +0.681, Abhd14a +0.656,
+Pter +0.621, Sgms2 +0.608, Egf +0.698. The neighbour-marker worry was correct and it removes seven of the twenty
+genes F2b named — including Abhd14a and Pter, two of the three genes F2b had just rescued as "amplitude change
+real, position change artefactual". Their amplitude change is now in doubt too.
+
+**Dpp4 survives and should lead the set.** It is an *anti*-rider (−0.579 / −0.598) — highest where distal
+admixture is lowest — and its species asymmetry is independently published in another organ with antibody
+validation (`literature-novelty-ledger.md`). Also surviving, with their scores to be reported alongside:
+Ggact (+0.468/+0.540, borderline), Tmem184a (+0.489/+0.465), Arhgap27 (+0.200/+0.236), Mob1b (−0.385/−0.319),
+Oxct1 (+0.477/+0.704, borderline), Ctsb (−0.641/−0.644), Sfxn2 (−0.699/−0.633). Slc7a13 appears among the
+survivors but is on the untestable list (human detection 0.12), so that filter must be applied to this set too.
+
+A limit worth recording in its own right: **the proximal-identity score barely orders along the human axis in
+HUK1_COR1 (−0.062, against −0.81/−0.85 in mouse)**. That is a second, independent sighting of the problem open
+item 32 names — this cohort has no strong positional positive control in the human arm.
+
 ### F3 · Methodological: the softmax centre of mass is not a position statistic on this cohort
 `COM = softmax(log-rate) @ grid` is exactly invariant to an additive per-gene per-species log offset. That is
 true, and it is what "probe-panel safe by algebra" rested on. It is also **maximally sensitive to curve
@@ -241,6 +284,19 @@ discovery) and **PMID 2535703** (rat CD73 activity highest in S1 — the *opposi
 mRNA gradient, which is why H8 must be stained before any CD73 claim is published). Literature was used only
 for gene function and novelty classification; no literature value was used to validate, calibrate or veto any
 measurement, and where it disagrees with us it became an experiment rather than a verdict.
+
+> **Superseded 2026-10-21 by `literature-novelty-ledger.md`, a full-text pass.** Two of the classifications below
+> are now known to be wrong, and one citation in them does not exist as described.
+> - **PMID 18981171 (Mackenzie 2008) does not report a species difference.** I checked the record myself: it is a
+>   human cloning, expression and enzymology paper whose distribution sentence reads *"UGT3A1 is found in the liver
+>   and kidney, and to a lesser, in the gastrointestinal tract."* No mouse data, no species comparison, no
+>   intra-renal localisation. **Delete this attribution.** UGT3A1's axial reversal remains a DISCOVERY; the
+>   organ-level species claim was never published and must not be cited to anyone.
+> - **DCXR is not discovery-grade.** Its human S3 weighting is stated in words by a 19-donor single-cell study
+>   (McEvoy 2022, PMID 36496458, Fig. 1e), and both limbs of the reversal sit in a 2012 open supplementary table.
+>   It must be rewritten as a **validation** — which is what it is, and it is the strongest one the paper has.
+> - **SLC17A3's human limb is published twice and agrees with us** (Sakaguchi 2024, PMID 38166558, Table 1:
+>   6.02 / 3.82 / 3.56 across PT_S1/S2/S3). Also a validation, not a discovery.
 
 **Novelty, as classified by the same pass (abstract-level).** Discovery-grade: the UGT3A1 intra-renal axial
 reversal (the organ-level tissue-distribution species difference is already published, PMID 18981171, but the

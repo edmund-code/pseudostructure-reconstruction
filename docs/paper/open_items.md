@@ -158,6 +158,63 @@ Full record in `docs/paper/hvm-continuous-discovery-round.md`. These are scienti
     0.061 and is a mouse neighbour marker (ratio 7.12); Slc5a2–Slc2a2 is flat. Tell them, and scope any SGLT2i work
     to an assay that detects SGLT1 in human.
 
+## C″. Added 2026-10-21 by the AKI-axis audit and the full-text literature pass
+
+Sources: `aki-axis-thesis-audit.md`, `literature-novelty-ledger.md`. Items 37–40 are the ones that change what the
+paper may claim; 41–46 are corrections and chores.
+
+37. **Three sentences are now forbidden, on published prior art.** "First to order unordered cross-sections"
+    (Chakravorty 2026, Cell — scPrisma on 337 per-tubule aggregates, no x/y). "Generalises to any repeated
+    structure such as crypts and lobules" — that is a 2022 SpaceFold quotation (Niec 2022), four years older than
+    anything the project's earlier method survey found, and the word "pseudospace" is itself taken at least three
+    times. "Aggregate per structure then order the aggregates." The novelty must move onto the **identification
+    contract** with all five qualifiers attached (partial cross-sections at unknown position; unknown endpoints;
+    specimen-dependent coverage; a single-cell-type axis; specimen-level calibration with cross-species transfer),
+    and the defence is that **no published open-axis method can run on a single-cell-type epithelium** — SpaceFold's
+    axis is built from cell-type composition and needs a deconvolution reference.
+38. **Two experiments the field will expect, neither yet run.** (i) scPrisma's **linear** mode on our tubule
+    aggregates as a named comparator to the elastic curve. (ii) The physical validation this class of method is now
+    judged by: inferred position against each cross-section's **own measured diameter or area** — not cortical
+    depth, which this project has already ruled out as a selector. Chakravorty validates at ρ 0.94 against a
+    measured physical dimension; a reviewer who knows that paper will ask.
+39. **The highest-value single experiment from the whole round: stain DPP4 in matched human and mouse kidney
+    cortex.** Dpp4 is the top gene of the sharper-in-human set, it survives the admixture screen as an anti-rider
+    (ρ_distal −0.579/−0.598), and its species asymmetry is already published in human-versus-mouse **liver** with
+    immunofluorescence validation (Yakubovsky 2026, Nature — verified in full text). Antibody staining carries no
+    probe panel, so a positive result removes the per-gene capture explanation for the entire 121-gene set in one
+    slide, and the prediction is pre-registered in someone else's figure. This now outranks item 31's RNAscope
+    panel on cost-to-information.
+40. **A third candidate cause for the attenuation, testable on our own data.** Item 31 records two surviving
+    causes. The literature supplies a third that is distinct from the positional smearing already excluded:
+    a **composition** difference, i.e. fewer pure-S3 units in the human arm. Test internally — condition the
+    amplitude ratio on per-specimen axial coverage and pure-S3 unit counts from `composition.csv` and report
+    whether it moves. Until then item 31 should read *three* causes, not two.
+41. **Reframe DCXR and SLC17A3 as validations, in those words.** Both have published human limbs that agree with
+    us (McEvoy 2022 Fig. 1e for DCXR in 19 donors; Sakaguchi 2024 Table 1 for SLC17A3 at 6.02/3.82/3.56). DCXR is
+    the paper's strongest validation — two independent designs, neither carrying our probe panels or our axis, get
+    the same answer in both species — and only its within-pure-S1 and within-pure-S3 half is new. Published as a
+    discovery it is the claim that costs the paper credibility.
+42. **Delete the PMID 18981171 attribution wherever it appears.** It is a human cloning and enzymology paper with
+    no mouse data and no intra-renal localisation; it cannot support the UGT3A1 species framing. Already struck in
+    `hvm-continuous-discovery-round.md`; check the figure legends and any draft text.
+43. **Stop calling ABHD14A a reversal** — the published rodent record has mouse flat, so the claim is "no mouse
+    gradient, a strong human gradient", the wording already used for NT5E. And **drop the ABHD17B/ASCT2
+    mechanism**: it requires apical ASCT2 in the mouse straight segment and the published rodent data have none.
+44. **Three abstract-only sources are load-bearing and must go through the library** before the species sections
+    are written: **Vrhovac 2015** (the only human measurement behind the S1/S2-versus-S3 SGLT2/SGLT1 scheme),
+    **Zhai 2003** (mouse PT ultrastructure, the classical claim that runs against claim B), **Guder & Ross 1984**.
+45. **Cite the literature that runs against claim B in the same breath as claim B.** Albadry 2024 measures
+    cross-species gradient intensity in liver and finds human similar to **mouse** with rat as the flat outlier —
+    the opposite direction for our species pair. Claim B's novelty is intact (no publication in any organ reports a
+    species-systematic axial amplitude difference, and the best-placed paper compares direction only, R = 0.15),
+    but it must not be presented as unopposed.
+46. **Corrections found by the AKI audit.** The constant-within-label control at 4.6%, on which the surviving
+    change-density claim rests, has **not** been re-derived — do that before publishing the 6–20× ratio.
+    `fold-protected` has **opposite polarity** between `a_gene_classes.csv.gz` (True for 93.8%) and
+    `d_end_contrasts.csv.gz` (unprotected ~5.7%); rename one. `pt-continuous-axis-experiments.md`'s "1,009 /
+    141 replicated / 115 fold-protected" should read **145 / 118**; and it names Slc34a1 and Slc5a2 as
+    "continuous shapes favoured" when the lowest-BIC model of six for both is a **step** model.
+
 ## D. Figures (round 3 and later)
 
 26. **Figure 5.** The coordinator's gene set is drawn. Recommendations:

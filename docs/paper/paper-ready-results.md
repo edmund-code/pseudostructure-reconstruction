@@ -71,14 +71,56 @@ with the injury response itself (ρ 0.23–0.66), so for AKI external replicatio
   95-gene testable core) that says which discrete calls to trust, and it is what exposed the human arm's
   attenuation. The bullets above are AKI-axis and gene-shape evidence and are **not** affected; keep them, and keep
   the species axis out of the detection-advantage argument.
+- **Amended again 2026-10-21, after the AKI-axis audit** (`aki-axis-thesis-audit.md`). The sentence above that the
+  bullets are "not affected" was premature; the AKI and mouse evidence has now had the same treatment and most of
+  it also narrows. Every number below was re-derived from the committed tables.
+  - **Bullet 1 holds, the ratio does not.** 28.1% / 2.7% reproduces exactly (1,480 and 142 of 5,259). But
+    `dBIC continuous` lets the continuous family field its best of three models and pins the step family to one;
+    the step family has a second member in the same table (`DS`, steps plus a within-segment slope), and 254 of the
+    1,480 "continuous" genes have `DS` as their actual best fit of six. Symmetric at the same ±6 margin the pair is
+    **17.3% / 6.6%**, a ratio of 2.6 rather than 10.4. Publish the symmetric pair, and beside it the statistic that
+    is amplitude-free: the comparison decides for 30.8% of genes and chooses continuous **91.2%** of the time, at
+    every amplitude decile. Good news from the same check — the species round's killer does **not** transfer:
+    Spearman(`dBIC continuous`, amplitude) = **0.179** against 0.891/0.956 there, and the discrete-favoured genes
+    have the *larger* median amplitude (1.169 against 0.915).
+  - **Bullet 2 holds on the wrong statistic.** 26 and 132 reproduce. But `above labels` compares **mutual
+    information**, which for a three-level predictor is capped at log2 3 = 1.585 bits; the labels score 1.123, and
+    all 26 margins (0.009–0.244) fit inside the 0.462-bit headroom to that ceiling, which **no set of 1,356**
+    reaches. Publish the localisation statistic instead: **69 of 1,356** sets predict a held-out unit's position
+    with lower median error than its own segment label, the 26 at 0.120–0.147 against 0.177.
+  - **Bullet 3 must be withdrawn.** An independent committed table — `pt_transition_sharpness/gene_edges_agreed`,
+    2,966 two-mouse-agreed per-gene edges fitted on **equal-count bins**, so no dense bin can manufacture a peak —
+    puts change **at** the boundaries, not beside them: enrichment 1.108 / 1.191 / 1.244 / 1.242 at ±0.10 / 0.15 /
+    0.20 / 0.30, and depletion further out (0.4295 against 0.5408 uniform). What survives, and is the better claim
+    anyway, is that within-segment **constancy** fails: 28.7% of reproducible excess change sits more than 0.3
+    units from both boundaries against 1.2% for a step transcriptome.
+  - **Bullet 4 splits.** Transition **width** (85) is the one genuinely continuous-only result in the paper and it
+    is answered: 33 pathway edges, median width 1.239 axis units, and **32 of 33 wider than this coordinate's own
+    response to a true step of the same amplitude** (median 2.59×). Within-segment **position** (84) is not
+    answered on this axis — its segment window averages in the human donor, so its "S2" is 48.5% of the mouse's own
+    S2 and each "third" is 0.162 units against a 0.26–0.33-unit label-step width. Drop the 84 half.
 *Why it matters:* this is the paper's second title claim, and reporting the limit is what makes the rest credible.
+**After both audits the claim has three measured supports** — transition width, the failure of within-segment
+constancy, and the planted S2 bump — and everything else is a resolution-and-screening advantage. That is what the
+methods section should claim.
 
 ### M4 · A planted-truth benchmark of the calling methods
 Power and false calls with a known answer (100, 102, 103): the positional F-test finds shape, S3-only and S2-bump
 changes at 0.5 log2 (≥ 0.96) and is blind to pure level (≤ 0.06); clustering finds level at 0.5 log2 and shape only
 at 1 log2. One planted program makes 100–650 sets significant, so **raw set counts are never reportable**; the
 network grouping returns 8–10 programs.
-*Why it matters:* it is the only yardstick with ground truth, and it justifies running two screens instead of one.
+- **Amended 2026-10-21** (`aki-axis-thesis-audit.md`). The sensitivities are correctly reported, but M4 has been
+  read as "the continuous screen detects planted structure the discrete screen misses", and that reading fails.
+  Paired on the identical planted datasets, positional F-test minus a three-segment step comparator gives a mean
+  margin of **exactly 0.0 in 19 of 32 cells** and exceeds its own across-replicate spread in 2; at 1 log2 both sit
+  at ceiling. The one direction-consistent exception is worth keeping precisely because it is specific: the planted
+  **S2 bump** — the shape a segment model cannot express — gives **15 positional wins and 0 segment wins** (mean
+  margin +0.125). Also correct the quoted ranges: "≥ 0.96" is the AKI frozen arm only (HvM frozen 0.917–0.967,
+  HvM low dose 0.750–0.875), "100–650 sets" is 0–795, and "8–10 programs" sits on a **null of 7** with nothing
+  planted.
+*Why it matters:* it is the only yardstick with ground truth, and what it actually separates is the two screens we
+run — the positional F-test finds shape and is blind to level, clustering finds level. That is a sufficient reason
+to run both, and it needs no continuous-beats-discrete framing.
 
 ### M5 · An external time course used as a ruler, and the position × time grid
 Notebook 99 dates a single-time-point spatial dataset by projecting phase programs defined in independent data:
@@ -110,7 +152,13 @@ no segmentation and no tissue x/y. This is the mechanism by which anyone else us
 
 ## 2 · Biology that should go in the paper
 
-### B1 · Acute PT injury is S3-weighted, measured continuously, and it replicates three times
+### B1 · Acute PT injury is S3-weighted, and it replicates three times
+> **Amended 2026-10-21** (`aki-axis-thesis-audit.md`): **"measured continuously" has been removed from this
+> title.** The biology holds and is strong — S3−S1 +0.2106 and +0.1946 in the two IR mice, 8 of 8 injury and loss
+> programmes monotone S1 < S2 < S3, and it **passes the amplitude surrogate that destroyed the species axis**
+> (Spearman −0.03 to +0.11). But a plain segment-label pseudobulk reproduces the continuous drift at Spearman
+> **1.000000** (Pearson 0.9939), so the continuous axis is how we measured this, not what made it visible. Same
+> verdict for B2, whose 0.52/0.31 survival ratios also reproduce from segment means alone (0.520–0.554).
 - On our axis, in both directions and both mice, beyond the controls' own spread (99).
 - In two independent labs' spatial IRI sections (105: Cheung 12 h ρ 0.41–0.66; Gharaie 24 h 0.45–0.46; controls
   −0.22 to 0.17).
@@ -124,7 +172,15 @@ support. **Caveat to carry:** it is acute. The geography is gone by 14 days.
 The IR PT keeps 0.52 of the healthy gradient overall and 0.31 from S2 to S3, against 0.9–1.2 under relabeling (91).
 Replicated in Gharaie: S2→S3 survives at 0.18–0.20 against 0.36–0.46 for S1→S2 (105).
 
-### B3 · Late S1 is the least responsive stretch of the PT
+### B3 · Late S1 is the least responsive stretch of the PT — WITHDRAWN
+> **Withdrawn 2026-10-21** (`aki-axis-thesis-audit.md`). The project's own interior-dip rule
+> (`pt-positional-decomposition.md`), applied to all 16 arms of `i4_program_profiles.csv` rather than the two it was
+> written for, **fires in 14 of 16 — including both control mice, whose relative excess (0.744 and 0.831) is larger
+> than the injured mice's (0.566 and 0.501)**. The committed values reproduce exactly (minima at 0.85/0.85, excess
+> over range 0.566/0.501); they are simply not specific to injury. A rule that fires harder in the controls cannot
+> carry this claim. Notebook 114's independent z-score reading — our own down-called genes separate S1 from S2 more
+> than S3 from S2 — is untouched, and "S1 is spared" should live there instead, worded as a segment-level result.
+
 A replicated minimum at 0.85 units, in every injury phase and in both directions (91, 99). It does not appear at
 55 µm (105), which is itself the resolution argument. Notebook 114 adds that our own down-called genes separate
 S1 from S2 more than S3 from S2 (z −10.6 at 4 h), so the paper should say "S1 is spared" alongside "S3 is worst".

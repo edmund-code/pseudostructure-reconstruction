@@ -255,3 +255,24 @@ Still from the earlier list:
 - the "13-cluster" wording in AGENTS.md and `docs/workflows/pseudospace.md`; the cross-species
   partitions have 11 clusters;
 - the notebook 01 working copy's commented machine path, which must not be staged.
+
+47. **M6's convergence ladder needs a new primary null, and the AKI half of it needs withdrawing.**
+    Re-run 2026-10-21 with the project's own `stratified_line_null` and one change — strata of expression decile
+    **× |amplitude| quartile** instead of decile alone, because a large-effect gene is more likely to be called by
+    every line and the published null does not model that. The AKI ladder collapses (5.08× → **1.63×** at k ≥ 6;
+    the frozen k ≥ 3 bar sits at **1.04×**), so withdraw the AKI multiples. The species ladder survives with
+    deflated multiples (k ≥ 4 **1.91×**, k ≥ 5 **3.21×**, k ≥ 6 **16.7×**) and should be reported with the
+    amplitude-preserving null as primary and the decile-only as a sensitivity. Both atlases are *below* 1.0 at
+    k ≥ 1 and k ≥ 2 under either null — lines overlap less than chance at the bottom — which deserves its own
+    sentence, being the opposite of what a shared-artefact story predicts.
+48. **Two lines cannot be both evidence and anchor; fix the bookkeeping.** Verified as exact column identities:
+    `call S7 handoff` and `is handoff` are the **same 58-gene column**, so an "anchored share" on a core counting
+    S7 is partly tautological (S7 carries 7 of the 24 species genes at k ≥ 5); all 195 `call A9 androgen` calls lie
+    inside the 566-gene `is androgen set`; and `supported` is **exactly** `call A5 | call A6`, two of the nine
+    counted AKI lines. Drop S7 from the counted lines or stop calling handoff membership an anchor, and say that
+    `supported` overlaps the line count.
+49. **A package-era species ladder has six lines, not seven.** The atlas-level line **S4** is an external-atlas
+    contrast and cannot be rebuilt package-era, which is the answer to the open question recorded in
+    `human-mouse-paper-ready.md` §6. Replacements exist on disk for the other gaps (level line in
+    `s3_level_gene_table.csv`; F-test in `gene_statistics_human_vs_mouse.csv`, 3,584 of 11,055 against notebook
+    67's SCF13-era 3,889 at Jaccard 0.62; zonation class in `pt_package_label_comparison/.../43/`).

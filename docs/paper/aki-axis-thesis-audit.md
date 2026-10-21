@@ -183,7 +183,65 @@ segment label must give the label its best available model and state the cardina
 predictors.** That is now a standing requirement, beside the amplitude surrogate and the
 within-group null.
 
-## 4 · Open questions this leaves
+## 4 · The convergence ladder (M6), which the atlas track attacked and I re-ran
+
+The second track rebuilt the species convergence ladder on package-era lines. It found something
+larger than it was asked for, so I re-ran the ladder myself with the project's own
+`stratified_line_null`, changing one thing: the strata.
+
+The published null permutes each line's calls within **expression decile**. That holds detection
+depth fixed and lets amplitude float — and a gene with a large effect is more likely to be called by
+*every* line, so lines agree for a reason the null does not model. Stratifying by **expression decile
+× |amplitude| quartile** fixes that. 200 draws, seed 112, both atlases:
+
+| k ≥ | AKI observed | published-style null | amplitude-preserving null |
+|---|---|---|---|
+| 3 | 3,158 | 1.095× | **1.038×** |
+| 4 | 1,712 | 1.656× | **1.154×** |
+| 5 | 795 | 2.798× | **1.339×** |
+| 6 | 295 | 5.040× | **1.630×** |
+
+| k ≥ | species observed | published-style null | amplitude-preserving null |
+|---|---|---|---|
+| 3 | 1,522 | 1.309× | **1.076×** |
+| 4 | 238 | 2.639× | **1.907×** |
+| 5 | 24 | 6.916× | **3.206×** |
+| 6 | 5 | 45.5× | **16.7×** |
+
+The published decile-only ladder reproduces to three decimals, so the implementation is faithful.
+The two atlases then part company, and the distinction matters:
+
+- **The AKI ladder does not survive.** 5.08× at k ≥ 6 becomes 1.63×, and the frozen k ≥ 3 bar that
+  the core list actually uses sits at **1.04×**. M6's AKI convergence is substantially a restatement
+  of effect size: big effects get called by many lines.
+- **The species ladder does survive, with its multiples deflated.** k ≥ 4 stays at 1.91×, k ≥ 5 at
+  3.21×, k ≥ 6 at 16.7× — the top rungs are still well above a null that already knows each gene's
+  amplitude. The five genes at k ≥ 6 are **Mme, Lap3, Hpgd, Slc16a9, Slc17a3**.
+
+**Three circularities, verified by me as exact column identities rather than inferred:**
+
+1. `call S7 handoff` and `is handoff` are **literally the same 58-gene column**. So any "anchored
+   share" quoted on a species core that counts S7 as a line is partly a tautology — scoring that
+   line *is* being anchored. S7 carries 7 of the 24 genes at k ≥ 5.
+2. All **195** `call A9 androgen` calls lie inside the 566-gene `is androgen set` anchor. The line is
+   its own anchor; the evidence model already records its leaking coefficient (4.94 against 0.31
+   corrected).
+3. `supported` is **exactly** `call A5 Kirita 12 h | call A6 KPMP` — the support filter is two of the
+   nine counted lines, so a gene's "support" is not independent of its line count.
+
+**What to do.** Report the species ladder with the amplitude-preserving null as the primary (and the
+decile-only as a sensitivity, not the reverse); withdraw the AKI multiples above k ≥ 3; drop S7 from
+the counted lines or stop calling handoff membership an anchor, because it cannot be both; and state
+that `supported` overlaps the line count. Note also that k ≥ 1 and k ≥ 2 are *below* 1.0 in both
+atlases under either null — the lines overlap **less** than chance at the bottom of the ladder, which
+is worth a sentence of its own since it is the opposite of what a shared-artefact story predicts.
+
+Two further limits from the same track, recorded without re-derivation: the nine AKI lines come from
+four independent datasets, and collapsing to one line per dataset removes the convergence
+(0.89× at k ≥ 4); and the species atlas-level line **S4 cannot be made package-era at all** because
+it is an external-atlas contrast — so a package-era species ladder has six lines, not seven.
+
+## 5 · Open questions this leaves
 
 1. The constant-within-label control at 4.6% is the number the surviving bullet 3 claim rests on and
    I have not re-derived it. Do that before it is published.

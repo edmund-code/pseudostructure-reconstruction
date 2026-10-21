@@ -187,6 +187,25 @@ reproduces within each arm, and **it points the opposite way in the two species*
 
 - **Positive riders (ρ > +0.5 in both sections) are enriched 6.3×**: 38 of 121 (31.4%) against 72 of 1,429 (5.0%)
   of the clean set. On the mouse score the same count is 5 of 121.
+  > **Corrected the same day: the 6.3× is inflated, and the admixture-specific part is 2.13×.** The distal score
+  > is itself axially monotone, so a rank correlation with it partly re-encodes the gene's own axial direction.
+  > Measured: corr(ρ_distal, ρ_bin-index) across genes = **+0.686 / +0.697** in the two human sections (and
+  > −0.865 / −0.723 in mouse). Separating the two:
+  > - Pure **direction** — rises distally in human (ρ with bin index > 0.5 in both sections) — is enriched
+  >   **3.41×** in the sharpening set on its own (63 of 121 = 52.1% against 218 of 1,429 = 15.3%).
+  > - **Conditioning on direction**, the rider share is still 35 of 63 (55.6%) in the sharpening set against
+  >   57 of 218 (26.1%) in the clean set — **2.13×**, and that part is admixture-specific.
+  >
+  > So the test is weaker than first stated and it does not collapse: the enrichment is real but roughly a third
+  > of the headline figure, and the right reading of the raw 6.3× is "the sharper-in-human genes are
+  > disproportionately genes that rise toward the human distal end, where the human arm's distal admixture also
+  > sits." The **named gene calls below are unaffected** — each is independently corroborated, Umod and Ppp1r1a by
+  > the rodent PT record and Abhd14a by its own detection (0.256–0.261, at the gate).
+  >
+  > **The instrument that would settle it is a PT-identity restriction**, not a marker-score correlation: restrict
+  > to units called proximal tubule by identity rather than by label, and ask what fraction of each gene's
+  > contrast survives. `post_hoc_unit_identity_by_bin.csv` carries it for the two mice only (PT identity 0.87–1.00
+  > per bin), so the human side needs building. Recorded as an open item.
 - **83 of 121 survive** dropping positive riders; 64 survive dropping riders of either sign.
 - **But the phenomenon is not made of admixture.** Across the clean set, sharpening barely tracks the score:
   ρ(log2 amplitude ratio, ρ_distal) = **+0.174** in both human sections, +0.056/+0.079 in mouse. Admixture-created

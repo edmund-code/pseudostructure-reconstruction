@@ -276,3 +276,48 @@ Still from the earlier list:
     `human-mouse-paper-ready.md` §6. Replacements exist on disk for the other gaps (level line in
     `s3_level_gene_table.csv`; F-test in `gene_statistics_human_vs_mouse.csv`, 3,584 of 11,055 against notebook
     67's SCF13-era 3,889 at Jaccard 0.62; zonation class in `pt_package_label_comparison/.../43/`).
+
+## C‴. Added 2026-10-21 by hypothesis round 2
+
+50. **Build the PT-identity restriction for the human arm.** It is the filter that decides the gene list, and it is
+    the one instrument that separates "the compartment changed" from "the cell type changed": it flipped Hao2's
+    mouse sign (retention 0.047, so its mouse proximal weighting was thin-limb units inside the PT-S3 label) and
+    it is the reason to trust Pck1 (0.808), Dcxr (0.861) and Kif12 (0.943). `post_hoc_unit_identity_by_bin.csv`
+    carries it for the two mice only (PT identity 0.87–1.00 per bin); the human side needs building. Until it
+    exists, no sharper-in-human or reversal list is final. This supersedes the marker-score admixture screen, whose
+    rank correlation partly re-encodes axial direction (corr with ρ_bin +0.686/+0.697) and whose admixture-specific
+    enrichment is **2.13×**, not the 6.3× first recorded.
+51. **Ugt3a1 comes off the reversal list.** It is the only many:many ortholog in the set, its mouse paralog Ugt3a2
+    is absent from the shared panel so paralog substitution cannot be excluded internally, 94% of its human effect
+    is thick-limb-attributable, the sign flips to +0.392 extrapolated to zero differential, and its human distal
+    bins hold 5–24 counts. The project had it ranked first. Also off: Hao2 (and the oxalate/glyoxylate trio),
+    Abhd14a (detection 0.256–0.261), Abhd17b (0.351/0.351), Slc26a1/Sat1, the Acy1⇄Acy3 baton pass, and
+    Slc6a18→Slc6a19 as a species handoff.
+52. **The reversal screen's operating point is τ = 0.20, not 0.15.** Re-derived independently: at τ = 0.15 the
+    human-section within-arm null still fires twice on the raw statistic, and is empty only after a filter stack
+    containing an external-atlas filter. At **τ = 0.20 both within-arm nulls are empty with no filtering**, giving
+    **47 genes** on internal-only filters, **47 of 47** passing an orientation-free re-check (Spearman against bin
+    index over all 20 bins, no purity selection, opposite-signed in all four specimens). Use that pair of numbers.
+53. **Put the human-replication fact in the limitations verbatim.** The two human sections are two sections of one
+    block and they agree **worse than two separate animals**: 44 gene pairs differ between them at |Δz| ≥ 0.3
+    against 4 between the two mice. Every "4-of-4 agreement" in this project is 2 biological mouse replicates plus
+    2 technical human sections.
+54. **Tell the collaborators the SGLT2i answer, because a powered null is more useful than silence.** The testable
+    unit SGLT2 → GLUT2 is **identically positioned** in the two species: matching index −0.393 mouse against
+    −0.396 human, ΔD = −0.003, against an amplitude surrogate generating a median |ΔD| of 0.383 with 48.6% of
+    4,000 draws exceeding the observation; the two amplitude ratios are 0.533 and 0.531. So no positional
+    explanation for species differences in SGLT2i response is supported here, the distal escape route is
+    unmeasured, and the assay that would answer it must detect SGLT1 in human PT (RNAscope or IHC, not this panel),
+    scored on straight versus convoluted profiles.
+55. **Resolve PCK1's mouse limb before publishing it as a reversal.** Our mouse Pck1 falls toward S3
+    (E −0.354/−0.255) while the published rodent record reports PEPCK *highest* in S3 (Drewnowski 2002,
+    **abstract only**, so load-bearing-on-abstract). Human rises strongly (+0.743/+0.864) at detection 0.98/0.99,
+    the best-detected gene in the list, with PT-identity retention 0.808 — so the claim is worth the slide, and the
+    stain already proposed resolves both questions at once.
+56. **Examine the NAD branch point; it is the round's most interesting unexamined result.** QPRT reverses
+    independently (mouse +0.127/+0.185 → human −0.296/−0.434 on PT-identity units, and also on the committed
+    fitted statistic, detection 0.656/0.567, balanced probes) and neither track promoted it. With HAAO conserved
+    distal in both arms and ACMSD reversed, three genes of the branch point now point the same way.
+57. **KIF12 is the best new reversal and has a named upstream cause.** Mouse −0.471/−0.503 against human
+    +0.384/+0.435, detection 0.87/0.86, PT-identity retention 0.943, and a direct HNF1B transcriptional target —
+    which is testable, unlike most of the list.

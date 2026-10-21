@@ -136,7 +136,10 @@ Conservation index ≈ 0.55 in the top 1% of genes, 0.1–0.3 among moderately z
 agreement rises from ≈ 0.5 to 0.85–0.89 with strength; transporters over-represented among conserved genes (33 of
 43 zonated transporters — a count made by hand, still open item 18). The 22 position-dependent pathways mostly
 summarise mouse zonation the human sections do not share.
-*Keep as its own section; do not let it carry the validation argument (see §0).*
+*Keep as its own section; do not let it carry the validation argument (see §0).* The species axis is treated in
+depth in `human-mouse-paper-ready.md`, which supersedes this entry: after the package switch the species result is
+**gene-level, not pathway-level**, the reversed-gradient list is the strongest claim on that axis, and the
+conservation-by-strength number above is the last one still computed on the retired coordinate.
 
 ### B8 · Two hypothesis-driven results that read as translational
 - **Transporter handoffs are not a family-wide principle** (Q1 fails), but 11 conserved handoffs are confirmed in

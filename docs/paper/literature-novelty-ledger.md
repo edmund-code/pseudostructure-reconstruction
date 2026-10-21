@@ -144,6 +144,13 @@ hypothesis predicts a positive correlation** — the sign is the test, and it sp
   mouse, 0.830 human). So the precondition the attack needs is present.
 - **Positive riders are enriched 6.3× in the set**: 38 of 121 (31.4%) against 72 of 1,429 (5.0%) of
   the clean set.
+
+  > **Corrected the same day — the admixture-specific part is 2.13×, not 6.3×.** The distal score is
+  > itself axially monotone (corr with bin index +0.686 / +0.697 in the two human sections), so a
+  > positive ρ with it partly re-encodes "rises distally". Conditioning on axial direction:
+  > direction alone is 3.41×, and among distally-rising genes riders are 35 of 63 (55.6%) against
+  > 57 of 218 (26.1%) — **2.13×** admixture-specific. Derivation in
+  > `hvm-continuous-discovery-round.md` §F2c. Quote 2.13×, not 6.3×.
 - **83 of 121 survive** dropping the positive riders; 64 survive dropping riders of either sign.
 - But the phenomenon is **not** created by admixture: across the clean set, sharpening barely tracks
   the distal score (ρ +0.174 in both human sections, +0.056/+0.079 in mouse).

@@ -88,6 +88,11 @@ plain count wins on 3 of 4 testable folds), and ranks the screens on one scale: 
 most calls.
 *Why it matters:* "the method that finds the most genes says the least about which of them are real" is a result
 about screens, not about our kidney. It also supplies the paper's gene table (the k ≥ 5 core).
+**Audited 2026-10-20 — AKI only.** On the species axis the convergence core is circular (two of the seven species
+lines are the reversal call and notebook 97's rewiring; a third is a structural superset of the reversal call) and
+four of the seven species lines were computed on the retired coordinate. The AKI atlas is unaffected. The species
+side must be rebuilt before it is quoted; see `human-mouse-paper-ready.md` §1 and §6. Also: the count beats the
+fitted model on 4 of 5 testable folds, not 3 of 4.
 
 ### M7 · Transferring the axis to data without segmentation
 Notebook 105 places 55 µm Visium spots from two other labs on our axis using injury-stable positional genes, with
@@ -132,9 +137,11 @@ bins; 107), its spatial clustering is the late-S3 wave rather than a niche, and 
 interstitial lineages do not predict it beyond position and depth (110). Raw Moran's I misleads here.
 
 ### B7 · Human and mouse PT agree mainly on their most strongly zonated genes
-Conservation index ≈ 0.55 in the top 1% of genes, 0.1–0.3 among moderately zonated genes, near zero below; direction
-agreement rises from ≈ 0.5 to 0.85–0.89 with strength; transporters over-represented among conserved genes (33 of
-43 zonated transporters — a count made by hand, still open item 18). The 22 position-dependent pathways mostly
+Conservation index 0.569 / 0.576 in the top 1% of genes (0.614 / 0.564 on the package re-run in notebook 73),
+0.1–0.3 among moderately zonated genes, not estimable below; share conserved among genes zonated in both species
+rises 0.571 → 0.889 with strength (raw sign agreement over all genes runs 0.482 → 0.667, a different column);
+transporters over-represented among conserved genes (33 of 43 zonated transporters, 0.767 against 0.505 for all
+zonated genes — written by notebook 47, so open item 18 is closed). The 22 position-dependent pathways mostly
 summarise mouse zonation the human sections do not share.
 *Keep as its own section; do not let it carry the validation argument (see §0).* The species axis is treated in
 depth in `human-mouse-paper-ready.md`, which supersedes this entry: after the package switch the species result is

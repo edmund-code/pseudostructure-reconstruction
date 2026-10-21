@@ -145,9 +145,13 @@ z of the S3 − S1 response (positive = the IRI effect is larger in S3):
   geography of any independent set (z −7.2, −7.6 and +9.3 at 4 h); only Kirita's own severe-injury program, which
   is not independent of the test data, is larger (16.5). The core was built with no external positional input, so
   this is an external check on it.
-- **The cell cycle is the exception.** It is the only set whose S3 weighting *peaks late*, at 2 d (z 2.8, and 4.4
-  for Gerhardt's cycling program), matching the proliferation wave that peaks at 48 h in the outer stripe
-  (Chang-Panesso 2019; Witzgall 1994).
+- **The cell cycle is the exception among the sets shown here.** Its S3 weighting *peaks late*, at 2 d (z 2.8,
+  and 4.4 for Gerhardt's cycling program), matching the proliferation wave that peaks at 48 h in the outer stripe
+  (Chang-Panesso 2019; Witzgall 1994). *(Corrected 2026-10-20: "the only set" is true only of the six rows in the
+  table above. Across all 32 sets, 11 peak at 2 d in signed location z and 8 in |z|, including our own 91 level up
+  (13.3 at 2 d against 9.3 at 4 h) and level down (−9.9 against −7.6), Gerhardt VCAM1 (5.6) and Gerhardt failed
+  repair (6.3, from 0.07 at 4 h). The cell cycle is the only set whose geography is *absent* early and present
+  late; it is not the only one that peaks late.)*
 - By 14 days every set is at or near zero, and several have changed sign.
 
 ### W2 · Neither boundary dominates; the sets split

@@ -202,7 +202,8 @@ phase 1,010, variability 1,217, androgen 195. Species: level 5,775, F-test 3,889
 
 **The validity curve (post hoc).** The annotation sets were never used to build a line, so the share of a core list
 that falls in a named literature, disease, transporter or androgen set is an independent check of the convergence
-score. It rises monotonically with k:
+score. It rises with k on the AKI axis; on the species axis it peaks at k ≥ 5 and falls at k ≥ 6 (0.870 → 0.800,
+on 23 and 5 genes), so "rises monotonically" is wrong for species — corrected 2026-10-20:
 
 | k | AKI anchored share | species anchored share |
 |---|---|---|

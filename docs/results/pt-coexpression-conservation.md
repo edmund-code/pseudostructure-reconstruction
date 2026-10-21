@@ -188,7 +188,11 @@ W is bimodal in our data: on the total layer, the quartiles of W_m are 0.595 and
   - **Conserved in both** (16 genes): Sptan1, Fam151a, Slc4a4, Itpr2, Apoe, Tpp1, Cotl1, Dpep1, Iyd, Gpx3, Tbx2, Lgmn,
     Slc6a19, Slc7a8, Atp6v0c, Gnptg. These are core PT transport and handling genes; Slc7a8 is also a 90 "conserved"
     gradient.
-- **Q5, residual modules.** The largest module (489 genes) is fatty-acid and xenobiotic metabolism (ORA fdr ~10⁻¹⁹).
+- **Q5, residual modules.** The fatty-acid and xenobiotic-metabolism module holds 489 genes (ORA fdr ~10⁻¹⁹).
+  *(Corrected 2026-10-20: it is the **smallest** of the five modules, not the largest. `q5_modules.csv` sizes are
+  1,079 / 839 / 748 / 524 / 489; the largest is module 2, whose top sets are Protein Secretion, Signaling By ROBO
+  Receptors and Cellular Response To Hypoxia at fdr 0.11. The 489 size, the annotation and the 0.53 conservation
+  are all correct.)*
   Tubules at the same position co-vary in their lipid and drug-metabolism programs, a tubule-level program beyond
   position. Its cross-species conservation is near chance (0.53).
 

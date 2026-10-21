@@ -405,7 +405,9 @@ about 0.5 min cold. The module is `pseudospace/positional_decomposition.py`, tes
 
   "Reversed" here is A < −0.25 on species means, looser than 90's rule (both specimens graded).
 - **Sets: no calls.** Of 381 sets, none is reversed, conserved or species-dominant at q ≤ 0.05.
-  - The set cosines spread around the genome-wide 0.23 (z mean −0.20, SD 0.93).
+  - The set cosines average 0.23 (z mean −0.20, SD 0.93). *(Corrected 2026-10-20: 0.23 is the mean set cosine,
+    not the genome-wide value. The genome-wide cosine over genes graded in either species is 0.299, so the sets sit
+    systematically **below** it — which is why the z mean is negative — rather than spreading around it.)*
   - The most negative z are oxidative phosphorylation, xenobiotic metabolism, fatty acids, PPAR and tryptophan
     (z −2.2 to −2.9, q > 0.4).
   - Species gradient differences are gene-level, not pathway-coherent beyond random genes.

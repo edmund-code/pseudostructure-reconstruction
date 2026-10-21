@@ -139,8 +139,11 @@ fail, two of them because the protocol itself was wrong; what survives is a shar
 ### Q2 · The plain count beats the fitted weighting — a useful negative
 
 - **Q2 fails.** The count model (notebook 112's line count plus the same expression deciles) is above the fitted
-  model on three of the four testable folds: AKI literature +0.018, AKI androgen +0.068, species literature +0.049;
-  only species disease genes go the other way (−0.027).
+  model on **four of the five** testable folds: AKI literature +0.018, AKI disease +0.004, AKI androgen +0.068,
+  species literature +0.049; only species disease genes go the other way (−0.027). *(Corrected 2026-10-20: this
+  paragraph said "three of the four" while the table above it lists all five folds. `fold_auc.csv` has five rows
+  with a non-null AUC; the AKI disease-gene fold is testable, with 395 held-out positives, and the count model wins
+  it too.)*
 - Fitting nine weights on one set of curated sources does not transfer to another. **Notebook 112's unweighted
   count is the statistic to use**, which is the simpler recommendation and the one already in the scoreboard.
 

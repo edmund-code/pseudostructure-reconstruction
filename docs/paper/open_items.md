@@ -80,10 +80,13 @@ it. Resolved items from the earlier list are summarised at the end.
 
 ## C. Coordinator checks and consistency across documents
 
-18. **Transporter count.** 33 of 43 zonated transporters conserved under symmetric classes, against
-    196 of 388 zonated genes. Counted by workstream 4 from `gene_classes_symmetric.csv`, not by a
-    notebook. Confirm, or add the count to notebook 43. Item 9's 30 of 54 is the notebook 40 count;
-    R3 gives both.
+18. **Transporter count — CLOSED 2026-10-20.** 33 of 43 zonated transporters conserved (0.767) against
+    196 of 388 zonated genes (0.505). It is **not** a hand count: notebook 47 writes it to
+    `results/pt_revision_addenda/tables/transporter_class_shares.csv` (row `Slc/Abc/Aqp`), with
+    `transporter_direction_agreement.csv` adding 40 zonated in both species and direction agreement
+    0.825 against 0.723 for all genes, and it reproduces exactly from notebook 43's
+    `gene_classes_symmetric.csv`. `draft_v03_changelog.md` §6.1 and `referee_response_v01.md` M8 still
+    say no notebook saves it and are stale. Item 9's 30 of 54 is the notebook 40 count; R3 gives both.
 19. **Abedini PMID.** Fixed 2026-10-04: the local `SOURCE.txt` now cites PMID 39048792 (Nat Genet
     56:1712–1724); no committed document carried the wrong PMID.
 20. **Documents that still carry superseded statements.**

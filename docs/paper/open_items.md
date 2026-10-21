@@ -123,11 +123,21 @@ it. Resolved items from the earlier list are summarised at the end.
 
 Full record in `docs/paper/hvm-continuous-discovery-round.md`. These are scientific blockers, not bookkeeping.
 
-31. **The human arm's gradient attenuation, cause unresolved — the highest-value item in this file.** Median
-    human/mouse curve amplitude 0.633 (0.73–0.79 on raw binned rates), 75.8% of core genes flatter, and
-    `criteria_hvm.csv` C12 ("A3: no attenuation flag") recorded **not met** at fraction 0.829. Biology and
-    measurement are perfectly confounded with species in a 2-vs-2 design, and both arms of both balanced
-    relabelling refits carry the asymmetry identically, so no internal control can separate them. **Closed by:**
+31. **The human arm's gradient attenuation — the highest-value item in this file. Narrowed 2026-10-21 from three
+    candidate causes to two.** Median human/mouse curve amplitude 0.633 on the 95-gene core and **0.453** on a
+    1,429-gene clean set genome-wide, 75.8% of core genes flatter, and `criteria_hvm.csv` C12 ("A3: no
+    attenuation flag") recorded **not met** at fraction 0.829. A blurred or mis-registered human axis is now
+    **excluded**: a positional smear can only lower an amplitude and must attenuate rough curves more, and
+    `analysis/scripts/attenuation_mechanism_human_vs_mouse.py` shows no smear width reaches the observed median,
+    every width gives the opposite-sign roughness dependence (−0.57 to −0.69 against an observed +0.302, +0.283
+    with independent noise in the stratifier), and the simulated sharpened share is 0.1–4.8% against 13.1%
+    observed. The flatness also reproduces across the two human sections (flatter in all four pairings for 0.997
+    of the most-attenuated quartile). What remains is **a per-gene capture difference between the two species'
+    probe panels** versus **genuinely shallower human zonation** — and note that the centre of mass's algebraic
+    offset-invariance does not remove a per-gene per-species *scale* difference, which is the surviving
+    candidate. Biology and measurement are still perfectly confounded with species in a 2-vs-2 design, and both
+    arms of both balanced relabelling refits carry the asymmetry identically, so no internal control separates
+    the remaining two. **Closed by:**
     RNAscope on one human block measuring S1-vs-S3 fold change for Nt5e, Miox and Slc34a3 against the mouse values.
     Until it is closed, no species magnitude should be published — and the AKI axis shares the human-side
     machinery, so it is not a species-only item.

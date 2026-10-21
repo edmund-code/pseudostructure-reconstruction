@@ -96,6 +96,75 @@ Worst-attenuated genes, which is why they generated the worst artefacts: Gatm (a
 0.143), Slc34a1 (0.100), Slc22a6 (0.153), Nt5e (0.187), Miox (0.235), Pm20d1 (0.362). Opposite direction:
 Abhd14a (2.656), Pter (2.537), Slc36a1 (2.207), Gpt (2.033).
 
+#### F2a · One of the three candidate causes is excluded: it is not a blurred human axis
+
+Added 2026-10-21, computed by `analysis/scripts/attenuation_mechanism_human_vs_mouse.py` (committed, root-flagged,
+fits nothing). The three candidate causes were a blurred or mis-registered human axis, a per-gene capture
+difference between the two species' panels, and genuinely shallower human zonation. **The first is now excluded,
+and it was the one that would have been most damaging to the method**, because it would have meant the human
+coordinate itself smears every gene.
+
+A positional smear is a convolution, so it has two signatures neither of the other mechanisms has: it can only
+*lower* an amplitude, never raise one, and it must attenuate a rough curve more than a smooth one. On a clean set
+of **1,429 genes** (converged in all four specimens, separated in none — 590 genes are separated and their fitted
+amplitudes reach tens of thousands of log units — mouse amplitude in [0.3, 10], human amplitude < 10, and mean
+observed rate > 0.5 per 10k in both species):
+
+| | median amplitude ratio | share sharper in human | ρ(log2 ratio, mouse roughness) |
+|---|---|---|---|
+| smear w = 0.050 | 0.964 | 0.048 | −0.567 |
+| smear w = 0.100 | 0.882 | 0.026 | −0.635 |
+| smear w = 0.163 | 0.778 | 0.005 | −0.677 |
+| smear w = 0.221 | 0.698 | 0.001 | −0.686 |
+| smear w = 0.250 | 0.662 | 0.001 | −0.685 |
+| **observed** | **0.453** | **0.131** | **+0.302** |
+
+The widths bracket the committed human fold-refit positional noise (0.163–0.221 axis units). **No width reaches
+the observed median at all**, and at every width the roughness dependence runs the opposite sign to the
+observation and the sharpened share is 0.1–4.8% against 13.1% observed. Roughness here is total variation
+divided by range, so the ratio's denominator shares estimation noise with any mouse-side stratifier; taking the
+denominator from one mouse and the roughness from the other leaves ρ at **+0.283**, and the amplitude dependence
+at **−0.370** — genes with the largest mouse gradients lose the most, which is a compression toward a ceiling
+rather than a blur.
+
+**The flatness also reproduces.** Stratified by attenuation, the share of genes flatter in human in all four
+specimen pairings runs 0.997 → 0.958 → 0.829 → 0.129 from the most to the least attenuated quartile, and the two
+human sections agree on amplitude at ρ 0.446 in the most-attenuated quartile against 0.710 in the least
+(median |log2 COR1/MED1| 0.488 against 0.315). So the attenuation is not one noisy section.
+
+Two caveats, both load-bearing. The two human sections are the **same donor processed together**, so their
+agreement excludes random positional noise but not a shared systematic capture factor — which is exactly the
+surviving candidate cause. And the curves are splines with three interior knots, so both arms are pre-smoothed
+by the basis and the simulation cannot probe widths below about one knot spacing; the test rests on a sign and a
+tail share, neither of which depends on resolving small widths, but a sharper test needs the per-unit counts.
+
+**What this changes:** open item 31's candidate list narrows from three to two, and the stain (items 31–32) now
+decides between *per-gene capture difference* and *genuinely shallower human zonation* rather than between three
+causes. Note that COM's algebraic offset-invariance does **not** remove a capture difference that acts as a
+per-gene per-species **scale**, which is precisely the surviving candidate.
+
+#### F2b · A result class that falls out of the exclusion: 121 genes are *sharper* in human
+
+A smear cannot sharpen a curve, so the sharpened genes bound the non-smearing component — and they are a
+finding in their own right. **121 of the 1,429 clean genes have larger amplitude in human than mouse in all four
+specimen pairings** (both human sections above both mice); 1,040 are flatter in all four and 269 are
+specimen-inconsistent. The top of the list by ratio:
+
+Dpp4 ×2.99, Ggact ×2.83, Tmem184a ×2.72, **Abhd14a ×2.66**, Sgms2 ×2.63, Arhgap27 ×2.63, Ppp1r1a ×2.60,
+**Pter ×2.54**, Tmem38b ×2.53, Mob1b ×2.45, Oxct1 ×2.37, Lrrfip2 ×2.37, Ddr1 ×2.34, Sfxn2 ×2.27, Pcsk5 ×2.22,
+**Slc36a1 ×2.21**, Mlxipl ×2.11, Umod ×2.11, G0s2 ×2.11, Mapt ×2.09.
+
+Three of those (Abhd14a, Pter, Slc36a1) are genes whose *positional* claims §3 retracts as amplitude artefacts.
+That is consistent rather than contradictory, and it is the right way to read them: their **amplitude** change is
+real and reproducible, their **position** change was the artefact of reading an amplitude change through a centre
+of mass. Sharpening is a different phenomenon from moving, and arguably the more interesting one — a gene more
+steeply zonated in human than mouse is a function the human tubule has specialised.
+
+Provisional pending two checks that are running: independent re-estimation on the model-free binned rates rather
+than the fitted curves, and the full filter stack on all 121. **Umod is in the list and is a thick-ascending-limb
+gene**, so the neighbour-marker filter is the test case for this set — if it does not remove Umod, the set needs
+a stricter contamination gate before anything is published from it.
+
 ### F3 · Methodological: the softmax centre of mass is not a position statistic on this cohort
 `COM = softmax(log-rate) @ grid` is exactly invariant to an additive per-gene per-species log offset. That is
 true, and it is what "probe-panel safe by algebra" rested on. It is also **maximally sensitive to curve

@@ -321,3 +321,39 @@ Still from the earlier list:
 57. **KIF12 is the best new reversal and has a named upstream cause.** Mouse −0.471/−0.503 against human
     +0.384/+0.435, detection 0.87/0.86, PT-identity retention 0.943, and a direct HNF1B transcriptional target —
     which is testable, unlike most of the list.
+
+## C⁗. Added 2026-10-21 by the drug-geography and figure round
+
+58. **Repair the G6pc / G6PC1 pairing — the terminal gluconeogenic step is invisible to the project.** Mouse
+    `G6pc` and human `G6PC1` are the same 1:1 ortholog pair in the same inventory component (6169), both well
+    detected (mouse 0.555/0.608, human 0.987/0.952), yet `G6pc` is **absent from the 11,055-gene shared space**
+    under either symbol, so glucose-6-phosphatase cannot appear in any cross-species table. It is also the
+    steepest gluconeogenic gene in the mouse arm (−3.2/−3.5). Fix before the glucose story is written. Not
+    repairable, and to be stated as panel asymmetry: SLC9A3R1, LDHA, ALDOA, TPI1 are mouse-only.
+59. **Correct three detection facts in the project record.** `Slc2a9` fails in the **mouse** arm (0.082; human
+    0.802) — the record had it as a human failure. `Abcc4` fails in mouse (0.089; human 0.533). `Slc5a8` fails in
+    human (0.071; mouse 0.851), so the apparently conserved SMCT1 contrast must not be used. Also `Oxct1` human
+    detection is **0.157** with the committed neighbour flag True (ratio 5.03): report its human limb as **not
+    measured**, not as flat, and drop the SLC9A3/NHE3 reversal for the same reason.
+60. **Report 18, not 16, for the opposite-sign share of the 29 movers.** 18 is the count on the **pure-compartment**
+    contrast per specimen (the retained statistic); 16 is the same count on the **curve-derived** arm contrasts
+    (the retracted one). They agree on 25 of 29; the four that differ are Hao2, Chp1, Msrb1 and Txnip. Classes on
+    the retained statistic: 18 opposite sign / 6 same sign > 1.5× apart / 4 same sign within 1.5× / 1 specimens
+    disagree within an arm.
+61. **The reversal phenomenon does not need the reconstructed axis, and that should be said.** An axis-free
+    contrast — `log2((S3+0.1)/(S1+0.1))` from the committed per-specimen `segment_means`, i.e. H&E segment labels
+    and raw counts only, no coordinate, spline, registration or purity bins — gives within-arm nulls of **0 of
+    2,946** (mouse) and **14 of 2,664** (human sections) against **380 of 915** cross-species over 10,669 genes.
+    The axis is how the genes were found and how shape is quantified; it is not what makes them visible. This is
+    the strongest available answer to "is the coordinate inventing the biology".
+62. **Publish the endocytic negative.** LRP2, CUBN, AMN and PDZK1 have **no resolvable gradient in either arm**.
+    A nephrotoxicity reader will ask where aminoglycoside uptake sits, and the honest answer here is that this
+    cohort cannot place it. Say so rather than omitting the panel.
+63. **The PCK1 dissociation is the round's strongest biology and needs its own paragraph.** Mouse gluconeogenesis
+    is one proximal block co-located with SGLT2 (every step S1-weighted); in human PCK1 inverts (axis-free
+    +1.21/+1.43 against mouse −0.73/−0.64) while FBP1, ALDOB, GPT2, GOT1 and GOT2 stay proximal. A dissociation
+    inside one pathway in one assay cannot be produced by global flattening or by a registration error. Its
+    hazards are already recorded as items 55 (the rodent PEPCK direction) and the human-distal admixture gate,
+    which PCK1 clears with an atlas ratio of 0.19.
+64. **Fix the SMCT naming in nb92's `h1_gene_shapes.csv`:** SLC5A8 is SMCT1, SLC5A12 is SMCT2; the table has them
+    swapped.

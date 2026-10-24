@@ -154,3 +154,25 @@ figure plan and draft still quote the old numbers, and notebook 78 (figures) is 
     the cluster view "missed" 120 of 123 sets largely by construction. Any future cluster-versus-curve comparison should
     use a statistical cluster test (the segment F-test) or a range-matched threshold.
 
+
+## From the transition-weighting check (2026-10-24)
+
+34. **Segment transitions move with label counts.**
+    - Notebook 72 places each transition at the 0.5 point of an unweighted logistic fit of label on position. That
+      point moves with the two labels' counts.
+    - The human sections hold 5.7–9.1 PT-S1 units per PT-S2 unit, so the human S1→S2 transitions land inside S2.
+    - Control: thinning one mouse's S2 to 7:1 moves its S1→S2 from 0.343 to 0.394–0.420.
+    - `logistic_transitions(..., balanced=True)` weights each label by 1 / its count. On the same thinned mice it stays at
+      0.337–0.342. `label_agreeing_thresholds` and `coordinate_segments` take the same flag.
+    - On 72's inputs (`analysis/scripts/balanced_segment_transitions.py`):
+      - Human S1→S2 moves from 0.544 / 0.666 to 0.387 / 0.399.
+      - Human S2→S3 moves from 0.605 / 0.590 to 0.632 / 0.636.
+      - Mouse moves by at most 0.002 (labels near 1:1:1).
+    - HUK1_MED1's transitions no longer cross, so issue 6's crossing and 72's C1 "not met" both come from the
+      weighting.
+    - Human minus mouse falls from +0.264 to +0.051 (S1→S2); S2→S3 becomes +0.021.
+    - The pooled human-vs-mouse cuts used by notebooks 79–84 move from 0.473 / 0.605 to 0.368 / 0.623, which mostly
+      removes issue 26's misplacement.
+    - AKI changes by 0.004–0.009 at S1→S2 and −0.027 / −0.015 at the IR mice's S2→S3.
+    - **Not adopted yet.** The default stays unweighted, because notebooks 77–92 re-derive 72's table as a guard
+      (G3). Adopting it means rerunning 72 with `balanced=True`, then the notebooks that read its table.

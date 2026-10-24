@@ -21,13 +21,15 @@ from .stats_gam import make_gam_design
 SEGMENTS = ('PT-S1', 'PT-S2', 'PT-S3')
 
 
-def label_agreeing_thresholds(position, segment, order=SEGMENTS, max_candidates=600):
+def label_agreeing_thresholds(position, segment, order=SEGMENTS, max_candidates=600, *, balanced=False):
     """Two cut points t12 < t23 on one specimen's coordinate that best reproduce its ordered labels.
 
     Maximises the number of structures with label order[0] below t12, order[1] in [t12, t23) and
     order[2] at or above t23. Candidates are midpoints between sorted positions, thinned to at most
-    ``max_candidates`` quantiles (ceiling: a cut can be off by one candidate spacing). Returns
-    (t12, t23, agreement fraction).
+    ``max_candidates`` quantiles (ceiling: a cut can be off by one candidate spacing). A plain count lets
+    a common label push the cuts into a rare one, so ``balanced`` maximises the mean agreement per label
+    (each structure weighted by 1 / its label's count) instead. Returns (t12, t23, agreement fraction),
+    the fraction being the plain share of structures that agree at the chosen cuts.
     """
     s = np.asarray(position, float)
     lab = np.asarray(segment).astype(str)
@@ -52,16 +54,19 @@ def label_agreeing_thresholds(position, segment, order=SEGMENTS, max_candidates=
     first = below[0][:, None]
     middle = below[1][None, :] - below[1][:, None]
     last = (n_last - below[2])[None, :]
-    score = first + middle + last
+    agree = first + middle + last
+    w = 1 / np.bincount(c_sorted, minlength=3) if balanced else np.ones(3)
+    score = w[0] * first + w[1] * middle + w[2] * last
     score[np.tril_indices(len(cuts), -1)] = -1
     i, j = np.unravel_index(np.argmax(score), score.shape)
-    return float(cuts[i]), float(cuts[j]), float(score[i, j] / len(s))
+    return float(cuts[i]), float(cuts[j]), float(agree[i, j] / len(s))
 
 
-def coordinate_segments(position, segment, specimen, order=SEGMENTS):
+def coordinate_segments(position, segment, specimen, order=SEGMENTS, *, balanced=False):
     """Per-specimen coordinate-threshold segments: labels redrawn by the coordinate alone.
 
-    Returns (labels named like ``order``, table of specimen thresholds and label agreement).
+    ``balanced`` goes to ``label_agreeing_thresholds``. Returns (labels named like ``order``, table of
+    specimen thresholds and label agreement).
     """
     s = np.asarray(position, float)
     lab, spec = np.asarray(segment).astype(str), np.asarray(specimen).astype(str)
@@ -69,7 +74,7 @@ def coordinate_segments(position, segment, specimen, order=SEGMENTS):
     rows = []
     for name in np.unique(spec):
         m = spec == name
-        t12, t23, agree = label_agreeing_thresholds(s[m], lab[m], order)
+        t12, t23, agree = label_agreeing_thresholds(s[m], lab[m], order, balanced=balanced)
         out[m] = np.where(s[m] < t12, order[0], np.where(s[m] < t23, order[1], order[2]))
         rows.append({'specimen': name, 't12': t12, 't23': t23, 'label agreement': agree})
     return out.astype(str), pd.DataFrame(rows)
@@ -84,8 +89,15 @@ def segment_units(position, t12, t23, lo=0., hi=1.):
                     np.where(s < t23, 1 + (s - t12) / (t23 - t12), 2 + (s - t23) / (hi - t23)))
 
 
-def logistic_transitions(position, segment, specimen, order=SEGMENTS):
-    """Per-specimen S1->S2 and S2->S3 transitions by logistic regression on position (notebook 37)."""
+def logistic_transitions(position, segment, specimen, order=SEGMENTS, *, balanced=False):
+    """Per-specimen S1->S2 and S2->S3 transitions by logistic regression on position (notebook 37).
+
+    A transition is the position where the fitted probability of the later label is 0.5. Unweighted, that
+    point moves with the two labels' counts (the intercept carries their log ratio): human S1 outnumbers S2
+    7-9 to 1, and thinning a mouse's S2 to that ratio moves its S1->S2 from 0.343 to about 0.42.
+    ``balanced`` weights each label by 1 / its count, so the point is where the two labels are equally
+    likely at equal prevalence. The default (unweighted) reproduces notebook 72's frozen transitions.
+    """
     from sklearn.linear_model import LogisticRegression
 
     s = np.asarray(position, float)
@@ -94,7 +106,8 @@ def logistic_transitions(position, segment, specimen, order=SEGMENTS):
     for name in np.unique(spec):
         for first, second in zip(order[:-1], order[1:]):
             keep = (spec == name) & np.isin(lab, [first, second])
-            model = LogisticRegression(C=1e4).fit(s[keep][:, None], (lab[keep] == second).astype(int))
+            model = LogisticRegression(C=1e4, class_weight='balanced' if balanced else None).fit(
+                s[keep][:, None], (lab[keep] == second).astype(int))
             rows.append({'specimen': name, 'transition': f'{first[-2:]}→{second[-2:]}',
                          'position': float(-model.intercept_[0] / model.coef_[0, 0])})
     return pd.DataFrame(rows)

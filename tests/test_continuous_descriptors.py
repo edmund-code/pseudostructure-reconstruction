@@ -24,6 +24,25 @@ def test_thresholds_recover_cuts_despite_label_noise():
     assert .9 < agree < .97
 
 
+def test_balanced_boundaries_ignore_label_prevalence():
+    pytest.importorskip('sklearn')
+    from pseudospace.continuous_descriptors import logistic_transitions
+    rng = np.random.default_rng(0)
+    s = rng.random(9000)
+    lab = _labels(s, .34, .61)
+    obs = s + rng.normal(0, .04, len(s))                         # noisy coordinate, so the labels overlap
+    keep = (lab != 'PT-S2') | (rng.random(len(s)) < 1 / 8)       # S2 rare, as human S2 is
+    obs, lab, spec = obs[keep], lab[keep], np.repeat('a', keep.sum())
+    plain = logistic_transitions(obs, lab, spec).position.to_numpy()
+    fair = logistic_transitions(obs, lab, spec, balanced=True).position.to_numpy()
+    assert plain[0] > .37 and plain[1] < .58                     # both cuts pushed into the rare label
+    assert abs(fair[0] - .34) < .015 and abs(fair[1] - .61) < .015
+    t12, t23, _ = label_agreeing_thresholds(obs, lab)
+    b12, b23, _ = label_agreeing_thresholds(obs, lab, balanced=True)
+    assert t12 > .37 and t23 < .58
+    assert abs(b12 - .34) < .03 and abs(b23 - .61) < .03
+
+
 def test_coordinate_segments_are_per_specimen():
     rng = np.random.default_rng(1)
     s = rng.random(2000)

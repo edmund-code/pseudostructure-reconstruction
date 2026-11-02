@@ -188,3 +188,39 @@ splits × two halves). None failed, and none reversed the global orientation.
 **Reading.** The axis depends little on which tubules are sampled and somewhat more on which genes are
 offered. Sequencing depth matters most: half the reads still gives a median ρ ≥ 0.93, but below that, units drop out of
 labelling and the PT limb can attach from the wrong end.
+
+### 3e. Trajectory baselines (2026-11-02)
+
+`analysis/paper/fig3_baselines.py` (Slingshot through `fig3_slingshot.R`). Settings, versions and runtimes are in
+`results/paper_figures/fig3/baselines/methods_notes.md`. Slingshot and GASTON ran in separate environments,
+passed by `--rscript` and `--gaston-python`; `kidney-pseudospace` was not changed.
+
+| Method | Ctrl1A2 | Ctrl1A4 | IR2A2 | IR2A4 | HUK1_COR1 | HUK1_MED1 |
+|---|---|---|---|---|---|---|
+| pseudostructure t | 0.934 | 0.946 | 0.933 | 0.972 | 0.949 | 0.945 |
+| DPT | 0.883 | 0.898 | 0.885 | 0.945 | 0.948 | 0.938 |
+| scFates (ppt) | 0.927 | 0.942 | 0.934 | 0.964 | 0.950 | 0.947 |
+| Slingshot | 0.837 | 0.863 | 0.824 | 0.874 | 0.908 | 0.862 |
+| GASTON | 0.552 | 0.490 | 0.432 | 0.328 | 0.039 | 0.086 |
+
+**Settings.**
+- **scFates:** σ was chosen by `explore_sigma` (σ = 1 in both fits), with 50 nodes, λ = 100 and 50 steps.
+  It had not converged at 50 steps; 200 and 500 steps gave the same ρ to three decimals. The trees branch (7 tips
+  in the mouse fit, 4 in the human-vs-mouse fit), and their pseudotime is used as given.
+- **Slingshot:** 5 lineages in the mouse fit and 6 in the human-vs-mouse fit; the score uses
+  `slingAvgPseudotime`.
+- **GASTON:** the settings of its Visium HD tutorial. It ran on the two mouse sections of the human-vs-mouse
+  fit as well, but those are not scored.
+
+**Reading.**
+- **On this score, t does not beat scFates.** The two are within 0.01 on every section. t beats DPT by up to
+  0.05 in mouse, and ties it in human; it beats Slingshot by 0.04–0.11.
+- **The score is close to its ceiling.** The labels are clusters of the same profiles, so any method that orders
+  the clusters correctly scores about 0.93–0.97. It cannot separate methods that differ *within* a segment. The
+  case for t over scFates has to come from elsewhere: it is one unbranched curve with a fixed root rule, not a
+  tree whose pseudotime depends on the branch a unit falls in.
+- **GASTON measures something else.** In mouse, its isodepth follows cortex-to-medulla depth: PTS1 and DCT are
+  shallow and CD deep, so it partly agrees with segment order. Both human pieces are cortex only, and there it
+  finds no axis (ρ < 0.09). Its human orientation rests on a root cluster of 111 and 72 units.
+- **Depth is not used to rank the baselines.** Doing so would make depth select a method, which the protocol
+  rules out.

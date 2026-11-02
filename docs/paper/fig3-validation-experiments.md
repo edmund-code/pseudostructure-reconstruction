@@ -1,0 +1,149 @@
+# Fig. 2–3 validation experiments: protocol and results
+
+Paper handoff section 6, items 2, 4, 5, 6, 7 and 8, run on the data available locally on 2026-11-02.
+The protocol was frozen before any of these fits ran. Results are appended below it and never edited
+to fit it.
+
+## Inputs and what they cost
+
+- **Fits.** The package runs under `results/package_pseudospace/runs/{aki,hvm}`, stages 01–04, from the
+  v4 segmentations. The AKI fit has 32,939 units on the curve. The paper's reference run
+  (v4fix, 32,785) is not readable here. Every number below moves slightly when it becomes available.
+- **Labels.** These are the stage-03 segment labels: Leiden clusters of the *same* expression profiles,
+  named by marker panels. The curve fit never sees them, except that stage 04 picks its root from
+  coarse cluster 0. They are therefore a consistency check, not independent anatomical truth. Figure
+  text must not call them "held-out".
+- **Order.** Labels map to seven groups in nephron order, PTS1 < PTS2 < PTS3 < AL < DCT < CNT < CD
+  (`analysis/paper/fig3_common.py`; mTAL and cTAL are both AL, CCD and IMCD are both CD). The score is
+  the unit-level Spearman ρ between a coordinate and the group rank, within each section.
+- **Sections.** Ctrl1A2, Ctrl1A4, IR2A2 and IR2A4 are scored in the AKI fit. HUK1_COR1 and HUK1_MED1
+  are scored in the human-vs-mouse fit.
+
+## Frozen protocol
+
+**3b. Labels along the axis (item 5).**
+- Draw a ridgeline of t per group, one panel per fit.
+- Report ρ per section.
+- Null: permute t within the section 1,000 times; p = (1 + #null ρ ≥ observed) / 1,001.
+
+**3d. Robustness (item 6).** Each perturbed dataset reruns the frozen stages 03 and 04, with the same
+configuration, the R harmony backend and 4 BLAS threads, as `analysis/scripts/position_half_sampling.py`
+does.
+- **Perturbations.** All three use fractions 10, 20, 30, 50, 70 and 100%, with three seeds each:
+  - *tubules*: a random subset of stage-02 QC units, stratified by section;
+  - *reads*: binomial thinning of every unit's counts;
+  - *genes*: a random subset of the genes offered to variable-gene selection.
+- **Score.** ρ between the rerun's t and the reference t on the units both contain, plus the rerun's ρ
+  against the *reference* labels.
+- **Checks.** The 100% arms are the reproduction check. Gene halves are reported as five
+  complementary splits; the ρ between the two halves of each split is reported too.
+- **Expected:** ρ ≥ 0.95 down to 30% tubules. Whatever comes out is reported.
+
+**3e. Trajectory baselines (item 7).** Every method runs on each fit's pass-2 Harmony embedding (50
+dimensions), and every method gets the same root, the stage-04 root unit.
+- **DPT** is the stage-04 DPT baseline, already computed.
+- **scFates** uses `tl.tree`, method `ppt`, on the same embedding.
+- **Slingshot** uses the pass-2 Leiden clusters (unsupervised), with the root unit's cluster as the start.
+  When there are several lineages, its averaged pseudotime is used.
+- **GASTON** runs per section on unit centroids plus expression PCs. It is the only spatial method; its
+  isodepth is oriented so the root's section end is low.
+- **Score:** ρ per section against the label rank.
+
+**3f. Cortical depth (item 8).**
+- **Tissue mask.** Threshold the saturation of each H&E slide at about 16 µm/px with Otsu, fill holes,
+  and keep the largest component.
+- **Capsule.** The capsule is the mask boundary within 100 µm of the mask's convex hull. Boundary
+  further inside the hull is the hilum or a cut, and is not capsule.
+- **Depth.** Depth is the distance from each unit's centroid to the nearest capsule pixel, in µm.
+- **Score.** Spearman ρ between depth and t over PT units per section, plus depth by label.
+- **Human sections.** If a human section shows no capsule, it is reported as not computable rather
+  than given a substitute edge.
+- Depth selects nothing.
+- **Expected.** Positive but modest ρ. S1 and S2 both lie throughout the cortical labyrinth, and
+  juxtamedullary nephrons start deep.
+
+**Fig. 2c gallery (item 4, partial).**
+- **IR2A4 tile.** A tile in the IR2A4 outer stripe, chosen as the 250 µm window with the most
+  PT-S3 units in the AKI fit, with the v4 predicted outlines.
+- **Human tile.** A tile from HUK1_MED1, the human section with no training blocks, with the v2
+  predicted outlines.
+- PQ stays unknown until someone draws manual outlines.
+
+**Fig. 2b ablations (item 2, mouse only).**
+- **Arms.** Retrain the full model, CNN stem only and ViT only, on the v4 manifest with the v4
+  configuration and identical seeds.
+- **Selection.** Select each arm by its pooled class-agnostic validation PQ.
+- **Score.** Report PQ with D4 TTA on the v4 validation blocks.
+- **Reference arm.** The full arm stands in for the locked v4 checkpoint and must land near its
+  0.727.
+- **Not run.** Human ablations are not run, because the human labels are not readable here.
+
+## Results
+
+(appended as each experiment finishes)
+
+### 3b. Labels along the axis (2026-11-02)
+
+`analysis/paper/fig3_panels.py`, panel b. Unit-level Spearman ρ of t against the seven-group rank:
+
+| Section | Fit | Units | ρ | Largest permuted ρ | p |
+|---|---|---|---|---|---|
+| Ctrl1A2 | AKI | 7,110 | 0.934 | 0.040 | 0.001 |
+| Ctrl1A4 | AKI | 6,703 | 0.946 | 0.044 | 0.001 |
+| IR2A2 | AKI | 9,150 | 0.933 | 0.036 | 0.001 |
+| IR2A4 | AKI | 9,976 | 0.972 | 0.036 | 0.001 |
+| HUK1_COR1 | human vs mouse | 5,489 | 0.949 | 0.051 | 0.001 |
+| HUK1_MED1 | human vs mouse | 6,020 | 0.945 | 0.046 | 0.001 |
+
+- **The permutation null is weak by construction.** Shuffling t against the labels gives ρ ≈ 0, so the
+  stronger comparison is the baselines in 3e. For reference, the stage-04 DPT baseline scores
+  0.88–0.94 on the same sections.
+- **The AKI fit has no CNT cluster.** Its labels are DCT2, CCD and IMCD. The human-vs-mouse fit has CNT.
+- **The human PTS2 and PTS3 ridges sit earlier than the mouse ones.** The two fits each have their own
+  0–1 scale, so the ridges are not on a shared axis.
+
+### 3c. Marker heatmaps (2026-11-02)
+
+- The panel is re-plotted from data, replacing the poster crops, which said "Pseudospace" and came from
+  the v4fix run.
+- It uses one marker per segment, the same genes in both species: Slc5a2, Slc13a3, Slc7a13, Slc12a1,
+  Slc12a3, Slc8a1 and Aqp2. This settles handoff open decision 5 on the human-poster set, because every
+  gene is measured in both fits.
+- Each row is the mean lognorm expression in 100 equal-width bins of t, z-scored per gene. Bins with
+  fewer than 5 units are blank, and the label bar shows the majority label per bin.
+
+### 3f. Cortical depth (2026-11-02)
+
+`analysis/paper/fig3_depth.py`. The capsule and tissue masks were checked by eye on all four mouse
+sections; the overlays are in `results/paper_figures/fig3/depth/qc_*.png`. The hilum and cracks are
+excluded from the capsule.
+
+**Human sections: not computable.** On both human sections, every outer edge is a cut face. Tubules are
+cut open at the edge and there is no fibrous capsule (checked at full resolution).
+
+| Section | PT units | ρ(t, depth) | ρ(label rank, depth) | ρ within PTS1 | ρ within PTS2 | ρ within PTS3 | Median depth S1 / S2 / S3 (µm) |
+|---|---|---|---|---|---|---|---|
+| Ctrl1A2 | 2,780 | 0.75 | 0.74 | −0.09 | 0.44 | 0.56 | 262 / 459 / 985 |
+| Ctrl1A4 | 2,745 | 0.71 | 0.70 | −0.28 | 0.40 | 0.61 | 235 / 407 / 1009 |
+| IR2A2 | 3,937 | 0.46 | 0.49 | −0.41 | 0.41 | 0.23 | 429 / 500 / 1297 |
+| IR2A4 | 5,551 | 0.27 | 0.29 | −0.46 | 0.29 | 0.23 | 541 / 601 / 1249 |
+
+**Reading.**
+- In the controls, t ranks PT cross-sections by depth as well as the segment labels do.
+- Within PTS2 and PTS3, t still rises with depth (ρ 0.4–0.6), which is resolution the labels do not carry.
+- Within PTS1, depth falls slightly as t rises. This is not interpreted: S1 begins at glomeruli spread
+  through the whole cortex.
+- In the AKI sections, the correlation is weaker and PTS1-labelled units sit deeper. Whether that comes
+  from injury or from the plane of section is not separable here.
+- **Not excluded:** a depth-dependent technical gradient, such as capture efficiency, would also produce
+  a positive ρ. Depth stays a consistency check, not truth.
+
+### Fig. 2c gallery (2026-11-02)
+
+`analysis/paper/fig2_gallery.py`. Each window was chosen from unit centroids before the image was viewed.
+
+- **IR2A4** has 21 PT-S3 units in the window, at pixel (18033, 4683), with 49 predicted outlines; casts
+  are visible.
+- **HUK1_MED1** has 18 PT units in the window, at pixel (11912, 4904), with 48 predicted outlines.
+
+The outlines register on the H&E. PQ still needs manual outlines of both tiles.

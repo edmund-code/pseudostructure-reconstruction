@@ -25,6 +25,7 @@ from fig3_panels import COLOURS, INK, MUTED, SECTION_COLOURS, style  # noqa: E40
 MICE = ['Ctrl1A2', 'Ctrl1A4']
 SEGS = ['PTS1', 'PTS2', 'PTS3']
 CLUSTER, BULK = '#555555', '#AAAAAA'
+LABEL_LOG2 = 0.5
 # panel boxes of make_fig4.py in SVG units (1 unit = 0.01 inch here)
 SIZE = {'a': (540, 292), 'b': (580, 967), 'c': (540, 282), 'd': (540, 282)}
 
@@ -42,6 +43,23 @@ def load(root: Path):
     names = list(z['genes'])
     curves = {m: {part: dict(zip(names, z[f'{part}|{m}'])) for part in ('curve', 'clusters', 'bulk', 'bins', 'bin_x')}
               for m in MICE}
+    # Post-hoc rule (after the screen, before the figure was final; recorded in the protocol doc): a call is shown
+    # only if it holds on raw counts within single labels, by >= LABEL_LOG2 in the same direction in both mice.
+    # Category 2 examples are ranked by that within-label change: the curve's change can be inflated where a
+    # spline dives into near-zero counts (Dpys in late S3).
+    chk = pd.read_csv(root / 'screen/label_check.csv').set_index('gene')
+    a, b = MICE
+    within = chk[[f'within_label_change_{a}', f'within_label_change_{b}']]
+    same = (np.sign(within[f'within_label_change_{a}']) == np.sign(chk[f'curve_change_{a}'])) & \
+           (np.sign(within[f'within_label_change_{b}']) == np.sign(chk[f'curve_change_{b}']))
+    ok2 = same & (within.abs().min(1) >= LABEL_LOG2)
+    peak = chk[[f'rise_in_S2_{a}', f'rise_in_S2_{b}', f'fall_in_S3_{a}', f'fall_in_S3_{b}']].min(1)
+    genes['label_ok'] = False
+    genes.loc[chk.index, 'label_ok'] = np.where(chk.category == 1, peak >= LABEL_LOG2, ok2)
+    genes['label_score'] = np.nan
+    genes.loc[chk.index, 'label_score'] = np.where(chk.category == 1, peak, within.abs().min(1))
+    genes['cat1'] &= genes.label_ok
+    genes['cat2'] &= genes.label_ok
     return genes, z['grid'], curves
 
 
@@ -88,7 +106,7 @@ def ylim_of(gene, curves, pad=0.5):
 
 def examples(genes):
     c1 = genes[genes.cat1].sort_values('cat1_score', ascending=False).index.tolist()
-    c2 = genes[genes.cat2 & ~genes.cat1].sort_values('cat2_score', ascending=False).index.tolist()
+    c2 = genes[genes.cat2 & ~genes.cat1].sort_values('label_score', ascending=False).index.tolist()
     return c1, c2
 
 

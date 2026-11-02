@@ -136,3 +136,22 @@ re-measures each call on units of one label only, from raw counts (`label_check.
 - **Panel b** has 79 rows: 5 Category 1 genes, then 74 Category 2 genes.
 - **Y-axes** span the bin and cluster means. Where counts run out (Dpys and Ugt2b34 in late S3), the spline
   dives below the data and is clipped.
+
+### Post-hoc rule for what the figure shows (2026-11-02, after the first figure)
+
+**Problem.** Dpys, the top-ranked Category 2 gene, is an artifact. Its curve falls 2.4–5.0 log2 inside the S3 core
+because the spline dives where counts run out. On raw counts from S3-labelled units it falls only 0.04 (Ctrl1A2)
+and 1.42 (Ctrl1A4). The frozen ranking by the curve's change rewards such dives.
+
+**Rule.** A call is shown only if it holds on raw counts within single labels, in the same direction and by at least
+0.5 log2 in both mice (`fig4_label_check.py`).
+- **Category 2.** Examples are ranked by that within-label change instead of the curve's.
+- **Category 1.** The S2 rise and the S3 fall must each pass.
+
+**Result.**
+- **What survives.** 68 of 74 Category 2 calls and 4 of 5 Category 1 calls. Hsd17b2 drops out: its S3 fall is
+  0.39–0.45.
+- **Panel b** now has 72 rows.
+- **Panel d** now shows Slc6a19, Scd1 and Cyp24a1, whose within-label changes are 2.1–3.0 log2. Panels a and c are
+  unchanged.
+- **The screen's counts above are unchanged.** This rule decides only what the figure shows.

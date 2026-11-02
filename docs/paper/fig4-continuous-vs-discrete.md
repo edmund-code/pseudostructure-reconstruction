@@ -88,4 +88,51 @@ S3, from posing as a PT pattern.
 
 ## Results
 
-(appended when the screen finishes)
+### Screen (2026-11-02)
+
+`analysis/paper/fig4_screen.py`, output in `results/paper_figures/fig4/screen/`. Inputs: 2,780 (Ctrl1A2) and
+2,745 (Ctrl1A4) PT units, 8,039 screened genes, and 32 gene-specific axes. On every axis b12 is 0.29–0.30 and b23
+is 0.67–0.68.
+
+| Step | Ctrl1A2 | Ctrl1A4 | Both |
+|---|---|---|---|
+| Decoy threshold (LR) | 16.0 | 15.8 | |
+| Curve beyond clusters | 2,374 | 2,442 | **1,680** (21% of screened genes) |
+| Dropped by the neighbour filter | | | 614 of the 1,680 |
+| Category 1, peak between segments | | | **5**, all at S2/S3 |
+| Category 2, change within a segment | | | **74** (S1 3, S2 60, S3 11) |
+
+- **Category 1** (ranked): Pigr, Cyp4a14, Cyp2d9, Hpd, Hsd17b2. None peaks at S1/S2.
+- **Category 2, top ten:** Dpys, Slc6a19, Ugt2b34, Cyp24a1, Slc22a7, Slc22a19, Higd1c, Slc5a12, Slc22a13, Scd1.
+
+**Reading.**
+- **Category 1 is real but small.** In each of the 5 genes, the cluster means put S2 and S3 at about the same level.
+  The curve instead peaks at the transition and falls through S3. Mixing S2 and S3 tubules cannot produce a peak
+  above both.
+- **Category 2 is mostly within S2,** the longest segment. Slc6a19 (B0AT1) and Slc5a12 (SMCT2) fall steadily through
+  S2, where the cluster means give one value. Neither pair was named in this protocol, so they are not used as
+  recovery checks.
+- **Many genes beyond the clusters are neighbour signal.** 37% of the genes where the curve beats the clusters are
+  more than twice as high in thick limb, DCT or collecting duct. Within-PT structure is partly neighbour RNA; the
+  filter keeps it out of both categories.
+
+### Post-hoc check: within a single label
+
+This check is not in the frozen protocol; it was added after the screen, before the figure was shown. Near a
+boundary, S1 and S2 units overlap on x, so a pure step between labels can look graded. `fig4_label_check.py`
+re-measures each call on units of one label only, from raw counts (`label_check.csv`).
+- **Category 2.** 72 of 74 calls change in the same direction within the label in both mice: 68 by at least
+  0.5 log2 and 43 by at least 1 log2. Measured within the label, the change is a median 0.83–0.88 of the curve's.
+  Label overlap explains little of it.
+- **Category 1.** All 5 rise within S2-labelled units toward the boundary (0.63–2.30 log2) and fall within
+  S3-labelled units after it (0.39–2.40 log2), in both mice. Hsd17b2's fall in S3 is the weakest (0.39–0.45).
+
+### Figure
+
+`analysis/paper/fig4_panels.py`.
+- **Panel a** shows Pigr, the top Category 1 gene.
+- **Presentation choice made after the screen:** to avoid showing a gene twice, panel c shows Category 1 ranks 2–4
+  (Cyp4a14, Cyp2d9, Hpd). Panel d shows Category 2 ranks 1–3 (Dpys, Slc6a19, Ugt2b34).
+- **Panel b** has 79 rows: 5 Category 1 genes, then 74 Category 2 genes.
+- **Y-axes** span the bin and cluster means. Where counts run out (Dpys and Ugt2b34 in late S3), the spline
+  dives below the data and is clipped.

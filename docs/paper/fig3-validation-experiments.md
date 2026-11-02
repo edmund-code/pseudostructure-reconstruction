@@ -228,30 +228,44 @@ passed by `--rscript` and `--gaston-python`; `kidney-pseudospace` was not change
 ### Fig. 2b ablations (2026-11-02)
 
 The architecture switch `model.backbone` (`full` | `cnn_only` | `vit_only`) is in `segmentation/`; `full` is the
-default and matches the previous model exactly. Each arm was trained on the v4 manifest with the v4 configuration,
+default and matches the previous model exactly. `full` is U-Net + OpenMidnight: the CNN stem is the U-Net's encoder
+half, and OpenMidnight's tokens join it at stride 16. `cnn_only` is a plain U-Net; `vit_only` drops the U-Net encoder
+and its skips, so the decoder upsamples OpenMidnight's tokens alone. Each arm was trained on the v4 manifest with the v4 configuration,
 seed 1337, for 54 epochs as v4 was, and selected by pooled validation PQ. Patches were re-extracted from the v4
 manifest; all 6,475 match v4 slide by slide and class by class. Software differs from v4: torch 2.10 instead of 2.5.1.
 
 | Arm | Trainable | Epoch | Val PQ, no TTA (1,298) | D4 Nx_4wk_050 (98) | D4 Ctrl_1A2_val (356) | **D4 pooled (454)** |
 |---|---|---|---|---|---|---|
 | v4 (locked) | 7.31 M | 35 | 0.727 | 0.880 | not run | – |
-| full | 7.31 M | 29 | 0.735 | 0.870 | 0.731 | **0.762** |
-| CNN stem only | 5.15 M | 39 | 0.729 | 0.867 | 0.767 | **0.789** |
-| ViT only | 4.30 M | 27 | 0.726 | 0.852 | 0.735 | **0.760** |
+| U-Net + OpenMidnight (`full`) | 7.31 M | 29 | 0.735 | 0.870 | 0.731 | **0.762** |
+| U-Net only (`cnn_only`) | 5.15 M | 39 | 0.729 | 0.867 | 0.767 | **0.789** |
+| OpenMidnight only (`vit_only`) | 4.30 M | 27 | 0.726 | 0.852 | 0.735 | **0.760** |
 
 **Reference arm.** The full arm reproduces v4: validation PQ 0.735 vs 0.727, and D4 on Nx_4wk_050 0.870 vs 0.880
 (one object of 98).
 
 **Reading.**
-- **Fusion does not raise PQ here.** On the frozen score, D4 pooled over the validation blocks, CNN stem only
-  leads full by 0.027 and ViT only trails it by 0.001.
-- **The CNN lead comes from one block.** On the held-out slide CNN only is 0.004 below full. Its lead is on
+- **OpenMidnight does not raise PQ here.** On the frozen score, D4 pooled over the validation blocks, U-Net only
+  leads U-Net + OpenMidnight by 0.027 and OpenMidnight only trails it by 0.001.
+- **The U-Net-only lead comes from one block.** On the held-out slide U-Net only is 0.004 below the full model. Its lead is on
   Ctrl_1A2_val, mostly the 50-object block at (9709, 10240): 0.71 vs 0.61.
 - **The arms are within noise.** There is one seed per arm, and per-region PQ spans 0.61–0.93 (full), 0.71–0.91
-  (CNN only) and 0.59–0.89 (ViT only). A claim that either branch matters would need several seeds per arm.
+  (U-Net only) and 0.59–0.89 (OpenMidnight only). A claim that either branch matters would need several seeds per arm.
 - **Scoring window.** That block's 2,048 px window runs 714 px past the annotated validation block. The scorer drops
   predictions on unannotated tissue before scoring, so the overshoot adds no false positives.
 
 **Fig. 2b now shows** the three mouse control bars at D4 pooled. The human bar is still v2's training-time
 validation PQ (0.824, no TTA). It is a different score from the mouse bars, and its D4 number needs the human
 labels and checkpoint, which are not readable here. Mouse AKI and the human ablations stay empty.
+
+**What the empty bars need.**
+- **Human, all three bars.** The HUK1_COR_1 training labels and the human v2 manifest and configuration, which are in
+  an account this one cannot read. Then three arms train as the mouse arms did, about 3.5 h each, and score with
+  D4 TTA. With the v2 checkpoint as well, the human full bar can be v2's own D4 score instead of a retrained stand-in.
+- **Mouse AKI, all three bars.** Dense manual outlines on two or three IR2A2/IR2A4 blocks (cortex and outer stripe,
+  about 150 tubules), in the QuPath classes of `Ctrl_1A2_final.geojson`. Each block needs an ROI rectangle that
+  marks it fully annotated. The outlines must be drawn from the H&E, not by correcting model outlines, because
+  correcting model outlines biases PQ towards the model. No retraining is needed: the three trained mouse arms
+  score the new blocks with D4 TTA. AKI sections were never in training, so every block is held out.
+- **Fig. 2d from the same work.** If a second person outlines the same AKI or human blocks, the annotator-vs-annotator
+  error for Fig. 2d comes from those blocks too.

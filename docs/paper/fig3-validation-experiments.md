@@ -147,3 +147,44 @@ cut open at the edge and there is no fibrous capsule (checked at full resolution
 - **HUK1_MED1** has 18 PT units in the window, at pixel (11912, 4904), with 48 predicted outlines.
 
 The outlines register on the H&E. PQ still needs manual outlines of both tiles.
+
+### 3d. Robustness (2026-11-02)
+
+`analysis/paper/fig3_robustness.py`, 64 reruns per fit (three arms × six fractions × three seeds, plus five gene
+splits × two halves). None failed, and none reversed the global orientation.
+
+**Deviations from the protocol.**
+- **Thread count.** The 100% reruns at 4 threads do not reproduce the reference exactly: they are deterministic
+  among themselves but land on a different Leiden partition. Rerunning the unperturbed data with the thread
+  variables unset, as the reference was run, reproduces it exactly (same fingerprints, max |Δt| = 0). So the
+  gap comes from the thread count, not the code. The grid keeps 4 threads as frozen; `rho_vs_full_rerun`
+  scores each rerun against the 4-thread 100% rerun and barely differs from ρ vs reference.
+- **Genes arm.** Only the pool for the integration HVGs is restricted (through `exclude_from_harmony_hvg`). The
+  2,000 clustering HVGs that name the labels are not, because the package has no hook for them.
+- **Added check.** `pt_limb_reversed` flags reruns whose PT limb is entered from its S3 end (median t of PTS1 above
+  PTS3). This partial flip keeps ρ positive, so global orientation alone misses it.
+
+**Median ρ with the reference t** (three seeds; lowest single rerun in brackets where it differs by > 0.05):
+
+| Kept | Mouse fit: tubules | reads | genes | Human + mouse fit: tubules | reads | genes |
+|---|---|---|---|---|---|---|
+| 10% | 0.983 | 0.458 (0.318) | 0.807 | 0.981 | 0.466 (0.358) | 0.790 |
+| 20% | 0.985 (0.664) | 0.772 | 0.891 (0.755) | 0.985 | 0.541 (0.433) | 0.854 (0.773) |
+| 30% | 0.988 | 0.788 | 0.947 | 0.982 | 0.755 (0.655) | 0.904 (0.838) |
+| 50% | 0.992 | 0.955 | 0.961 (0.549) | 0.987 | 0.930 (0.852) | 0.895 |
+| 70% | 0.991 | 0.980 | 0.983 | 0.988 | 0.957 | 0.964 |
+| 100% | 0.995 | 0.995 | 0.995 | 0.992 | 0.992 | 0.992 |
+
+- **Expected result met.** ρ ≥ 0.95 down to 30% tubules holds in every 10–70% tubule rerun but one: mouse
+  `tubules_f020_s2` (0.664), whose PT limb is reversed. Down to 10% tubules, ρ stays at 0.98.
+- **Reads are the weak arm.** Below 50% of reads, ρ falls to 0.46–0.79. Thinned clusters fall below stage 03's
+  absolute panel-score threshold and are dropped as Unassigned, so only 13.6k of 32.9k mouse units reach the
+  curve at 10% reads. Most limb reversals are in this arm (mouse 6 of 8, human 8 of 9).
+- **Against the reference labels,** pooled median ρ stays at 0.95 for every tubule fraction in both fits; the reference
+  itself scores 0.952 (mouse) and 0.957 (human + mouse).
+- **Gene halves, ρ between half A and half B:** mouse 0.942, 0.908, 0.950, 0.940, 0.952; human + mouse 0.915,
+  0.851, 0.874, 0.825, 0.901. Two disjoint gene sets give nearly the same order.
+
+**Reading.** The axis depends little on which tubules are sampled and somewhat more on which genes are
+offered. Sequencing depth matters most: half the reads still gives a median ρ ≥ 0.93, but below that, units drop out of
+labelling and the PT limb can attach from the wrong end.

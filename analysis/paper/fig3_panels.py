@@ -260,41 +260,51 @@ def panel_c(args, plt, out):
 
 # ---------------------------------------------------------------------------------------------------- d
 def panel_d(args, plt, out):
-    path = Path(args.results_root) / 'paper_figures/fig3/robustness/aki/robustness.csv'
-    if not path.exists():
+    root = Path(args.results_root) / 'paper_figures/fig3/robustness'
+    fits = {run: pd.read_csv(root / run / 'robustness.csv') for run in ('aki', 'hvm') if (root / run / 'robustness.csv').exists()}
+    if not fits:
         print('d: no robustness results yet')
         return None
-    r = pd.read_csv(path)
+    from matplotlib.lines import Line2D
     fig = figure(plt, 'd')
-    ax = fig.add_axes([0.16, 0.26, 0.50, 0.68])
-    styles = {'tubules': ('#2F6DB5', '-'), 'reads': ('#D9692B', '-'), 'genes': ('#5BA55B', '-')}
-    for cond, (c, ls) in styles.items():
-        d = r[(r.condition == cond) & r.half.isna()] if 'half' in r else r[r.condition == cond]
-        if d.empty:
-            continue
-        g = d.groupby('fraction').rho_vs_reference
-        x = np.asarray(g.median().index) * (100 if d.fraction.max() <= 1 else 1)
-        ax.fill_between(x, g.min(), g.max(), color=c, alpha=0.2, lw=0)
-        ax.plot(x, g.median(), color=c, ls=ls, lw=1.2, marker='o', ms=2.5)
-        ax.text(x[0] - 3, g.median().iloc[0], cond, ha='right', va='center', fontsize=6.5, color=c)
+    ax = fig.add_axes([0.13, 0.26, 0.60, 0.68])
+    arms = {'tubules': '#2F6DB5', 'reads': '#D9692B', 'genes': '#5BA55B'}
+    dashes = {'aki': '-', 'hvm': (0, (2, 1.2))}           # median over seeds; every rerun is a dot (mouse filled)
+    for run, r in fits.items():
+        for k, (cond, c) in enumerate(arms.items()):
+            d = r[r.condition == cond]
+            g = d.groupby('fraction').rho_vs_reference.median()
+            ax.plot(100 * g.index, g, color=c, ls=dashes[run], lw=1.0)
+            jitter = (k - 1) * 0.9 + (0.45 if run == 'hvm' else -0.45)
+            ax.scatter(100 * d.fraction + jitter, d.rho_vs_reference, s=3.5, lw=0.5, zorder=3,
+                       color=c if run == 'aki' else 'white', edgecolor=c)
+    lo = min(float(r.rho_vs_reference.min()) for r in fits.values())
     ax.set_xlim(0, 103)
-    ax.set_ylim(min(0.0, float(r.rho_vs_reference.min()) - 0.05), 1.02)
+    ax.set_ylim(np.floor(lo * 10) / 10 - 0.02, 1.02)
+    ax.set_xticks([10, 30, 50, 70, 100])
     ax.set_xlabel('fraction kept (%)', labelpad=1)
     ax.set_ylabel('ρ with full-data axis')
-    halves = Path(args.results_root) / 'paper_figures/fig3/robustness/aki/gene_halves.csv'
-    if halves.exists():
-        h = pd.read_csv(halves)
-        col = next(c for c in h.columns if 'a_vs_b' in c or 'halves' in c or c.startswith('rho'))
-        hx = fig.add_axes([0.78, 0.26, 0.16, 0.68])
-        hx.scatter(np.zeros(len(h)) + np.linspace(-0.1, 0.1, len(h)), h[col], s=8, color='#5BA55B')
-        hx.set_xlim(-0.5, 0.5)
-        hx.set_ylim(ax.get_ylim())
-        hx.set_xticks([0])
-        hx.set_xticklabels(['half A vs B'])
-        hx.set_yticklabels([])
+    keys = [Line2D([], [], color=c, lw=1.1) for c in arms.values()]
+    keys += [Line2D([], [], color='#999999', lw=1.1), Line2D([], [], color='#999999', lw=1.1, ls=dashes['hvm'])]
+    ax.legend(keys, [*arms, 'mouse', 'human + mouse'], loc='lower right', fontsize=6, frameon=False,
+              handlelength=1.6, labelspacing=0.25, borderaxespad=0.2)
+    hx = fig.add_axes([0.80, 0.26, 0.17, 0.68])           # five complementary gene splits: rho between the halves
+    for i, (run, filled) in enumerate((('aki', True), ('hvm', False))):
+        p = root / run / 'gene_halves.csv'
+        if not p.exists():
+            continue
+        h = pd.read_csv(p)['rho_A_vs_B']
+        hx.scatter(i + np.linspace(-0.12, 0.12, len(h)), h, s=9, color=arms['genes'] if filled else 'white',
+                   edgecolor=arms['genes'], lw=0.8, zorder=3)
+    hx.set_xlim(-0.6, 1.6)
+    hx.set_ylim(ax.get_ylim())
+    hx.set_xticks([0, 1])
+    hx.set_xticklabels(['mouse', 'human\n+ mouse'], fontsize=6)
+    hx.set_yticklabels([])
+    hx.set_title('gene half A vs B', fontsize=6, color=MUTED, pad=2)
     fig.savefig(out / 'f3_d.png', facecolor='white')
     plt.close(fig)
-    return r
+    return fits
 
 
 # ---------------------------------------------------------------------------------------------------- e

@@ -34,9 +34,16 @@ class KidneyPanoptic(nn.Module):
         self.n_classes = class_spec.n_classes
         self.compact_indices = list(class_spec.compact_indices)
 
-        self.encoder = FrozenEncoder(dict(cfg.get("encoder", {}) or {}))
+        # Fig. 2b ablation: full | cnn_only (no ViT, never loaded) | vit_only (no stem).
+        self.backbone = str(cfg.get("model", {}).get("backbone", "full"))
+        if self.backbone not in ("full", "cnn_only", "vit_only"):
+            raise ValueError(f"model.backbone must be full, cnn_only or vit_only, "
+                             f"got '{self.backbone}'")
+        self.encoder = (None if self.backbone == "cnn_only"
+                        else FrozenEncoder(dict(cfg.get("encoder", {}) or {})))
         dec_cfg = dict(cfg.get("decoder", {}) or {})
-        self.decoder = FusionDecoder(self.encoder.out_dims, dec_cfg)
+        self.decoder = FusionDecoder(self.encoder.out_dims if self.encoder else [], dec_cfg,
+                                     backbone=self.backbone)
         d = self.decoder.out_channels
         norm = dec_cfg.get("norm", "gn")
 
@@ -57,7 +64,7 @@ class KidneyPanoptic(nn.Module):
 
     # ----------------------------------------------------------------- forward
     def forward(self, rgb: torch.Tensor) -> dict[str, torch.Tensor]:
-        tokens = self.encoder(rgb)
+        tokens = self.encoder(rgb) if self.encoder is not None else None
         feat = self.decoder(rgb, tokens)
 
         out = {

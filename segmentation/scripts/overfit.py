@@ -71,7 +71,9 @@ def main():
     opt = torch.optim.AdamW(model.trainable_parameters(), lr=args.lr, weight_decay=0.0)
     print(f"trainable params: {model.n_trainable() / 1e6:.2f} M")
 
-    model.train(); model.encoder.eval()
+    model.train()
+    if model.encoder is not None:
+        model.encoder.eval()
     first = None
     t0 = time.time()
     for step in range(args.steps):

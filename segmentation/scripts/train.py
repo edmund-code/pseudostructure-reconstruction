@@ -105,7 +105,8 @@ def main():
     # ----------------------------------------------------------------- model
     model = build_model(cfg, spec).to(device)
     print(f"trainable parameters: {model.n_trainable() / 1e6:.2f} M "
-          f"(encoder frozen: {cfg['encoder']['name']})")
+          f"(backbone {model.backbone}; frozen encoder: "
+          f"{cfg['encoder']['name'] if model.encoder is not None else 'none'})")
 
     weights = compute_class_weights(train_metas, spec, cfg).to(device)
     print("semantic class weights: " +
@@ -155,7 +156,8 @@ def main():
     # -------------------------------------------------------------- training
     for epoch in range(start_epoch, epochs):
         model.train()
-        model.encoder.eval()          # belt and braces: the encoder never trains
+        if model.encoder is not None:
+            model.encoder.eval()      # belt and braces: the encoder never trains
         t0 = time.time()
         agg = Counter()
         n_steps = 0

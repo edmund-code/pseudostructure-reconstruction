@@ -101,3 +101,29 @@ def test_encoder_input_size_must_be_a_multiple_of_14():
 def test_unknown_encoder_name_fails_loudly():
     with pytest.raises(ValueError, match="Unknown encoder"):
         build_model(base_cfg(encoder={"name": "resnet50"}))
+
+
+@pytest.mark.parametrize("backbone", ["full", "cnn_only", "vit_only"])
+def test_backbone_ablations_keep_output_shapes(backbone):
+    m = build_model(base_cfg(model={"backbone": backbone}))
+    out = m(torch.randn(2, 3, 100, 100))   # odd stride-16 size: 100 -> 50 -> 25 -> 13 -> 7
+    assert out["semantic_logits"].shape == (2, 6, 100, 100)
+    assert out["boundary_logits"].shape == (2, 3, 100, 100)
+    assert out["center_logits"].shape == (2, 2, 100, 100)
+    assert (m.encoder is None) == (backbone == "cnn_only"), "cnn_only must not build the ViT"
+    assert (m.decoder.stem is None) == (backbone == "vit_only")
+    assert (m.decoder.token_proj is None) == (backbone == "cnn_only")
+    out["boundary_logits"].sum().backward()
+    assert all(p.grad is not None for p in m.decoder.parameters()), \
+        "every kept decoder block must sit on the gradient path"
+
+
+def test_full_backbone_is_the_default_and_keeps_checkpoint_keys():
+    keys = set(build_model(base_cfg()).state_dict())
+    assert keys == set(build_model(base_cfg(model={"backbone": "full"})).state_dict())
+    assert {"decoder.stem.level0.block.0.weight", "decoder.token_proj.0.weight"} <= keys
+
+
+def test_unknown_backbone_fails_loudly():
+    with pytest.raises(ValueError, match="backbone"):
+        build_model(base_cfg(model={"backbone": "resnet"}))

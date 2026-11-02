@@ -147,6 +147,9 @@ decoder:
   dropout: 0.10          # the 7.3M decoder is what overfits; the encoder is frozen
 
 model:
+  # Backbone ablation (Fig. 2b): full | cnn_only (drops the ViT branch and its fusion) |
+  # vit_only (drops the full-resolution stem; the decoder upsamples the tokens alone).
+  backbone: full
   legacy_hv: false       # experimental centroid-HV branch; NOT used by the default decode
   # 3 = bg / interior / boundary
   # 4 = bg / interior / boundary-to-background / boundary-to-INSTANCE  (default)

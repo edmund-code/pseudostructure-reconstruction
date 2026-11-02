@@ -15,6 +15,14 @@ stem   : s1 512² x32, s2 256² x64, s4 128² x128, s8 64² x192, s16 32² x256
 tokens : L x (1536, 37, 37) -> concat -> 1x1 -> (fuse_dim, 37, 37) -> resize -> 32²
 fuse   : stride-16 tokens + stride-16 stem -> then up 8 -> 4 -> 2 -> 1
 output : (decoder_channels[-1], 512, 512) when out_stride == 1
+
+Backbone ablations (``backbone``, Fig. 2b)
+-----------------------------------------
+full     : the above.
+cnn_only : no token branch; fuse16 sees the stride-16 stem features alone.
+vit_only : no stem; the token map is upsampled bilinearly through the same 8 -> 4 -> 2 -> 1
+           blocks, to the sizes the stem would have produced, with no skips.
+Each removed input only shrinks the in-channels of the block that consumed it.
 """
 from __future__ import annotations
 
@@ -77,7 +85,7 @@ class RGBStem(nn.Module):
 class FusionDecoder(nn.Module):
     """Fuse the frozen token pyramid with the stem pyramid and upsample to out_stride."""
 
-    def __init__(self, encoder_dims: Sequence[int], cfg: dict):
+    def __init__(self, encoder_dims: Sequence[int], cfg: dict, backbone: str = "full"):
         super().__init__()
         self.out_stride = int(cfg.get("out_stride", 1))
         if self.out_stride not in (1, 2):
@@ -90,38 +98,47 @@ class FusionDecoder(nn.Module):
             raise ValueError(f"decoder.decoder_channels must have 4 entries "
                              f"(strides 8,4,2,1), got {dec_ch}")
 
-        self.stem = RGBStem(stem_ch, norm)
+        use_vit, use_stem = backbone != "cnn_only", backbone != "vit_only"
+        skip = stem_ch if use_stem else [0] * 5
+        self.stem = RGBStem(stem_ch, norm) if use_stem else None
         # Concat-then-project lets the decoder learn how much each encoder block matters,
         # rather than fixing a uniform sum.
         self.token_proj = nn.Sequential(
             nn.Conv2d(int(sum(encoder_dims)), fuse_dim, 1, bias=False),
             _norm(norm, fuse_dim),
             nn.ReLU(inplace=True),
-        )
-        self.fuse16 = ConvBlock(fuse_dim + stem_ch[4], fuse_dim, norm)
-        self.up8 = ConvBlock(fuse_dim + stem_ch[3], dec_ch[0], norm)
-        self.up4 = ConvBlock(dec_ch[0] + stem_ch[2], dec_ch[1], norm)
-        self.up2 = ConvBlock(dec_ch[1] + stem_ch[1], dec_ch[2], norm)
-        self.up1 = ConvBlock(dec_ch[2] + stem_ch[0], dec_ch[3], norm)
+        ) if use_vit else None
+        self.fuse16 = ConvBlock((fuse_dim if use_vit else 0) + skip[4], fuse_dim, norm)
+        self.up8 = ConvBlock(fuse_dim + skip[3], dec_ch[0], norm)
+        self.up4 = ConvBlock(dec_ch[0] + skip[2], dec_ch[1], norm)
+        self.up2 = ConvBlock(dec_ch[1] + skip[1], dec_ch[2], norm)
+        self.up1 = ConvBlock(dec_ch[2] + skip[0], dec_ch[3], norm)
         self.dropout = nn.Dropout2d(float(cfg.get("dropout", 0.0)))
         self.out_channels = dec_ch[3] if self.out_stride == 1 else dec_ch[2]
 
     @staticmethod
-    def _up_to(x: torch.Tensor, ref: torch.Tensor) -> torch.Tensor:
-        return F.interpolate(x, size=ref.shape[-2:], mode="bilinear", align_corners=False)
+    def _up_cat(x: torch.Tensor, size, skip) -> torch.Tensor:
+        x = F.interpolate(x, size=size, mode="bilinear", align_corners=False)
+        return x if skip is None else torch.cat([x, skip], dim=1)
 
-    def forward(self, rgb: torch.Tensor, tokens: list[torch.Tensor]) -> torch.Tensor:
-        s0, s1, s2, s3, s4 = self.stem(rgb)
+    def forward(self, rgb: torch.Tensor, tokens: list[torch.Tensor] | None) -> torch.Tensor:
+        s = self.stem(rgb) if self.stem is not None else [None] * 5
+        # The sizes the stride-2 stem produces; vit_only upsamples to them with no skips.
+        sizes = [tuple(rgb.shape[-2:])]
+        for _ in range(4):
+            sizes.append(tuple((d + 1) // 2 for d in sizes[-1]))
 
-        t = torch.cat(tokens, dim=1) if len(tokens) > 1 else tokens[0]
-        t = self.token_proj(t)
-        t = F.interpolate(t, size=s4.shape[-2:], mode="bilinear", align_corners=False)
-
-        x = self.fuse16(torch.cat([t, s4], dim=1))
-        x = self.up8(torch.cat([self._up_to(x, s3), s3], dim=1))
-        x = self.up4(torch.cat([self._up_to(x, s2), s2], dim=1))
-        x = self.up2(torch.cat([self._up_to(x, s1), s1], dim=1))
+        if self.token_proj is not None:
+            t = torch.cat(tokens, dim=1) if len(tokens) > 1 else tokens[0]
+            t = self.token_proj(t)
+            x = self._up_cat(t, sizes[4], s[4])
+        else:  # cnn_only
+            x = s[4]
+        x = self.fuse16(x)
+        x = self.up8(self._up_cat(x, sizes[3], s[3]))
+        x = self.up4(self._up_cat(x, sizes[2], s[2]))
+        x = self.up2(self._up_cat(x, sizes[1], s[1]))
         if self.out_stride == 2:
             return self.dropout(x)
-        x = self.up1(torch.cat([self._up_to(x, s0), s0], dim=1))
+        x = self.up1(self._up_cat(x, sizes[0], s[0]))
         return self.dropout(x)

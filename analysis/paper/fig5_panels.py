@@ -1,8 +1,8 @@
 """Fig. 5 panels (main) and their Extended Data companions, drawn from fig5_screen.py and fig5_interpret.py.
 
 Main figure (make_fig5.py):
- reversed       genes whose gradient along the PT reverses between mouse and human (examples)
- steeper        genes graded the same way in both species but more steeply in human (examples)
+ rises         reversed gradients that rise along the PT in mouse and fall in human (externally confirmed examples)
+ falls         reversed gradients that fall in mouse and rise in human (externally confirmed examples)
  handoff_rows   transporter handoffs in the poster layout, mouse and human side by side, with switch positions
 Extended Data (make_ed_fig_hvm.py):
  maps           one mouse and one human section, PT tubules coloured by position on the shared axis
@@ -43,18 +43,20 @@ PT = {'PT-S1': 0, 'PT-S2': 1, 'PT-S3': 2}
 MOUSE_C, HUMAN_C = '#2F6DB5', '#6A4BB0'
 EARLY = {'mouse': '#3A8DD0', 'human': '#9A7FD6'}
 LATE = {'mouse': '#1B3A5C', 'human': '#3B2470'}
-SIZE = {'reversed': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
+SIZE = {'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
         'pathway_null': (380, 242)}
-MAIN = ['reversed', 'steeper', 'handoff_rows']
+MAIN = ['rises', 'falls', 'handoff_rows']
 EXTENDED = ['maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
 # examples are chosen after the screen and the follow-up (presentation choice, recorded in the protocol doc)
-REVERSED = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Dcxr', 'Dcxr'), ('Slc5a11', 'Slc5a11'), ('Hpgd', 'Hpgd')]
+# reversals whose two limbs both reproduce externally (mouse microdissection in both sexes, human atlas donors;
+# docs/paper/fig5-human-vs-mouse-along-pt.md): rising in mouse and falling in human, and the reverse
+RISES = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Hpgd', 'Hpgd'), ('Lpar6', 'Lpar6')]
+FALLS = [('Dcxr', 'Dcxr'), ('Slc5a11', 'Slc5a11'), ('Pitpnc1', 'Pitpnc1'), ('Sorbs1', 'Sorbs1')]
 RELOCATED: list = []          # (label, gene-set key); the frozen set screen called none
-STEEPER = [('Gpt', 'Gpt'), ('Fmo5', 'Fmo5'), ('Sel1l3', 'Sel1l3'), ('Pter', 'Pter')]
 H_PAIRS = [('Slc5a2', 'Slc5a1', 'Glucose'), ('Slc6a19', 'Slc6a18', 'Neutral amino acids'),
            ('Slc7a7', 'Slc7a13', 'Cationic amino acids'), ('Slc22a23', 'Slc22a12', 'Organic anions'),
            ('Slc16a1', 'Slc16a9', 'Monocarboxylates')]
@@ -564,10 +566,10 @@ def main(argv=None):
         panel_conservation(plt, screen, out)
     if 'flattening' in panels:
         panel_flattening(plt, genes, summary, out)
-    if 'reversed' in panels and REVERSED:
-        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'reversed', REVERSED)
-    if 'steeper' in panels and STEEPER:
-        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'steeper', STEEPER)
+    if 'rises' in panels:
+        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'rises', RISES)
+    if 'falls' in panels:
+        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'falls', FALLS)
     if 'relocated' in panels and RELOCATED:
         panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'relocated', RELOCATED, sets)
     if 'pathways' in panels and summary['pathways']['calls']['species']:

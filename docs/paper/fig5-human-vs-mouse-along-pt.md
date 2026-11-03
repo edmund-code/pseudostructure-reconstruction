@@ -234,3 +234,89 @@ MCT9), none in human only.
 **Abstract wording.** "We identify pathways and paired solute transporters whose proximal tubule positions differ"
 is not supported for pathways: the calibrated set screen calls none. Supported: "genes and paired solute
 transporters".
+
+## Literature and external checks (post hoc, interpretation only)
+
+Almost none of the called genes has published axial localization in either species, so the decisive evidence is
+per-segment primary data re-read for this purpose (not used by the screen, and not drawn in any figure): Chen 2021
+male and Chen 2023 male + female mouse microdissection (PMIDs 33769951, 36758122), Lee 2015 rat microdissection,
+KTEA rat protein, Cheval 2012 human and mouse S1/S3 SAGE, Xiong 2023 sex-bias and nephron *Ar*-knockout tables
+(PMID 37673062), and Lake 2023 human PT-S1/S2/S3 snRNA per donor (PMID 37468583; 17 normal, 12 AKI, 23 CKD donors
+with ≥ 20 cells per segment). Earlier per-gene reviews (gene agents, 2026-10-23; pathway ground truth, 2026-10-27)
+were reused for the genes they covered.
+
+- **Donor state is ruled out.** Every human direction that Lake shows in normal cortex holds in its AKI and CKD
+  donors, and in male donors alone.
+- **The male-mouse caveat is real for a named subset.** The mouse limb reverses or vanishes in female mice for
+  Hao2, Sh3gl2, Vnn1 and part of Lrig1, and *Ar* knockout confirms androgen control (Hao2, Sh3gl2, Lrig1).
+
+**The 28 reversals.**
+
+| verdict | genes |
+|---|---|
+| both limbs reproduced (mouse microdissection, both sexes; human atlas donors) | Mme (+3.2 / +4.7; Lake −1.5), Slc17a3 (+2.4 / +3.2; −1.4), Hpgd (+3.3 / +5.7; −1.7), Lpar6 (+1.7 / +1.2; −2.3), Dcxr (−1.9 / −2.0; +1.6), Slc5a11 (−1.8 / −0.9; +2.9), Pitpnc1 (−1.8 / −0.9; +2.1), Sorbs1 (−0.6 / −0.9; +1.4), Frmd4b, Aldh3b1, Chrna4 — **11** |
+| human limb weak or few probes | Ctsh (Lake −0.4, 29% of donors up), Slc25a15 (6 CPM), Odc1 (1 human probe vs 3), Msrb1, Rai14 |
+| mouse limb male-only or partly androgen | Hao2, Sh3gl2, Vnn1, Lrig1 |
+| mouse limb not reproduced (flat in microdissection) | Tmem252, Abhd14a |
+| human limb not reproduced (flat or rising in Lake) | Lap3, Fuca2, Tex264 |
+| artefact or not comparable | Apoc3 (human PT does not express it, 0.3 CPM), Ugt3a1 (not a 1:1 ortholog), Reep6 (discounted earlier: human sections disagree) |
+
+None of the 11 has published axial data in both species. Partial precedents: NEP polarity flips between rat and
+rabbit microdissection (Edwards 1999, abstract); DCXR is S3-high in human single-cell data (McEvoy 2022) and S1-high
+in rat; human SLC17A3 falls S1 → S3 (Sakaguchi 2024); human SMIT2 (SLC5A11) matches an independent donor.
+Biological reading: neprilysin (sacubitril target) and the urate exporter NPT4 sit early in the human PT and late
+in the mouse; the inositol transporter SMIT2 and the uronate-pathway enzyme DCXR sit late in the human PT and early
+in the mouse; 15-PGDH (Hpgd, prostaglandin inactivation) and the P2Y5 receptor (Lpar6) follow Mme.
+
+**Steeper in human.** Mostly our mouse arm being flatter than microdissection, not human biology: mouse
+microdissection is as steep as our human sections for Gpt (+2.0 against Lake +2.1) and nearly for Pter; Fmo5 and
+Slc7a13 are steep in male microdissection (+4.1, +7.8) and the latter is male-only; Ggact is androgen-dependent;
+Sel1l3 falls in microdissection (a reversal externally). Only Fut8 survives (mouse −0.9, human −2.0, 16/17 donors).
+The category stays in Extended Data with this caveat. The same comparison says our mouse S3-minus-S1 contrasts are
+compressed relative to microdissected S1 and S3 (expected: microdissection takes pure segment pieces, the core means
+here average over a range of positions).
+
+**Lysosome (top-ranked, uncalled set).** Legumain falls S1 → S3 in mouse microdissection (−2.4) as in human (Lake
+−2.4), and Ctsb/Ctsl fall in mouse microdissection too, so the set's "earlier in human" offset is more likely our
+mouse arm than a species relocation. Not a finding, as the screen said.
+
+**Handoffs (Lake human crossings, mouse microdissection by sex; units are segment centres S1 = 0, S2 = 1, S3 = 2).**
+- **Later in human: 7 of 7 checked reproduce:** SGLT2 → SGLT1 (mouse 0.50/0.53, human 1.38; human SGLT2 protein
+  covers S1 and S2, SGLT1 is the S3 transporter, Vrhovac 2015), SGLT2 → SGLT5, B0AT1 → B0AT3 (human SLC6A19 nearly
+  flat, so the switch moves into S3), y+LAT1 / LAT2 → AGT1 (part of the mouse-early position is androgen: AGT1 is
+  male-only in mouse and the female crossing is later), SLC22A23 → URAT1 and → OCT2.
+- **Earlier in human: MCT pairs reproduce, OCTN2 pairs do not.** Human SLC16A9 (MCT9) is high in S1 and falls,
+  mouse Slc16a9 rises, as proposed. OCTN2 → URAT1 and → OAT2 cross later in Lake, not earlier; OAT2 protein is
+  S1/S2-dominant in human, so OCTN2 → OAT2 is unresolved.
+- **The two "not shifted" pairs are challenged.** Lake shows a late human crossing for lactate SMCT2 → SMCT1 (SLC5A8
+  7.8 → 184 CPM on a flat-high SLC5A12) and cystine b0,+AT → AGT1. Our human SLC5A8 is barely detected (7% of units),
+  so our "no lactate handoff in human" is a sensitivity limit, not biology; the poster's statement should go.
+
+## Figure versions
+
+- **v1 (2026-11-03, before the external checks):** a reversed (Mme, Slc17a3, Dcxr, Slc5a11, Hpgd); b steeper in
+  human (Gpt, Fmo5, Sel1l3, Pter); c handoffs.
+- **v2 (current):** a rising in mouse, falling in human (Mme, Slc17a3, Hpgd, Lpar6); b falling in mouse, rising in
+  human (Dcxr, Slc5a11, Pitpnc1, Sorbs1); c five handoffs (glucose SGLT2 → SGLT1, neutral amino acids B0AT1 → B0AT3,
+  cationic amino acids y+LAT1 → AGT1, organic anions SLC22A23 → URAT1, monocarboxylates MCT1 → MCT9), each of whose
+  shift reproduces in the human atlas. Examples were limited to calls whose both limbs reproduce externally
+  (presentation choice). Steeper-in-human moved to Extended Data (panel e, every call) because the external check
+  attributes most of it to our mouse arm.
+- **Extended Data:** maps, coverage, gradient conservation, human-vs-mouse gradient scatter, every call along the
+  PT, the pathway screen against its relabelings, all handoffs, the admixture bound and cortical check.
+
+## The most notable results, in order
+
+1. **Orthologous genes reverse their gradient along the proximal tubule between mouse and human.** 28 calibrated
+   calls (0 under either relabeling); 11 reproduce in independent mouse microdissection (both sexes) and the human
+   atlas, none described axially before. The best supported: neprilysin and the urate exporter NPT4 early in human
+   and late in mouse; SMIT2 and DCXR the reverse.
+2. **Transporter switch points move between species, mostly later along the human PT.** 13 of 53 shift beyond the
+   common warp (0/0). Glucose (SGLT2 → SGLT1/SGLT5) and amino-acid (B0AT1 → B0AT3, → AGT1) switches sit 0.2–0.3
+   later in human because the human early transporters stay on through S2; all seven checked reproduce in the human
+   atlas, and protein localization agrees for SGLT2/SGLT1. MCT9 runs the opposite way in the two species.
+3. **Human PT gradients are a much flatter version of the mouse ones on this platform.** Human sections keep under a
+   tenth of a mouse gradient while the mice keep 0.6–1.0 of a human one; the cause is not separable here, so the
+   figure compares directions and switch positions, which flattening cannot create.
+4. **No pathway moves as a whole.** The calibrated set screen calls nothing, and its top set (lysosome) is likely
+   our mouse arm. The abstract should say genes, not pathways.

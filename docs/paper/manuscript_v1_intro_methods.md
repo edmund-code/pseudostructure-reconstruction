@@ -14,7 +14,7 @@ Spatial transcriptomics (ST) technologies enable gene expression characterizatio
 However, sections of repeating three-dimensional structures such as kidney nephrons capture scattered
 cross-sections whose position along the structure is lost. To address this, we develop pseudostructure
 reconstruction to segment such cross-sections from histology and order them along a shared axis using paired ST
-data, without segment labels. We apply pseudostructure reconstruction to VisiumHD data of mouse and human kidneys
+data, without segment labels. We apply pseudostructure reconstruction to Visium HD data of mouse and human kidneys
 to recapitulate expected nephron segment order and resolve continuous gradients within proximal tubule segments
 that clustering obscures. Comparing species, we identify pathways and paired solute transporters whose proximal
 tubule positions differ between mouse and human. Finally, we compare control and acutely injured mouse kidneys,
@@ -24,46 +24,55 @@ gradients in structures and tissues of interest.
 
 ## Introduction
 
-Spatial transcriptomics (ST) technologies enable gene expression characterization within intact tissue
-sections[1–3], and recent platforms such as VisiumHD measure whole sections at 2-µm resolution[4]. Many organs are
-built from repeated three-dimensional units whose function changes continuously along their length, such as the
-liver lobule, the intestinal villus and the kidney nephron[5,6]. Along the nephron, the proximal tubule alone runs
-through three subsegments, S1, S2 and S3, which differ in solute transport, metabolism and susceptibility to
-injury[7–9]. Single-cell and spatial studies have mapped these segment states in mouse and human kidneys and in
-acute injury[10–15], but how gene expression changes along the length of the tubule, within and between its
-segments, remains largely uncharacterized.
+Spatial transcriptomics (ST) technologies enable gene expression characterization within tissue sections while
+retaining each measurement's position[1–3], and Visium HD captures the protein-coding
+transcriptome on a continuous grid of 2-µm squares across a 6.5 × 6.5-mm capture area[4]. Many organs
+are built from repeated units whose function changes continuously along an axis, such as the liver lobule[5],
+the intestinal villus[6] and the kidney nephron[7,8]. Along the nephron, the proximal tubule
+runs through three subsegments, S1, S2 and S3, which differ in solute transport and metabolism[9,10]
+and in susceptibility to ischaemic injury[8]; in the mouse, they are distinguished by transporter expression
+rather than by ultrastructure[11]. Single-cell and spatial studies have mapped these segment states in mouse
+and human kidneys and in acute injury[8,12–16], but gene
+expression along the tubule is known mostly at the resolution of these three segments.
 
 However, a two-dimensional section cuts each nephron many times. A single kidney section therefore holds thousands
 of tubule cross-sections, each from an unknown position along its nephron, and neighbouring cross-sections often
 belong to different nephrons, so their location in the tissue plane does not reveal their position along the
-structure. Recovering that position physically requires tracing individual nephrons through serial sections[16,17]
-or profiling tissue in three dimensions[18–21], approaches that remain laborious and are rarely paired with
-transcriptome-wide measurements across whole organs.
+structure. Recovering that position physically requires tracing individual nephrons through hundreds to thousands
+of serial sections[11,17,18] or profiling tissue in three dimensions[19–21];
+these approaches need many sections or assays per specimen and have so far captured morphology, targeted gene
+panels or transcriptomes over sub-millimetre depths rather than whole organs.
 
-As such, ST analyses of the kidney typically discretize. Clustering and spatial-domain methods assign each spot or
-cross-section to a segment label[22–26], and comparisons between conditions or species then contrast segment
-means. Segment labels cannot represent a gene that changes within a segment, peaks at a segment boundary, or hands
-its function to a partner transporter part-way along the tubule. Methods that model continuous expression
-gradients, such as GASTON and Belayer, build their coordinate from tissue x/y positions[27,28], and CoPro takes the
+As such, ST analyses of the kidney typically summarize expression by segment or cell type[15,16].
+Clustering assigns each cell, spot or cross-section to one of a few discrete groups that are then annotated as
+segments[22,23], spatial-domain methods additionally encourage neighbouring spots in the tissue plane to
+share a group[24–26], and comparisons between conditions or species then contrast group means.
+Discrete groups cannot represent a gene that changes within a segment, peaks at a segment boundary, or hands its
+function to a partner transporter part-way along the tubule, and a spatial prior misleads where neighbouring
+cross-sections belong to different nephrons. Methods that model continuous expression gradients build their
+coordinate from tissue x/y positions[27–29]; applied to the kidney, CoPro was also given the
 order of nephron segments as an input[29]. Comparative methods align sections to compare expression at matched
-locations[30,31], which requires sections that share structure in the tissue plane. Trajectory inference orders
-cells along continuous processes from expression alone[32–36], and related ideas have ordered repeated structures:
-intestinal crypt positions from deconvolved cell-type composition[37], testis tubules around the known cycle of the
-seminiferous epithelium[38,39], and hair follicles by developmental age from three-dimensional profiles[40]. These
-approaches rely on a change in cell-type composition, a cyclic topology or three-dimensional data. In the proximal
-tubule, the epithelial cell type is shared along the axis, the ends of the structure are not marked, and each
-section samples cross-sections at unknown positions.
+locations[30,31], which requires sections that share structure in the tissue plane. Trajectory
+inference orders cells along continuous processes from their expression profiles, usually given a start cell or
+cluster that sets the direction[32–36], and related ideas have
+ordered repeated structures: intestinal crypt positions from deconvolved cell-type composition[37], testis
+tubules around the known cycle of the seminiferous epithelium[38] using a cyclic topological
+template[39], and hair follicles by developmental age, each captured whole in three dimensions[40].
+These repeated-structure approaches rely on a change in cell-type composition, a known cyclic topology or
+three-dimensional capture of whole structures. In the proximal tubule, the epithelial cell type is shared along the
+axis, no landmark marks where a cross-section lies, and each section samples cross-sections at unknown positions.
 
 To address this, we develop pseudostructure reconstruction, which treats every cross-section of a repeated
 structure as a sample of one shared structure and recovers its position from its expression, much as pseudotime
 recovers progress through a process. Pseudostructure reconstruction segments tubule cross-sections from H&E
-histology with a frozen pathology foundation model[41–43] and a trainable decoder, sums the paired VisiumHD bins
-within each cross-section, harmonizes sections[44], and fits a single elastic principal curve[45,46] through all
-cross-sections, placing each at a position t between 0 and 1 without segment labels or tissue coordinates. Genes
-are then modelled along t with negative-binomial generalized additive models[47], each gene on an axis built without
-it, and comparisons between groups are calibrated against balanced relabelings of the specimens.
+histology with a frozen pathology foundation model[41–43] and a trainable decoder, sums
+the paired Visium HD bins within each cross-section, harmonizes sections[44], and fits a single elastic
+principal curve[45–47] through all cross-sections, placing each at a position t
+between 0 and 1 without segment labels or tissue coordinates. Genes are then modelled along t by negative-binomial
+regression on a spline basis[48,49], each gene on an axis built without it, and comparisons
+between groups are calibrated against balanced relabelings of the specimens.
 
-We apply pseudostructure reconstruction to VisiumHD data of four mouse and two human kidney sections. Without
+We apply pseudostructure reconstruction to Visium HD data of four mouse and two human kidney sections. Without
 segment labels, it recapitulates the order of nephron segments in every section, remains stable when tubules are
 downsampled or the axis is built from half of the genes, and orders segments as well as the best tree-based
 trajectory method while fitting one unbranched curve. Within
@@ -74,77 +83,23 @@ along the human proximal tubule, later for glucose and amino-acid transporters. 
 points that move upstream as injured S3 loses its late transporters, and gradients within segments that injury
 creates or erases. Pseudostructure reconstruction is available as an open-source Python package at [URL].
 
-**References cited in the Introduction** (verified against Europe PMC, Crossref or the publisher; numbering
-continues into Results and Methods)
-
-1. Ståhl, P. L. et al. Visualization and analysis of gene expression in tissue sections by spatial transcriptomics. *Science* 353, 78–82 (2016).
-2. Marx, V. Method of the Year: spatially resolved transcriptomics. *Nat. Methods* 18, 9–14 (2021).
-3. Moses, L. & Pachter, L. Museum of spatial transcriptomics. *Nat. Methods* 19, 534–546 (2022).
-4. Oliveira, M. F. et al. High-definition spatial transcriptomic profiling of immune cell populations in colorectal cancer. *Nat. Genet.* 57, 1512–1523 (2025).
-5. Halpern, K. B. et al. Single-cell spatial reconstruction reveals global division of labour in the mammalian liver. *Nature* 542, 352–356 (2017).
-6. Moor, A. E. et al. Spatial reconstruction of single enterocytes uncovers broad zonation along the intestinal villus axis. *Cell* 175, 1156–1167.e15 (2018).
-7. Curthoys, N. P. & Moe, O. W. Proximal tubule function and response to acidosis. *Clin. J. Am. Soc. Nephrol.* 9, 1627–1638 (2014).
-8. Lee, J. W., Chou, C.-L. & Knepper, M. A. Deep sequencing in microdissected renal tubules identifies nephron segment-specific transcriptomes. *J. Am. Soc. Nephrol.* 26, 2669–2677 (2015).
-9. Chen, L., Chou, C.-L. & Knepper, M. A. A comprehensive map of mRNAs and their isoforms across all 14 renal tubule segments of mouse. *J. Am. Soc. Nephrol.* 32, 897–912 (2021).
-10. Ransick, A. et al. Single-cell profiling reveals sex, lineage, and regional diversity in the mouse kidney. *Dev. Cell* 51, 399–413.e7 (2019).
-11. Muto, Y. et al. Single cell transcriptional and chromatin accessibility profiling redefine cellular heterogeneity in the adult human kidney. *Nat. Commun.* 12, 2190 (2021).
-12. Lake, B. B. et al. An atlas of healthy and injured cell states and niches in the human kidney. *Nature* 619, 585–594 (2023).
-13. Kirita, Y., Wu, H., Uchimura, K., Wilson, P. C. & Humphreys, B. D. Cell profiling of mouse acute kidney injury reveals conserved cellular responses to injury. *Proc. Natl Acad. Sci. USA* 117, 15874–15883 (2020).
-14. Marshall, J. L. et al. High-resolution Slide-seqV2 spatial transcriptomics enables discovery of disease-specific cell neighborhoods and pathways. *iScience* 25, 104097 (2022).
-15. Dixon, E. E., Wu, H., Muto, Y., Wilson, P. C. & Humphreys, B. D. Spatially resolved transcriptomic analysis of acute kidney injury in a female murine model. *J. Am. Soc. Nephrol.* 33, 279–289 (2022).
-16. Zhai, X. Y. et al. Digital three-dimensional reconstruction and ultrastructure of the mouse proximal tubule. *J. Am. Soc. Nephrol.* 14, 611–619 (2003).
-17. Zhai, X. Y. et al. Three-dimensional reconstruction of the mouse nephron. *J. Am. Soc. Nephrol.* 17, 77–88 (2006).
-18. Wang, X. et al. Three-dimensional intact-tissue sequencing of single-cell transcriptional states. *Science* 361, eaat5691 (2018).
-19. Vickovic, S. et al. Three-dimensional spatial transcriptomics uncovers cell type localizations in the human rheumatoid arthritis synovium. *Commun. Biol.* 5, 129 (2022).
-20. Schott, M. et al. Open-ST: high-resolution spatial transcriptomics in 3D. *Cell* 187, 3953–3972.e26 (2024).
-21. Kiemen, A. L. et al. CODA: quantitative 3D reconstruction of large tissues at cellular resolution. *Nat. Methods* 19, 1490–1499 (2022).
-22. Traag, V. A., Waltman, L. & van Eck, N. J. From Louvain to Leiden: guaranteeing well-connected communities. *Sci. Rep.* 9, 5233 (2019).
-23. Hao, Y. et al. Integrated analysis of multimodal single-cell data. *Cell* 184, 3573–3587.e29 (2021).
-24. Zhao, E. et al. Spatial transcriptomics at subspot resolution with BayesSpace. *Nat. Biotechnol.* 39, 1375–1384 (2021).
-25. Hu, J. et al. SpaGCN: integrating gene expression, spatial location and histology to identify spatial domains and spatially variable genes by graph convolutional network. *Nat. Methods* 18, 1342–1351 (2021).
-26. Long, Y. et al. Spatially informed clustering, integration, and deconvolution of spatial transcriptomics with GraphST. *Nat. Commun.* 14, 1155 (2023).
-27. Chitra, U. et al. Mapping the topography of spatial gene expression with interpretable deep learning. *Nat. Methods* 22, 298–309 (2025).
-28. Ma, C., Chitra, U., Zhang, S. & Raphael, B. J. Belayer: modeling discrete and continuous spatial variation in gene expression from spatially resolved transcriptomics. *Cell Syst.* 13, 786–797.e13 (2022).
-29. Miao, Z. et al. Dissecting the coordinated progression of cell states in spatial transcriptomics with CoPro. Preprint at *bioRxiv* https://doi.org/10.64898/2026.04.17.719309 (2026).
-30. Clifton, K. et al. STalign: alignment of spatial transcriptomics data using diffeomorphic metric mapping. *Nat. Commun.* 14, 8123 (2023).
-31. Clifton, K. et al. STcompare: comparative spatial transcriptomics data analysis of structurally matched tissues to characterize differentially spatially patterned genes. *Bioinformatics* 42, btag644 (2026).
-32. Trapnell, C. et al. The dynamics and regulators of cell fate decisions are revealed by pseudotemporal ordering of single cells. *Nat. Biotechnol.* 32, 381–386 (2014).
-33. Haghverdi, L., Büttner, M., Wolf, F. A., Buettner, F. & Theis, F. J. Diffusion pseudotime robustly reconstructs lineage branching. *Nat. Methods* 13, 845–848 (2016).
-34. Street, K. et al. Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics. *BMC Genomics* 19, 477 (2018).
-35. Wolf, F. A. et al. PAGA: graph abstraction reconciles clustering with trajectory inference through a topology preserving map of single cells. *Genome Biol.* 20, 59 (2019).
-36. Saelens, W., Cannoodt, R., Todorov, H. & Saeys, Y. A comparison of single-cell trajectory inference methods. *Nat. Biotechnol.* 37, 547–554 (2019).
-37. Niec, R. E. et al. Lymphatics act as a signaling hub to regulate intestinal stem cell activity. *Cell Stem Cell* 29, 1067–1082.e18 (2022).
-38. Karin, J., Bornfeld, Y. & Nitzan, M. scPrisma infers, filters and enhances topological signals in single-cell data using spectral template matching. *Nat. Biotechnol.* 41, 1645–1654 (2023).
-39. Chakravorty, A. et al. The temporal architecture of the seminiferous epithelial cycle revealed by spatial transcriptomics. *Cell* 189, 4122–4139.e24 (2026).
-40. Asami, S., Yin, C., Fan, J., Garza, L. A. & Kalhor, R. Four-dimensional molecular mapping from a spatial snapshot reveals the dynamics of hair follicle organogenesis. *Cell* 189, 5653–5672.e14 (2026).
-41. Oquab, M. et al. DINOv2: learning robust visual features without supervision. *Trans. Mach. Learn. Res.* (2024).
-42. Karasikov, M. et al. Training state-of-the-art pathology foundation models with orders of magnitude less data. In *Medical Image Computing and Computer Assisted Intervention – MICCAI 2025*, LNCS 15967, 573–583 (Springer, 2025).
-43. Kaplan, D. et al. How to train a state-of-the-art pathology foundation model with $1.6k. Technical Report SOPHONT-TR-2025-001 (Sophont, 2025). https://doi.org/10.5281/zenodo.20711012
-44. Korsunsky, I. et al. Fast, sensitive and accurate integration of single-cell data with Harmony. *Nat. Methods* 16, 1289–1296 (2019).
-45. Gorban, A. N. & Zinovyev, A. Y. Elastic principal graphs and manifolds and their practical applications. *Computing* 75, 359–379 (2005).
-46. Albergante, L. et al. Robust and scalable learning of complex intrinsic dataset geometry via ElPiGraph. *Entropy* 22, 296 (2020).
-47. Van den Berge, K. et al. Trajectory-based differential expression analysis for single-cell sequencing data. *Nat. Commun.* 11, 1201 (2020).
-
-Methods references continue the numbering: Ronneberger 2015 (U-Net), Kirillov 2019 (panoptic quality), Meyer &
-Beucher 1990 (watershed), Yates 2021 (HCOP), Wolf 2018 (Scanpy), Hastie & Stuetzle 1989 (principal curves),
-Chen 2021 (microdissection), CZ CELLxGENE Census, MSigDB/Reactome/KEGG and Enrichr. Full entries:
-`scratchpad` research notes, to be moved into a reference manager.
-
 ## Methods
 
 ### Pseudostructure reconstruction overview
 
-Pseudostructure reconstruction takes hematoxylin and eosin (H&E) whole-slide images with registered VisiumHD 2-µm
+Pseudostructure reconstruction takes hematoxylin and eosin (H&E) whole-slide images with registered Visium HD 2-µm
 bins from one or more sections and returns, for every segmented cross-section of a repeated structure (a unit),
 its summed expression profile and a position t ∈ [0, 1] along the structure, shared by all sections. Positions
-come from expression alone: segment labels and tissue coordinates never enter the placement of a unit. Every step
+come from expression alone: segment labels and tissue coordinates never enter the placement of a unit, and a
+marker axis only orients the curve. t orders units along the structure; it is not physical length, because a
+section samples each part of the structure in proportion to the length it lays in the plane. Every step
 after segmentation is implemented in the pseudostructure reconstruction package (`pseudospace_reconstruction`
 0.1.0, commit 59da04b).
 
 **Tubule segmentation: annotations.** Tubules were segmented from H&E whole-slide images with a deep-learning model
 trained on partial manual annotations. Structures were outlined as polygons in QuPath [version] on seven mouse
 kidney sections: six from a separate nephrectomy study (three 24 h and three 4 weeks after nephrectomy; not
-VisiumHD data) and one control section (Ctrl1A2) that is also analysed here. These contained 2,422 annotated
+Visium HD data) and one control section (Ctrl1A2) that is also analysed here. These contained 2,422 annotated
 objects: 1,438 proximal tubules, 457 distal tubules, 336 collecting ducts and 191 glomeruli. For human data, one
 cortical section (HUK1_COR1, also analysed here) contained 1,547 objects: 1,443 tubules and 104 glomeruli.
 Structures that were not annotated (vessels, interstitium, partially visible tubules) and tissue outside annotated
@@ -155,10 +110,11 @@ nephrectomy sections were used for training and one was withheld for validation;
 into alternating 2,048-pixel blocks for training and validation, and the human section likewise into
 non-overlapping training and validation blocks.
 
-**Tubule segmentation: model and training.** Each model combines a frozen pathology foundation model, OpenMidnight
-(an open replication of Midnight, a DINOv2 ViT-g/14 with registers and 1.13 billion parameters)[41–43], with a
+**Tubule segmentation: model and training.** Each model combines a frozen pathology foundation model, OpenMidnight[43], an open replication of
+Midnight[42] trained on about 12,000 TCGA H&E slides: a DINOv2[41] ViT-g/14 with register tokens[50] (1.13
+billion parameters in the released checkpoint). It is joined to a
 trainable full-resolution convolutional stem that supplies detail below the 14-pixel patch size, and a U-Net-style
-decoder[ref] (7.31 million trainable parameters in total). The decoder has three outputs per pixel: a class map
+decoder[51] (7.31 million trainable parameters in total). The decoder has three outputs per pixel: a class map
 (background, proximal tubule, distal tubule, collecting duct and glomerulus in mouse; background, tubule and
 glomerulus in human); a structure map with four categories (background, object interior, edge facing background,
 edge facing another object; a pixel is an edge when a different label occurs within a 3-pixel radius); and a
@@ -167,21 +123,22 @@ glomerular centre heatmap. Because annotations were partial, the loss was comput
 terms for the class and structure maps with mean-squared error for the centre map. Models were trained with AdamW
 (learning rate 3 × 10⁻⁴, weight decay 0.03, batch size 8 for mouse and 6 for human), with a two-epoch linear
 warm-up followed by cosine decay over 60 epochs, geometric, colour and stain augmentation, and oversampling of rare
-classes. The checkpoint with the highest validation panoptic quality (PQ)[ref Kirillov 2019] was kept. Each model
+classes. The checkpoint with the highest validation class-agnostic panoptic quality (PQ)[52] was kept. Each model
 was trained once on one NVIDIA RTX 6000 Ada GPU, in about 3.5 h (mouse) and 2.5 h (human).
 
-**Tubule segmentation: instances and accuracy.** Objects were separated by marker-controlled watershed[ref]: seeds
+**Tubule segmentation: instances and accuracy.** Objects were separated by marker-controlled watershed[53]: seeds
 of high interior probability were flooded up to the edge probabilities. Each object took the majority class of
 its interior, glomeruli with more than one centre peak were split, and objects below a class-specific minimum area
 were discarded. Whole slides were processed in tiles with 25% overlap, averaging predictions over the eight
 rotations and reflections of each tile. Accuracy was assessed on annotated objects of the withheld validation
 regions, matching predictions one-to-one to annotations at intersection over union (IoU) above 0.5. In mouse, PQ
-was 0.880 (segmentation quality 0.914, detection quality 0.963; 98 objects in five regions of the withheld
+was 0.880 (segmentation quality 0.914, recognition quality 0.963; 98 objects in five regions of the withheld
 section); 1.0% of annotated objects were split and 6.1% merged. The human model reached a validation PQ of 0.824.
 [See note A: reconcile with the Fig. 2 evaluation.]
 
 **Aggregating bins into units.** Every in-tissue 2-µm bin was assigned to the polygon covering its centre, and its
-counts were summed within each polygon, giving one raw-count profile per unit. Morphometrics (area, perimeter,
+counts were summed within each polygon, giving one raw-count profile per unit, as Visium HD 2-µm bins have been
+summed within segmented nuclei[4]. Morphometrics (area, perimeter,
 equivalent diameter, solidity, circularity, axis lengths) were recorded for every polygon.
 
 **Quality control.** Units were kept when they had at least 500 counts and at least 90% of their polygon area
@@ -195,30 +152,32 @@ different, non-adjacent identity were removed, while adjacent ones, likely genui
 and morphology (solidity below 0.75, or a narrow neck between two lobes). Glomeruli were exempt from the merge
 tests. Counts were normalized to 10⁴ per unit and log-transformed for embedding; all gene models use raw counts.
 
-**Sections from two species.** Human genes were mapped to one-to-one mouse orthologs (HCOP[ref]). A pair was kept
-when its mouse symbol is measured in every mouse section and its human symbol in every human section; human genes
+**Sections from two species.** Human genes were mapped to one-to-one mouse orthologs from HCOP[54]: pairs
+supported by at least three of its orthology resources, kept when each gene is the other's best-supported
+partner. A pair was used when its mouse symbol is measured in every mouse section and its human symbol in every
+human section; human genes
 were renamed to the mouse symbols and every non-shared gene was dropped before quality control, so both species
 enter the embedding with the same features. Because the two probe panels differ, expression levels are never
 compared across species, only patterns along the axis.
 
 **Embedding, section correction and labels.** The kept units of all sections were embedded jointly in two passes
-(Scanpy 1.11.5[ref]; R harmony 2.0.5[44]). In each pass, highly variable genes (mean 0.0125–3, normalized
-dispersion ≥ 0.5, intersected across sections) gave 50 principal components, corrected for section with Harmony
-(θ = 6, λ = 1, 30 iterations). Units were clustered by Leiden[22] (resolution 2, 30 nearest neighbours, 2,000
+(Scanpy 1.11.5[55]; R harmony 2.0.5[44]). In each pass, highly variable genes (Scanpy's defaults: mean
+0.0125–3, normalized dispersion ≥ 0.5; intersected across sections) gave 50 principal components, corrected for
+section with Harmony (θ = 6, λ fixed at 1, at most 30 rounds). Units were clustered by Leiden[22] (resolution 2, 30 nearest neighbours, 2,000
 highly variable genes), and each cluster was labelled from curated marker panels (PT-S1, PT-S2, PT-S3, thin limb,
 thick ascending limb, macula densa, DCT, CNT and collecting-duct segments; best panel score ≥ 0.5 and margin ≥ 0.1
 over the runner-up). Non-tubule clusters were dropped and the nephron units re-embedded (pass 2) with genes
 detected in at least 5% of units and with at least 20 counts. Labels were reviewed cluster by cluster and none was
 overridden. Labels are not inputs to the curve.
 
-**Elastic principal curve.** An elastic principal curve[45,46] was fitted through all pass-2 units in the 50
+**Elastic principal curve.** An elastic principal curve[45–47] was fitted through all pass-2 units in the 50
 corrected components. The curve is a chain of k nodes minimizing
 
 U = (1/N) Σᵢ ‖xᵢ − n(xᵢ)‖² + λ Σ_edges ‖nⱼ − nⱼ₊₁‖² + μ Σ_inner nodes ‖nⱼ − (nⱼ₋₁ + nⱼ₊₁)/2‖²,
 
 where n(xᵢ) is the node nearest to unit i; the terms measure fit, stretching and bending. The curve was initialized
-as three nodes on the first principal component and grown by bisecting the edge whose bisection gave the lowest
-energy, relaxing node positions after each addition, until k = 50 (λ = 0.01, μ = 0.1). Each unit was projected
+as three nodes on the first principal component (the elpigraph-python default) and grown by bisecting the edge whose
+bisection gave the lowest energy[47], relaxing node positions after each addition, until k = 50 (λ = 0.01, μ = 0.1). Each unit was projected
 onto its nearest edge, and its position is the path length from the start of the curve to its projection; units
 beyond an end node were placed on the straight continuation of the end edge, up to twice that edge's length. The
 start is the curve end nearest the root unit, the medoid of the proximal-tubule cluster lowest on a marker axis
@@ -245,9 +204,10 @@ more than 0.06 from any boundary.
 **Models.** For each gene and section, counts were modelled by negative-binomial generalized linear models with a
 log(library size) offset, the library being the unit's total over non-mitochondrial genes: a curve (cubic B-spline
 in x with 6 degrees of freedom, knots at reference x quantiles, the same basis in every section), clusters (the
-PT-S1/S2/S3 label factor), clusters + curve, and bulk (an intercept)[47]. The dispersion was estimated per gene and
-section by maximum likelihood under clusters + curve and held fixed for the nested fits, which were fitted by
-iteratively reweighted least squares. Curves are reported as log2 counts per 10⁴ on 201 grid points. Mitochondrial
+PT-S1/S2/S3 label factor), clusters + curve, and bulk (an intercept). The spline follows tradeSeq[49] (six cubic basis functions, knots at quantiles, a
+library-size offset) but carries no smoothing penalty. The dispersion was estimated per gene and section by maximum
+likelihood under clusters + curve and held fixed for the nested fits, which were fitted by iteratively reweighted
+least squares and compared by likelihood ratio[48]. Curves are reported as log2 counts per 10⁴ on 201 grid points. Mitochondrial
 genes were excluded, and genes were dropped when their rate in any neighbouring segment group (ascending limb, DCT,
 collecting duct) exceeded twice their PT rate (neighbour filter).
 
@@ -261,12 +221,13 @@ boundary in both sections) or a change within a segment (mean of the last third 
 
 ### Transporter handoffs
 
-Within each solute-carrier and ABC transporter family (HGNC groups 752 and 417)[ref HGNC], a gene was early in a
+Within each transporter family (the subgroups of HGNC gene groups 752, solute carriers, and 417, ATP binding
+cassette transporters[56]; downloaded 2026-10-12), a gene was early in a
 species when its end contrast (mean of the last 30% of its curve minus the first 30%) was ≤ −0.5 log2 in both
 sections of that species, and late when ≥ +0.5 in both; every early × late pair of a family is a candidate handoff.
-Mouse pairs were confirmed when microdissected mouse PT segments[9] showed the early member higher in S1 than S3 and
-the late member the reverse, and human pairs likewise against single-cell PT segment profiles of six donors in CZ
-CELLxGENE Census[ref]. The confirmed pairs (50 mouse, 16 human; 57 distinct) were fixed before any species or injury
+Mouse pairs were confirmed when microdissected mouse PT segments[10] showed the early member higher in S1 than S3 and
+the late member the reverse, and human pairs likewise against single-cell profiles of proximal convoluted tubule (S1 and S2) and S3 cells
+from the six donors with at least 50 cells of each in CZ CELLxGENE Census (release 2025-11-08)[57]. The confirmed pairs (50 mouse, 16 human; 57 distinct) were fixed before any species or injury
 comparison. For each pair and section, both curves were min–max scaled over the grid points inside that section's
 2.5–97.5% range of x, and the switch x* is the first point where the early profile minus the late one turns from
 positive to non-positive (linear interpolation). Scaling makes x* invariant to a per-gene offset and scale of the
@@ -299,10 +260,11 @@ both group-2 sections, |E(group 2)| − |E(group 1)| ≥ 0.5 for all four pairs,
 **Switch shifts.** A pair's switch shifted when it has a switch in all four sections, all four pair differences in
 x* share a sign, |Δx*| ≥ 0.05, Δx* is specific, and its 95% bootstrap interval excludes 0.
 
-**Pathways.** Gene sets came from MSigDB Hallmark 2020, Reactome 2022 and KEGG 2019 Mouse (Enrichr libraries)[refs],
-restricted to screened genes with at least 10 members. A set's statistic is the mean of its members' per-gene
+**Pathways.** Gene sets came from MSigDB Hallmark 2020[58], Reactome 2022[59] and KEGG 2019
+Mouse[60,61], as distributed by Enrichr[62,63]; human gene symbols were mapped
+to mouse through the one-to-one ortholog map, and sets were restricted to screened genes with at least 10 members. A set's statistic is the mean of its members' per-gene
 statistic. Each set was compared with 1,000 random sets of the same size drawn from the screened genes (two-sided
-empirical p) and Benjamini–Hochberg corrected within each contrast; a call needs q ≤ 0.05, four agreeing pairs and
+empirical p) and Benjamini–Hochberg corrected[64] within each contrast; a call needs q ≤ 0.05, four agreeing pairs and
 specificity.
 
 **Gradient retention.** Genes with a change of at least 0.75 log2 in one section were selected, and each other
@@ -314,7 +276,7 @@ another avoids regression to the mean.
 **Tissue and data.** Kidneys from two control mice and two mice after ischemia–reperfusion injury (IRI) were
 profiled, one section per mouse (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4). [Strain, age, IRI protocol (clamp duration, uni-
 or bilateral, time to harvest), fixation and embedding, animal protocol number.] All four mice are male (Ddx3y,
-Eif2s3y, Kdm5d and Uty are expressed). Sections were processed with the VisiumHD [mouse probe set, version; 19,059
+Eif2s3y, Kdm5d and Uty are expressed). Sections were processed with the Visium HD [mouse probe set, version; 19,059
 genes], H&E-stained, imaged at [scanner, objective] and processed with Space Ranger [version] to 2-µm bins.
 
 **Reconstruction.** The four sections were reconstructed together. Of 64,272 segmented polygons, 43,984 contained
@@ -338,7 +300,7 @@ halves of the gene-half splits.
 
 **Tissue and data.** Two sections of healthy kidney cortex from one male donor (HUK1_COR1 and HUK1_MED1; both are
 cortex, the "MED" name does not denote medulla; DDX3Y, KDM5D, UTY and EIF1AY are expressed) were profiled with the
-VisiumHD [human probe set, version; 18,132 genes]. [Source of the tissue, donor age, IRB protocol and consent.] They
+Visium HD [human probe set, version; 18,132 genes]. [Source of the tissue, donor age, IRB protocol and consent.] They
 were analysed together with the two control mouse sections, whose bins were reprocessed in the ortholog space.
 
 **Reconstruction.** The ortholog space held 15,567 genes. Of 51,155 segmented polygons, 31,533 contained bins,
@@ -376,26 +338,100 @@ and were not scored.
 
 ### Analysis with other methods
 
-The same corrected embedding and root were ordered by diffusion pseudotime[33] (Scanpy 1.11.5; max(30, √n)
-neighbours, 15 diffusion components), Slingshot 2.14.0[34] on the pass-2 clusters (R 4.4.3), scFates 1.2.5 (principal
-tree)[ref Faure 2023] and GASTON[27] (GLM-PCA input, 30 restarts per section), and each ordering was scored by the
+The same corrected embedding and root were ordered by diffusion pseudotime[33] as implemented in Scanpy 1.11.5[55]
+(max(30, √n) neighbours, 15 diffusion components, rooted at the same root unit), Slingshot 2.14.0[34] on the pass-2
+Leiden clusters (R 4.4.3; starting from the root unit's cluster, with each unit's per-lineage pseudotimes averaged by
+its lineage weights), scFates 1.2.5[65] (SimplePPT principal tree[66]) and GASTON[27] (GLM-PCA input, 30 restarts per section), and each ordering was scored by the
 same ρ. [Exact settings: `results/paper_figures/fig3/baselines/methods_notes.md`.]
 
 ### Statistics and reproducibility
 
 Sections are the replication units: two per group, with the two human sections from one donor, so human results
-describe that donor. No statistical method was used to predetermine sample size, and no data were excluded beyond
+describe that donor. All specimens are male; in mouse, S3 is the most sex-divergent part of the PT[8], so
+mouse S3 genes describe male mice. No statistical method was used to predetermine sample size, and no data were excluded beyond
 the quality-control rules above. Every screen's rules, thresholds and nulls were written down before its first fit;
 checks added afterwards are reported as post hoc. Random seeds are fixed in the code. [Runtime and hardware for
 stages 01–04 and the gene models.]
 
 ### Data availability
 
-[VisiumHD data and H&E images: repository and accession. Segmentation annotations and model weights: where.]
+[Visium HD data and H&E images: repository and accession. Segmentation annotations and model weights: where.]
 
 ### Code availability
 
 [Pseudostructure reconstruction package and analysis code: GitHub URLs, Zenodo DOI and jef.works documentation.]
+
+## References
+
+Numbered by first citation (Introduction, then Methods). Every reference was checked against its full text on
+2026-11-03 unless marked; the claim-by-claim record is `docs/paper/citation_ledger.md`.
+
+1. Ståhl, P. L. et al. Visualization and analysis of gene expression in tissue sections by spatial transcriptomics. *Science* 353, 78–82 (2016).
+2. Method of the Year 2020: spatially resolved transcriptomics. *Nat. Methods* 18, 1 (2021). doi:10.1038/s41592-020-01042-x
+3. Moses, L. & Pachter, L. Museum of spatial transcriptomics. *Nat. Methods* 19, 534–546 (2022). **[bioRxiv preprint read]**
+4. Oliveira, M. F. et al. High-definition spatial transcriptomic profiling of immune cell populations in colorectal cancer. *Nat. Genet.* 57, 1512–1523 (2025).
+5. Halpern, K. B. et al. Single-cell spatial reconstruction reveals global division of labour in the mammalian liver. *Nature* 542, 352–356 (2017).
+6. Moor, A. E. et al. Spatial reconstruction of single enterocytes uncovers broad zonation along the intestinal villus axis. *Cell* 175, 1156–1167.e15 (2018). **[inaccessible (abstract only)]**
+7. Lee, J. W., Chou, C.-L. & Knepper, M. A. Deep sequencing in microdissected renal tubules identifies nephron segment-specific transcriptomes. *J. Am. Soc. Nephrol.* 26, 2669–2677 (2015).
+8. Ransick, A. et al. Single-cell profiling reveals sex, lineage, and regional diversity in the mouse kidney. *Dev. Cell* 51, 399–413.e7 (2019).
+9. Curthoys, N. P. & Moe, O. W. Proximal tubule function and response to acidosis. *Clin. J. Am. Soc. Nephrol.* 9, 1627–1638 (2014).
+10. Chen, L., Chou, C.-L. & Knepper, M. A. A comprehensive map of mRNAs and their isoforms across all 14 renal tubule segments of mouse. *J. Am. Soc. Nephrol.* 32, 897–912 (2021).
+11. Zhai, X. Y. et al. Digital three-dimensional reconstruction and ultrastructure of the mouse proximal tubule. *J. Am. Soc. Nephrol.* 14, 611–619 (2003).
+12. Muto, Y. et al. Single cell transcriptional and chromatin accessibility profiling redefine cellular heterogeneity in the adult human kidney. *Nat. Commun.* 12, 2190 (2021).
+13. Lake, B. B. et al. An atlas of healthy and injured cell states and niches in the human kidney. *Nature* 619, 585–594 (2023).
+14. Kirita, Y., Wu, H., Uchimura, K., Wilson, P. C. & Humphreys, B. D. Cell profiling of mouse acute kidney injury reveals conserved cellular responses to injury. *Proc. Natl Acad. Sci. USA* 117, 15874–15883 (2020).
+15. Melo Ferreira, R. et al. Integration of spatial and single-cell transcriptomics localizes epithelial cell-immune cross-talk in kidney injury. *JCI Insight* 6, e147703 (2021).
+16. Dixon, E. E., Wu, H., Muto, Y., Wilson, P. C. & Humphreys, B. D. Spatially resolved transcriptomic analysis of acute kidney injury in a female murine model. *J. Am. Soc. Nephrol.* 33, 279–289 (2022).
+17. Zhai, X. Y. et al. Three-dimensional reconstruction of the mouse nephron. *J. Am. Soc. Nephrol.* 17, 77–88 (2006).
+18. Kiemen, A. L. et al. CODA: quantitative 3D reconstruction of large tissues at cellular resolution. *Nat. Methods* 19, 1490–1499 (2022).
+19. Wang, X. et al. Three-dimensional intact-tissue sequencing of single-cell transcriptional states. *Science* 361, eaat5691 (2018).
+20. Vickovic, S. et al. Three-dimensional spatial transcriptomics uncovers cell type localizations in the human rheumatoid arthritis synovium. *Commun. Biol.* 5, 129 (2022).
+21. Schott, M. et al. Open-ST: high-resolution spatial transcriptomics in 3D. *Cell* 187, 3953–3972.e26 (2024).
+22. Traag, V. A., Waltman, L. & van Eck, N. J. From Louvain to Leiden: guaranteeing well-connected communities. *Sci. Rep.* 9, 5233 (2019).
+23. Hao, Y. et al. Integrated analysis of multimodal single-cell data. *Cell* 184, 3573–3587.e29 (2021).
+24. Zhao, E. et al. Spatial transcriptomics at subspot resolution with BayesSpace. *Nat. Biotechnol.* 39, 1375–1384 (2021).
+25. Hu, J. et al. SpaGCN: integrating gene expression, spatial location and histology to identify spatial domains and spatially variable genes by graph convolutional network. *Nat. Methods* 18, 1342–1351 (2021). **[Research Square preprint read]**
+26. Long, Y. et al. Spatially informed clustering, integration, and deconvolution of spatial transcriptomics with GraphST. *Nat. Commun.* 14, 1155 (2023).
+27. Chitra, U. et al. Mapping the topography of spatial gene expression with interpretable deep learning. *Nat. Methods* 22, 298–309 (2025).
+28. Ma, C., Chitra, U., Zhang, S. & Raphael, B. J. Belayer: modeling discrete and continuous spatial variation in gene expression from spatially resolved transcriptomics. *Cell Syst.* 13, 786–797.e13 (2022).
+29. Miao, Z. et al. Dissecting the coordinated progression of cell states in spatial transcriptomics with CoPro. Preprint at *bioRxiv* https://doi.org/10.64898/2026.04.17.719309 (2026). **[preprint (not peer reviewed)]**
+30. Clifton, K. et al. STalign: alignment of spatial transcriptomics data using diffeomorphic metric mapping. *Nat. Commun.* 14, 8123 (2023).
+31. Clifton, K. et al. STcompare: comparative spatial transcriptomics data analysis of structurally matched tissues to characterize differentially spatially patterned genes. *Bioinformatics* 42, btag644 (2026).
+32. Trapnell, C. et al. The dynamics and regulators of cell fate decisions are revealed by pseudotemporal ordering of single cells. *Nat. Biotechnol.* 32, 381–386 (2014). **[main text read; Online Methods paywalled]**
+33. Haghverdi, L., Büttner, M., Wolf, F. A., Buettner, F. & Theis, F. J. Diffusion pseudotime robustly reconstructs lineage branching. *Nat. Methods* 13, 845–848 (2016). **[bioRxiv preprint v2 read; published text not accessible]**
+34. Street, K. et al. Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics. *BMC Genomics* 19, 477 (2018).
+35. Wolf, F. A. et al. PAGA: graph abstraction reconciles clustering with trajectory inference through a topology preserving map of single cells. *Genome Biol.* 20, 59 (2019).
+36. Saelens, W., Cannoodt, R., Todorov, H. & Saeys, Y. A comparison of single-cell trajectory inference methods. *Nat. Biotechnol.* 37, 547–554 (2019). **[authors' manuscript source read]**
+37. Niec, R. E. et al. Lymphatics act as a signaling hub to regulate intestinal stem cell activity. *Cell Stem Cell* 29, 1067–1082.e18 (2022).
+38. Chakravorty, A. et al. The temporal architecture of the seminiferous epithelial cycle revealed by spatial transcriptomics. *Cell* 189, 4122–4139.e24 (2026).
+39. Karin, J., Bornfeld, Y. & Nitzan, M. scPrisma infers, filters and enhances topological signals in single-cell data using spectral template matching. *Nat. Biotechnol.* 41, 1645–1654 (2023).
+40. Asami, S., Yin, C., Fan, J., Garza, L. A. & Kalhor, R. Four-dimensional molecular mapping from a spatial snapshot reveals the dynamics of hair follicle organogenesis. *Cell* 189, 5653–5672.e14 (2026).
+41. Oquab, M. et al. DINOv2: learning robust visual features without supervision. *Trans. Mach. Learn. Res.* (2024). https://openreview.net/forum?id=a68SUt6zFt
+42. Karasikov, M. et al. Training state-of-the-art pathology foundation models with orders of magnitude less data. In *Medical Image Computing and Computer Assisted Intervention – MICCAI 2025*, LNCS 15967, 573–583 (Springer, 2025).
+43. Kaplan, D., Grandhi, R. S., Lane, C., Warner, B., Abraham, T. M. & Scotti, P. S. How to train a state-of-the-art pathology foundation model with $1.6k. Technical Report SOPHONT-TR-2025-001 (Sophont, 2025). https://doi.org/10.5281/zenodo.20711012
+44. Korsunsky, I. et al. Fast, sensitive and accurate integration of single-cell data with Harmony. *Nat. Methods* 16, 1289–1296 (2019).
+45. Hastie, T. & Stuetzle, W. Principal curves. *J. Am. Stat. Assoc.* 84, 502–516 (1989). **[partial scan (pp. 502, 504)]**
+46. Gorban, A. N. & Zinovyev, A. Y. Elastic principal graphs and manifolds and their practical applications. *Computing* 75, 359–379 (2005).
+47. Albergante, L. et al. Robust and scalable learning of complex intrinsic dataset geometry via ElPiGraph. *Entropy* 22, 296 (2020).
+48. McCarthy, D. J., Chen, Y. & Smyth, G. K. Differential expression analysis of multifactor RNA-Seq experiments with respect to biological variation. *Nucleic Acids Res.* 40, 4288–4297 (2012).
+49. Van den Berge, K. et al. Trajectory-based differential expression analysis for single-cell sequencing data. *Nat. Commun.* 11, 1201 (2020).
+50. Darcet, T., Oquab, M., Mairal, J. & Bojanowski, P. Vision transformers need registers. In *International Conference on Learning Representations* (2024). arXiv:2309.16588
+51. Ronneberger, O., Fischer, P. & Brox, T. U-Net: convolutional networks for biomedical image segmentation. In *Medical Image Computing and Computer-Assisted Intervention – MICCAI 2015*, LNCS 9351, 234–241 (Springer, 2015).
+52. Kirillov, A., He, K., Girshick, R., Rother, C. & Dollár, P. Panoptic segmentation. In *Proc. IEEE/CVF Conference on Computer Vision and Pattern Recognition* 9396–9405 (2019).
+53. Beucher, S. & Meyer, F. The morphological approach to segmentation: the watershed transformation. In *Mathematical Morphology in Image Processing* (ed. Dougherty, E. R.) 433–481 (Marcel Dekker, 1993).
+54. Yates, B., Gray, K. A., Jones, T. E. M. & Bruford, E. A. Updates to HCOP: the HGNC comparison of orthology predictions tool. *Brief. Bioinform.* 22, bbab155 (2021).
+55. Wolf, F. A., Angerer, P. & Theis, F. J. SCANPY: large-scale single-cell gene expression data analysis. *Genome Biol.* 19, 15 (2018).
+56. Seal, R. L. et al. Genenames.org: the HGNC resources in 2023. *Nucleic Acids Res.* 51, D1003–D1009 (2023).
+57. CZI Cell Science Program et al. CZ CELLxGENE Discover: a single-cell data platform for scalable exploration, analysis and modeling of aggregated data. *Nucleic Acids Res.* 53, D886–D900 (2025).
+58. Liberzon, A. et al. The Molecular Signatures Database (MSigDB) hallmark gene set collection. *Cell Syst.* 1, 417–425 (2015).
+59. Gillespie, M. et al. The reactome pathway knowledgebase 2022. *Nucleic Acids Res.* 50, D687–D692 (2022).
+60. Kanehisa, M. & Goto, S. KEGG: Kyoto Encyclopedia of Genes and Genomes. *Nucleic Acids Res.* 28, 27–30 (2000). **[inaccessible (abstract only)]**
+61. Kanehisa, M., Sato, Y., Furumichi, M., Morishima, K. & Tanabe, M. New approach for understanding genome variations in KEGG. *Nucleic Acids Res.* 47, D590–D595 (2019).
+62. Kuleshov, M. V. et al. Enrichr: a comprehensive gene set enrichment analysis web server 2016 update. *Nucleic Acids Res.* 44, W90–W97 (2016).
+63. Xie, Z. et al. Gene set knowledge discovery with Enrichr. *Curr. Protoc.* 1, e90 (2021).
+64. Benjamini, Y. & Hochberg, Y. Controlling the false discovery rate: a practical and powerful approach to multiple testing. *J. R. Stat. Soc. B* 57, 289–300 (1995).
+65. Faure, L., Soldatov, R., Kharchenko, P. V. & Adameyko, I. scFates: a scalable python package for advanced pseudotime and bifurcation analysis from single-cell data. *Bioinformatics* 39, btac746 (2023).
+66. Mao, Q., Yang, L., Wang, L., Goodison, S. & Sun, Y. SimplePPT: a simple principal tree algorithm. In *Proc. 2015 SIAM International Conference on Data Mining* 792–800 (2015). **[not read (Crossref record only)]**
 
 ---
 
@@ -419,4 +455,19 @@ stages 01–04 and the gene models.]
   deconvolved cell-type composition), Chakravorty 2026 (hand-segmented testis tubules ordered around a known cycle),
   Asami 2026 (Jean Fan co-author; hair follicles ordered by developmental age from 3D profiles), CoPro (needs x/y,
   takes segment order as input), GASTON/Belayer (x/y). "First to order cross-sections" must not be claimed.
+- **F. From the full-text citation check (2026-11-03; record in `docs/paper/citation_ledger.md`).**
+  - Our first sentence is close to the opening of STalign's abstract (same lab: "Spatial transcriptomics (ST)
+    technologies enable high throughput gene expression characterization within thin tissue sections").
+  - Asami 2026 (Jean Fan co-author) names kidney nephrons as a target for its "spatial pseudotiming". The Discussion
+    should separate the two: it orders whole structures that develop asynchronously by developmental age; we order
+    cross-sections of mature structures by position along them, from 2D sections in which no structure is whole.
+  - CoPro and Asami already compare samples on a shared expression-derived axis, so a shared axis is not new by
+    itself; what is new is an axis built with no tissue coordinates, labels, reference program or whole-structure
+    capture.
+  - None of the repeated-structure precedents compares its axis with a measured position along the structure
+    (Asami correlates with follicle length, ρ 0.94/0.90), so our segment-order ρ and stability tests are the fair
+    comparison.
+  - Not yet read in full: Moor 2018 (inaccessible), Kanehisa & Goto 2000 (abstract), Mao 2015 (not read), Hastie &
+    Stuetzle 1989 (two pages), Haghverdi 2016 (preprint read; published version paywalled). Read before submission or
+    replace.
 - **D. Title grammar:** "Pseudostructure reconstruction of kidney nephrons enables …" (singular verb).

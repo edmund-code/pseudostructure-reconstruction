@@ -376,3 +376,113 @@ poster.
   - **Layout.** Called segments are outlined, and rows are grouped by segment. The row list is written to
     `panels/f6_pathways_rows.csv`.
   - All of these are presentation choices made after the screen.
+
+## Follow-up: what each result is, and which are notable (2026-11-02, post hoc, descriptive)
+
+The user asked to investigate each pathway and gene and to pick the most notable results.
+`analysis/paper/fig6_interpret.py` writes three tables to `screen/`: `interpret_pathways.csv`, `interpret_genes.csv`
+and `interpret_handoffs.csv`. Nothing here is a new claim test. These are checks on calls already made, and readouts
+of what drives them.
+
+### Pathway calls: four robustness checks
+
+A call counts as **robust** when all four checks pass:
+1. The change has the same sign on raw counts of units with that segment's label, in all four pairs.
+2. It keeps its sign when the first and last 5% of the PT are trimmed.
+3. With its top three genes removed, the set still beats random sets (p ≤ 0.05).
+4. It is not carried only by end effects (this is the trimming check, applied to S1 and S3).
+
+95 of the 122 calls pass: S1 77 of 89, S2 12 of 24, S3 6 of 9. They reduce to three signals.
+
+- **S2, replication machinery climbs through S2 in AKI.**
+  - Sets: DNA strand elongation +0.42, mismatch repair +0.40, lagging-strand synthesis +0.34, G1/S-specific
+    transcription +0.32, mitotic prometaphase +0.15.
+  - On raw counts within the S2 label the change is +0.37 to +0.47 log2.
+  - Leading genes: Gins1, Mcm6, Mcm7, Pold2, Rfc4, Pcna, Rpa2, Cdt1, E2f1, Tk1, Tyms.
+  - **The control mice are flat** (W −0.01 to −0.04), so injury creates this gradient.
+- **S3, the respiratory chain falls through S3 in AKI.**
+  - Sets: KEGG oxidative phosphorylation −0.22, Reactome respiratory electron transport −0.21.
+  - The signal is broad: the top three genes carry 11% of it, and dropping them leaves p 0.001.
+  - Raw counts give −0.23, and trimming keeps −0.22.
+  - Leading genes: Ndufb3, Ndufb5, Ndufa5, Cox7a2, Atp6v0e2.
+  - The controls are flat to slightly rising (+0.04 to +0.09), so injury creates this one too.
+- **S1, replication and proteasome sets ease along S1 in AKI. This is weak.**
+  - 43 of the 77 robust S1 calls are led by proteasome subunits (Psmc1, Psmb4, Psmf1, Psmd8), and the rest by
+    replication genes (Pole2, Gins1, Ccne2, Mcm6).
+  - Trimming the first 5% of the PT halves every one of them (median −0.07 log2), so most of the effect sits at the
+    very start of the PT.
+- **Not robust.**
+  - **End effects:** ether lipid metabolism (S3, −0.45 falls to −0.06 when trimmed) and gluconeogenesis (S1).
+  - **Two or three genes carry the call:** integrin and platelet sets, cholesterol biosynthesis and SREBP, plasma
+    lipoprotein, scavenger receptors, KRAS-down, G alpha (q).
+  - So two of the examples used in the second figure version (integrin and cholesterol) were weak.
+
+### Single genes (Category A calls)
+
+The Category A list missed calibration (false-call share 0.12). These calls are therefore named, checked examples,
+not a list. Splitting each change into its control part and its AKI part shows two kinds of event.
+
+- **Injury creates a within-segment gradient (controls flat).**
+  - S2: Havcr1 (KIM-1) +1.0 in AKI against −0.3 in controls.
+  - S3: Flvcr2 −1.8, Acnat1 −2.1, Anpep (CD13) −1.0, Fmo5 −1.1, Esr1 (S1) −0.9.
+- **Injury erases a healthy within-segment gradient (AKI flat).** All in S2:
+
+| Gene | Control | AKI |
+|---|---|---|
+| Cyp4a14 | +1.29 | −0.41 |
+| Cyp4a10 | +1.31 | +0.04 |
+| Cyp51 | +1.32 | 0.00 |
+| Agt | +1.53 | +0.37 |
+| Hpd | +1.17 | −0.16 |
+| Cyp24a1 | −2.09 | +0.06 |
+| Spns3 | −2.72 | −0.46 |
+| Steap2 | −0.93 | +0.08 |
+
+  - Hsd17b2 is reduced rather than erased (+2.66 to +1.63).
+  - Cyp4a14 and Hsd17b2 are Fig. 4 Category 1 genes, and Cyp24a1 is a Fig. 4 Category 2 example. Injury erases the
+    healthy within-PT structure that Fig. 4 shows.
+- **Artifacts to drop.** Fgb and Serpina10 (S1) are barely detected in controls (whole-PT about −6 to −7 log2 per 10k).
+  Their "rise within S1" is control noise, and the AKI curves are flat.
+- **Near the neighbour threshold** (1.8–2.0× in IR): Hpgd, Tcf24, Tcte2, Snx16, Acot11. Acot11 also fails the trim.
+
+### Is erasure systematic? Gradient retention
+
+**Design.**
+- Genes are chosen by a within-segment change of at least 0.75 log2 in one control mouse.
+- The comparison is how much of it the other control keeps, against each IR mouse.
+- Both directions of the choice are run.
+- **Why this design.** Choosing in one control and reading the other avoids regression to the mean.
+
+**Result** (median kept fraction, from `interpret_retention.csv`):
+
+| Segment | Held-out control | IR mice |
+|---|---|---|
+| S1 | 0.43, 0.52 | 0.23–0.32 |
+| S2 | 1.16, 0.84 | 0.49–0.56 |
+| S3 | 0.58, 0.35 | 0.12–0.32 |
+
+The IR mice keep less in all 12 comparisons.
+
+**Can noisier IR positions explain it?** Noise would flatten every gene equally.
+- **S2.** Genes whose whole-PT level barely changes (|Δ| < 0.25) keep 0.66–0.68 in IR against 0.87–0.98 in the held-out
+  control. Injury-responsive genes keep 0.45–0.54 against 0.82–1.19.
+- **So** about a quarter of the S2 flattening is common to all genes. That is the bound on placement noise, and it
+  matches the slightly lower IR placement agreement.
+- **The injury-responsive genes lose about twice as much.**
+- **S1 and S3.** The two groups do not separate, so there flattening cannot be told apart from noise.
+- **Positive control.** IR positions do carry within-segment structure: injury builds new gradients in S2 and S3,
+  above.
+
+### Handoffs: what moves them
+
+- **Raw counts and segment means agree** that the upstream shifts come from late, S3-high partners losing expression in
+  injured S3:
+  - GAT2 (Slc6a13) S3 −2.9 log2;
+  - rBAT (Slc3a1) −1.8, which also falls further within S3 on raw counts (−0.26 in controls, −1.08 in IR);
+  - PCFT (Slc46a1) −2.1;
+  - OCT2 (Slc22a2) −1.8;
+  - MCT4 and MCT9 (Slc16a4, Slc16a9) −3.4 and −2.7.
+- **MCT1 is the exception.** MCT1 (Slc16a1), an early partner, is induced 27-fold in injured S3 (+4.75 log2).
+- **ZIP5 → ZIP14 and ZIP8 move downstream** because ZIP5 stays on further into S2.
+- **Drop Slc5a9 → Slc5a3.** Slc5a3 is 23× higher in thick limb than in PT, so it is neighbour signal; the handoff
+  screen applied no neighbour filter. The controls also disagree on where Slc5a9 falls. 10 shifted pairs remain.

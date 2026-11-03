@@ -43,9 +43,10 @@ UP, DOWN = '#B2182B', '#2166AC'     # direction of an AKI response, as in panel 
 # panel boxes of make_fig6.py in SVG units (1 unit = 0.01 inch here)
 SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 412),
         'maps': (360, 242), 'coverage': (380, 242), 'placement': (380, 242), 'genes': (580, 312),
-        'response_map': (560, 312), 'handoff_moves': (580, 312)}
-MAIN = ['programs', 'pathways', 'handoff_rows']
-EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'response_map', 'handoff_moves']
+        'response_map': (560, 312), 'handoff_moves': (580, 312), 'made': (1160, 232), 'erased': (880, 232),
+        'retention': (270, 232)}
+MAIN = ['made', 'erased', 'retention', 'handoff_rows']
+EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'programs', 'pathways', 'response_map', 'handoff_moves']
 
 
 def parse_args(argv=None):
@@ -438,9 +439,18 @@ def panel_h(plt, grid, curves, hp, out, b12, b23):
 
 
 # ---------------------------------------------------------------------------------------------------- g
-def panel_g(plt, hp, out, b12, b23):
+def neighbour_free(hp, genes):
+    """Handoff pairs whose partners both pass the screen's neighbour rule in both conditions (post hoc: the handoff
+    screen had none; it drops Slc5a9 -> Slc5a3, whose late partner is 23x higher in thick limb)."""
+    ratio = genes[['neighbour_ratio_control', 'neighbour_ratio_IR']].max(axis=1)
+    ok = lambda g: g in ratio.index and ratio[g] <= 2.0  # noqa: E731
+    return hp[[ok(e) and ok(l) for e, l in zip(hp.early, hp.late)]]
+
+
+def panel_g(plt, hp, genes, out, b12, b23):
     """The pairs that move: switch position in control (blue) and AKI (orange), each mouse as an open dot."""
     fig = figure(plt, 'handoff_moves')
+    hp = neighbour_free(hp, genes)
     e = hp[hp.eligible & hp.shifted].copy()
     e['cx'] = e[[f'x_{m}' for m in CONTROLS]].mean(1)
     e['ix'] = e[[f'x_{m}' for m in INJURED]].mean(1)
@@ -589,6 +599,90 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23):
     plt.close(fig)
 
 
+# ---------------------------------------------------------------------------------------------------- gradients
+# made / erased: within-segment changes that injury creates or removes (fig6_interpret.py); examples are chosen after
+# the screen and the follow-up (presentation choice, recorded in the protocol doc). Each entry: (label, genes or a gene
+# set key, segment). A set is drawn as the mean of its supported members' curves.
+MADE = [('Havcr1', ['Havcr1'], 2), ('DNA replication', 'Reactome_2022::DNA Strand Elongation R-HSA-69190', 2),
+        ('Oxidative phosphorylation', 'KEGG_2019_Mouse::Oxidative phosphorylation', 3), ('Anpep', ['Anpep'], 3)]
+ERASED = [('Cyp4a14', ['Cyp4a14'], 2), ('Agt', ['Agt'], 2), ('Cyp51', ['Cyp51'], 2), ('Cyp24a1', ['Cyp24a1'], 2)]
+
+
+def mean_curves(root, screen, genes, members, seg):
+    """Per-mouse mean of the members' curves (log2 counts per 10k) over the screened genes supported in seg."""
+    z = np.load(root / screen / 'all_curves.npz', allow_pickle=True)
+    pos = {g: i for i, g in enumerate(z['genes'])}
+    ok = genes.universe & genes.neighbour_ok & genes.converged & ~genes[f'unsupported_S{seg}']
+    idx = [pos[g] for g in members if ok.get(g, False) and g in pos]
+    return {m: z[f'curve|{m}'][idx].mean(0) for m in MICE}, len(idx)
+
+
+def panel_gradients(plt, root, screen, genes, curves, grid, out, b12, b23, key, examples):
+    from matplotlib.patches import Rectangle
+
+    sets = json.loads((root.parents[1] / 'pt_package_aki/tables/gene_sets.json').read_text())
+    fig = figure(plt, key)
+    n = len(examples)
+    cores = [(0, b12 - 0.06), (b12 + 0.06, b23 - 0.06), (b23 + 0.06, 1)]
+    for i, (label, what, seg) in enumerate(examples):
+        ax = fig.add_axes([0.075 + i * (0.925 / n), 0.13, 0.925 / n - 0.065, 0.74])
+        if isinstance(what, list) and len(what) == 1:
+            g = what[0]
+            lo, hi = level_ylim(g, curves)
+            row = genes.loc[g]
+            ax.add_patch(Rectangle((cores[seg - 1][0], lo), np.diff(cores[seg - 1])[0], hi - lo, color='#EFEFEF', lw=0))
+            gene_levels(ax, g, row, grid, curves, (lo, hi))
+            ax.set_title(label, fontsize=7.5, style='italic', color=INK, pad=2)
+        else:
+            mc, k = mean_curves(root, screen, genes, sets[what], seg)
+            vals = np.concatenate([mc[m][(grid >= 0.02) & (grid <= 0.98)] for m in MICE])
+            lo, hi = vals.min() - 0.15, vals.max() + 0.15
+            ax.add_patch(Rectangle((cores[seg - 1][0], lo), np.diff(cores[seg - 1])[0], hi - lo, color='#EFEFEF', lw=0))
+            for m in MICE:
+                kk = (grid >= 0.02) & (grid <= 0.98)
+                ax.plot(grid[kk], mc[m][kk], color=SECTION_COLOURS[m], lw=1.2)
+            ax.set_ylim(lo, hi)
+            pad = (hi - lo) * 0.06
+            segment_band(ax, b12, b23, lo - 2.2 * pad, pad)
+            for b in (b12, b23):
+                ax.axvline(b, color='#CCCCCC', lw=0.5, zorder=0)
+            ax.set_xlim(0, 1)
+            ax.set_xticks([])
+            ax.set_title(f'{label} ({k} genes)', fontsize=7.5, color=INK, pad=2)
+        if i == 0:
+            ax.set_ylabel('log2 counts per 10k')
+    fig.savefig(out / f'f6_{key}.png', facecolor='white')
+    plt.close(fig)
+
+
+def panel_retention(plt, root, screen, out):
+    """How much of a healthy within-segment gradient (chosen in one control mouse) the other control and the IR mice
+    keep, per segment; injury-responsive genes against genes whose level barely changes."""
+    d = pd.read_csv(root / screen / 'interpret_retention.csv')
+    fig = figure(plt, 'retention')
+    ax = fig.add_axes([0.20, 0.18, 0.76, 0.74])
+    for gi, (grp, mk) in enumerate((('injury-responsive', 'o'), ('level unchanged', 's'))):
+        for s in (1, 2, 3):
+            r = d[(d.segment == s) & (d.genes == grp)]
+            held = np.r_[r.loc[r.selected_in == 'Ctrl1A2', 'kept_Ctrl1A4'], r.loc[r.selected_in == 'Ctrl1A4', 'kept_Ctrl1A2']]
+            ir = np.r_[r[['kept_IR2A2', 'kept_IR2A4']].to_numpy().ravel()]
+            x = s - 1 + gi * 0.38 - 0.19
+            ax.scatter(np.full(len(held), x - 0.07), held, s=14, marker=mk, color=CTRL, lw=0, zorder=3)
+            ax.scatter(np.full(len(ir), x + 0.07), ir, s=14, marker=mk, color=IR, lw=0, zorder=3)
+            ax.plot([x - 0.07, x + 0.07], [np.mean(held), np.mean(ir)], color='#999999', lw=0.8, zorder=2)
+    ax.axhline(0, color='#BBBBBB', lw=0.5)
+    ax.set_xticks([0, 1, 2])
+    ax.set_xticklabels(['S1', 'S2', 'S3'])
+    ax.set_xlim(-0.6, 2.6)
+    ax.set_ylabel('gradient kept', labelpad=1)
+    ax.scatter([0.05], [0.10], s=12, marker='o', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(0.09, 0.10, 'injury-responsive genes', transform=ax.transAxes, fontsize=5.8, color=MUTED, va='center')
+    ax.scatter([0.05], [0.03], s=12, marker='s', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(0.09, 0.03, 'level unchanged', transform=ax.transAxes, fontsize=5.8, color=MUTED, va='center')
+    fig.savefig(out / 'f6_retention.png', facecolor='white')
+    plt.close(fig)
+
+
 # ---------------------------------------------------------------------------------------------------- main
 def main(argv=None):
     args = parse_args(argv)
@@ -620,9 +714,15 @@ def main(argv=None):
     if 'response_map' in args.panels:
         panel_f(plt, genes, grid, curves, out, b12, b23)
     if 'handoff_moves' in args.panels:
-        panel_g(plt, hp, out, b12, b23)
+        panel_g(plt, hp, genes, out, b12, b23)
     if 'handoff_rows' in args.panels:
         panel_h(plt, grid, curves, hp, out, b12, b23)
+    if 'made' in args.panels:
+        panel_gradients(plt, root, args.screen, genes, curves, grid, out, b12, b23, 'made', MADE)
+    if 'erased' in args.panels:
+        panel_gradients(plt, root, args.screen, genes, curves, grid, out, b12, b23, 'erased', ERASED)
+    if 'retention' in args.panels:
+        panel_retention(plt, root, args.screen, out)
     if 'pathways' in args.panels:
         panel_pathways(plt, root, args.screen, genes, out, b12, b23)
 

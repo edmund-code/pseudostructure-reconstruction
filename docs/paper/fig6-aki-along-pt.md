@@ -311,3 +311,30 @@ there.
 **Presentation choices.**
 - **Examples in g.** They were chosen after the screen as one of each kind.
 - **Panel d.** Slc7a13 was swapped for Slc34a1 so no gene appears twice.
+
+### Figure, second version (2026-11-02, after the user's review)
+
+The user found the handoff and pathway panels hard to read. Both were redrawn in the layout of the control vs AKI
+poster.
+- **g, handoffs that move.** The 11 shifted pairs, each from its control switch to its AKI switch, with each mouse
+  shown. Protein names are added. The control-vs-AKI scatter of all 52 pairs is dropped.
+- **h, five handoffs in poster layout.** Each row gives the substrate, the genes and the proteins, with the control
+  and AKI curves side by side and the segment bands behind them. The control switch is dashed and the AKI switch
+  dotted. Bars show each partner's level in AKI.
+  - **The y axis is scaled expression, not the poster's log counts.** The switch is defined on scaled profiles (notebook
+    101), so the marked switch is exactly where the drawn curves cross.
+  - On log counts, a level drop moves the crossing too. That is how the poster showed cystine as "lost" and moved
+    lactate and glucose. On scaled profiles, none of those three pairs moves (Δx\* +0.07, +0.01 and −0.02).
+  - The level bars carry the cystine result: Slc7a13 is 4.3 log2 lower.
+  - **Rows (chosen after the screen):** MCT1 → MCT4 (largest shift), B0AT1 → GAT2 and 4F2hc → rBAT (upstream shifts,
+    amino acids), ZIP5 → ZIP14 (downstream shift) and cystine (no shift, level loss).
+- **i, four pathways in poster layout.** Each shows the S1/S2/S3 means (called segments outlined) beside the PT drawn
+  as a tube. The tube is coloured by the pathway's AKI response along it, from weakest to strongest within the
+  pathway, and a circle marks the strongest change.
+  - The four were chosen after the screen as one readable representative per theme of the 122 calls:
+    - S phase: proliferation, falling within S1;
+    - integrin cell-surface interactions: rising within S1 and falling within S2, a peak at the S1/S2 boundary;
+    - cholesterol biosynthesis: falling within S2;
+    - oxidative phosphorylation: falling within S3.
+  - Bile acid metabolism was tried first and dropped, because its within-S2 change (−0.08) is not visible.
+  - The example genes are the three members whose change in the called segment is largest in the call's direction.

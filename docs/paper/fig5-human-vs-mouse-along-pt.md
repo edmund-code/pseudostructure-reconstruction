@@ -136,3 +136,101 @@ other human section and each mouse. Selecting in one section and reading another
 Main: reversed gradients; pathway relocations; handoffs in the poster layout (mouse and human side by side).
 Extended Data: maps, coverage, gradient conservation, steeper-in-human genes, pathway map, all moving handoffs and
 the checks. Which examples are drawn is a presentation choice made after the screen and recorded here.
+
+## Results (2026-11-03)
+
+`analysis/paper/fig5_screen.py` (protocol as frozen in 367e917; about 45 min at 24 jobs), then
+`fig5_interpret.py` (post-hoc checks) and `fig5_panels.py`. Outputs in
+`results/paper_figures/fig5/{screen,panels}/`; tests `tests/test_paper_fig5.py`.
+
+**How the protocol was read.**
+- E is averaged over the core's grid points inside the section's own 2.5–97.5% x range, so no curve is read
+  where a section has no tubules (the protocol said "over the core").
+- As in Fig. 6, every handoff pair uses the x range of the first handoff gene's axis; the ranges of the 32 axes
+  differ by < 0.01.
+- Handoff partners outside the screened universe were fitted for the handoffs only (e.g. Slc5a1, Slc5a8, which are
+  detected in 6–7% of human PT units).
+
+**Data.**
+- PT units: Ctrl1A2 2,644, Ctrl1A4 2,650, HUK1_COR1 3,194, HUK1_MED1 3,459. Median mitochondrial fraction:
+  mouse 0.04/0.035, human 0.18/0.19.
+- 5,983 genes are detected in ≥ 10% of PT units in all four sections; the neighbour rule drops 2,052 of them (more
+  than in the AKI fit) and 59 did not converge, leaving 3,872 screened; 3,869 are assessable.
+- Boundaries over the 32 axes: b12 0.318–0.340, b23 0.633–0.660. Up to 3.2% of human units sit before the first
+  mouse unit and are clipped to x = 0; ≤ 0.13% at the end.
+
+**The flattening.** OLS of human E on mouse E over the assessable genes has slope 0.09–0.12 in the four pairs
+(regression dilution included). Gradient conservation (§7):
+
+| chosen in | genes | other mouse keeps | human sections keep | same sign in human |
+|---|---|---|---|---|
+| Ctrl1A2 | 516 | 1.18 | 0.05 / 0.09 | 0.59 / 0.62 |
+| Ctrl1A4 | 682 | 0.84 | 0.05 / 0.09 | 0.60 / 0.64 |
+
+| chosen in | genes | other human keeps | mice keep | same sign in mouse |
+|---|---|---|---|---|
+| HUK1_COR1 | 95 | 1.04 | 0.96 / 0.71 | 0.72 / 0.72 |
+| HUK1_MED1 | 142 | 0.88 | 0.64 / 0.59 | 0.73 / 0.71 |
+
+Each species reproduces its own gradients. The mice keep most of a human gradient, but the human sections keep
+under a tenth of a mouse gradient: human PT gradients are, on this platform and donor, a much flatter version of
+the mouse ones. The cause (probe capture, donor, biology) is not separable here (`human-arm-attenuation`), so the
+figure compares directions and positions, never amplitudes.
+
+**Category R — reversed gradients: 28 calls, 0 and 0 under the relabelings; calibrated.**
+Apoc3, Hpgd, Tmem252, Vnn1, Dcxr, Aldh3b1, Lpar6, Abhd14a, Sh3gl2, Frmd4b, Pitpnc1, Mme, Slc5a11, Slc25a15,
+Slc17a3, Sorbs1, Msrb1, Rai14, Lap3, Ctsh, Fuca2, Ugt3a1, Chrna4, Hao2, Lrig1, Odc1, Tex264, Reep6 (by smallest
+|E|). Earlier leads not called: Slc10a2 (human MED1 −0.30, under the 0.5 floor), Miox (MED1 +0.49), Acot12
+(MED1 −0.14), Pck1 (mouse −0.54/−0.39 is the wrong limb for the floor), Dpp4 (Ctrl1A2 +0.23).
+
+**Category H — steeper in human: 7 calls, 0 and 0; calibrated.** Gpt, Pter, Sel1l3, Slc7a13, Ggact, Fut8, Fmo5.
+The mirror category (steeper in mouse) has 131 genes and 0/0 under the relabelings; it is not called.
+
+**Pathways: no call.** 890 sets; 0 species calls and 0/0 under the relabelings. The species p distribution does
+not depart from the relabelings' (p ≤ 0.01: 17 sets, against 21 and 20; ED panel f). The best-ranked sets all sit
+earlier along the human PT than the trend predicts: Lysosome (KEGG; d −0.22, p 0.001, q 0.22), MHC class II
+antigen presentation, Coagulation, Metabolism of vitamins and cofactors. Lysosome and MHC II are led by the
+cathepsins and legumain (Lgmn, Ctsl, Ctsh, Ctsb, Ctsf) and survive raw counts, low-mito human units, cortical mouse
+S3 and dropping their top three genes (p 0.002, 0.008). This matches the 2026-10-26 relocation screen, but this
+screen cannot separate it from section-to-section variation, so it is not a finding.
+
+**Transporter handoffs: 13 of 53 shift, all 13 beyond the common warp; the same rule applied to each relabeling (from the saved bootstraps, after the run) calls 0 and 0.**
+59 pairs; switches in both mice 58, in both human sections 54; 2 pairs switch in mouse only (MCT12 → MCT5, MCT12 →
+MCT9), none in human only.
+
+| switch later in human | Δx\* (95% interval) | switch earlier in human | Δx\* |
+|---|---|---|---|
+| SGLT2 → SGLT1 (poster pair) | +0.30 (0.26, 0.32) | MCT1 → MCT9 | −0.49 (−0.53, −0.46) |
+| SGLT2 → SMIT2 | +0.26 (0.16, 0.45) | MCT10 → MCT9 | −0.33 (−0.39, −0.17) |
+| SLC22A23 → URAT1 | +0.25 (0.08, 0.31) | MCT1 → MCT5 | −0.32 (−0.48, −0.00) |
+| y+LAT1 → AGT1 | +0.24 (0.20, 0.26) | OCTN2 → URAT1 | −0.22 (−0.26, −0.02) |
+| SLC22A23 → OCT2 | +0.24 (0.11, 0.32) | OCTN2 → OAT2 | −0.16 (−0.33, −0.09) |
+| SGLT2 → SGLT5 | +0.21 (0.11, 0.27) | | |
+| LAT2 → AGT1 | +0.19 (0.13, 0.22) | | |
+| B0AT1 → B0AT3 | +0.18 (0.13, 0.21) | | |
+
+- **What moves them.** In the glucose and amino-acid pairs, the early partner is far flatter in human (SGLT2 E
+  −1.4/−1.5 against −4.5/−8.0; B0AT1 −0.6/−1.0 against −4.6/−6.2; y+LAT1 −1.5 against −3.0/−3.8), so it stays on
+  through the mouse S2 and the late partner takes over at the mouse S2/S3 boundary. In the MCT pairs the late
+  partners reverse: MCT9 and MCT5 rise toward S3 in mouse (E +1.3/+1.5, +1.2/+1.3) and fall in human
+  (−0.4/−0.6, −0.2/−0.1), so the human "switch" is two falling curves crossing early. MCT9 is a reversal, not a
+  moved handoff.
+- **Not shifted:** lactate SMCT2 → SMCT1, +0.40 but its interval reaches −0.01 (human SMCT2 is flat, so the
+  crossing is unstable); cystine b0,+AT → AGT1, +0.14, not specific. The poster's "no handoff in human" for lactate
+  and B0AT1 does not hold on this axis: both cross, B0AT1 → B0AT3 later.
+
+**Checks (post hoc where marked).**
+- **Admixture (reformulated post hoc).** The named ρ with a distal-identity score turned out uninformative: the
+  distal signal rises along the PT in both species, so ρ restates each gene's direction. The replacement is a bound.
+  The S3 core carries thick-limb signal at 0.14 / 0.05 of a thick-limb tubule's (mouse) and 0.08 / 0.08 (human);
+  the S1 core at most 0.05. With a neighbour ratio ≤ 2 (the screen's rule), admixture can add at most 0.22 log2 to
+  any called gene's gradient, against a smallest |E| of 0.5, and it can only raise late-PT expression. No call is
+  flagged.
+- **Human cell state.** Raw R of every call keeps its sign in the lowest-mito tertile of both human sections
+  (35/35).
+- **Cortex-only human (post hoc).** Restricting mouse S3 to cortical units (8–13% of S3-core units) keeps the sign
+  for 32/35 calls; Lrig1, Hao2 (reversed) and Sel1l3 (steeper) lose it.
+
+**Abstract wording.** "We identify pathways and paired solute transporters whose proximal tubule positions differ"
+is not supported for pathways: the calibrated set screen calls none. Supported: "genes and paired solute
+transporters".

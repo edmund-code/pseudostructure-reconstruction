@@ -190,6 +190,65 @@ def panel_b(plt, genes, grid, curves, out, mark):
     return {'n_rows': len(rows), 'n_cat1': n1}
 
 
+# ---------------------------------------------------------------------------------------------------- b (lines)
+GROUPS = [('peak at S2/S3', lambda g: g.cat1),
+          ('rises within S2', lambda g: ~g.cat1 & g.cat2 & (g.change_segment_Ctrl1A2 == 1) & (g.change_Ctrl1A2 > 0)),
+          ('falls within S2', lambda g: ~g.cat1 & g.cat2 & (g.change_segment_Ctrl1A2 == 1) & (g.change_Ctrl1A2 < 0)),
+          ('falls within S3', lambda g: ~g.cat1 & g.cat2 & (g.change_segment_Ctrl1A2 == 2) & (g.change_Ctrl1A2 < 0))]
+MISSED = '#F4B6B0'
+
+
+def centred(gene, genes, grid, curves):
+    """Curve and cluster staircase of one gene, both mice averaged, as log2 fold from its bulk PT mean."""
+    b12, b23 = genes.loc[gene, ['b12', 'b23']]
+    seg = np.digitize(grid, [b12, b23])
+    bulk = np.mean([curves[m]['bulk'][gene] for m in MICE])
+    curve = np.mean([curves[m]['curve'][gene] for m in MICE], 0) - bulk
+    steps = np.mean([curves[m]['clusters'][gene] for m in MICE], 0)[seg] - bulk
+    # the spline can dive where counts run out; keep it inside the range of this gene's own bin means
+    bins = np.concatenate([curves[m]['bins'][gene] for m in MICE]) - bulk
+    bins = bins[np.isfinite(bins)]
+    return np.clip(curve, bins.min() - 0.25, bins.max() + 0.25), steps
+
+
+def panel_b_lines(plt, genes, grid, curves, out):
+    fig = plt.figure(figsize=(SIZE['b'][0] / 100, SIZE['b'][1] / 100))
+    rows = [(name, genes.index[rule(genes)].tolist()) for name, rule in GROUPS]
+    rows = [(n, g) for n, g in rows if g]
+    h, gap, top = 0.78 / len(rows), 0.20 / len(rows), 0.96
+    counts = {}
+    for i, (name, members) in enumerate(rows):
+        ax = fig.add_axes([0.14, top - (i + 1) * h - i * gap + gap * 0.35, 0.82, h])
+        pairs = [centred(g, genes, grid, curves) for g in members]
+        cur, stp = np.stack([c for c, _ in pairs]), np.stack([s for _, s in pairs])
+        for c in cur:
+            ax.plot(grid, c, color=SECTION_COLOURS['Ctrl1A4'], lw=0.5, alpha=0.35, zorder=1)
+        mc, ms = np.median(cur, 0), np.median(stp, 0)
+        ax.fill_between(grid, mc, ms, color=MISSED, lw=0, zorder=2)
+        ax.plot(grid, ms, color=CLUSTER, lw=2.0, zorder=3, solid_capstyle='butt')
+        ax.plot(grid, mc, color=SECTION_COLOURS['Ctrl1A2'], lw=2.2, zorder=4)
+        ax.axhline(0, color=BULK, lw=0.8, ls=(0, (2, 1.5)), zorder=0)
+        both = np.r_[mc, ms]
+        b12, b23 = genes.loc[members, 'b12'].mean(), genes.loc[members, 'b23'].mean()
+        gene_band(ax, b12, b23, min(-2, np.floor(both.min() - 1)), max(2, np.ceil(both.max() + 1)))
+        ax.set_title(f'{name}  ·  {len(members)} genes', fontsize=7.5, color=INK, pad=3, loc='left')
+        ax.set_ylabel('log2 fold from PT mean')
+        counts[name] = len(members)
+    fig.savefig(out / 'f4_b.png', facecolor='white')
+    plt.close(fig)
+    return counts
+
+
+def gene_band(ax, b12, b23, lo, hi):
+    ax.set_ylim(lo, hi)
+    pad = (hi - lo) * 0.05
+    segment_band(ax, b12, b23, lo - 2.4 * pad, pad)
+    for b in (b12, b23):
+        ax.axvline(b, color='#CCCCCC', lw=0.5, zorder=0)
+    ax.set_xlim(0, 1)
+    ax.set_xticks([])
+
+
 # ---------------------------------------------------------------------------------------------------- c, d
 def panel_examples(plt, key, gene_list, genes, grid, curves, out):
     fig = plt.figure(figsize=(SIZE[key][0] / 100, SIZE[key][1] / 100))
@@ -214,7 +273,7 @@ def main(argv=None):
     a = panel_a(plt, genes, grid, curves, out)
     # presentation choice made after the screen: panel a shows the top gene, so c and d skip it (no duplicate)
     c1, c2 = [g for g in c1 if g != a][:3], [g for g in c2 if g != a][:3]
-    b = panel_b(plt, genes, grid, curves, out, [a] + c1 + c2)
+    b = panel_b_lines(plt, genes, grid, curves, out)
     if c1:
         panel_examples(plt, 'c', c1, genes, grid, curves, out)
     if c2:

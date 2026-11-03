@@ -155,3 +155,25 @@ and 1.42 (Ctrl1A4). The frozen ranking by the curve's change rewards such dives.
 - **Panel d** now shows Slc6a19, Scd1 and Cyp24a1, whose within-label changes are 2.1–3.0 log2. Panels a and c are
   unchanged.
 - **The screen's counts above are unchanged.** This rule decides only what the figure shows.
+
+### Panel b redrawn as curves against the cluster staircase (2026-11-02)
+
+The heatmap showed the difference poorly. Its curve block and cluster block share the S1 → S3 trend, so they looked
+alike.
+
+**New panel b.** One plot per pattern of the calls that hold within labels:
+- peak at S2/S3, 4 genes;
+- rises within S2, 32;
+- falls within S2, 23;
+- falls within S3, 9.
+
+The 4 remaining calls (S1, and one rise within S3) form groups too small to plot. They stay in the counts.
+
+**What each plot shows.**
+- **Units:** log2 fold from the gene's bulk PT mean, both mice averaged.
+- **Lines:** each gene's curve thin, the median curve thick, and the median of the same genes' S1/S2/S3 cluster
+  means as a staircase.
+- **Shading:** the gap between the curve and the staircase, which is what the clusters miss.
+- **Clipping:** each gene's curve is clipped to its own bin-mean range (±0.25), so spline dives where counts run
+  out do not widen the gap.
+- **Edge effect:** the upturn in the last ~5% of PT in two groups is a spline edge effect plus the last bin.

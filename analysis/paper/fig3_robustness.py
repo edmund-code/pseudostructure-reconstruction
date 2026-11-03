@@ -59,7 +59,8 @@ FRACTIONS = (0.1, 0.2, 0.3, 0.5, 0.7, 1.0)
 SEEDS = (0, 1, 2)
 N_SPLITS = 5
 CONDITIONS = ('tubules', 'reads', 'genes')
-ARM_ID = {'tubules': 1, 'reads': 2, 'genes': 3, 'gene_half': 4}   # keeps the arms' random streams independent
+ARM_ID = {'tubules': 1, 'reads': 2, 'genes': 3, 'gene_half': 4, 'exclude': 5}   # keeps the arms' random streams
+#                                                                                     independent
 EXCLUDE_COL = 'exclude_from_harmony_hvg'
 
 
@@ -127,6 +128,11 @@ def perturb(qc, spec: dict, target_sum: float) -> tuple[object, dict]:
         info.update(read_fraction_realised=float(counts.sum()) / before, median_library=float(np.median(lib)))
         return qc, info
     excluded = qc.var[EXCLUDE_COL].to_numpy(bool)
+    if cond == 'exclude':    # a named gene list withdrawn from the pool (Fig. 6 injury-blind axis)
+        withdrawn = qc.var_names.isin(spec['genes']) & ~excluded
+        qc.var[EXCLUDE_COL] = excluded | withdrawn
+        info.update(n_pool=int((~excluded).sum()), n_withdrawn=int(withdrawn.sum()))
+        return qc, info
     pool = qc.var_names[~excluded]
     perm = rng.permutation(len(pool))
     if cond == 'genes':
@@ -139,7 +145,7 @@ def perturb(qc, spec: dict, target_sum: float) -> tuple[object, dict]:
     return qc, info
 
 
-def run_job(args, name: str, out: Path) -> None:
+def run_job(args, name: str, out: Path, spec: dict | None = None) -> None:
     import anndata as ad
     from pseudospace_reconstruction.config import RunPaths, load_config
     from pseudospace_reconstruction.integrate import run_two_pass
@@ -148,7 +154,7 @@ def run_job(args, name: str, out: Path) -> None:
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(message)s')
     t0 = time.time()
-    spec = parse_job(name)
+    spec = spec or parse_job(name)
     ensure_r_home()
     config = load_config(REPO / CONFIGS[args.run], Path(args.data_root))
     stage03 = stage03_arguments(config)

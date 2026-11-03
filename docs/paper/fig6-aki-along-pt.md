@@ -163,3 +163,151 @@ No threshold changes after seeing results. Any rule added afterwards is labelled
   rule (rule 5) and the clipping count report it.
 - **Positions within segments are noisy** (notebook 72), which flattens real within-segment changes; Category A is
   conservative.
+
+## Results
+
+### Placement of injured tubules (2026-11-02)
+
+`analysis/paper/fig6_placement.py`, output in `results/paper_figures/fig6/placement/`. To add the arm, the rerun
+script `fig3_robustness.py` gained an `exclude` condition, which withdraws a named gene list from the HVG pool.
+
+**Injury-responsive genes.**
+- 10,404 genes were assessed. 3,812 are injury-responsive: 2,896 up and 916 down.
+- All 3,812 were withdrawn from integration.
+- The injury-blind rerun kept 33,375 units (the reference keeps 32,939), and its segment order ρ is 1.0.
+
+Spearman ρ of each section's PT positions:
+
+| Section | all PT | S1 | S2 | S3 | gene half A vs B, all PT |
+|---|---|---|---|---|---|
+| Ctrl1A2 | 0.938 | 0.855 | 0.847 | 0.683 | 0.902 |
+| Ctrl1A4 | 0.971 | 0.891 | 0.900 | 0.673 | 0.946 |
+| IR2A2 | 0.898 | 0.682 | 0.821 | 0.657 | 0.822 |
+| IR2A4 | 0.914 | 0.689 | 0.812 | 0.732 | 0.839 |
+
+**Verdict: passes.**
+- **All PT.** The floor is 0.888, and the IR sections reach 0.898 and 0.914.
+- **S3.** The floor is 0.623, and the IR sections reach 0.657 and 0.732.
+- Without 3,812 injury genes, the IR tubules keep their order nearly as well as the control tubules do.
+
+**Not in the pass rule: within S1, IR agrees less.** ρ is 0.68–0.69 in IR against 0.86–0.89 in controls. Within-S1
+positions in IR therefore lean partly on injury genes. The IR gene-half agreement within S1 (0.40–0.43) is also low,
+but so is the controls' (0.47–0.55).
+
+### Screen (2026-11-02)
+
+`analysis/paper/fig6_screen.py`, output in `results/paper_figures/fig6/screen/`.
+
+**Inputs.**
+- PT units: Ctrl1A2 2,780, Ctrl1A4 2,745, IR2A2 3,937, IR2A4 5,551.
+- 32 gene-specific axes; on each, b12 is 0.29–0.30 and b23 is 0.67–0.68.
+- 5,379 genes were screened. The neighbour filter dropped 2,934; it is applied within each condition, and injured PT
+  loses so much transport expression that many genes now exceed twice the PT rate in a neighbour group.
+
+**Category A, the response changes inside a segment: not calibrated (null).**
+- There are 34 calls, one per gene: S1 8, S2 12, S3 14; 13 go up.
+- The decoy (positions shuffled within label) gives 4 calls. The false-call share is 0.118, above the frozen 0.10.
+- So, by the protocol, the figure shows no Category A list.
+- Not used for any decision: the symmetric relabeling calibration gives 1 and 3 calls, a share of 0.059.
+
+**Display map.** 2,220 screened genes reach |Δ| ≥ 1 log2 somewhere in a core, with all four pairs agreeing in sign
+there.
+
+**Handoffs: 11 of 52 pairs shift; none is lost.**
+- All 52 pairs (50 from notebook 101, 2 from the poster) cross in both controls on this fit.
+- The 11 shifted pairs are:
+
+| Pair | Control x\* | AKI x\* | Δx\* (95% CI) | What moves |
+|---|---|---|---|---|
+| Slc16a1 → Slc16a4 (MCT1 → MCT4) | 0.63 | 0.21 | −0.42 (−0.55, −0.26) | late partner loses its S3 rise; MCT1 stays on late |
+| Slc16a1 → Slc16a9 | 0.62 | 0.31 | −0.30 (−0.45, −0.27) | late partner loses its S3 rise |
+| Slc16a12 → Slc16a9 | 0.62 | 0.32 | −0.30 (−0.39, −0.24) | late partner loses its S3 rise |
+| Slc6a19 → Slc6a13 (B0AT1 → GAT2) | 0.53 | 0.30 | −0.23 (−0.28, −0.20) | late partner loses its S3 rise |
+| Slc46a3 → Slc46a1 | 0.66 | 0.44 | −0.22 (−0.44, −0.07) | late partner loses its S3 rise |
+| Slc3a2 → Slc3a1 (4F2hc → rBAT) | 0.51 | 0.30 | −0.20 (−0.23, −0.16) | rBAT loses its S3 rise |
+| Slc6a8 → Slc6a13 | 0.52 | 0.34 | −0.19 (−0.29, −0.14) | late partner loses its S3 rise; the early one falls later |
+| Slc22a6 → Slc22a2 (OAT1 → OCT2) | 0.65 | 0.50 | −0.14 (−0.15, −0.13) | small; neither half-point moves much, the crossing does |
+| Slc39a5 → Slc39a8 (ZIP5 → ZIP8) | 0.45 | 0.62 | +0.17 (+0.11, +0.22) | ZIP5 stays on further into S2 |
+| Slc39a5 → Slc39a14 (ZIP5 → ZIP14) | 0.53 | 0.72 | +0.20 (+0.08, +0.24) | ZIP5 stays on further into S2 |
+| Slc5a9 → Slc5a3 | 0.46 | 0.74 | +0.27 (+0.22, +0.35) | the two controls disagree on where Slc5a9 falls (0.36 and 0.95) |
+
+- The "what moves" column is descriptive. It compares the early profile's last fall below 0.5 and the late profile's
+  first rise above 0.5 (`pseudospace.handoffs.half_points`) between conditions.
+- **Unshifted pairs, for comparison.**
+  - Cystine (Slc7a9 → Slc7a13) keeps its position: Δx\* +0.07, not specific.
+  - Its late partner Slc7a13 is 4.3 log2 lower around the handoff. The handoff stays where it was, at about a
+    twentieth of the level.
+  - The poster's glucose (Slc5a2 → Slc5a1) and lactate (Slc5a12 → Slc5a8) pairs do not move (−0.02 and +0.01).
+  - So the poster's "the cystine handoff is lost" is a level statement, not a position one.
+
+**Post-hoc check of the handoff calls (not in the protocol; added after the screen).**
+- The protocol calibrated Category A and the pathways, but not the handoffs.
+- **Method.** The shift rule was applied symmetrically, with each relabeling as the contrast and the other two splits
+  as its specificity check. The bootstraps are those already drawn.
+- **Result.** Relabeling 1 gives 0 shifted pairs and relabeling 2 gives 0, against 11 for the condition.
+
+**Pathways within segments: 122 calls, none under the relabelings (with a post-hoc correction, below).**
+- 1,070 sets were tested in each segment, 3,206 set × segment tests in all. 122 are called:
+
+| Segment | Calls | Rising | Falling |
+|---|---|---|---|
+| S1 | 89 | 12 | 77 |
+| S2 | 24 | 12 | 12 |
+| S3 | 9 | 0 | 9 |
+
+- **Calibration.** Relabeling 1 gives 0 calls, and so does relabeling 2. None is even at q ≤ 0.05, against 338 for the
+  condition. The calibration share is 0.
+- **Effect sizes are modest.** |W| has a median of 0.13 log2 and a maximum of 0.45 among the calls. The largest
+  relabeling is at most 0.25 × the condition (median 0.17).
+- **Themes.**
+  - S1, falling: DNA replication and cell-cycle sets (Synthesis of DNA −0.16, DNA replication −0.16). The AKI rise of
+    the replication program is largest at the start of S1 and eases along it.
+  - S1, rising: integrin signalling (+0.25) and gluconeogenesis (+0.21).
+  - S2, rising: DNA strand elongation (+0.42), mismatch repair (+0.40), G1/S-specific transcription (+0.32). The
+    replication response climbs through S2.
+  - S2, falling: SREBP-driven cholesterol synthesis (−0.14 to −0.17) and plasma lipoprotein remodelling (−0.31).
+  - S3, falling: ether lipid metabolism (−0.45) and oxidative phosphorylation / respiratory electron transport
+    (−0.20 to −0.22). These fall further through S3.
+- **Caveat on S1.** The first third of the S1 core starts at x = 0, where splines are least constrained. Both
+  conditions share the basis, and fewer than 0.1% of IR units are clipped at the start, so this is not an end pile-up.
+  Still, the S1 calls are the least robust kind.
+
+**Post-hoc correction to the pathway statistic (added after the first run; labelled).**
+- **What went wrong.** In the first run (kept in `paper_figures/fig6/screen_run1/`), the screen called 0 sets under
+  any split. The set statistics there reached 34–6,921 log2, which is impossible.
+- **Cause.** About a dozen genes have no count in one third of a core in some mouse; for example, Akr1c18 in S1 and
+  Cyp27b1 in S3. Their splines dive without bound there, giving within-core changes up to 6,921 log2. These few genes
+  dominated both the observed set means and the random-set null.
+- **Rule.** A gene's W in a segment is treated as unsupported when, in any mouse, the first or last third of that
+  core holds no count of it. Such genes leave that segment's set means and its random-set pool. This removes 19, 17
+  and 30 gene × segment entries in S1, S2 and S3.
+- **Scope.** The rule touches only the pathway statistic and the program summaries. Category A, the display map and
+  the handoffs reproduce the first run exactly.
+- **Disclosure.** Because the rule was written after a null was seen, these calls are reported as post hoc.
+
+**Programs on this axis (notebook 76's verdicts stand).**
+- **Signs agree with notebook 76.**
+  - Transport T_PT: S1 +0.08, S2 −0.03, S3 −0.25. The S3 relabelings are −0.12 and −0.12, so it is not specific.
+  - Cell cycle C: S1 −0.10, S2 +0.25, S3 −0.10. The S2 relabelings are 0.07 and 0.04, 0.27×, so it is not specific.
+- These are set means over a fixed list, without the random-set comparison of the screen. The screen can still call
+  narrower replication sets in S2, where those sets change more than the whole C program does.
+- The neighbour filter leaves only 3 of R's 18 markers (Havcr1 among them), so R is not shown.
+
+### Figure (2026-11-02)
+
+`analysis/paper/fig6_panels.py`.
+- **a.** Ctrl1A2 and IR2A2, PT tubules coloured by position.
+- **b.** Density along the control-quantile axis, per section.
+- **c.** Placement check.
+- **d.** Havcr1, Krt20, Mki67 and Slc34a1. A mouse's curve is drawn only where 16 of its 20 bins have counts, and it
+  is clipped to its bin range ± 0.25.
+- **e.** C and T_PT profiles with pairs, relabelings and segment means.
+- **f.** The 2,220-gene display map beside the segment view.
+- **g.** Scaled profiles of three handoffs: one moving upstream, one moving downstream, and cystine, which does not
+  move.
+- **h.** All 52 handoff positions, and the 11 that move, per mouse.
+- **i.** All 122 pathway calls, each centred on its segment mean.
+
+**Presentation choices.**
+- **Examples in g.** They were chosen after the screen as one of each kind.
+- **Panel d.** Slc7a13 was swapped for Slc34a1 so no gene appears twice.

@@ -170,7 +170,7 @@ over the runner-up). Non-tubule clusters were dropped and the nephron units re-e
 detected in at least 5% of units and with at least 20 counts. Labels were reviewed cluster by cluster and none was
 overridden. Labels are not inputs to the curve.
 
-**Elastic principal curve.** An elastic principal curve[45–47] was fitted through all pass-2 units in the 50
+**Elastic principal curve.** An elastic principal curve[46,47] was fitted through all pass-2 units in the 50
 corrected components. The curve is a chain of k nodes minimizing
 
 U = (1/N) Σᵢ ‖xᵢ − n(xᵢ)‖² + λ Σ_edges ‖nⱼ − nⱼ₊₁‖² + μ Σ_inner nodes ‖nⱼ − (nⱼ₋₁ + nⱼ₊₁)/2‖²,
@@ -178,8 +178,10 @@ U = (1/N) Σᵢ ‖xᵢ − n(xᵢ)‖² + λ Σ_edges ‖nⱼ − nⱼ₊₁‖
 where n(xᵢ) is the node nearest to unit i; the terms measure fit, stretching and bending. The curve was initialized
 as three nodes on the first principal component (the elpigraph-python default) and grown by bisecting the edge whose
 bisection gave the lowest energy[47], relaxing node positions after each addition, until k = 50 (λ = 0.01, μ = 0.1). Each unit was projected
-onto its nearest edge, and its position is the path length from the start of the curve to its projection; units
-beyond an end node were placed on the straight continuation of the end edge, up to twice that edge's length. The
+onto its nearest edge, and its position is the path length from the start of the curve to its projection (the projection index of
+principal curves[45]); units
+beyond an end node were placed on the straight continuation of the end edge, up to twice that edge's length
+(our addition to the curve projection). The
 start is the curve end nearest the root unit, the medoid of the proximal-tubule cluster lowest on a marker axis
 (mean score of early genes Cyp2e1, Gatm, Slc13a3, Slc22a6, Slc5a12, Slc5a2 minus that of late genes Aqp2, Aqp4,
 Atp6v0d2, Rhcg, Slc14a2, Wnt7b), which decides only which end is 0; positions were then scaled to [0, 1]. The fit is
@@ -371,7 +373,7 @@ Numbered by first citation (Introduction, then Methods). Every reference was che
 3. Moses, L. & Pachter, L. Museum of spatial transcriptomics. *Nat. Methods* 19, 534–546 (2022). **[bioRxiv preprint read]**
 4. Oliveira, M. F. et al. High-definition spatial transcriptomic profiling of immune cell populations in colorectal cancer. *Nat. Genet.* 57, 1512–1523 (2025).
 5. Halpern, K. B. et al. Single-cell spatial reconstruction reveals global division of labour in the mammalian liver. *Nature* 542, 352–356 (2017).
-6. Moor, A. E. et al. Spatial reconstruction of single enterocytes uncovers broad zonation along the intestinal villus axis. *Cell* 175, 1156–1167.e15 (2018). **[inaccessible (abstract only)]**
+6. Moor, A. E. et al. Spatial reconstruction of single enterocytes uncovers broad zonation along the intestinal villus axis. *Cell* 175, 1156–1167.e15 (2018).
 7. Lee, J. W., Chou, C.-L. & Knepper, M. A. Deep sequencing in microdissected renal tubules identifies nephron segment-specific transcriptomes. *J. Am. Soc. Nephrol.* 26, 2669–2677 (2015).
 8. Ransick, A. et al. Single-cell profiling reveals sex, lineage, and regional diversity in the mouse kidney. *Dev. Cell* 51, 399–413.e7 (2019).
 9. Curthoys, N. P. & Moe, O. W. Proximal tubule function and response to acidosis. *Clin. J. Am. Soc. Nephrol.* 9, 1627–1638 (2014).
@@ -398,7 +400,7 @@ Numbered by first citation (Introduction, then Methods). Every reference was che
 30. Clifton, K. et al. STalign: alignment of spatial transcriptomics data using diffeomorphic metric mapping. *Nat. Commun.* 14, 8123 (2023).
 31. Clifton, K. et al. STcompare: comparative spatial transcriptomics data analysis of structurally matched tissues to characterize differentially spatially patterned genes. *Bioinformatics* 42, btag644 (2026).
 32. Trapnell, C. et al. The dynamics and regulators of cell fate decisions are revealed by pseudotemporal ordering of single cells. *Nat. Biotechnol.* 32, 381–386 (2014). **[main text read; Online Methods paywalled]**
-33. Haghverdi, L., Büttner, M., Wolf, F. A., Buettner, F. & Theis, F. J. Diffusion pseudotime robustly reconstructs lineage branching. *Nat. Methods* 13, 845–848 (2016). **[bioRxiv preprint v2 read; published text not accessible]**
+33. Haghverdi, L., Büttner, M., Wolf, F. A., Buettner, F. & Theis, F. J. Diffusion pseudotime robustly reconstructs lineage branching. *Nat. Methods* 13, 845–848 (2016). **[accepted author manuscript read; copyedited version paywalled]**
 34. Street, K. et al. Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics. *BMC Genomics* 19, 477 (2018).
 35. Wolf, F. A. et al. PAGA: graph abstraction reconciles clustering with trajectory inference through a topology preserving map of single cells. *Genome Biol.* 20, 59 (2019).
 36. Saelens, W., Cannoodt, R., Todorov, H. & Saeys, Y. A comparison of single-cell trajectory inference methods. *Nat. Biotechnol.* 37, 547–554 (2019). **[authors' manuscript source read]**
@@ -410,7 +412,7 @@ Numbered by first citation (Introduction, then Methods). Every reference was che
 42. Karasikov, M. et al. Training state-of-the-art pathology foundation models with orders of magnitude less data. In *Medical Image Computing and Computer Assisted Intervention – MICCAI 2025*, LNCS 15967, 573–583 (Springer, 2025).
 43. Kaplan, D., Grandhi, R. S., Lane, C., Warner, B., Abraham, T. M. & Scotti, P. S. How to train a state-of-the-art pathology foundation model with $1.6k. Technical Report SOPHONT-TR-2025-001 (Sophont, 2025). https://doi.org/10.5281/zenodo.20711012
 44. Korsunsky, I. et al. Fast, sensitive and accurate integration of single-cell data with Harmony. *Nat. Methods* 16, 1289–1296 (2019).
-45. Hastie, T. & Stuetzle, W. Principal curves. *J. Am. Stat. Assoc.* 84, 502–516 (1989). **[partial scan (pp. 502, 504)]**
+45. Hastie, T. & Stuetzle, W. Principal curves. *J. Am. Stat. Assoc.* 84, 502–516 (1989).
 46. Gorban, A. N. & Zinovyev, A. Y. Elastic principal graphs and manifolds and their practical applications. *Computing* 75, 359–379 (2005).
 47. Albergante, L. et al. Robust and scalable learning of complex intrinsic dataset geometry via ElPiGraph. *Entropy* 22, 296 (2020).
 48. McCarthy, D. J., Chen, Y. & Smyth, G. K. Differential expression analysis of multifactor RNA-Seq experiments with respect to biological variation. *Nucleic Acids Res.* 40, 4288–4297 (2012).
@@ -425,13 +427,13 @@ Numbered by first citation (Introduction, then Methods). Every reference was che
 57. CZI Cell Science Program et al. CZ CELLxGENE Discover: a single-cell data platform for scalable exploration, analysis and modeling of aggregated data. *Nucleic Acids Res.* 53, D886–D900 (2025).
 58. Liberzon, A. et al. The Molecular Signatures Database (MSigDB) hallmark gene set collection. *Cell Syst.* 1, 417–425 (2015).
 59. Gillespie, M. et al. The reactome pathway knowledgebase 2022. *Nucleic Acids Res.* 50, D687–D692 (2022).
-60. Kanehisa, M. & Goto, S. KEGG: Kyoto Encyclopedia of Genes and Genomes. *Nucleic Acids Res.* 28, 27–30 (2000). **[inaccessible (abstract only)]**
+60. Kanehisa, M. & Goto, S. KEGG: Kyoto Encyclopedia of Genes and Genomes. *Nucleic Acids Res.* 28, 27–30 (2000).
 61. Kanehisa, M., Sato, Y., Furumichi, M., Morishima, K. & Tanabe, M. New approach for understanding genome variations in KEGG. *Nucleic Acids Res.* 47, D590–D595 (2019).
 62. Kuleshov, M. V. et al. Enrichr: a comprehensive gene set enrichment analysis web server 2016 update. *Nucleic Acids Res.* 44, W90–W97 (2016).
 63. Xie, Z. et al. Gene set knowledge discovery with Enrichr. *Curr. Protoc.* 1, e90 (2021).
 64. Benjamini, Y. & Hochberg, Y. Controlling the false discovery rate: a practical and powerful approach to multiple testing. *J. R. Stat. Soc. B* 57, 289–300 (1995).
 65. Faure, L., Soldatov, R., Kharchenko, P. V. & Adameyko, I. scFates: a scalable python package for advanced pseudotime and bifurcation analysis from single-cell data. *Bioinformatics* 39, btac746 (2023).
-66. Mao, Q., Yang, L., Wang, L., Goodison, S. & Sun, Y. SimplePPT: a simple principal tree algorithm. In *Proc. 2015 SIAM International Conference on Data Mining* 792–800 (2015). **[not read (Crossref record only)]**
+66. Mao, Q., Yang, L., Wang, L., Goodison, S. & Sun, Y. SimplePPT: a simple principal tree algorithm. In *Proc. 2015 SIAM International Conference on Data Mining* 792–800 (2015).
 
 ---
 
@@ -467,7 +469,6 @@ Numbered by first citation (Introduction, then Methods). Every reference was che
   - None of the repeated-structure precedents compares its axis with a measured position along the structure
     (Asami correlates with follicle length, ρ 0.94/0.90), so our segment-order ρ and stability tests are the fair
     comparison.
-  - Not yet read in full: Moor 2018 (inaccessible), Kanehisa & Goto 2000 (abstract), Mao 2015 (not read), Hastie &
-    Stuetzle 1989 (two pages), Haghverdi 2016 (preprint read; published version paywalled). Read before submission or
-    replace.
+  - All 66 references have now been read in full (for DPT, the accepted author manuscript; for Moses 2022, SpaGCN and
+    CoPro, preprints).
 - **D. Title grammar:** "Pseudostructure reconstruction of kidney nephrons enables …" (singular verb).

@@ -4,7 +4,7 @@ Every reference in `manuscript_v1_intro_methods.md`, checked against its full te
 one per group; see `citation_checks/`). "Before" is the verdict on the draft as it stood; "change" is what the
 current draft does about it. Reports A and B use the earlier numbering (old no.); report C is keyed by name.
 Rule (user, 2026-11-03): read every cited or related paper in full, check our sentence against it, and use it
-for wording. A row marked pending must be read or replaced before submission.
+for wording.
 
 | no. | reference | old no. | full text read | before | change |
 |---|---|---|---|---|---|
@@ -13,7 +13,7 @@ for wording. A row marked pending must be read or replaced before submission.
 | 3 | Moses, L. & Pachter, L. Museum of spatial transcriptomics. | 3 | Y, bioRxiv preprint | supported | — |
 | 4 | Oliveira, M. F. et al. High-definition spatial transcriptomic profilin | 4 | Y | partly | "whole sections" → 6.5 × 6.5-mm capture area; product name Visium HD; also cited in Methods for summing 2-µm bins in segmented objects |
 | 5 | Halpern, K. B. et al. Single-cell spatial reconstruction reveals globa | 5 | Y | partly | liver lobule only; "along their length" → "along an axis" |
-| 6 | Moor, A. E. et al. Spatial reconstruction of single enterocytes uncove | 6 | N, inaccessible | abstract only | pending: villus clause provisional |
+| 6 | Moor, A. E. et al. Spatial reconstruction of single enterocytes uncove | 6 | Y (published PDF via web archive) | supported | — |
 | 7 | Lee, J. W., Chou, C.-L. & Knepper, M. A. Deep sequencing in microdisse | 8 | Y | not supported where cited | rat, no S1/S2/S3 comparison; moved to "repeated units" |
 | 8 | Ransick, A. et al. Single-cell profiling reveals sex, lineage, and reg | 10 | Y | supported | now also carries the S3 injury clause and the male-only note in Methods |
 | 9 | Curthoys, N. P. & Moe, O. W. Proximal tubule function and response to  | 7 | Y | partly | transport and metabolism only; injury clause moved to [Ransick] |
@@ -40,7 +40,7 @@ for wording. A row marked pending must be read or replaced before submission.
 | 30 | Clifton, K. et al. STalign: alignment of spatial transcriptomics data  | 30 | Y | supported | — |
 | 31 | Clifton, K. et al. STcompare: comparative spatial transcriptomics data | 31 | Y | supported | — |
 | 32 | Trapnell, C. et al. The dynamics and regulators of cell fate decisions | 32 | Y main text; Online Methods paywalled | supported except "alone" | Fix C: "usually given a start cell or cluster" |
-| 33 | Haghverdi, L., Büttner, M., Wolf, F. A., Buettner, F. & Theis, F. J. D | 33 | Y, bioRxiv preprint v2 only | partly (needs a root cell) | Fix C; Methods: "as implemented in Scanpy"; published text pending |
+| 33 | Haghverdi, L., Büttner, M., Wolf, F. A., Buettner, F. & Theis, F. J. D | 33 | Y, accepted author manuscript (copyedited version paywalled) | partly (needs a root cell) | Fix C; Methods: "as implemented in Scanpy" |
 | 34 | Street, K. et al. Slingshot: cell lineage and pseudotime inference for | 34 | Y | partly | Fix C; Methods: started from the root unit's cluster, lineage-weighted average |
 | 35 | Wolf, F. A. et al. PAGA: graph abstraction reconciles clustering with  | 35 | Y | partly | Fix C |
 | 36 | Saelens, W., Cannoodt, R., Todorov, H. & Saeys, Y. A comparison of sin | 36 | Y, authors' manuscript source | partly | Fix C |
@@ -52,7 +52,7 @@ for wording. A row marked pending must be read or replaced before submission.
 | 42 | Karasikov, M. et al. Training state-of-the-art pathology foundation mo | 42 | Y, arXiv | supported | — |
 | 43 | Kaplan, D., Grandhi, R. S., Lane, C., Warner, B., Abraham, T. M. & Sco | 43 | Y | supported | TCGA training data added; 1.13 B = released checkpoint |
 | 44 | Korsunsky, I. et al. Fast, sensitive and accurate integration of singl | 44 | Y | supported | "λ fixed at 1, at most 30 rounds" |
-| 45 | Hastie, T. & Stuetzle, W. Principal curves. | new | partial scan | supported for what is cited | pending full read |
+| 45 | Hastie, T. & Stuetzle, W. Principal curves. | new | Y (all pages, as images) | partly | Methods: cited for the projection index only; the elastic energy is [Gorban, Albergante]; end extension stated as ours |
 | 46 | Gorban, A. N. & Zinovyev, A. Y. Elastic principal graphs and manifolds | 45 | Y, arXiv | partly | cited for the energy only (its growth rule differs) |
 | 47 | Albergante, L. et al. Robust and scalable learning of complex intrinsi | 46 | Y | supported | three-node start attributed to elpigraph-python |
 | 48 | McCarthy, D. J., Chen, Y. & Smyth, G. K. Differential expression analy | new | Y | new | NB GLM with offset compared by likelihood ratio |
@@ -67,12 +67,14 @@ for wording. A row marked pending must be read or replaced before submission.
 | 57 | CZI Cell Science Program et al. CZ CELLxGENE Discover: a single-cell d | new | Y | supported | PCT (S1+S2) vs S3, six donors with ≥ 50 cells, Census release stated; source study citation to add |
 | 58 | Liberzon, A. et al. The Molecular Signatures Database (MSigDB) hallmar | new | Y | supported | — |
 | 59 | Gillespie, M. et al. The reactome pathway knowledgebase 2022. | new | Y | supported | human symbols mapped to mouse through the ortholog map |
-| 60 | Kanehisa, M. & Goto, S. KEGG: Kyoto Encyclopedia of Genes and Genomes. | new | N, abstract only | — | pending |
+| 60 | Kanehisa, M. & Goto, S. KEGG: Kyoto Encyclopedia of Genes and Genomes. | new | Y | supported | kept with Kanehisa 2019, which covers the 2019 library |
 | 61 | Kanehisa, M., Sato, Y., Furumichi, M., Morishima, K. & Tanabe, M. New  | new | Y | supported | — |
 | 62 | Kuleshov, M. V. et al. Enrichr: a comprehensive gene set enrichment an | new | Y | supported | — |
 | 63 | Xie, Z. et al. Gene set knowledge discovery with Enrichr. | new | Y | supported | — |
 | 64 | Benjamini, Y. & Hochberg, Y. Controlling the false discovery rate: a p | new | Y | supported | — |
 | 65 | Faure, L., Soldatov, R., Kharchenko, P. V. & Adameyko, I. scFates: a s | new | Y | partly | baseline used SimplePPT; Mao 2015 added |
-| 66 | Mao, Q., Yang, L., Wang, L., Goodison, S. & Sun, Y. SimplePPT: a simpl | new | N, not read | — | pending |
+| 66 | Mao, Q., Yang, L., Wang, L., Goodison, S. & Sun, Y. SimplePPT: a simpl | new | Y | supported | scFates docs confirm ppt = SimplePPT |
+
+The five references first left unread were read in full afterwards (`citation_checks/E_first_unread.md`).
 
 Results-section literature (Figs 5 and 6 verdicts) is checked separately in `citation_checks/D_results_literature.md`.

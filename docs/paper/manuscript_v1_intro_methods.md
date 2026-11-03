@@ -1,6 +1,8 @@
 # Pseudostructure reconstruction of kidney nephrons enables comparative 3D analysis of molecular gradients
 
-Draft v1 of the Introduction and Methods (2026-11-03). Written against the pipeline as it now runs: H&E segmentation
+Draft v1 of the Introduction and Methods (2026-11-03; Methods restructured the same day after the lab's pattern:
+a short overview whose run-in paragraphs are the method's components, then gene models, handoffs and group
+comparisons, one subsection per dataset, evaluation, other methods, statistics). Written against the pipeline as it now runs: H&E segmentation
 with a frozen OpenMidnight encoder (no SAM2), the reconstruction package's elastic principal curve (diffusion
 pseudotime is a baseline only), and negative-binomial gene models on per-gene held-out axes. Bracketed items
 `[...]` are facts we do not hold in the repo and need from collaborators. Numbers come from the frozen protocols in
@@ -130,284 +132,262 @@ Chen 2021 (microdissection), CZ CELLxGENE Census, MSigDB/Reactome/KEGG and Enric
 
 ## Methods
 
-### Overview of pseudostructure reconstruction
+### Pseudostructure reconstruction overview
 
-Pseudostructure reconstruction takes a hematoxylin and eosin (H&E) whole-slide image and the VisiumHD data
-registered to it, and returns, for every segmented tubule cross-section, an expression profile and a position t
-between 0 and 1 along the nephron. It runs in five steps:
-1. tubule cross-sections are segmented from the H&E image;
-2. VisiumHD 2-µm bins are summed within each cross-section;
-3. low-quality and merged cross-sections are removed;
-4. the cross-sections of all sections are embedded jointly and corrected for section effects;
-5. an elastic principal curve is fitted through the embedded cross-sections and each is projected onto it.
+Pseudostructure reconstruction takes hematoxylin and eosin (H&E) whole-slide images with registered VisiumHD 2-µm
+bins from one or more sections and returns, for every segmented cross-section of a repeated structure (a unit),
+its summed expression profile and a position t ∈ [0, 1] along the structure, shared by all sections. Positions
+come from expression alone: segment labels and tissue coordinates never enter the placement of a unit. Every step
+after segmentation is implemented in the pseudostructure reconstruction package (`pseudospace_reconstruction`
+0.1.0, commit 59da04b).
 
-Segment labels and tissue coordinates are never used to place a cross-section. Labels enter only to evaluate the
-axis and, after it is built, to compare the curve with discrete summaries. Steps 2–5 are implemented in the
-pseudostructure reconstruction package (`pseudospace_reconstruction` 0.1.0, commit 59da04b), run with
-`pseudospace-recon run --config <folder> --data-root <root> --out <run>`.
-
-### Tissue samples and VisiumHD data
-
-**Mouse.** Kidneys from two control mice and two mice after ischemia–reperfusion injury (IRI) were profiled, one
-section per mouse (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4). [Strain, age, IRI protocol (clamp duration, uni- or bilateral,
-time to harvest), fixation and embedding, animal protocol number.] All four mice are male, as confirmed by
-expression of Y-chromosome genes (Ddx3y, Eif2s3y, Kdm5d, Uty).
-
-**Human.** Two sections of healthy kidney cortex from one donor (HUK1_COR1 and HUK1_MED1) were profiled. Both
-sections are cortex; the "MED" name does not denote medulla. [Source (nephrectomy for tumour?), distance from the
-tumour, donor age, IRB protocol and consent.] The donor is male (DDX3Y, KDM5D, UTY, EIF1AY expressed).
-
-**VisiumHD.** Sections were processed with the VisiumHD [mouse / human whole-transcriptome probe set, version] and
-H&E-stained and imaged at [scanner, objective]. Reads were processed with Space Ranger [version] to 2-µm bins
-registered to the H&E image. The mouse panel measures 19,059 genes and the human panel 18,132.
-
-### Tubule segmentation
-
-Tubules were segmented from H&E whole-slide images with a deep-learning model trained on partial manual
-annotations. Structures were outlined as polygons in QuPath [version] on seven mouse kidney sections: six from a
-separate nephrectomy study (three 24 h and three 4 weeks after nephrectomy; not VisiumHD data) and one control
-section (Ctrl1A2) that is also analysed here. These contained 2,422 annotated objects: 1,438 proximal tubules,
-457 distal tubules, 336 collecting ducts and 191 glomeruli. For human data, one cortical section (HUK1_COR1, also
-analysed here) contained 1,547 objects: 1,443 tubules and 104 glomeruli. Structures that were not annotated
-(vessels, interstitium, partially visible tubules) and tissue outside annotated regions did not contribute to the
-loss; 52 annotated background regions served as negative examples. Mouse images were analysed at 0.44 µm per pixel
-and human images at 0.5 µm per pixel, without resampling or stain normalization.
-
-Separate mouse and human models were trained on patches of 512 × 512 and 640 × 640 pixels, respectively. Five
+**Tubule segmentation: annotations.** Tubules were segmented from H&E whole-slide images with a deep-learning model
+trained on partial manual annotations. Structures were outlined as polygons in QuPath [version] on seven mouse
+kidney sections: six from a separate nephrectomy study (three 24 h and three 4 weeks after nephrectomy; not
+VisiumHD data) and one control section (Ctrl1A2) that is also analysed here. These contained 2,422 annotated
+objects: 1,438 proximal tubules, 457 distal tubules, 336 collecting ducts and 191 glomeruli. For human data, one
+cortical section (HUK1_COR1, also analysed here) contained 1,547 objects: 1,443 tubules and 104 glomeruli.
+Structures that were not annotated (vessels, interstitium, partially visible tubules) and tissue outside annotated
+regions did not contribute to the loss; 52 annotated background regions served as negative examples. Mouse images
+were analysed at 0.44 µm per pixel and human images at 0.5 µm per pixel, without resampling or stain
+normalization. Separate mouse and human models were trained on patches of 512 × 512 and 640 × 640 pixels. Five
 nephrectomy sections were used for training and one was withheld for validation; the control section was divided
-into alternating 2,048-pixel blocks for training and validation. The human section was likewise divided into
+into alternating 2,048-pixel blocks for training and validation, and the human section likewise into
 non-overlapping training and validation blocks.
 
-Each model combines a frozen pathology foundation model, OpenMidnight (an open replication of Midnight, a DINOv2
-ViT-g/14 with registers and 1.13 billion parameters)[41–43], with a trainable full-resolution convolutional stem that supplies detail below the 14-pixel
-patch size, and a U-Net-style decoder[ref] (7.31 million trainable parameters in total) with three outputs per
-pixel:
-- a class map (background, proximal tubule, distal tubule, collecting duct and glomerulus in mouse; background,
-  tubule and glomerulus in human);
-- a structure map with four categories (background, object interior, edge facing background, edge facing another
-  object), where a pixel is an edge when a different label occurs within a 3-pixel radius;
-- a glomerular centre heatmap.
+**Tubule segmentation: model and training.** Each model combines a frozen pathology foundation model, OpenMidnight
+(an open replication of Midnight, a DINOv2 ViT-g/14 with registers and 1.13 billion parameters)[41–43], with a
+trainable full-resolution convolutional stem that supplies detail below the 14-pixel patch size, and a U-Net-style
+decoder[ref] (7.31 million trainable parameters in total). The decoder has three outputs per pixel: a class map
+(background, proximal tubule, distal tubule, collecting duct and glomerulus in mouse; background, tubule and
+glomerulus in human); a structure map with four categories (background, object interior, edge facing background,
+edge facing another object; a pixel is an edge when a different label occurs within a 3-pixel radius); and a
+glomerular centre heatmap. Because annotations were partial, the loss was computed only over annotated objects, a
+5-pixel margin around them, annotated background and off-tissue pixels, and combined cross-entropy and soft Dice
+terms for the class and structure maps with mean-squared error for the centre map. Models were trained with AdamW
+(learning rate 3 × 10⁻⁴, weight decay 0.03, batch size 8 for mouse and 6 for human), with a two-epoch linear
+warm-up followed by cosine decay over 60 epochs, geometric, colour and stain augmentation, and oversampling of rare
+classes. The checkpoint with the highest validation panoptic quality (PQ)[ref Kirillov 2019] was kept. Each model
+was trained once on one NVIDIA RTX 6000 Ada GPU, in about 3.5 h (mouse) and 2.5 h (human).
 
-Because annotations were partial, the loss was computed only over annotated objects, a 5-pixel margin around them,
-annotated background and off-tissue pixels. It combined cross-entropy and soft Dice terms for the class and
-structure maps with mean-squared error for the centre map.
+**Tubule segmentation: instances and accuracy.** Objects were separated by marker-controlled watershed[ref]: seeds
+of high interior probability were flooded up to the edge probabilities. Each object took the majority class of
+its interior, glomeruli with more than one centre peak were split, and objects below a class-specific minimum area
+were discarded. Whole slides were processed in tiles with 25% overlap, averaging predictions over the eight
+rotations and reflections of each tile. Accuracy was assessed on annotated objects of the withheld validation
+regions, matching predictions one-to-one to annotations at intersection over union (IoU) above 0.5. In mouse, PQ
+was 0.880 (segmentation quality 0.914, detection quality 0.963; 98 objects in five regions of the withheld
+section); 1.0% of annotated objects were split and 6.1% merged. The human model reached a validation PQ of 0.824.
+[See note A: reconcile with the Fig. 2 evaluation.]
 
-Models were trained with AdamW at a learning rate of 3 × 10⁻⁴ and weight decay 0.03, with batch size 8 (mouse) or
-6 (human). The learning rate followed a two-epoch linear warm-up and then cosine decay over 60 epochs. Training
-used geometric, colour and stain augmentation and oversampling of rare classes. The checkpoint with the highest
-validation panoptic quality (PQ)[ref Kirillov 2019] was kept. Each model was trained once on one NVIDIA RTX 6000
-Ada GPU, in about 3.5 h (mouse) and 2.5 h (human).
+**Aggregating bins into units.** Every in-tissue 2-µm bin was assigned to the polygon covering its centre, and its
+counts were summed within each polygon, giving one raw-count profile per unit. Morphometrics (area, perimeter,
+equivalent diameter, solidity, circularity, axis lengths) were recorded for every polygon.
 
-Objects were separated by marker-controlled watershed: seeds from high interior probability were flooded up to the
-edge probabilities. Each object took the majority class of its interior; glomeruli with more than one centre peak
-were split; objects below a class-specific minimum area were discarded. Whole slides were processed in tiles with
-25% overlap, averaging predictions over the eight rotations and reflections of each tile.
+**Quality control.** Units were kept when they had at least 500 counts and at least 90% of their polygon area
+covered by bins. Within each section and segmentation class (at least 50 units per group), units more than three
+median absolute deviations from the median of log total counts, log counts per bin or the residual of detected
+genes on total counts were removed. Merged neighbouring tubules would mix expression from different segments, so
+every unit was also screened for merged objects: conflicting identity (marker panels of two non-adjacent nephron
+families score high; flagged, not removed); a split test (the unit's bins are split along their best spatial cut,
+the halves are scored for identity, and the separation is tested against 99 label shuffles at α = 0.05; halves of
+different, non-adjacent identity were removed, while adjacent ones, likely genuine segment transitions, were kept);
+and morphology (solidity below 0.75, or a narrow neck between two lobes). Glomeruli were exempt from the merge
+tests. Counts were normalized to 10⁴ per unit and log-transformed for embedding; all gene models use raw counts.
 
-Performance was assessed on annotated objects of the withheld validation regions, matching predictions one-to-one
-to annotations at intersection over union (IoU) above 0.5. In mouse, PQ was 0.880 (segmentation quality 0.914,
-detection quality 0.963; 98 objects in five regions of the withheld section); 1.0% of annotated objects were split
-and 6.1% merged. The human model reached a validation PQ of 0.824. [See note A below: these numbers must be
-reconciled with the Fig. 2 evaluation.]
+**Sections from two species.** Human genes were mapped to one-to-one mouse orthologs (HCOP[ref]). A pair was kept
+when its mouse symbol is measured in every mouse section and its human symbol in every human section; human genes
+were renamed to the mouse symbols and every non-shared gene was dropped before quality control, so both species
+enter the embedding with the same features. Because the two probe panels differ, expression levels are never
+compared across species, only patterns along the axis.
 
-### Aggregating VisiumHD bins into cross-sections
+**Embedding, section correction and labels.** The kept units of all sections were embedded jointly in two passes
+(Scanpy 1.11.5[ref]; R harmony 2.0.5[44]). In each pass, highly variable genes (mean 0.0125–3, normalized
+dispersion ≥ 0.5, intersected across sections) gave 50 principal components, corrected for section with Harmony
+(θ = 6, λ = 1, 30 iterations). Units were clustered by Leiden[22] (resolution 2, 30 nearest neighbours, 2,000
+highly variable genes), and each cluster was labelled from curated marker panels (PT-S1, PT-S2, PT-S3, thin limb,
+thick ascending limb, macula densa, DCT, CNT and collecting-duct segments; best panel score ≥ 0.5 and margin ≥ 0.1
+over the runner-up). Non-tubule clusters were dropped and the nephron units re-embedded (pass 2) with genes
+detected in at least 5% of units and with at least 20 counts. Labels were reviewed cluster by cluster and none was
+overridden. Labels are not inputs to the curve.
 
-Every in-tissue 2-µm bin was assigned to the polygon covering its centre, and its counts were summed within each
-polygon, giving one raw-count profile per cross-section (a "unit"). Morphometrics (area, perimeter, equivalent
-diameter, solidity, circularity, major and minor axis lengths) were recorded for every polygon. Of 64,272 mouse
-polygons (control and AKI) and 51,155 polygons in the human-vs-mouse dataset, 43,984 and 31,533 contained bins.
-
-### Quality control
-
-Units were kept when they had at least 500 counts and at least 90% of their polygon area covered by bins. Within
-each section and segmentation class (at least 50 units per group), units more than three median absolute
-deviations from the median of log total counts, log counts per bin or the residual of detected genes on total
-counts were removed. Merged neighbouring tubules would mix expression from different segments, so every unit was
-also screened for merged objects:
-- **conflicting identity**: marker panels of two non-adjacent nephron families score high (flagged, not removed);
-- **split test**: the unit's bins are split along their best spatial cut, the two halves are scored for identity,
-  and the separation is tested against 99 label shuffles (α = 0.05); halves of different identity that are not
-  adjacent along the nephron were removed, and adjacent ones (likely genuine segment transitions) kept;
-- **morphology**: solidity below 0.75 or a narrow neck between two lobes.
-
-Glomeruli were exempt from the merge tiers. Counts were normalized to 10⁴ per unit and log-transformed for
-embedding; all gene models use raw counts. After quality control, 36,445 mouse units (control and AKI) and 27,395
-human-vs-mouse units remained.
-
-### Human–mouse ortholog space
-
-For the species comparison, human genes were mapped to one-to-one mouse orthologs (HCOP[ref]). A pair was kept
-when its mouse symbol is measured in every mouse section and its human symbol in every human section, giving
-15,567 shared genes. Human genes were renamed to the mouse symbols and every non-shared gene was dropped before
-quality control, so both species enter the embedding with the same features. Gene-level counts were not otherwise
-adjusted between species; because the two probe panels differ, expression levels are never compared across
-species, only shapes along the axis.
-
-### Embedding, section correction and segment labels
-
-The kept units of all sections of one dataset were embedded jointly in two passes (Scanpy 1.11.5[ref]; R harmony
-2.0.5[ref]):
-1. Highly variable genes (mean 0.0125–3, normalized dispersion ≥ 0.5, intersected across sections) → 50 principal
-   components → Harmony on the principal components (θ = 6, λ = 1, 30 iterations).
-2. A 30-nearest-neighbour graph on the corrected components; Leiden clustering[ref] at resolution 2 on 2,000
-   highly variable genes.
-3. Each cluster was labelled from curated marker panels (PT-S1, PT-S2, PT-S3, thin limb, thick ascending limb,
-   macula densa, DCT, CNT and collecting-duct segments; best panel score ≥ 0.5 and margin ≥ 0.1 over the
-   runner-up). Non-tubule clusters (glomerulus, vessel, stroma, smooth muscle, immune) were dropped.
-4. The remaining nephron units were re-embedded (pass 2) with genes detected in at least 5% of units and with at
-   least 20 counts.
-
-Labels were reviewed cluster by cluster and none was overridden. Pass 2 kept 32,939 mouse units (control and AKI)
-and 25,048 human-vs-mouse units (13,539 mouse and 11,509 human). Labels are not inputs to the curve.
-
-### Elastic principal curve and the pseudostructure axis
-
-An elastic principal curve[ref ElPiGraph, Albergante 2020] was fitted through all pass-2 units in the 50
-Harmony-corrected components. The curve is a chain of k nodes that minimizes
+**Elastic principal curve.** An elastic principal curve[45,46] was fitted through all pass-2 units in the 50
+corrected components. The curve is a chain of k nodes minimizing
 
 U = (1/N) Σᵢ ‖xᵢ − n(xᵢ)‖² + λ Σ_edges ‖nⱼ − nⱼ₊₁‖² + μ Σ_inner nodes ‖nⱼ − (nⱼ₋₁ + nⱼ₊₁)/2‖²,
 
-where n(xᵢ) is the node nearest to unit i: the first term fits the data, the second penalizes stretching and the
-third bending. The curve was initialized as three nodes on the first principal component and grown by bisecting
-the edge whose bisection gave the lowest energy, relaxing node positions after each addition, until k = 50 nodes
-(λ = 0.01, μ = 0.1). Each unit was projected onto its nearest edge, and its position is the path length from the
-start of the curve to its projection. Units beyond an end node were placed on the straight continuation of the end
-edge, up to twice that edge's length. The start is the curve end nearest the root unit, the medoid of the
-proximal-tubule cluster lowest on a marker axis. The marker axis (the difference of mean scores of early genes
-Cyp2e1, Gatm, Slc13a3, Slc22a6, Slc5a12, Slc5a2 and late genes Aqp2, Aqp4, Atp6v0d2, Rhcg, Slc14a2, Wnt7b) decides
-only which end is 0; positions were then scaled to [0, 1]. The fit is deterministic (seed 0). The curve code is a
-port of elpigraph-python 0.3.4 reduced to the principal-curve case.
+where n(xᵢ) is the node nearest to unit i; the terms measure fit, stretching and bending. The curve was initialized
+as three nodes on the first principal component and grown by bisecting the edge whose bisection gave the lowest
+energy, relaxing node positions after each addition, until k = 50 (λ = 0.01, μ = 0.1). Each unit was projected
+onto its nearest edge, and its position is the path length from the start of the curve to its projection; units
+beyond an end node were placed on the straight continuation of the end edge, up to twice that edge's length. The
+start is the curve end nearest the root unit, the medoid of the proximal-tubule cluster lowest on a marker axis
+(mean score of early genes Cyp2e1, Gatm, Slc13a3, Slc22a6, Slc5a12, Slc5a2 minus that of late genes Aqp2, Aqp4,
+Atp6v0d2, Rhcg, Slc14a2, Wnt7b), which decides only which end is 0; positions were then scaled to [0, 1]. The fit is
+deterministic (seed 0). The curve code is a port of elpigraph-python 0.3.4 reduced to the principal-curve case.
 
-The curve runs through every nephron unit, so the proximal tubule (PT) is a stretch of it. For analyses within the
-PT, positions are re-expressed as ranks among PT units (see "Gene models along the PT").
-
-### Evaluating the axis
-
-**Segment order.** Each unit's label was mapped to seven groups in nephron order (PT-S1 < PT-S2 < PT-S3 <
-ascending limb < DCT < CNT < collecting duct), and the Spearman ρ between t and the group rank was computed per
-section. A permutation null shuffled t within the section 1,000 times.
-
-**Robustness.** Stages 03–04 were rerun on perturbed inputs, each scored by Spearman ρ with the reference t over
-shared units:
-- tubule downsampling to 10–100% of units per section (three seeds per fraction);
-- binomial thinning of every count to 10–100% of reads, followed by renormalization;
-- five random splits of the genes into halves, each half run alone, with the other half withdrawn from the
-  highly-variable-gene pool. The two halves of a split are scored against each other.
-
-Reruns used four BLAS threads, because the Leiden partition of stage 03 depends on the thread count.
-
-**Other ordering methods.** The same corrected embedding was ordered by diffusion pseudotime (Scanpy; max(30, √n)
-neighbours, 15 diffusion components, same root)[ref Haghverdi 2016], Slingshot 2.14.0[ref Street 2018] on the pass-2
-clusters, scFates (principal tree, ppt)[ref Faure 2023] and GASTON[ref Chitra 2025] (GLM-PCA, 30 restarts per
-section), each scored by the same ρ. [Exact settings: `results/paper_figures/fig3/baselines/methods_notes.md`.]
-
-**Cortical depth.** On the mouse sections, each PT unit's distance to the kidney capsule was measured on the H&E
-image after masking the hilum and cracks, and correlated with t. Depth is independent of expression and serves as
-a consistency check only; it never selected a parameter. The human sections have no capsule (every edge is a cut
-face) and were not scored.
-
-### Gene models along the PT
+### Gene models along the structure
 
 **A position for each gene that the gene did not help build.** A gene that defines the axis could look graded
-along it by construction. Each gene's position for a unit is therefore the mean of the five gene-half axes built
-without that gene (from the robustness splits above); a unit needs a position on at least three of the five.
+along it by construction. The genes were therefore split at random into halves five times, and stages 03–04 were
+rerun on each half alone, with the other half withdrawn from the highly-variable-gene pool. Each gene's position for
+a unit is the mean of the five axes built without that gene; a unit needs a position on at least three of the five.
 
-**PT coordinate x.** Within the PT (units labelled PT-S1, PT-S2 or PT-S3), x is a unit's rank among the PT units of
-the reference group (control mice for AKI; mice for the species comparison), divided by their number. Units of the
-other group are mapped through the reference units' empirical distribution (linear interpolation) and clipped to
-[0, 1]: fewer than 0.1% of injured-mouse units, and up to 3.2% of human units (all at the start of the PT), were
-clipped. So x runs in equal numbers of reference tubules.
+**PT coordinate x.** The curve runs through every nephron unit, so the proximal tubule (PT) is a stretch of it.
+Within the PT (units labelled PT-S1, PT-S2 or PT-S3), x is a unit's rank among the PT units of a reference group of
+sections, divided by their number, so x runs in equal numbers of reference tubules. Units of the other group are
+mapped through the reference units' empirical distribution (linear interpolation) and clipped to [0, 1].
 
 **Boundaries and cores.** b₁₂ is the threshold on x that misclassifies the fewest reference units between the
-PT-S1 and PT-S2 labels, and b₂₃ likewise for PT-S2 and PT-S3. A segment's core is its x range more than 0.06 from
-any boundary. Boundaries come from the reference group only; in particular, human labels never place a boundary,
-because most human PT-S2-zone units are labelled PT-S1.
+PT-S1 and PT-S2 labels, and b₂₃ likewise for PT-S2 and PT-S3, computed on each axis. A segment's core is its x range
+more than 0.06 from any boundary.
 
-**Models.** For each gene and section, counts were modelled by negative-binomial GLMs with a log(library size)
-offset, the library being the unit's total over non-mitochondrial genes:
-- **curve**: a cubic B-spline in x with 6 degrees of freedom, knots at reference x quantiles (the same basis in
-  every section);
-- **clusters**: the PT-S1/S2/S3 label factor;
-- **clusters + curve**; and **bulk**: an intercept.
+**Models.** For each gene and section, counts were modelled by negative-binomial generalized linear models with a
+log(library size) offset, the library being the unit's total over non-mitochondrial genes: a curve (cubic B-spline
+in x with 6 degrees of freedom, knots at reference x quantiles, the same basis in every section), clusters (the
+PT-S1/S2/S3 label factor), clusters + curve, and bulk (an intercept)[47]. The dispersion was estimated per gene and
+section by maximum likelihood under clusters + curve and held fixed for the nested fits, which were fitted by
+iteratively reweighted least squares. Curves are reported as log2 counts per 10⁴ on 201 grid points. Mitochondrial
+genes were excluded, and genes were dropped when their rate in any neighbouring segment group (ascending limb, DCT,
+collecting duct) exceeded twice their PT rate (neighbour filter).
 
-The dispersion was estimated per gene and section by maximum likelihood under clusters + curve and held fixed for
-the nested fits, which were fitted by iteratively reweighted least squares. Curves are reported as log2 counts per
-10⁴ on 201 grid points. Mitochondrial genes were excluded. Genes were screened when detected in at least 10% of PT
-units in each section of the relevant group, and dropped when their rate in any neighbouring segment (ascending
-limb, DCT, collecting duct) exceeded twice the PT rate (neighbour filter).
-
-**Curve against clustering (Fig. 4).** In the control mice, the likelihood ratio of clusters + curve against
-clusters measures what position adds beyond the segment labels. Its null was a decoy that shuffles x within each
-label in each mouse and refits. For each mouse, the threshold was the smallest at which (decoy genes above it) /
-(real genes above it) ≤ 0.05, and a gene passed when it cleared the threshold in both mice. Passing genes were then
-classed as a peak between segments (global maximum within 0.06 of a boundary, at least 0.5 log2 above both flanking
-cores, same boundary in both mice) or a change within a segment (mean of the last third of a core minus its first
-third ≥ 1 log2, same sign and segment in both mice).
+**Curve against clustering.** The likelihood ratio of clusters + curve against clusters measures what position adds
+beyond the segment labels. Its null was a decoy that shuffles x within each label in each section and refits. For
+each section, the threshold was the smallest at which (decoy genes above it) / (real genes above it) ≤ 0.05, and a
+gene passed when it cleared the threshold in both sections of a group. Passing genes were classed as a peak between
+segments (global maximum within 0.06 of a boundary, at least 0.5 log2 above both flanking cores, at the same
+boundary in both sections) or a change within a segment (mean of the last third of a core minus its first third
+≥ 1 log2, with the same sign and segment in both sections).
 
 ### Transporter handoffs
 
 Within each solute-carrier and ABC transporter family (HGNC groups 752 and 417)[ref HGNC], a gene was early in a
 species when its end contrast (mean of the last 30% of its curve minus the first 30%) was ≤ −0.5 log2 in both
-sections of that species, and late when ≥ +0.5 in both. Every early × late pair of a family is a candidate handoff.
-Mouse pairs were confirmed when microdissected mouse PT segments[ref Chen 2021] showed the early member higher in S1
-than S3 and the late member the reverse; human pairs likewise against single-cell PT segment profiles of six donors
-in CZ CELLxGENE Census[ref]. Confirmed pairs (50 mouse, 16 human; 57 distinct) were frozen before any species or
-injury comparison.
+sections of that species, and late when ≥ +0.5 in both; every early × late pair of a family is a candidate handoff.
+Mouse pairs were confirmed when microdissected mouse PT segments[9] showed the early member higher in S1 than S3 and
+the late member the reverse, and human pairs likewise against single-cell PT segment profiles of six donors in CZ
+CELLxGENE Census[ref]. The confirmed pairs (50 mouse, 16 human; 57 distinct) were fixed before any species or injury
+comparison. For each pair and section, both curves were min–max scaled over the grid points inside that section's
+2.5–97.5% range of x, and the switch x* is the first point where the early profile minus the late one turns from
+positive to non-positive (linear interpolation). Scaling makes x* invariant to a per-gene offset and scale of the
+log curve, so neither probe efficiency nor overall gradient amplitude moves it. Its uncertainty came from 200
+bootstraps that resample units within each section and refit both curves at fixed dispersion.
 
-For each pair and section, both curves were min–max scaled over the grid points inside that section's 2.5–97.5%
-range of x, and the switch x* is the first point where the early profile minus the late one turns from positive to
-non-positive (linear interpolation). Scaling makes x* invariant to a per-gene offset and scale of the log curve, so
-neither probe efficiency nor overall gradient amplitude moves it. Its uncertainty came from 200 bootstraps that
-resample units within each section and refit both curves at fixed dispersion.
+### Comparing groups of sections
 
-### Comparing conditions and species
+**Design and calibration.** Each comparison has two groups of two sections. For a per-section quantity Q, the group
+contrast is mean(Q, group 2) − mean(Q, group 1), and its four pairs are the cross differences of single sections.
+Two balanced relabelings, which put one section of each group into each arm, give the same statistic with the group
+effect cancelled; they measure section-to-section variation. A contrast is specific when both relabelings are at
+most 0.25 of it in absolute value. Every call requires the four pairs to share its sign, and every list is
+calibrated by applying the full rule to the two relabelings (or to the decoy, where stated): the estimated
+false-call share is (null calls) / (real calls), and a list above 0.10 is reported as not calibrated.
 
-**Design and calibration.** Each comparison has two groups of two sections (control vs AKI mice; mice vs human
-sections). For a per-section quantity Q, the group contrast is mean(Q, group 2) − mean(Q, group 1), and its four
-pairs are the cross differences of single sections. Two balanced relabelings, which put one section of each group
-into each arm, give the same statistic with the group effect cancelled; they measure section-to-section variation.
-A contrast is **specific** when both relabelings are at most 0.25 of it in absolute value. Every call requires the
-four pairs to share its sign and specificity, and every list is calibrated by applying the full rule to the two
-relabelings: the estimated false-call share is (mean relabeling calls) / (real calls), and a list above 0.10 is
-reported as not calibrated.
+**Changes within a segment.** For a segment core, W is the curve's mean over the last third minus its mean over the
+first third. A gene's response changes inside a segment when |W| of the group contrast is ≥ 1 log2, all four pairs
+have that sign with |W| ≥ 0.5, the contrast is specific, the same change is seen in raw counts of units carrying that
+segment's label (summed counts, pseudo-count 0.5; ≥ 0.5 log2, all four pairs agreeing), and each third of the core
+holds at least 25 such units in every section. This list was calibrated with the decoy.
 
-**Within-segment responses (AKI).** For a segment core, W is the curve's mean over the last third minus its mean
-over the first third. A gene's AKI response changes inside a segment when |W(AKI − control)| ≥ 1 log2, all four
-pairs have that sign with |W| ≥ 0.5, the contrast is specific, the same change is seen in raw counts of units
-carrying that segment's label (summed counts, pseudo-count 0.5; ≥ 0.5 log2, all four pairs agreeing), and each
-third of the core holds at least 25 such units in every mouse. The decoy above calibrated this list.
+**Gradients that differ in direction or steepness.** For each section, E is the curve's mean over the S3 core minus
+its mean over the S1 core (over grid points within the section's sampled range), and R the same from raw counts of
+PT-S3-labelled units in the S3 core and PT-S1-labelled units in the S1 core. A gradient reverses when both sections
+of one group share the sign of E, both of the other group have the opposite sign, |E| ≥ 0.5 in all four, and R
+agrees in sign with E in each. A gradient is steeper in group 2 when E has one sign in all four sections, |E| ≥ 1 in
+both group-2 sections, |E(group 2)| − |E(group 1)| ≥ 0.5 for all four pairs, and R shows the same.
 
-**Gradients across species.** For each section, E is the curve's mean over the S3 core minus over the S1 core
-(over grid points within the section's sampled range), and R the same from raw counts of PT-S3-labelled units in
-the S3 core and PT-S1-labelled units in the S1 core. A gradient **reverses** when both mice share the sign of E,
-both human sections have the opposite sign, |E| ≥ 0.5 in all four sections, and R agrees in sign with E in each.
-A gradient is **steeper in human** when E has one sign in all four sections, |E| ≥ 1 in both human sections,
-|E(human)| − |E(mouse)| ≥ 0.5 for all four pairs, and R shows the same. The reverse (steeper in mouse) is counted
-but not called, because the human sections are flatter overall and the two cannot be told apart.
+**Switch shifts.** A pair's switch shifted when it has a switch in all four sections, all four pair differences in
+x* share a sign, |Δx*| ≥ 0.05, Δx* is specific, and its 95% bootstrap interval excludes 0.
 
-**Transporter switch shifts.** A pair's switch shifted when it has a switch in all four sections, all four pair
-differences in x* share a sign, |Δx*| ≥ 0.05, Δx* is specific, and its 95% bootstrap interval excludes 0. For the
-species comparison, x* was also re-expressed as its quantile among the switch points of all graded genes in the
-same section; a shift that persists on that scale is not explained by a smooth warp between the two species' axes.
+**Pathways.** Gene sets came from MSigDB Hallmark 2020, Reactome 2022 and KEGG 2019 Mouse (Enrichr libraries)[refs],
+restricted to screened genes with at least 10 members. A set's statistic is the mean of its members' per-gene
+statistic. Each set was compared with 1,000 random sets of the same size drawn from the screened genes (two-sided
+empirical p) and Benjamini–Hochberg corrected within each contrast; a call needs q ≤ 0.05, four agreeing pairs and
+specificity.
 
-**Pathways.** Gene sets came from MSigDB Hallmark 2020, Reactome 2022 and KEGG 2019 Mouse (Enrichr
-libraries)[refs], restricted to screened genes with at least 10 members. A set's statistic is the mean over its
-members of the per-gene statistic: W (AKI) per segment, or, across species, the gene's distance from the
-genome-wide line of E(human) on E(mouse) fitted by least squares for each human × mouse pair (averaged over the four
-pairs), which removes the overall flattening of human gradients. Each set was compared with 1,000 random sets of
-the same size drawn from the screened genes (two-sided empirical p) and Benjamini–Hochberg corrected within each
-contrast; a call needs q ≤ 0.05, four agreeing pairs and specificity.
+**Gradient retention.** Genes with a change of at least 0.75 log2 in one section were selected, and each other
+section's median signed change over the median selected change was reported. Selecting in one section and reading
+another avoids regression to the mean.
 
-**Gradient retention.** Genes with a within-segment (AKI) or end-to-end (species) change of at least 0.75 log2 in
-one reference section were selected, and the other sections' median signed change over the median selected change
-was reported. Selecting in one section and reading another avoids regression to the mean.
+### Analysis of control and injured mouse kidneys
+
+**Tissue and data.** Kidneys from two control mice and two mice after ischemia–reperfusion injury (IRI) were
+profiled, one section per mouse (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4). [Strain, age, IRI protocol (clamp duration, uni-
+or bilateral, time to harvest), fixation and embedding, animal protocol number.] All four mice are male (Ddx3y,
+Eif2s3y, Kdm5d and Uty are expressed). Sections were processed with the VisiumHD [mouse probe set, version; 19,059
+genes], H&E-stained, imaged at [scanner, objective] and processed with Space Ranger [version] to 2-µm bins.
+
+**Reconstruction.** The four sections were reconstructed together. Of 64,272 segmented polygons, 43,984 contained
+bins, 36,445 passed quality control and 32,939 nephron units were placed on the curve; PT units numbered 2,780,
+2,745, 3,937 and 5,551 (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4).
+
+**Gene models.** The control mice are the reference group for x; fewer than 0.1% of IR units were clipped. The
+comparison of curve and clustering used the control sections only, screening genes detected in at least 10% of PT
+units in each control mouse. The control–AKI comparison screened genes detected in at least 10% of PT units in each
+mouse of at least one condition, so that genes switched on or off by injury are included, with the neighbour filter
+applied within each condition. Pathway statistics were W per segment core.
+
+**Placement of injured tubules.** To test whether IR units are placed by injury genes rather than by position,
+injury-responsive genes were defined from whole-PT pseudobulk (all four IR × control pairs of the same sign and at
+least 0.5 log2; detected in at least 5% of PT units in some section), and the 3,812 such genes were withdrawn from
+the highly-variable-gene pool in a rerun of stages 03–04. Each section's PT positions on this injury-blind axis were
+compared with the reference by Spearman ρ, over all PT units and within each label, against the ρ between the two
+halves of the gene-half splits.
+
+### Analysis of human and mouse kidneys
+
+**Tissue and data.** Two sections of healthy kidney cortex from one male donor (HUK1_COR1 and HUK1_MED1; both are
+cortex, the "MED" name does not denote medulla; DDX3Y, KDM5D, UTY and EIF1AY are expressed) were profiled with the
+VisiumHD [human probe set, version; 18,132 genes]. [Source of the tissue, donor age, IRB protocol and consent.] They
+were analysed together with the two control mouse sections, whose bins were reprocessed in the ortholog space.
+
+**Reconstruction.** The ortholog space held 15,567 genes. Of 51,155 segmented polygons, 31,533 contained bins,
+27,395 passed quality control and 25,048 nephron units (13,539 mouse, 11,509 human) were placed on the curve; PT
+units numbered 2,644, 2,650, 3,194 and 3,459 (Ctrl1A2, Ctrl1A4, HUK1_COR1, HUK1_MED1).
+
+**Gene models.** The mice are the reference group for x; up to 3.2% of human units, all at the start of the PT, were
+clipped. Boundaries come from the mouse units only, because most human units in the S2 range of x are labelled
+PT-S1. Genes were screened when detected in at least 10% of PT units in all four sections (a comparison of
+patterns needs the gene in both species), with the neighbour filter applied within each species. The steeper-in-mouse
+category was counted but not called, because the human sections are flatter overall and the two cannot be told
+apart. For pathways, the per-gene statistic was the distance from the genome-wide line of E(human) on E(mouse),
+fitted by least squares for each human × mouse pair and averaged over the four pairs, which removes the overall
+flattening of human gradients. Switch positions were also re-expressed as quantiles among the switch points of all
+graded genes in the same section; a shift that persists on that scale is not explained by a smooth warp between the
+two species' axes.
+
+### Evaluation of the axis
+
+**Segment order.** Each unit's label was mapped to seven groups in nephron order (PT-S1 < PT-S2 < PT-S3 <
+ascending limb < DCT < CNT < collecting duct), and the Spearman ρ between t and the group rank was computed per
+section, against a null that shuffled t within the section 1,000 times. The mouse sections were scored in the
+control/AKI reconstruction and the human sections in the human/mouse reconstruction.
+
+**Robustness.** Stages 03–04 were rerun on perturbed inputs and each rerun scored by Spearman ρ with the reference t
+over shared units: tubule downsampling to 10–100% of units per section (three seeds per fraction); binomial thinning
+of every count to 10–100% of reads, followed by renormalization; and the five gene-half splits, whose two halves were
+also scored against each other. Reruns used four BLAS threads, because the Leiden partition depends on the thread
+count.
+
+**Cortical depth.** On the mouse sections, each PT unit's distance to the kidney capsule was measured on the H&E
+image after masking the hilum and cracks, and correlated with t. Depth is independent of expression and served as a
+consistency check only; it never selected a parameter. The human sections have no capsule (every edge is a cut face)
+and were not scored.
+
+### Analysis with other methods
+
+The same corrected embedding and root were ordered by diffusion pseudotime[33] (Scanpy 1.11.5; max(30, √n)
+neighbours, 15 diffusion components), Slingshot 2.14.0[34] on the pass-2 clusters (R 4.4.3), scFates 1.2.5 (principal
+tree)[ref Faure 2023] and GASTON[27] (GLM-PCA input, 30 restarts per section), and each ordering was scored by the
+same ρ. [Exact settings: `results/paper_figures/fig3/baselines/methods_notes.md`.]
 
 ### Statistics and reproducibility
 
 Sections are the replication units: two per group, with the two human sections from one donor, so human results
 describe that donor. No statistical method was used to predetermine sample size, and no data were excluded beyond
-the quality-control rules above. Every screen's rules, thresholds and nulls were frozen in a written protocol
-before its first fit; checks added afterwards are reported as post hoc. Random seeds are fixed in the code.
-[Runtime and hardware for stages 01–04 and the gene models.]
+the quality-control rules above. Every screen's rules, thresholds and nulls were written down before its first fit;
+checks added afterwards are reported as post hoc. Random seeds are fixed in the code. [Runtime and hardware for
+stages 01–04 and the gene models.]
 
 ### Data availability
 
@@ -415,7 +395,7 @@ before its first fit; checks added afterwards are reported as post hoc. Random s
 
 ### Code availability
 
-[Pseudostructure reconstruction package: GitHub URL and jef.works documentation. Analysis code: GitHub URL.]
+[Pseudostructure reconstruction package and analysis code: GitHub URLs, Zenodo DOI and jef.works documentation.]
 
 ---
 

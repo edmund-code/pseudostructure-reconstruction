@@ -237,18 +237,26 @@ transporters".
 
 ## Literature and external checks (post hoc, interpretation only)
 
+Re-checked 2026-11-03 by a full-text reader of every cited paper (`citation_checks/D_results_literature.md`); the
+descriptions below carry its corrections.
+
 Almost none of the called genes has published axial localization in either species, so the decisive evidence is
 per-segment primary data re-read for this purpose (not used by the screen, and not drawn in any figure): Chen 2021
-male and Chen 2023 male + female mouse microdissection (PMIDs 33769951, 36758122), Lee 2015 rat microdissection,
-KTEA rat protein, Cheval 2012 human and mouse S1/S3 SAGE, Xiong 2023 sex-bias and nephron *Ar*-knockout tables
-(PMID 37673062), and Lake 2023 human PT-S1/S2/S3 snRNA per donor (PMID 37468583; 17 normal, 12 AKI, 23 CKD donors
-with ≥ 20 cells per segment). Earlier per-gene reviews (gene agents, 2026-10-23; pathway ground truth, 2026-10-27)
+male mouse microdissection and the female samples added in Chen 2023 (whose male samples are Chen 2021's, so "both
+sexes" means one male and one female set; PMIDs 33769951, 36758122; Chen's PTS2 is the straight tubule of the
+cortical medullary rays), Lee 2015 rat microdissection, KTEA rat protein (fewer proteins detected in S1 than S2, so
+an S1 zero may be non-detection), Cheval 2012 human and mouse S1/S3 SAGE (pooled libraries; sex and mouse strain not
+stated), Xiong 2023 sex-bias and nephron *Ar*-knockout tables (PMID 37673062), and Lake 2023 human PT-S1/S2/S3 snRNA
+per donor (PMID 37468583; 17 normal, 12 AKI, 23 CKD donors with ≥ 20 cells per segment in our reanalysis; Lake's
+own single-cell data could not resolve PT-S1 from PT-S2 accurately, and its labels were set against Chen 2021, so
+Lake agreeing with Chen is partly circular). Earlier per-gene reviews (gene agents, 2026-10-23; pathway ground truth, 2026-10-27)
 were reused for the genes they covered.
 
 - **Donor state is ruled out.** Every human direction that Lake shows in normal cortex holds in its AKI and CKD
   donors, and in male donors alone.
 - **The male-mouse caveat is real for a named subset.** The mouse limb reverses or vanishes in female mice for
-  Hao2, Sh3gl2, Vnn1 and part of Lrig1, and *Ar* knockout confirms androgen control (Hao2, Sh3gl2, Lrig1).
+  Hao2, Sh3gl2, Vnn1 and part of Lrig1, and *Ar* knockout confirms androgen control (Hao2 in Xiong 2023's text;
+  Sh3gl2 and Lrig1 from its supplementary tables).
 
 **The 28 reversals.**
 
@@ -261,9 +269,12 @@ were reused for the genes they covered.
 | human limb not reproduced (flat or rising in Lake) | Lap3, Fuca2, Tex264 |
 | artefact or not comparable | Apoc3 (human PT does not express it, 0.3 CPM), Ugt3a1 (not a 1:1 ortholog), Reep6 (discounted earlier: human sections disagree) |
 
-None of the 11 has published axial data in both species. Partial precedents: NEP polarity flips between rat and
-rabbit microdissection (Edwards 1999, abstract); DCXR is S3-high in human single-cell data (McEvoy 2022) and S1-high
-in rat; human SLC17A3 falls S1 → S3 (Sakaguchi 2024); human SMIT2 (SLC5A11) matches an independent donor.
+None of the 11 has published axial data in both species. Partial precedents: the axial direction of neprilysin
+*activity* differs between microdissected rat and rabbit tubules (Edwards 1999, abstract only; neither species is
+ours); DCXR is called S3-abundant in human single-cell data (McEvoy 2022, a label taken from its references) and is
+S1-high in rat; human SLC17A3 falls S1 → S3 (Sakaguchi 2024); human SLC5A11 (SMIT2) is S3-high in independent human
+nuclei (Schlosser 2020), while the only mammalian SMIT2 protein localization, in rabbit, is proximal convoluted
+(Lahjouji 2007, abstract only), matching our mouse limb, so only the human-late half of that reversal is new.
 Biological reading: neprilysin (sacubitril target) and the urate exporter NPT4 sit early in the human PT and late
 in the mouse; the inositol transporter SMIT2 and the uronate-pathway enzyme DCXR sit late in the human PT and early
 in the mouse; 15-PGDH (Hpgd, prostaglandin inactivation) and the P2Y5 receptor (Lpar6) follow Mme.
@@ -282,12 +293,12 @@ mouse arm than a species relocation. Not a finding, as the screen said.
 
 **Handoffs (Lake human crossings, mouse microdissection by sex; units are segment centres S1 = 0, S2 = 1, S3 = 2).**
 - **Later in human: 7 of 7 checked reproduce:** SGLT2 → SGLT1 (mouse 0.50/0.53, human 1.38; human SGLT2 protein
-  covers S1 and S2, SGLT1 is the S3 transporter, Vrhovac 2015), SGLT2 → SGLT5, B0AT1 → B0AT3 (human SLC6A19 nearly
+  covers S1 and S2, SGLT1 is the S3 transporter, Vrhovac 2015, abstract only), SGLT2 → SGLT5, B0AT1 → B0AT3 (human SLC6A19 nearly
   flat, so the switch moves into S3), y+LAT1 / LAT2 → AGT1 (part of the mouse-early position is androgen: AGT1 is
   male-only in mouse and the female crossing is later), SLC22A23 → URAT1 and → OCT2.
 - **Earlier in human: MCT pairs reproduce, OCTN2 pairs do not.** Human SLC16A9 (MCT9) is high in S1 and falls,
   mouse Slc16a9 rises, as proposed. OCTN2 → URAT1 and → OAT2 cross later in Lake, not earlier; OAT2 protein is
-  S1/S2-dominant in human, so OCTN2 → OAT2 is unresolved.
+  S1/S2-dominant in human (Breljak 2016, abstract only), so OCTN2 → OAT2 is unresolved.
 - **The two "not shifted" pairs are challenged.** Lake shows a late human crossing for lactate SMCT2 → SMCT1 (SLC5A8
   7.8 → 184 CPM on a flat-high SLC5A12) and cystine b0,+AT → AGT1. Our human SLC5A8 is barely detected (7% of units),
   so our "no lactate handoff in human" is a sensitivity limit, not biology; the poster's statement should go.

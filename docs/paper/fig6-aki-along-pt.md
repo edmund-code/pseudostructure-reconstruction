@@ -353,3 +353,26 @@ poster.
   - d. Injury and transport genes (Havcr1, Krt20, Mki67, Slc34a1).
   - e. The 2,220-gene response map beside the segment view.
 - **Panel outputs** of `fig6_panels.py` are now named by content (`f6_<name>.png`), not by letter.
+
+### Third version (2026-11-02, user: b and c were redundant; the nephron schematic was for the poster only)
+
+- **Main Fig. 6.**
+  - a. Programs along the PT, stacked.
+  - b. Pathway heatmap.
+  - c. Five handoffs in the poster layout.
+- **Extended Data f.** The 11 moving handoffs, control to AKI, moved here from the main figure.
+- **Pathway heatmap (main b).**
+  - **Rows.** One row per distinct called pathway, 33 in all.
+    - Calls in a segment that share 0.3 or more of their screened genes (Jaccard) are drawn once.
+    - The representative is chosen in library order (Hallmark, Reactome, then KEGG), then by p.
+    - A pathway called in two segments (integrin cell-surface interactions, in S1 and S2) is one row.
+    - KEGG "Human Diseases" sets (for example Alzheimer disease and small cell lung cancer) are not drawn. In the PT
+      they stand in for respiratory-chain or cell-cycle members. They remain in `pathways.csv`.
+  - **Blocks.**
+    - The AKI response along the PT.
+    - The same pathways' S1/S2/S3 means.
+    - The response centred on its mean within each segment core, with the transition windows left blank. This block
+      shows the change the segment means cannot express.
+  - **Layout.** Called segments are outlined, and rows are grouped by segment. The row list is written to
+    `panels/f6_pathways_rows.csv`.
+  - All of these are presentation choices made after the screen.

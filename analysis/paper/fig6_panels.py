@@ -2,15 +2,16 @@
 
 Main figure (make_fig6.py):
  programs       cell-cycle program and PT transporters: AKI response along the PT against the segment means
- handoff_moves  the transporter handoffs that move: switch position in control and IR, per mouse
+ pathways       distinct pathways whose AKI response changes inside a segment: response along the PT, S1/S2/S3
+                means, and the difference
  handoff_rows   five handoffs in the poster layout: early and late partner, control and IR, switches, AKI levels
- pathways       four pathways whose AKI response changes inside a segment: S1/S2/S3 means beside a coloured PT
 Extended Data (make_ed_fig_aki.py):
  maps           one control and one IR section, PT tubules coloured by position on the shared axis
  coverage       where each section's PT tubules sit on the axis (density per section)
  placement      placement check: positions on the injury-blind axis against the reference, per section and label
  genes          injury and transport genes along the PT, control and IR, each mouse
  response_map   every gene with a large AKI response: response along the PT beside its segment view
+ handoff_moves  the transporter handoffs that move: switch position in control and IR, per mouse
 
 Reads <results-root>/paper_figures/fig6/{placement,screen}/ and writes PNGs to <results-root>/paper_figures/fig6/panels/.
 Protocol: docs/paper/fig6-aki-along-pt.md.
@@ -40,11 +41,11 @@ CTRL, IR = '#2F6DB5', '#D9692B'
 STEP = '#555555'
 UP, DOWN = '#B2182B', '#2166AC'     # direction of an AKI response, as in panel f's colour map
 # panel boxes of make_fig6.py in SVG units (1 unit = 0.01 inch here)
-SIZE = {'programs': (560, 272), 'handoff_moves': (580, 272), 'handoff_rows': (1160, 412), 'pathways': (1160, 322),
+SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 412),
         'maps': (360, 242), 'coverage': (380, 242), 'placement': (380, 242), 'genes': (580, 312),
-        'response_map': (560, 312)}
-MAIN = ['programs', 'handoff_moves', 'handoff_rows', 'pathways']
-EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'response_map']
+        'response_map': (560, 312), 'handoff_moves': (580, 312)}
+MAIN = ['programs', 'pathways', 'handoff_rows']
+EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'response_map', 'handoff_moves']
 
 
 def parse_args(argv=None):
@@ -260,7 +261,7 @@ def staircase(b12, b23, values):
 def panel_e(plt, grid, programs, out, b12, b23):
     fig = figure(plt, 'programs')
     for i, (key, title) in enumerate(E_PROGRAMS):
-        ax = fig.add_axes([0.09 + i * 0.48, 0.12, 0.38, 0.76])
+        ax = fig.add_axes([0.16, 0.56 - i * 0.48, 0.80, 0.36])
         for r in ('relabeling 1', 'relabeling 2'):
             ax.plot(grid, programs[f'{key}|{r}'], color='#9A9A9A', lw=0.8, ls=(0, (2, 1.5)))
         for a in INJURED:
@@ -277,8 +278,7 @@ def panel_e(plt, grid, programs, out, b12, b23):
         ax.set_xlim(0, 1)
         ax.set_xticks([])
         ax.set_title(title, fontsize=7.5, color=INK, pad=2)
-        if i == 0:
-            ax.set_ylabel('log2 AKI / control')
+        ax.set_ylabel('log2 AKI / control')
     fig.savefig(out / 'f6_programs.png', facecolor='white')
     plt.close(fig)
 
@@ -468,107 +468,123 @@ def panel_g(plt, hp, out, b12, b23):
     plt.close(fig)
 
 
-# ---------------------------------------------------------------------------------------------------- i
-# poster layout: per pathway, its S1/S2/S3 means beside the PT drawn as a tube coloured by the response along it
-I_SETS = [('Reactome_2022::S Phase R-HSA-69242', 'S phase'),
-          ('Reactome_2022::Integrin Cell Surface Interactions R-HSA-216083', 'Integrin cell-surface interactions'),
-          ('Reactome_2022::Cholesterol Biosynthesis R-HSA-191273', 'Cholesterol biosynthesis'),
-          ('KEGG_2019_Mouse::Oxidative phosphorylation', 'Oxidative phosphorylation')]
-# one per theme of the calls, chosen after the screen (presentation choice, recorded in the protocol doc)
+# ---------------------------------------------------------------------------------------------------- pathways
+LIBRARY_ORDER = ('MSigDB_Hallmark_2020', 'Reactome_2022', 'KEGG_2019_Mouse')
+JACCARD = 0.3      # calls in one segment sharing more of their screened genes than this are drawn once
 
 
-def nephron_path(b12, b23, n=400):
-    """Points along a drawn PT (glomerulus top right; S1 convoluted, a U-turn, S2 convoluted, S3 straight down into
-    the outer medulla) and the PT position x of each point."""
-    t = np.linspace(0, 1, n)
-    s1 = np.c_[0.80 - 0.56 * t, 0.76 + 0.035 * np.sin(2 * np.pi * 3 * t)]
-    a = np.linspace(np.pi / 2, 3 * np.pi / 2, n // 3)
-    turn = np.c_[0.24 + 0.12 * np.cos(a), 0.64 + 0.12 * np.sin(a)]
-    s2 = np.c_[0.24 + 0.46 * t, 0.52 + 0.03 * np.sin(2 * np.pi * 3 * t)]
-    diag = np.c_[np.linspace(0.70, 0.76, n // 4), np.linspace(0.52, 0.42, n // 4)]
-    s3 = np.c_[np.full(n // 2, 0.76), np.linspace(0.42, 0.05, n // 2)]
-    out, xs = [], []
-    for pieces, (lo, hi) in (((s1, turn), (0, b12)), ((s2, diag), (b12, b23)), ((s3,), (b23, 1))):
-        pts = np.vstack(pieces)
-        d = np.r_[0, np.cumsum(np.hypot(*np.diff(pts, axis=0).T))]
-        out.append(pts)
-        xs.append(lo + (hi - lo) * d / d[-1])
-    return np.vstack(out), np.concatenate(xs)
+DISEASE_WORDS = ('disease', 'cancer', 'carcinoma', 'leukemia', 'infection', 'tuberculosis', 'diabetic', 'hepatitis')
 
 
-def draw_nephron(ax, prof, grid, b12, b23, cmap):
-    from matplotlib.collections import LineCollection
-    from matplotlib.patches import Circle, Rectangle
+def pathway_name(key, width=48):
+    import re
 
-    ax.add_patch(Rectangle((0, 0.30), 1, 0.72, color='#FBF6EC', lw=0, zorder=0))
-    ax.add_patch(Rectangle((0, 0), 1, 0.30, color='#F1E7DA', lw=0, zorder=0))
-    ax.add_patch(Circle((0.88, 0.84), 0.075, fc='none', ec='#999999', lw=1.0, zorder=1))
-    ax.add_patch(Circle((0.88, 0.84), 0.05, fc='#D5D8DD', ec='#999999', lw=0.6, zorder=1))
-    pts, xs = nephron_path(b12, b23)
-    seg = np.stack([pts[:-1], pts[1:]], 1)
-    mid = (xs[:-1] + xs[1:]) / 2
-    outline = [COLOURS['PTS1'] if v < b12 else COLOURS['PTS2'] if v < b23 else COLOURS['PTS3'] for v in mid]
-    ax.add_collection(LineCollection(seg, colors=outline, linewidths=7.5, capstyle='round', zorder=2))
-    v = np.interp(mid, grid, prof)
-    a = np.abs(v)
-    lo, hi = a.min(), a.max()
-    ax.add_collection(LineCollection(seg, colors=cmap(0.12 + 0.88 * (a - lo) / max(hi - lo, 1e-9)), linewidths=5,
-                                     capstyle='round', zorder=3))
-    for b in (b12, b23):          # segment boundaries across the tube
-        k = np.argmin(np.abs(xs - b))
-        d = pts[min(k + 1, len(pts) - 1)] - pts[max(k - 1, 0)]
-        nrm = np.array([-d[1], d[0]]) / np.hypot(*d) * 0.045
-        ax.plot(*np.c_[pts[k] - nrm, pts[k] + nrm], color=INK, lw=1.0, zorder=4)
-    k = np.argmax(np.abs(np.interp(xs, grid, prof)))
-    ax.plot(*pts[k], marker='o', ms=5.5, mfc='white', mec=INK, mew=1.2, zorder=5)
-    for name, xy in (('PTS1', (0.47, 0.88)), ('PTS2', (0.47, 0.40)), ('PTS3', (0.82, 0.20))):
-        ax.text(*xy, name, fontsize=6.5, weight='bold', color=INK, ha='left' if name == 'PTS3' else 'center',
-                va='center', zorder=6)
-    ax.text(0.02, 0.95, 'cortex', fontsize=6, style='italic', color=MUTED, va='top')
-    ax.text(0.02, 0.12, 'outer\nmedulla', fontsize=6, style='italic', color=MUTED)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1.0)
-    ax.axis('off')
-    return v.min(), v.max()
+    lib, name = key.split('::', 1)
+    name = ('Hallmark ' if lib.startswith('MSigDB') else '') + re.sub(r'\s+R-HSA-\d+$', '', name)
+    return name if len(name) <= width else name[:name.rfind(' ', 0, width)].rstrip(',') + ' …'
 
 
-def panel_i(plt, root, screen, genes, out, b12, b23):
+def distinct_calls(calls, sets, screened):
+    """One row per family of overlapping calls within a segment: candidates in library order (Hallmark, Reactome,
+    KEGG), then by p; a call is kept unless it shares >= JACCARD of its genes with one already kept."""
+    # KEGG "Human Diseases" sets (Alzheimer disease, small cell lung cancer, ...) are not drawn: in kidney PT they
+    # stand in for their respiratory-chain or cell-cycle members (presentation choice; they stay in pathways.csv)
+    calls = calls[~calls.set.str.lower().str.contains('|'.join(DISEASE_WORDS))]
+    calls = calls.assign(lib=calls.set.str.split('::').str[0].map({l: i for i, l in enumerate(LIBRARY_ORDER)}))
+    kept = []
+    for seg, grp in calls.groupby('segment'):
+        mine = []
+        for _, r in grp.sort_values(['lib', 'p', 'n'], ascending=[True, True, False]).iterrows():
+            m = {g for g in sets[r.set] if screened.get(g, False)}
+            if all(len(m & o) / len(m | o) < JACCARD for o in mine):
+                mine.append(m)
+                kept.append(r)
+    kept = pd.DataFrame(kept)
+    # a pathway called in two segments is one row, ordered by its first called segment
+    out = kept.groupby('set').agg(segments=('segment', lambda v: sorted(set(v))), first=('segment', 'min'),
+                                  W=('W', 'first')).reset_index()
+    return out.sort_values(['first', 'W']).reset_index(drop=True)
+
+
+def panel_pathways(plt, root, screen, genes, out, b12, b23):
+    """Distinct pathway calls x position: the AKI response along the PT, the same pathways' S1/S2/S3 means, and the
+    response centred within each segment (the change the segment means cannot show). Called segments are outlined."""
     from matplotlib.colors import TwoSlopeNorm
+    from matplotlib.patches import Rectangle
 
     pw = pd.read_csv(root / screen / 'pathways.csv')
     calls = pw[(pw.split == 'condition') & pw.call]
     sets = json.loads((root.parents[1] / 'pt_package_aki/tables/gene_sets.json').read_text())
+    screened = genes.universe & genes.neighbour_ok & genes.converged
+    rows = distinct_calls(calls, sets, screened)
     z = np.load(root / screen / 'all_curves.npz', allow_pickle=True)
     grid = z['grid']
     pos = {g: i for i, g in enumerate(z['genes'])}
     delta = np.mean([z[f'curve|{m}'] for m in INJURED], 0) - np.mean([z[f'curve|{m}'] for m in CONTROLS], 0)
-    screened = genes.universe & genes.neighbour_ok & genes.converged
-    supported = screened & ~genes[[f'unsupported_S{s + 1}' for s in range(3)]].any(axis=1)
-    norm = TwoSlopeNorm(0, -1.5, 1.5)
+    resp, segv = [], []
+    for _, r in rows.iterrows():
+        ok = screened & ~genes[[f'unsupported_S{s}' for s in r.segments]].any(axis=1)
+        mem = [g for g in sets[r.set] if ok.get(g, False)]
+        resp.append(delta[[pos[g] for g in mem]].mean(0))
+        segv.append(genes.loc[mem, [f'segment_view_S{s + 1}' for s in range(3)]].mean().to_numpy())
+    resp, segv = np.array(resp), np.array(segv)
+    # within each segment core, the response minus its own mean over that core: only the change inside segments
+    # (the transition windows, where S1/S2 or S2/S3 tubules mix, are left blank)
+    within = np.full_like(resp, np.nan)
+    for lo, hi in ((0, b12 - 0.06), (b12 + 0.06, b23 - 0.06), (b23 + 0.06, 1.0)):
+        k = (grid >= lo) & (grid <= hi)
+        within[:, k] = resp[:, k] - resp[:, k].mean(1, keepdims=True)
+    n = len(rows)
     fig = figure(plt, 'pathways')
-    n = len(I_SETS)
-    for k, (key, title) in enumerate(I_SETS):
-        x0, w = 0.01 + k / n, 1 / n - 0.02
-        mem = [g for g in sets[key] if supported.get(g, False)]
-        prof = delta[[pos[g] for g in mem]].mean(0)
-        segv = genes.loc[mem, [f'segment_view_S{s + 1}' for s in range(3)]].mean().to_numpy()
-        up = segv.mean() > 0
-        mine = calls[calls.set == key].sort_values('p').iloc[0]
-        called = set(calls.loc[calls.set == key, 'segment'])
-        wcol = genes.loc[mem, f'W_condition_S{mine.segment}']
-        top3 = (wcol * np.sign(mine.W)).sort_values(ascending=False).index[:3]
-        fig.text(x0, 0.965, f'{title} {"↑" if up else "↓"}', fontsize=8, weight='bold', color=INK, va='top')
-        fig.text(x0, 0.875, ', '.join(top3), fontsize=6.5, style='italic', color=MUTED, va='top')
-        fig.text(x0, 0.79, 'S1/S2/S3 means', fontsize=6.3, weight='bold', color=INK, va='center')
-        for s in range(3):
-            c = plt.get_cmap('RdBu_r')(norm(segv[s]))
-            dark = abs(segv[s]) > 0.9
-            fig.text(x0 + w * (0.42 + 0.20 * s), 0.79, f'S{s + 1} {segv[s]:+.2f}', fontsize=6.3, va='center',
-                     color='white' if dark else INK, weight='bold' if s + 1 in called else 'normal',
-                     bbox=dict(boxstyle='round,pad=0.25', fc=c, ec=INK if s + 1 in called else 'none', lw=0.8))
-        ax = fig.add_axes([x0, 0.02, w, 0.66])
-        lo, hi = draw_nephron(ax, prof, grid, b12, b23, plt.get_cmap('Reds' if up else 'Blues'))
-        fig.text(x0, 0.715, f'pseudostructure  {lo:+.2f} to {hi:+.2f}', fontsize=6.3, color=INK, va='center')
+    top, bottom = 0.90, 0.07
+    lim, mlim = 1.5, 0.5
+    blocks = [('along the PT', resp, TwoSlopeNorm(0, -lim, lim), 'RdBu_r', 0.36, 0.30),
+              ('S1/S2/S3 means', segv, TwoSlopeNorm(0, -lim, lim), 'RdBu_r', 0.675, 0.075),
+              ('within each segment', within, TwoSlopeNorm(0, -mlim, mlim), 'PuOr_r', 0.77, 0.20)]
+    for title, data, norm, cmap, x0, w in blocks:
+        ax = fig.add_axes([x0, bottom, w, top - bottom])
+        three = data.shape[1] == 3
+        cm = plt.get_cmap(cmap).copy()
+        cm.set_bad('#F3F3F3')
+        ax.imshow(np.ma.masked_invalid(data), aspect='auto', cmap=cm, norm=norm, interpolation='nearest',
+                  extent=(0, 3, n, 0) if three else (0, 1, n, 0))
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if three:
+            for s in range(3):
+                ax.add_patch(Rectangle((s, n + 0.25), 1, 0.45, color=COLOURS[SEGS[s]], lw=0, clip_on=False))
+        else:
+            for b in (b12, b23):
+                ax.axvline(b, color='#333333', lw=0.5)
+            segment_band(ax, b12, b23, n + 0.25, 0.45)
+            cores = [(0, b12 - 0.06), (b12 + 0.06, b23 - 0.06), (b23 + 0.06, 1)]
+            for y, r in rows.iterrows():
+                for seg in r.segments:
+                    lo, hi = cores[int(seg) - 1]
+                    ax.add_patch(Rectangle((lo, y + 0.06), hi - lo, 0.88, fc='none', ec=INK, lw=0.7))
+        ax.set_ylim(n + 0.75, 0)
+        ax.set_title(title, fontsize=7.5, color=MUTED, pad=2)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+        cax = fig.add_axes([x0 + w * 0.15, 0.955, w * 0.7, 0.012]) if not three else None
+        if cax is not None:
+            cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation='horizontal')
+            cb.set_ticks([norm.vmin, 0, norm.vmax])
+            cb.set_ticklabels([f'{norm.vmin:+g}', '0', f'{norm.vmax:+g}'])
+            cb.ax.tick_params(length=0, labelsize=5.5, pad=1)
+            cb.ax.xaxis.set_ticks_position('top')
+            cb.outline.set_visible(False)
+    for y, r in rows.iterrows():
+        yy = top - (y + 0.5) / (n + 0.75) * (top - bottom)
+        fig.text(0.345, yy, pathway_name(r.set), fontsize=6.2, ha='right', va='center', color=INK)
+    for seg in (1, 2, 3):
+        idx = np.flatnonzero(rows['first'].to_numpy() == seg)
+        if len(idx):
+            y0 = top - idx[0] / (n + 0.75) * (top - bottom)
+            y1 = top - (idx[-1] + 1) / (n + 0.75) * (top - bottom)
+            fig.lines.append(plt.Line2D([0.352, 0.352], [y1 + 0.003, y0 - 0.003], transform=fig.transFigure,
+                                        color=COLOURS[SEGS[seg - 1]], lw=3))
+    rows.assign(name=rows.set.map(pathway_name)).to_csv(out / 'f6_pathways_rows.csv', index=False)
     fig.savefig(out / 'f6_pathways.png', facecolor='white')
     plt.close(fig)
 
@@ -608,7 +624,7 @@ def main(argv=None):
     if 'handoff_rows' in args.panels:
         panel_h(plt, grid, curves, hp, out, b12, b23)
     if 'pathways' in args.panels:
-        panel_i(plt, root, args.screen, genes, out, b12, b23)
+        panel_pathways(plt, root, args.screen, genes, out, b12, b23)
 
 
 if __name__ == '__main__':

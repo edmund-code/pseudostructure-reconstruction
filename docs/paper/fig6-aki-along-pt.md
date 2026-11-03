@@ -219,7 +219,7 @@ there.
 
 | Pair | Control x\* | AKI x\* | Δx\* (95% CI) | What moves |
 |---|---|---|---|---|
-| Slc16a1 → Slc16a4 (MCT1 → MCT4) | 0.63 | 0.21 | −0.42 (−0.55, −0.26) | late partner loses its S3 rise; MCT1 stays on late |
+| Slc16a1 → Slc16a4 (MCT1 → MCT5) | 0.63 | 0.21 | −0.42 (−0.55, −0.26) | late partner loses its S3 rise; MCT1 stays on late |
 | Slc16a1 → Slc16a9 | 0.62 | 0.31 | −0.30 (−0.45, −0.27) | late partner loses its S3 rise |
 | Slc16a12 → Slc16a9 | 0.62 | 0.32 | −0.30 (−0.39, −0.24) | late partner loses its S3 rise |
 | Slc6a19 → Slc6a13 (B0AT1 → GAT2) | 0.53 | 0.30 | −0.23 (−0.28, −0.20) | late partner loses its S3 rise |
@@ -326,7 +326,7 @@ poster.
   - On log counts, a level drop moves the crossing too. That is how the poster showed cystine as "lost" and moved
     lactate and glucose. On scaled profiles, none of those three pairs moves (Δx\* +0.07, +0.01 and −0.02).
   - The level bars carry the cystine result: Slc7a13 is 4.3 log2 lower.
-  - **Rows (chosen after the screen):** MCT1 → MCT4 (largest shift), B0AT1 → GAT2 and 4F2hc → rBAT (upstream shifts,
+  - **Rows (chosen after the screen):** MCT1 → MCT5 (largest shift), B0AT1 → GAT2 and 4F2hc → rBAT (upstream shifts,
     amino acids), ZIP5 → ZIP14 (downstream shift) and cystine (no shift, level loss).
 - **i, four pathways in poster layout.** Each shows the S1/S2/S3 means (called segments outlined) beside the PT drawn
   as a tube. The tube is coloured by the pathway's AKI response along it, from weakest to strongest within the
@@ -481,8 +481,73 @@ The IR mice keep less in all 12 comparisons.
   - rBAT (Slc3a1) −1.8, which also falls further within S3 on raw counts (−0.26 in controls, −1.08 in IR);
   - PCFT (Slc46a1) −2.1;
   - OCT2 (Slc22a2) −1.8;
-  - MCT4 and MCT9 (Slc16a4, Slc16a9) −3.4 and −2.7.
+  - MCT5 and MCT9 (Slc16a4, Slc16a9) −3.4 and −2.7.
 - **MCT1 is the exception.** MCT1 (Slc16a1), an early partner, is induced 27-fold in injured S3 (+4.75 log2).
 - **ZIP5 → ZIP14 and ZIP8 move downstream** because ZIP5 stays on further into S2.
 - **Drop Slc5a9 → Slc5a3.** Slc5a3 is 23× higher in thick limb than in PT, so it is neighbour signal; the handoff
   screen applied no neighbour filter. The controls also disagree on where Slc5a9 falls. 10 shifted pairs remain.
+
+### Literature check and artifact checks (2026-11-03)
+
+A literature agent read full texts where it could; abstract-only sources are marked. It also checked direction in
+the Liu 2017 IRI whole-kidney bulk time course (GSE98622, 48 h against sham) and the normal segment levels in Chen 2021
+microdissection (GSE150338). Neither dataset is segment-resolved for shape. Both files are in the session scratchpad,
+not the repo.
+
+**Correction.** Slc16a4 is **MCT5** (HGNC). MCT4 is Slc16a3. Labels are fixed.
+
+**Artifact checks** (run in this session on S3-labelled units, first against last third of the S3 core):
+- **Late-S3 respiratory-chain fall is not thick-limb bleed.**
+  - IR S3 units carry less TAL signal than controls (Slc12a1 −3.0 and −2.3 against +0.4 and +1.3 log2 per 10k).
+  - TAL signal rises slightly toward late S3 in IR (Umod +0.5 to +0.7), which would raise OXPHOS, yet OXPHOS falls
+    (−0.15 to −0.19 on summed counts).
+  - The controls' slight OXPHOS rise within S3 may be TAL bleed (Slc12a1 +1.1 to +1.3 toward late S3).
+- **MCT1 induction in injured S3 is in PT units.**
+  - In IR S3 units, Slc16a1 does not track immune markers (Ptprc, Lyz2, Cd74; ρ −0.04 to 0.10) or endothelial ones
+    (Emcn, Pecam1; ρ 0.05 to 0.09).
+  - It tracks PT and injury markers weakly (Slc34a1, Lrp2, Havcr1; ρ 0.05 to 0.26).
+  - It is detected in 13% and 32% of IR S3 units, so it is patchy.
+
+**Verdicts by finding.**
+
+| Finding | What is known | Positional aspect | Status |
+|---|---|---|---|
+| Replication and KIM-1 climb through S2 | Proliferation peaks in outer stripe and S3 at 2 d (Humphreys 2008, 2011; Witzgall 1994, abstract only); injury spreads from the corticomedullary junction (Xuanyuan 2025, maps only) | Never measured within a segment | **New**. Caveat: S-phase transcripts can mean endoreplication. Polyploid cells are mostly cortical S1/S2 (De Chiara 2022), and at 2 d only about 13% of Ki-67+ cells divide (Lazzeri 2018). Say "replication program", not "division". |
+| Respiratory chain falls through S3 | PGC-1α and OXPHOS collapse after IRI (Tran 2016; Funk 2012, abstract only); zone-level ATP loss (Fujii 2019, abstract only; Arnoux 2025 names TAL as most affected) | No within-S3 gradient reported | **New** (TAL bleed checked, above) |
+| Handoffs move upstream as S3 partners fall | PT carrier loss in injured states (Li 2022; Wu 2024; Xuanyuan 2025: healthy-S3 neighbourhood absent at 12 h–2 d); OCT2 and OAT down after IRI; direction confirmed in Liu 2017 bulk (Slc7a13 −4.4, Slc3a1 −1.4, Slc22a2 −1.2, Slc6a13 −1.0, Slc46a1 −1.0) | No study reports where a paralog switch sits or that one moves | **New**. Caveat: dedifferentiation at 12 h–2 d is reversible, so this may be a transient state |
+| Cystine handoff keeps its position, AGT1 down about 20× | AGT1 is apical S3, male-only; b0,+AT is S1-high (Nagamori 2016) | Position kept although the level falls | An internal control for the handoff readout |
+| MCT1 induced about 27× in injured S3 | MCT1 is basolateral and S1-high; S3 is normally near-silent (0.2 TPM); bulk induction about 3–5× (Liu 2017; Balzer 2022); MCT1 lactate entry drives ferroptosis (Yu 2025) | Not reported; about 10× any published induction | Notable but needs ISH or protein; PT-intrinsic by the marker check |
+| ZIP5 stays on further into S2 | ZIP8 and ZIP14 are S3 metal transporters, ZIP8 knockout protects in IRI (Cai 2025) | ZIP5 has no published PT localisation | New, rests on our data alone |
+| Cyp24a1 extends across S2 (control S1-restricted, AKI flat and high) | Normally S1-restricted (85.9 / 2.4 / 0.0 TPM; Fuchs 2024); FGF23 rises in AKI; IRI bulk up (Liu 2017) | Expansion into S2 not reported | **New**. Contradicted in folic-acid AKI (Egli-Spichtig 2018, down 17-fold), so model-specific |
+| Agt flattened within S2 | Agt mRNA is S2/S3 (Matsusaka 2012); cortical Agt mRNA falls after ischaemia (Kontogiannis 1998, abstract only); Liu 2017 −1.0 | Not positional before | Known direction; falls where normally highest |
+| Cyp4a10 and Cyp4a14 flattened within S2 | PPARα pathway collapse after IRI (Yan 2022, a mutant-mouse study) | Not positional | Known direction |
+| Cyp51 flattened within S2 | Ischaemia induces cholesterol synthesis (Naito 2009, abstract only), but Liu 2017 gives −2.2 at 48 h | — | Phase-dependent conflict; state it |
+| Flvcr2 falls through S3 | Choline transporter; choline depleted after ischaemia (Tran 2016) | New | Interpretable; neighbour ratio 1.7 in IR |
+| Fgb, Serpina10, Spp2, Slc34a3, Cyp2d26 in S1; Esr1; Acaa2; Spns3; Steap2; Apob; Hpgd | Fgb in cortical S1/S2 is known (Melo Ferreira 2021); Slc34a3 and Cyp2d26 fall in bulk, against a rise; the others are near the detection floor or unreported | — | **Drop.** Fgb and Serpina10 are control noise (above). |
+
+### The most notable results, in order
+
+1. **Transporter handoffs move upstream after IRI because injured S3 loses its late partners.**
+   - 10 of 52 pairs move after the neighbour filter; none moves under either relabeling.
+   - Cystine is an internal control: AGT1 falls about 20-fold, yet the handoff stays where it was.
+   - New as a positional readout, with direction confirmed in independent bulk data.
+2. **Injury builds new gradients inside segments.**
+   - The replication program and KIM-1 climb through S2.
+   - The respiratory chain falls through S3.
+   - The controls are flat for all of them, and both pass all four robustness checks.
+   - New as within-segment measurements; injury in these mice is graded within segments, not just S3 against the
+     rest.
+3. **Injury erases the healthy within-segment structure.**
+   - Gradients chosen in one control are kept in the other control but about halved in AKI (12 of 12 comparisons).
+   - Injury-responsive genes lose about twice as much as level-unchanged ones, which bound the placement noise.
+   - **Examples with literature support:**
+     - Cyp24a1 spreads from S1 across S2.
+     - Agt is suppressed in S2 where it is normally highest.
+     - Cyp4a14 and Cyp4a10 (the PPARα programme) are flattened.
+   - This links to Fig. 4: Cyp4a14, Hsd17b2 and Cyp24a1 are among the genes Fig. 4 shows.
+4. **MCT1 is switched on in injured S3, which normally lacks it** (about 27-fold, patchy). Notable, but it needs
+   validation by in-situ hybridisation or protein before it can be a headline.
+
+**Figure.** Main Fig. 6 shows results 1–3: a, built gradients (Havcr1, the DNA-replication set, oxidative
+phosphorylation, Anpep); b, erased gradients (Cyp4a14, Agt, Cyp51, Cyp24a1); c, gradient retention; d, the handoff rows.
+Result 4 goes in the text and Extended Data.

@@ -338,7 +338,7 @@ def panel_f(plt, genes, grid, curves, out, b12, b23):
 # h, poster layout: one row per transporter pair, control and AKI side by side, the switch marked in both
 G_PAIRS = [('Slc16a1', 'Slc16a4', 'Monocarboxylates'), ('Slc6a19', 'Slc6a13', 'Amino acids'),
            ('Slc3a2', 'Slc3a1', 'Amino-acid carrier'), ('Slc39a5', 'Slc39a14', 'Zinc'), ('Slc7a9', 'Slc7a13', 'Cystine')]
-PROTEIN = {'Slc16a1': 'MCT1', 'Slc16a4': 'MCT4', 'Slc6a19': 'B0AT1', 'Slc6a13': 'GAT2', 'Slc3a2': '4F2hc',
+PROTEIN = {'Slc16a1': 'MCT1', 'Slc16a4': 'MCT5', 'Slc6a19': 'B0AT1', 'Slc6a13': 'GAT2', 'Slc3a2': '4F2hc',
            'Slc3a1': 'rBAT', 'Slc39a5': 'ZIP5', 'Slc39a14': 'ZIP14', 'Slc7a9': 'b0,+AT', 'Slc7a13': 'AGT1',
            'Slc39a8': 'ZIP8', 'Slc16a9': 'MCT9', 'Slc16a12': 'MCT12', 'Slc22a6': 'OAT1', 'Slc22a2': 'OCT2',
            'Slc46a3': 'SLC46A3', 'Slc46a1': 'PCFT', 'Slc6a8': 'CRT1', 'Slc5a9': 'SGLT4', 'Slc5a3': 'SMIT1'}

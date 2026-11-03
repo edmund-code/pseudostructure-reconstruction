@@ -338,3 +338,18 @@ poster.
     - oxidative phosphorylation: falling within S3.
   - Bile acid metabolism was tried first and dropped, because its within-S2 change (−0.08) is not visible.
   - The example genes are the three members whose change in the called segment is largest in the call's direction.
+
+### Main figure vs Extended Data (2026-11-02, user: the main figure keeps the biggest findings)
+
+- **Main Fig. 6** (`make_fig6.py`):
+  - a. Programs along the PT.
+  - b. The 11 handoffs that move.
+  - c. Five handoffs in the poster layout.
+  - d. Four pathways on the nephron schematic.
+- **Extended Data** (`make_ed_fig_aki.py`):
+  - a. Control and AKI sections coloured by position.
+  - b. Coverage along the axis.
+  - c. Placement check.
+  - d. Injury and transport genes (Havcr1, Krt20, Mki67, Slc34a1).
+  - e. The 2,220-gene response map beside the segment view.
+- **Panel outputs** of `fig6_panels.py` are now named by content (`f6_<name>.png`), not by letter.

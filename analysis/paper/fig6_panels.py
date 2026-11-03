@@ -1,14 +1,16 @@
-"""Fig. 6 panels: control against AKI along the PT, drawn from fig6_placement.py and fig6_screen.py.
+"""Fig. 6 panels (main) and their Extended Data companions, drawn from fig6_placement.py and fig6_screen.py.
 
- a  one control and one IR section, PT tubules coloured by position on the shared axis
- b  where each section's PT tubules sit on the axis (density per section)
- c  placement check: positions on the injury-blind axis against the reference, per section and label
- d  injury markers along the PT, control and IR, each mouse
- e  programs along the PT (cell cycle, transport, injury markers): the AKI response against the segment view
- f  every gene with a large AKI response: response along the PT beside its segment view
- g  genes whose AKI response changes inside a segment (category A)
- h  transporter handoffs: crossing positions in control and IR
- i  pathways whose AKI response changes inside a segment
+Main figure (make_fig6.py):
+ programs       cell-cycle program and PT transporters: AKI response along the PT against the segment means
+ handoff_moves  the transporter handoffs that move: switch position in control and IR, per mouse
+ handoff_rows   five handoffs in the poster layout: early and late partner, control and IR, switches, AKI levels
+ pathways       four pathways whose AKI response changes inside a segment: S1/S2/S3 means beside a coloured PT
+Extended Data (make_ed_fig_aki.py):
+ maps           one control and one IR section, PT tubules coloured by position on the shared axis
+ coverage       where each section's PT tubules sit on the axis (density per section)
+ placement      placement check: positions on the injury-blind axis against the reference, per section and label
+ genes          injury and transport genes along the PT, control and IR, each mouse
+ response_map   every gene with a large AKI response: response along the PT beside its segment view
 
 Reads <results-root>/paper_figures/fig6/{placement,screen}/ and writes PNGs to <results-root>/paper_figures/fig6/panels/.
 Protocol: docs/paper/fig6-aki-along-pt.md.
@@ -38,15 +40,18 @@ CTRL, IR = '#2F6DB5', '#D9692B'
 STEP = '#555555'
 UP, DOWN = '#B2182B', '#2166AC'     # direction of an AKI response, as in panel f's colour map
 # panel boxes of make_fig6.py in SVG units (1 unit = 0.01 inch here)
-SIZE = {'a': (360, 242), 'b': (380, 242), 'c': (380, 242), 'd': (580, 232), 'e': (560, 232),
-        'f': (560, 312), 'g': (580, 312), 'h': (1160, 412), 'i': (1160, 322)}
+SIZE = {'programs': (560, 272), 'handoff_moves': (580, 272), 'handoff_rows': (1160, 412), 'pathways': (1160, 322),
+        'maps': (360, 242), 'coverage': (380, 242), 'placement': (380, 242), 'genes': (580, 312),
+        'response_map': (560, 312)}
+MAIN = ['programs', 'handoff_moves', 'handoff_rows', 'pathways']
+EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'response_map']
 
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--results-root', default=os.environ.get('PSEUDOSPACE_RESULTS_ROOT', str(REPO / 'results')))
     p.add_argument('--out', default='paper_figures/fig6', help='relative to the results root')
-    p.add_argument('--panels', default='abcdefghi')
+    p.add_argument('--panels', nargs='+', default=None, help='panel names (default: all)')
     p.add_argument('--screen', default='screen', help='screen folder under --out')
     return p.parse_args(argv)
 
@@ -83,7 +88,7 @@ def panel_a(plt, root, out):
     pt = reference_x(root)
     obs = ad.read_h5ad(root / RUNS['aki'] / '02_qc/units_qc.h5ad', backed='r').obs
     ref = pd.read_parquet(root / RUNS['aki'] / '04_pseudospace/pseudospace.parquet')
-    fig = figure(plt, 'a')
+    fig = figure(plt, 'maps')
     cmap = plt.get_cmap('viridis')
     for i, s in enumerate(('Ctrl1A2', 'IR2A2')):
         ax = fig.add_axes([0.01 + i * 0.47, 0.13, 0.46, 0.80])
@@ -108,7 +113,7 @@ def panel_a(plt, root, out):
     cax.tick_params(length=0, pad=1.5)
     for sp in cax.spines.values():
         sp.set_visible(False)
-    fig.savefig(out / 'f6_a.png', facecolor='white', dpi=300)
+    fig.savefig(out / 'f6_maps.png', facecolor='white', dpi=300)
     plt.close(fig)
 
 
@@ -117,7 +122,7 @@ def panel_b(plt, root, out, b12, b23):
     from scipy.stats import gaussian_kde
 
     pt = reference_x(root)
-    fig = figure(plt, 'b')
+    fig = figure(plt, 'coverage')
     ax = fig.add_axes([0.16, 0.16, 0.80, 0.80])
     grid = np.linspace(0, 1, 301)
     step = 1.0
@@ -140,14 +145,14 @@ def panel_b(plt, root, out, b12, b23):
     ax.set_xticks([0, 1])
     ax.set_xticklabels(['start of PT', 'end'])
     ax.set_xlabel('pseudostructure (control quantile)', labelpad=1)
-    fig.savefig(out / 'f6_b.png', facecolor='white')
+    fig.savefig(out / 'f6_coverage.png', facecolor='white')
     plt.close(fig)
 
 
 # ---------------------------------------------------------------------------------------------------- c
 def panel_c(plt, root, out):
     pl = pd.read_csv(root / 'placement/placement.csv')
-    fig = figure(plt, 'c')
+    fig = figure(plt, 'placement')
     ax = fig.add_axes([0.15, 0.20, 0.82, 0.74])
     groups = ['all PT', 'PT-S1', 'PT-S2', 'PT-S3']
     names = {'all PT': 'all PT', 'PT-S1': 'S1', 'PT-S2': 'S2', 'PT-S3': 'S3'}
@@ -168,7 +173,7 @@ def panel_c(plt, root, out):
     ax.text(0.05, 0.13, 'injury-blind axis vs reference', transform=ax.transAxes, va='center', fontsize=6, color=MUTED)
     ax.scatter([0.02], [0.05], s=14, facecolor='white', edgecolor=MUTED, lw=0.8, transform=ax.transAxes, clip_on=False)
     ax.text(0.05, 0.05, 'gene half A vs half B', transform=ax.transAxes, va='center', fontsize=6, color=MUTED)
-    fig.savefig(out / 'f6_c.png', facecolor='white')
+    fig.savefig(out / 'f6_placement.png', facecolor='white')
     plt.close(fig)
 
 
@@ -233,14 +238,14 @@ D_GENES = ['Havcr1', 'Krt20', 'Mki67', 'Slc34a1']
 
 
 def panel_d(plt, genes, grid, curves, out):
-    fig = figure(plt, 'd')
+    fig = figure(plt, 'genes')
     for i, g in enumerate(D_GENES):
         ax = fig.add_axes([0.07 + i * 0.235, 0.12, 0.19, 0.76])
         gene_levels(ax, g, genes.loc[g], grid, curves, level_ylim(g, curves))
         ax.set_title(g, fontsize=7.5, style='italic', color=INK, pad=2)
         if i == 0:
             ax.set_ylabel('log2 counts per 10k')
-    fig.savefig(out / 'f6_d.png', facecolor='white')
+    fig.savefig(out / 'f6_genes.png', facecolor='white')
     plt.close(fig)
 
 
@@ -253,7 +258,7 @@ def staircase(b12, b23, values):
 
 
 def panel_e(plt, grid, programs, out, b12, b23):
-    fig = figure(plt, 'e')
+    fig = figure(plt, 'programs')
     for i, (key, title) in enumerate(E_PROGRAMS):
         ax = fig.add_axes([0.09 + i * 0.48, 0.12, 0.38, 0.76])
         for r in ('relabeling 1', 'relabeling 2'):
@@ -274,7 +279,7 @@ def panel_e(plt, grid, programs, out, b12, b23):
         ax.set_title(title, fontsize=7.5, color=INK, pad=2)
         if i == 0:
             ax.set_ylabel('log2 AKI / control')
-    fig.savefig(out / 'f6_e.png', facecolor='white')
+    fig.savefig(out / 'f6_programs.png', facecolor='white')
     plt.close(fig)
 
 
@@ -296,7 +301,7 @@ def panel_f(plt, genes, grid, curves, out, b12, b23):
     lim = 3.0
     order = leaves_list(linkage(np.clip(resp, -lim, lim)[:, ::4], 'average'))
     resp, seg = resp[order], seg[order]
-    fig = figure(plt, 'f')
+    fig = figure(plt, 'response_map')
     norm = TwoSlopeNorm(0, -lim, lim)
     n = len(rows)
     ax = fig.add_axes([0.07, 0.07, 0.66, 0.89])
@@ -324,7 +329,7 @@ def panel_f(plt, genes, grid, curves, out, b12, b23):
     cb.outline.set_visible(False)
     cb.ax.tick_params(length=0, labelsize=6)
     cb.set_label('log2 AKI / control', fontsize=6, color=MUTED, labelpad=2)
-    fig.savefig(out / 'f6_f.png', facecolor='white')
+    fig.savefig(out / 'f6_response_map.png', facecolor='white')
     plt.close(fig)
 
 
@@ -358,7 +363,7 @@ def where_in(x, b12, b23):
 def panel_h(plt, grid, curves, hp, out, b12, b23):
     from matplotlib.patches import FancyBboxPatch
 
-    fig = figure(plt, 'h')
+    fig = figure(plt, 'handoff_rows')
     n = len(G_PAIRS)
     top, bottom, gap = 0.86, 0.09, 0.025
     h = (top - bottom - gap * (n - 1)) / n
@@ -428,14 +433,14 @@ def panel_h(plt, grid, curves, hp, out, b12, b23):
         bx.tick_params(labelsize=6)
         for sp in ('top', 'right', 'left'):
             bx.spines[sp].set_visible(False)
-    fig.savefig(out / 'f6_h.png', facecolor='white')
+    fig.savefig(out / 'f6_handoff_rows.png', facecolor='white')
     plt.close(fig)
 
 
 # ---------------------------------------------------------------------------------------------------- g
 def panel_g(plt, hp, out, b12, b23):
     """The pairs that move: switch position in control (blue) and AKI (orange), each mouse as an open dot."""
-    fig = figure(plt, 'g')
+    fig = figure(plt, 'handoff_moves')
     e = hp[hp.eligible & hp.shifted].copy()
     e['cx'] = e[[f'x_{m}' for m in CONTROLS]].mean(1)
     e['ix'] = e[[f'x_{m}' for m in INJURED]].mean(1)
@@ -459,7 +464,7 @@ def panel_g(plt, hp, out, b12, b23):
     ax.set_xlim(0, 1)
     ax.set_xticks([0, b12, b23, 1])
     ax.set_xticklabels(['start', 'S1 | S2', 'S2 | S3', 'end of PT'], fontsize=6)
-    fig.savefig(out / 'f6_g.png', facecolor='white')
+    fig.savefig(out / 'f6_handoff_moves.png', facecolor='white')
     plt.close(fig)
 
 
@@ -540,7 +545,7 @@ def panel_i(plt, root, screen, genes, out, b12, b23):
     screened = genes.universe & genes.neighbour_ok & genes.converged
     supported = screened & ~genes[[f'unsupported_S{s + 1}' for s in range(3)]].any(axis=1)
     norm = TwoSlopeNorm(0, -1.5, 1.5)
-    fig = figure(plt, 'i')
+    fig = figure(plt, 'pathways')
     n = len(I_SETS)
     for k, (key, title) in enumerate(I_SETS):
         x0, w = 0.01 + k / n, 1 / n - 0.02
@@ -564,7 +569,7 @@ def panel_i(plt, root, screen, genes, out, b12, b23):
         ax = fig.add_axes([x0, 0.02, w, 0.66])
         lo, hi = draw_nephron(ax, prof, grid, b12, b23, plt.get_cmap('Reds' if up else 'Blues'))
         fig.text(x0, 0.715, f'pseudostructure  {lo:+.2f} to {hi:+.2f}', fontsize=6.3, color=INK, va='center')
-    fig.savefig(out / 'f6_i.png', facecolor='white')
+    fig.savefig(out / 'f6_pathways.png', facecolor='white')
     plt.close(fig)
 
 
@@ -576,6 +581,7 @@ def main(argv=None):
     out = root / 'panels'
     out.mkdir(parents=True, exist_ok=True)
     plt = style()
+    args.panels = args.panels or MAIN + EXTENDED
     have_screen = (root / args.screen / 'genes.csv').exists()
     if have_screen:
         genes, grid, curves, programs = load(root, args.screen)
@@ -583,25 +589,25 @@ def main(argv=None):
         b12, b23 = float(genes.b12.median()), float(genes.b23.median())
     else:
         b12, b23 = 0.29, 0.675
-    if 'a' in args.panels:
+    if 'maps' in args.panels:
         panel_a(plt, rroot, out)
-    if 'b' in args.panels:
+    if 'coverage' in args.panels:
         panel_b(plt, rroot, out, b12, b23)
-    if 'c' in args.panels:
+    if 'placement' in args.panels:
         panel_c(plt, root, out)
     if not have_screen:
         return
-    if 'd' in args.panels:
+    if 'genes' in args.panels:
         panel_d(plt, genes, grid, curves, out)
-    if 'e' in args.panels:
+    if 'programs' in args.panels:
         panel_e(plt, grid, programs, out, b12, b23)
-    if 'f' in args.panels:
+    if 'response_map' in args.panels:
         panel_f(plt, genes, grid, curves, out, b12, b23)
-    if 'g' in args.panels:
+    if 'handoff_moves' in args.panels:
         panel_g(plt, hp, out, b12, b23)
-    if 'h' in args.panels:
+    if 'handoff_rows' in args.panels:
         panel_h(plt, grid, curves, hp, out, b12, b23)
-    if 'i' in args.panels:
+    if 'pathways' in args.panels:
         panel_i(plt, root, args.screen, genes, out, b12, b23)
 
 

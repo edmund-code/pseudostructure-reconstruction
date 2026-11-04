@@ -72,20 +72,35 @@ tracing or three-dimensional profiling, which have so far captured morphology al
 sub-millimetre depths.
 - Still to do: find and read in full a source for seminiferous tubules and one for the epididymal duct.
 
-**P2 (draft v3, the whole nephron).** In the kidney, each nephron passes through a known sequence of segments,
-from the proximal tubule through the loop of Henle and the distal convoluted tubule to the connecting tubule, which
-drains into the collecting duct. These segments perform distinct functions, from bulk reabsorption of filtered
-solutes in the proximal tubule to salt reabsorption in the thick ascending limb and final adjustment of salt,
-potassium and water in the distal convoluted tubule, connecting tubule and collecting duct. The proximal tubule is
-further divided into three segments, S1, S2 and S3, that differ in solute transport, metabolism and susceptibility to
-injury. Specifically, glucose is reabsorbed mainly by SGLT2 in S1 and S2 and by SGLT1 in S3. As such, the known
-segment order provides an opportunity to evaluate whether a method recovers position along a structure. However,
-transcriptomic atlases resolve the nephron only into these discrete segments, such that how expression changes within
-each segment remains an open question.
+**P2 (draft v4, why the proximal tubule).** In the kidney, each nephron passes through a known sequence of
+segments, from the proximal tubule through the loop of Henle and the distal convoluted tubule to the connecting
+tubule, which drains into the collecting duct. These segments perform distinct functions, from bulk reabsorption in
+the proximal tubule to salt reabsorption in the thick ascending limb and final adjustment of salt, potassium and water
+in the distal convoluted tubule, connecting tubule and collecting duct. Of these, the proximal tubule reabsorbs
+approximately 60–70% of filtered water and salt and nearly all filtered nutrients. This reabsorption requires high
+metabolic activity, which makes the proximal tubule the segment most susceptible to injury. The proximal tubule is
+further divided into three segments, S1, S2 and S3, that differ in solute transport and metabolism. For example,
+glucose is reabsorbed mainly by SGLT2 in S1 and S2 and by SGLT1 in S3. As such, the known segment order provides an
+opportunity to evaluate whether a method recovers position along a structure. However, transcriptomic atlases resolve
+the nephron only into these discrete segments, such that how expression changes within each segment remains an open
+question.
 - The segments match the order used in the Fig. 3 evaluation: PT-S1 < PT-S2 < PT-S3 < ascending limb < DCT < CNT <
   collecting duct.
-- Sources (cite later): Curthoys & Moe for the PT, S1–S3 and SGLT2/SGLT1; Ransick for injury; Chen 2021 and Lake 2023
-  for the atlases. The functions of the distal segments still need a physiology review, read in full.
+- The two new sentences justify the proximal-tubule focus by its function and injury, not by "most studied", which no
+  source we have read supports. The explicit focus goes in P5 (sentence 5.3: "genes that vary within proximal-tubule
+  segments") and the Fig. 4 Results opening.
+- Sources (cite later), both read in full:
+  - Curthoys & Moe 2014: "reabsorbing approximately 60%–70% of the water and NaCl, a greater proportion of the NaHCO3,
+    and nearly all of the nutrients in the ultrafiltrate"; the energy comes from the basolateral Na+/K+-ATPase.
+  - Kirita 2020 (PNAS): "proximal tubule (PT) epithelia (the segment most susceptible to injury)"; "this segment
+    suffers the most injury due to high metabolic activity".
+  - Optional primary source, not yet read: Chevalier 2016 (Am J Physiol Renal Physiol), "The proximal tubule is the
+    primary target of injury and progression of kidney disease".
+- "Susceptibility to injury" was dropped from the S1–S3 sentence to avoid repeating it. Ransick's "the S3 region is
+  particularly vulnerable to injury" can go in the AKI Results instead.
+- "Specifically" became "For example" in the SGLT sentence, so the paragraph does not repeat a connective.
+- Other sources: Curthoys & Moe for S1–S3 and SGLT2/SGLT1; Chen 2021 and Lake 2023 for the atlases. The functions of
+  the distal segments still need a physiology review, read in full.
 
 **P3 (draft).** Attempts at such analysis can be performed using clustering or spatial-domain approaches that
 assign each spot or cross-section to a discrete group, assuming that mean expression is constant within each group.

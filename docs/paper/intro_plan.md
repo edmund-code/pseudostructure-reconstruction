@@ -72,14 +72,15 @@ tracing or three-dimensional profiling, which have so far captured morphology al
 sub-millimetre depths.
 - Still to do: find and read in full a source for seminiferous tubules and one for the epididymal duct.
 
-**P2 (draft).** For example, the mouse proximal tubule averages nearly 4 mm in length within a cortex about 1.3 mm
-thick, coiling around its own glomerulus before descending toward the medulla. Along this
-course, it passes through three segments, S1, S2 and S3, that differ in solute transport and metabolism and in susceptibility to injury. Specifically, glucose is reabsorbed mainly by SGLT2 in S1
-and S2 and by SGLT1 in S3. Thus, as transcriptomic atlases resolve the proximal tubule only
-into these three segments, how expression changes within each segment remains an
-open question. As the order of these segments is known, the proximal tubule further provides an opportunity to
-evaluate methods that recover position along a structure.
+**P2 (draft v2, opening on the known order).** In the kidney, each nephron passes through a known sequence of
+segments, including the three segments of the proximal tubule, S1, S2 and S3. These segments differ in solute
+transport and metabolism and in susceptibility to injury. Specifically, glucose is reabsorbed mainly by SGLT2 in S1
+and S2 and by SGLT1 in S3. As such, the known segment order provides an opportunity to evaluate whether a method
+recovers position along a structure. However, transcriptomic atlases resolve the proximal tubule only into these
+three segments, such that how expression changes within each segment remains an open question.
 - Citations come later; the sources for each claim are in the reference table below.
+- v1 opened on the tubule's length (nearly 4 mm in a cortex 1.3 mm thick). That clause can return as "the nearly
+  4-mm proximal tubule" if wanted.
 
 ## Sentence plan
 

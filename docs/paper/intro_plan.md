@@ -118,3 +118,27 @@ draft's reference numbers.
   - Belayer;
   - Halpern 2017 and Moor 2018: liver and villus have landmarks in the plane, which is the contrast case.
 - **Dropped:** the Method of the Year editorial, Lee 2015, Melo Ferreira 2021, CODA, STARmap, Vickovic 2022, GraphST.
+
+### Links (DOIs checked against Crossref, 2026-11-03)
+- Ståhl 2016: https://doi.org/10.1126/science.aaf2403
+- Moses & Pachter 2022: https://doi.org/10.1038/s41592-022-01409-2
+- Zhai 2006: https://doi.org/10.1681/ASN.2005080796
+- Schott 2024 (Open-ST): https://doi.org/10.1016/j.cell.2024.05.055
+- Chakravorty 2026: https://doi.org/10.1016/j.cell.2026.04.036
+- Curthoys & Moe 2014: https://doi.org/10.2215/CJN.10391012
+- Chen 2021: https://doi.org/10.1681/ASN.2020101406
+- Ransick 2019: https://doi.org/10.1016/j.devcel.2019.10.005
+- Lake 2023: https://doi.org/10.1038/s41586-023-05769-3
+- BayesSpace: https://doi.org/10.1038/s41587-021-00935-2
+- SpaGCN: https://doi.org/10.1038/s41592-021-01255-8
+- GASTON: https://doi.org/10.1038/s41592-024-02503-3
+- CoPro (preprint): https://doi.org/10.64898/2026.04.17.719309
+- STalign: https://doi.org/10.1038/s41467-023-43915-7
+- STcompare: https://doi.org/10.1093/bioinformatics/btag644
+- Monocle (Trapnell 2014): https://doi.org/10.1038/nbt.2859
+- DPT (Haghverdi 2016): https://doi.org/10.1038/nmeth.3971
+- Saelens 2019: https://doi.org/10.1038/s41587-019-0071-9
+- SpaceFold (Niec 2022): https://doi.org/10.1016/j.stem.2022.05.007
+- Asami 2026: https://doi.org/10.1016/j.cell.2026.06.014
+- ElPiGraph (Albergante 2020): https://doi.org/10.3390/e22030296
+- Visium HD (Oliveira 2025): https://doi.org/10.1038/s41588-025-02193-3

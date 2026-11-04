@@ -73,13 +73,13 @@ sub-millimetre depths.
 - Still to do: find and read in full a source for seminiferous tubules and one for the epididymal duct.
 
 **P2 (draft).** For example, the mouse proximal tubule averages nearly 4 mm in length within a cortex about 1.3 mm
-thick [Zhai 2003], coiling around its own glomerulus before descending toward the medulla [Zhai 2006]. Along this
-course, it passes through three segments, S1, S2 and S3, that differ in solute transport and metabolism [Curthoys &
-Moe 2014] and in susceptibility to injury [Ransick 2019]. Specifically, glucose is reabsorbed mainly by SGLT2 in S1
-and S2 and by SGLT1 in S3 [Curthoys & Moe 2014]. Thus, as transcriptomic atlases resolve the proximal tubule only
-into these three segments [Ransick 2019; Chen 2021; Lake 2023], how expression changes within each segment remains an
+thick, coiling around its own glomerulus before descending toward the medulla. Along this
+course, it passes through three segments, S1, S2 and S3, that differ in solute transport and metabolism and in susceptibility to injury. Specifically, glucose is reabsorbed mainly by SGLT2 in S1
+and S2 and by SGLT1 in S3. Thus, as transcriptomic atlases resolve the proximal tubule only
+into these three segments, how expression changes within each segment remains an
 open question. As the order of these segments is known, the proximal tubule further provides an opportunity to
 evaluate methods that recover position along a structure.
+- Citations come later; the sources for each claim are in the reference table below.
 
 ## Sentence plan
 

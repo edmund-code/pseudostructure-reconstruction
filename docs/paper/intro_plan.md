@@ -59,6 +59,28 @@ Methods, Results or the Discussion.
   - as applications: reversals between human and mouse, with human transporter switch points later (**genes**, not
     pathways), and AKI switch points moving upstream.
 
+## Working draft (2026-11-03)
+
+**P1 (agreed by the user).** Spatial transcriptomic (ST) technologies enable investigations into tissue organization
+and cellular function by capturing the spatial location and gene expression profiles of cells within a
+two-dimensional tissue slice. However, many organs are built from structures, such as kidney nephrons, seminiferous
+tubules and the epididymal duct, that wind back and forth through the tissue, with successive parts of each structure
+performing different functions. As such, a two-dimensional slice captures each structure only as scattered
+cross-sections, losing their positions along the structure. This lack of positional information hinders the
+characterization of gene expression variation along repeated structures. Recovering position requires serial-section
+tracing or three-dimensional profiling, which have so far captured morphology alone or transcriptomes over
+sub-millimetre depths.
+- Still to do: find and read in full a source for seminiferous tubules and one for the epididymal duct.
+
+**P2 (draft).** For example, the mouse proximal tubule averages nearly 4 mm in length within a cortex about 1.3 mm
+thick [Zhai 2003], coiling around its own glomerulus before descending toward the medulla [Zhai 2006]. Along this
+course, it passes through three segments, S1, S2 and S3, that differ in solute transport and metabolism [Curthoys &
+Moe 2014] and in susceptibility to injury [Ransick 2019]. Specifically, glucose is reabsorbed mainly by SGLT2 in S1
+and S2 and by SGLT1 in S3 [Curthoys & Moe 2014]. Thus, as transcriptomic atlases resolve the proximal tubule only
+into these three segments [Ransick 2019; Chen 2021; Lake 2023], how expression changes within each segment remains an
+open question. As the order of these segments is known, the proximal tubule further provides an opportunity to
+evaluate methods that recover position along a structure.
+
 ## Sentence plan
 
 Key to the labels:

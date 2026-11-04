@@ -95,6 +95,17 @@ coordinates or segment labels, provides an alternative strategy for such structu
 - Sources (cite later): BayesSpace, SpaGCN, GASTON (constant-mean assumption); GASTON, CoPro; STalign, STcompare;
   Monocle, DPT, Saelens; SpaceFold (crypts, composition); Chakravorty (testis, cycle); Asami (follicles, 3D).
 
+**P4 (draft).** Thus, we sought to treat cross-sections from the many copies of a structure, such as the nephrons
+of a kidney, as samples of a pseudostructure, defined as one shared structure along which each cross-section can be
+placed by its expression. The position of each cross-section along the pseudostructure, t, captures both the order of
+segments and the position within a segment (Fig. 1). In the context of single-cell data, pseudotime orders cells
+along a process from their expression. In the context of tissue structures, a pseudostructure analogously orders
+cross-sections along a structure, preserving their order but not physical distance.
+- Optional (STdeconvolve's "Briefly, … (i)–(iii)"): Briefly, this ordering leverages (i) the many copies of a
+  structure in each slice, (ii) one expression program shared along an unbranched axis, and (iii) slices that
+  together span the axis even when each covers it only partially.
+- Sources (cite later): Monocle, DPT for pseudotime.
+
 ## Sentence plan
 
 Key to the labels:

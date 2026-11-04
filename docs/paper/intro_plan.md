@@ -80,3 +80,41 @@ Methods, Results or the Discussion.
 - t is not linear in physical length.
 - Axis error is an alternative explanation for shifts in t.
 - The design has two mice per condition and one human donor.
+
+## References for the Introduction (22)
+
+Every reference below was read in full (Moses 2022 and CoPro as preprints). The numbers in brackets are the current
+draft's reference numbers.
+
+| Paragraph | Reference | What it supports |
+|---|---|---|
+| P1 | Ståhl 2016 [1] | Spatial transcriptomics measures expression in place |
+| P1 | Moses & Pachter 2022 [3] | The field and its technologies |
+| P1 | Zhai 2006 [17] | Nephrons wind through the tissue; tracing them takes serial sections |
+| P1 | Schott 2024, Open-ST [21] | 3D spatial transcriptomics, over limited depth |
+| P1, P3 | Chakravorty 2026 [38] | Seminiferous tubules; ordering around a known cycle |
+| P2 | Curthoys & Moe 2014 [9] | S1–S3 transport; SGLT2 in S1/S2 and SGLT1 in S3 |
+| P2 | Chen 2021 [10] | mRNA map across the 14 mouse tubule segments |
+| P2 | Ransick 2019 [8] | Mouse PT regional states and injury susceptibility |
+| P2 | Lake 2023 [13] | Human healthy and injured states, including spatial data |
+| P3 | Zhao 2021, BayesSpace [24]; Hu 2021, SpaGCN [25] | Spatial domains |
+| P3 | Chitra 2025, GASTON [27] | Gradients built from tissue x/y |
+| P3 | Miao 2026, CoPro [29] | Continuous axis; was given segment order in its kidney run |
+| P3 | Clifton 2023, STalign [30]; Clifton 2026, STcompare [31] | Comparison needs structure shared in the plane |
+| P3, P4 | Trapnell 2014 [32]; Haghverdi 2016 [33] | Pseudotime; needs a start cell |
+| P3 | Saelens 2019 [36] | Trajectory-inference benchmark |
+| P3 | Niec 2022, SpaceFold [37] | Ordering by cell-type composition |
+| P3 | Asami 2026 [40] | Whole structures captured in 3D, ordered by developmental age |
+| P5 | Albergante 2020, ElPiGraph [47] | Elastic principal curve |
+| P5 | Oliveira 2025 [4] | Visium HD |
+
+### Moved out of the Introduction
+- **To Methods:** Leiden and Seurat; the foundation-model references; Harmony; Hastie & Stuetzle; Gorban &
+  Zinovyev; McCarthy; tradeSeq.
+- **To Results:** Zhai 2003; Slingshot, PAGA and scFates (as baselines); Kirita 2020 and Dixon 2022 (for AKI);
+  Muto 2021 (for human).
+- **To the Discussion:**
+  - scPrisma;
+  - Belayer;
+  - Halpern 2017 and Moor 2018: liver and villus have landmarks in the plane, which is the contrast case.
+- **Dropped:** the Method of the Year editorial, Lee 2015, Melo Ferreira 2021, CODA, STARmap, Vickovic 2022, GraphST.

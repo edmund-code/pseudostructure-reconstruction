@@ -72,15 +72,20 @@ tracing or three-dimensional profiling, which have so far captured morphology al
 sub-millimetre depths.
 - Still to do: find and read in full a source for seminiferous tubules and one for the epididymal duct.
 
-**P2 (draft v2, opening on the known order).** In the kidney, each nephron passes through a known sequence of
-segments, including the three segments of the proximal tubule, S1, S2 and S3. These segments differ in solute
-transport and metabolism and in susceptibility to injury. Specifically, glucose is reabsorbed mainly by SGLT2 in S1
-and S2 and by SGLT1 in S3. As such, the known segment order provides an opportunity to evaluate whether a method
-recovers position along a structure. However, transcriptomic atlases resolve the proximal tubule only into these
-three segments, such that how expression changes within each segment remains an open question.
-- Citations come later; the sources for each claim are in the reference table below.
-- v1 opened on the tubule's length (nearly 4 mm in a cortex 1.3 mm thick). That clause can return as "the nearly
-  4-mm proximal tubule" if wanted.
+**P2 (draft v3, the whole nephron).** In the kidney, each nephron passes through a known sequence of segments,
+from the proximal tubule through the loop of Henle and the distal convoluted tubule to the connecting tubule, which
+drains into the collecting duct. These segments perform distinct functions, from bulk reabsorption of filtered
+solutes in the proximal tubule to salt reabsorption in the thick ascending limb and final adjustment of salt,
+potassium and water in the distal convoluted tubule, connecting tubule and collecting duct. The proximal tubule is
+further divided into three segments, S1, S2 and S3, that differ in solute transport, metabolism and susceptibility to
+injury. Specifically, glucose is reabsorbed mainly by SGLT2 in S1 and S2 and by SGLT1 in S3. As such, the known
+segment order provides an opportunity to evaluate whether a method recovers position along a structure. However,
+transcriptomic atlases resolve the nephron only into these discrete segments, such that how expression changes within
+each segment remains an open question.
+- The segments match the order used in the Fig. 3 evaluation: PT-S1 < PT-S2 < PT-S3 < ascending limb < DCT < CNT <
+  collecting duct.
+- Sources (cite later): Curthoys & Moe for the PT, S1–S3 and SGLT2/SGLT1; Ransick for injury; Chen 2021 and Lake 2023
+  for the atlases. The functions of the distal segments still need a physiology review, read in full.
 
 **P3 (draft).** Attempts at such analysis can be performed using clustering or spatial-domain approaches that
 assign each spot or cross-section to a discrete group, assuming that mean expression is constant within each group.

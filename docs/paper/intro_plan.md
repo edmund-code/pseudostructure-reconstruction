@@ -59,6 +59,79 @@ Methods, Results or the Discussion.
   - as applications: reversals between human and mouse, with human transporter switch points later (**genes**, not
     pathways), and AKI switch points moving upstream.
 
+## Sentence plan
+
+Key to the labels:
+- **COPY**: a Fan-lab sentence used verbatim, apart from citations, the tool name and the URL.
+- **ADAPT**: her sentence word for word, with our nouns swapped in.
+- **OURS**: our own sentence, written in her pattern.
+
+Citations are given as keys because the reference numbers will change. Nature runs a similarity check on submissions.
+One copied sentence is normal; the adapted ones differ enough to pass. Total: about 510 words (cut 1.4 to reach about 500).
+
+### P1. The limitation of spatial transcriptomics
+- **1.1 COPY**, STcompare sentence 1:
+  Spatial transcriptomic (ST) technologies enable the investigation of how tissue organization relates to cellular function by capturing the spatial location of cells within a tissue and the gene expression profiles associated with those locations [Ståhl 2016; Moses 2022].
+- **1.2 OURS:**
+  Many organs are organized as repeated structures, such as nephrons in the kidney and seminiferous tubules in the testis [Zhai 2006; Chakravorty 2026].
+- **1.3 OURS**, the "However" pattern:
+  However, a two-dimensional section cuts each copy many times, and neighbouring cross-sections often belong to different copies, so tissue position does not reveal position along the structure.
+- **1.4 ADAPT**, STdeconvolve ("This lack of single-cell resolution hinders the characterization of cell-type-specific spatial organization and gene expression variation"):
+  This lack of positional information hinders the characterization of gene expression variation along repeated structures.
+- **1.5 OURS:**
+  Recovering position requires serial-section tracing [Zhai 2006] or three-dimensional profiling [Schott 2024], which have so far captured morphology alone or transcriptomes over sub-millimetre depths.
+
+### P2. The kidney as the model example
+- **2.1 OURS**, CRAWDAD's "For example" pattern:
+  In the kidney, for example, the proximal tubule of each nephron runs through three segments, S1, S2 and S3, that differ in solute transport and metabolism [Curthoys & Moe 2014] and in susceptibility to injury [Ransick 2019].
+- **2.2 OURS**, STdeconvolve's "Specifically" pattern:
+  Specifically, glucose is reabsorbed mainly by SGLT2 in S1 and S2 and by SGLT1 in S3 [Curthoys & Moe 2014].
+- **2.3 ADAPT**, MERINGUE ("Thus, how these subpopulations of cells are organized in space … remains an open question in many systems"):
+  Thus, as transcriptomic atlases resolve the proximal tubule into these three segments [Ransick 2019; Chen 2021; Lake 2023], how gene expression varies within segments remains an open question.
+- **2.4 OURS**, CRAWDAD's "provide an opportunity" pattern:
+  As its segment order is known, the kidney further provides an opportunity to evaluate recovered position.
+
+### P3. Prior methods
+- **3.1 ADAPT**, STcompare ("Attempts at such comparative analysis of ST datasets can be performed using traditional … approaches such as …"):
+  Attempts at such analysis can be performed using clustering or spatial-domain approaches that assign each spot or cross-section to a discrete group [Zhao 2021; Hu 2021], assuming that mean expression is constant within each group [Chitra 2025].
+- **3.2 ADAPT**, STdeconvolve ("As such, these approaches rely on the availability of a suitable single-cell reference"):
+  Other approaches rely on tissue coordinates, modelling continuous gradients from tissue position [Chitra 2025; Miao 2026] or comparing sections after aligning shared tissue structures [Clifton 2023; Clifton 2026].
+- **3.3 OURS**, MERINGUE's "Alternative approaches" pattern:
+  Alternatively, trajectory inference orders cells along processes from their expression [Trapnell 2014; Haghverdi 2016; Saelens 2019], and related approaches have ordered repeated structures by cell-type composition [Niec 2022], a known cycle [Chakravorty 2026] or whole structures profiled in three dimensions [Asami 2026].
+- **3.4 OURS**, the "However" pattern:
+  However, along the proximal tubule, a single epithelial cell type spans the axis, and no landmark marks where a cross-section lies.
+- **3.5 ADAPT**, STdeconvolve ("As such, a reference-free deconvolution approach provides an alternative strategy for deconvolving cell types when an appropriate reference is not available"):
+  As such, an approach that orders cross-sections without tissue coordinates or segment labels provides an alternative strategy for such structures.
+
+### P4. The concept
+- **4.1 ADAPT**, CRAWDAD ("Thus, we sought to consider …"), with MERINGUE's inline "defined as":
+  Thus, we sought to place every cross-section along a pseudostructure, defined as one shared structure of which each cross-section is a sample, at a position t that captures both segment order and position within a segment (Fig. 1).
+- **4.2 ADAPT**, STdeconvolve's parallel pair ("In the context of natural language processing, … In the context of ST data, …"):
+  In the context of single cells, pseudotime orders cells along a process from their expression [Trapnell 2014; Haghverdi 2016]. In the context of repeated structures, pseudostructure analogously orders cross-sections along a structure, preserving order but not physical length.
+
+### P5. The tool and results
+- **5.1 ADAPT**, STalign ("To address these challenges, we present an approach called STalign that builds on recent developments in Large Deformation Diffeomorphic Metric Mapping to align ST datasets using image varifolds"):
+  To address these challenges, we present an approach called pseudostructure reconstruction that builds on elastic principal curves [Albergante 2020] to place cross-sections along a shared axis without segment labels or tissue coordinates.
+- **5.2 ADAPT**, CRAWDAD ("We demonstrate CRAWDAD on simulated as well as real SRO datasets …, though CRAWDAD is amenable to any SRO data for which cell positions and cell-type annotations can be obtained"):
+  We demonstrate pseudostructure reconstruction on Visium HD data [Oliveira 2025] from four mouse and two human kidney sections, though pseudostructure reconstruction is amenable to any ST data in which repeated structures can be segmented.
+- **5.3 ADAPT**, MERINGUE ("we show that MERINGUE is able to identify …"):
+  We show that pseudostructure reconstruction is able to recover segment order without labels, resolve genes that vary within segments, and identify genes and transporter switch points that differ between species or shift after acute kidney injury.
+- **5.4 COPY**, STalign (tool name and URL changed):
+  Pseudostructure reconstruction is available as an open-source Python package at [URL].
+
+### Sentence habits these follow
+- Every sentence opens with a connective that states its role:
+  - a limit: *However*;
+  - a consequence: *As such*, *Thus*;
+  - an instance: *For example*, *Specifically*;
+  - a parallel: *Alternatively*;
+  - the turn to the tool: *To address these challenges*.
+- One claim per sentence, with the citation at the end of the clause it supports.
+- The same term every time: "cross-section", "repeated structure", "pseudostructure reconstruction".
+- A new term is defined inline with "defined as".
+- Prior methods are described by what they do and what they rely on. The tool's name is the subject of the sentences
+  that say what it does.
+
 ## Cut from the current draft (787 words)
 | Material | Where it goes |
 |---|---|
@@ -66,13 +139,13 @@ Methods, Results or the Discussion.
 | "distinguished by transporter expression, not ultrastructure" | Results |
 | Descriptions of CoPro, SpaceFold, Chakravorty and Asami | Discussion (keep one citation clause each here) |
 | The segmentation pipeline | Methods (keep half a clause here) |
-| The URL | Code availability |
 
 ## Style
 - Short sentences, one claim each.
 - No "first", "novel" or "state-of-the-art".
 - Criticise the input a category relies on, not a named tool.
-- The first sentence must not echo STalign's ("Spatial transcriptomics technologies enable…").
+- Copy Fan-lab sentences that apply directly (the user, 2026-11-03), such as STcompare's first sentence; see the
+  sentence plan.
 
 ## For the Discussion
 - How we differ from Asami.

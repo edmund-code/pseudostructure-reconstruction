@@ -82,6 +82,19 @@ three segments, such that how expression changes within each segment remains an 
 - v1 opened on the tubule's length (nearly 4 mm in a cortex 1.3 mm thick). That clause can return as "the nearly
   4-mm proximal tubule" if wanted.
 
+**P3 (draft).** Attempts at such analysis can be performed using clustering or spatial-domain approaches that
+assign each spot or cross-section to a discrete group, assuming that mean expression is constant within each group.
+Other approaches model continuous gradients from tissue coordinates or compare slices after aligning shared tissue
+structures, and therefore rely on tissue position, which does not reflect position along a nephron. Alternatively,
+trajectory inference orders cells along processes from their expression, and related approaches have ordered
+structures such as intestinal crypts, seminiferous tubules and hair follicles using changes in cell-type composition,
+a known cyclic topology or three-dimensional profiles of whole structures. However, along the proximal tubule, a
+single epithelial cell type spans an open, non-cyclic axis, and a cross-section carries no landmark of its position
+other than its expression. As such, an approach that orders cross-sections from their expression, without tissue
+coordinates or segment labels, provides an alternative strategy for such structures.
+- Sources (cite later): BayesSpace, SpaGCN, GASTON (constant-mean assumption); GASTON, CoPro; STalign, STcompare;
+  Monocle, DPT, Saelens; SpaceFold (crypts, composition); Chakravorty (testis, cycle); Asami (follicles, 3D).
+
 ## Sentence plan
 
 Key to the labels:

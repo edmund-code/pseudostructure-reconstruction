@@ -437,8 +437,8 @@ def panel_plane(args, plt, out, cache, d):
                 chosen.append(r.rename(name))
                 break
     sel = pd.DataFrame(chosen)
-    # number them in reading order on the section, so the bar shows them reordered
-    sel = sel.assign(row=((sel.y_centroid - y0) / side * 3).astype(int)).sort_values(['row', 'x_centroid'])
+    # number them by fitted position, so the bar reads 1..n while the section shows them scattered
+    sel = sel.sort_values('t')
     sel['number'] = np.arange(1, len(sel) + 1)
     fi = set(sel.feature_index.astype(int))
     fig, ax = square_axes(plt, 900)

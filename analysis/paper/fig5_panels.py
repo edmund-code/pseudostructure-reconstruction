@@ -46,11 +46,11 @@ MOUSE_C, HUMAN_C = '#2F6DB5', '#C51B7D'
 EARLY = {'mouse': '#3A8DD0', 'human': '#E58BBE'}
 LATE = {'mouse': '#1B3A5C', 'human': '#7A0F4D'}
 REVERSED_C = '#D95F02'
-SIZE = {'reversals': (1160, 232), 'reversals_grid': (760, 352), 'contrast': (390, 352), 'pathway_curves': (1160, 232), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
+SIZE = {'reversals': (1160, 232), 'reversals_grid': (760, 352), 'cluster_shift': (560, 300), 'contrast': (390, 352), 'pathway_curves': (600, 300), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
         'pathway_null': (380, 242)}
-MAIN = ['reversals_grid', 'contrast', 'pathway_curves', 'handoff_rows']
+MAIN = ['reversals_grid', 'contrast', 'pathway_curves', 'handoff_rows', 'cluster_shift']
 EXTENDED = ['maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
@@ -320,6 +320,56 @@ def panel_handoff_rows(plt, grid, curves, pos, hp, out, b12, b23):
         for sp in ('top', 'right', 'left'):
             sx.spines[sp].set_visible(False)
     fig.savefig(out / 'f5_handoff_rows.png', facecolor='white')
+    plt.close(fig)
+
+
+def cluster_switch_shift(genes, hp, b12, b23):
+    """Each shifted pair's species shift as clustering would read it: per section, the straight lines through its own
+    three cluster means (placed at the mouse segment centres; Fig. 4's lines model), min-max scaled, crossing found
+    as for the curves. Post hoc (2026-11-09), point estimates; NaN where a section's lines do not cross."""
+    from pseudospace.handoffs import crossing, scaled_profile
+
+    grid = np.linspace(0, 1, 201)
+    centres = [b12 / 2, (b12 + b23) / 2, (b23 + 1) / 2]
+
+    def lines(g, m):
+        return scaled_profile(np.interp(grid, centres, [genes.loc[g, f'cluster_S{k}_{m}'] for k in (1, 2, 3)]))
+
+    rows = []
+    for _, r in hp[hp.shifted].iterrows():
+        x = {m: crossing(lines(r.early, m), lines(r.late, m), grid) for m in SECTIONS}
+        rows.append({'early': r.early, 'late': r.late, 'curve': r['shift'],
+                     'clusters': np.mean([x[m] for m in HUMAN]) - np.mean([x[m] for m in MOUSE])})
+    return pd.DataFrame(rows).sort_values('curve')
+
+
+def panel_cluster_shift(plt, genes, hp, out, b12, b23):
+    """Shifted handoffs: the curve's species shift (filled) against the shift the cluster means give (open)."""
+    d = cluster_switch_shift(genes, hp, b12, b23)
+    d.to_csv(out / 'f5_cluster_shift.csv', index=False)
+    shown = {(e, l) for e, l, _ in H_PAIRS}
+    fig = figure(plt, 'cluster_shift')
+    ax = fig.add_axes([0.30, 0.15, 0.66, 0.81])
+    for y, (_, r) in enumerate(d.iterrows()):
+        col = INK if (r.early, r.late) in shown else MUTED
+        if np.isfinite(r.clusters):
+            ax.plot([r.clusters, r.curve], [y, y], color='#CCCCCC', lw=1, zorder=1)
+            ax.scatter([r.clusters], [y], s=16, facecolor='white', edgecolor=col, lw=0.9, zorder=3)
+        else:
+            ax.text(0.0, y, '×', color=col, fontsize=7, ha='center', va='center', zorder=3)
+        ax.scatter([r.curve], [y], s=16, color=col, lw=0, zorder=4)
+        ax.text(-0.04, y, f'{PROTEIN.get(r.early, r.early)} → {PROTEIN.get(r.late, r.late)}', fontsize=5.8, color=col,
+                ha='right', va='center', transform=ax.get_yaxis_transform())
+    ax.axvline(0, color='#BBBBBB', lw=0.6, zorder=0)
+    ax.set_ylim(-0.7, len(d) - 0.3)
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.set_xlabel('switch shift, human − mouse', labelpad=1)
+    ax.scatter([0.03], [1.0], s=14, color=INK, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(0.06, 1.0, 'curve', fontsize=5.8, color=MUTED, va='center', transform=ax.transAxes)
+    ax.scatter([0.18], [1.0], s=14, facecolor='white', edgecolor=INK, lw=0.9, transform=ax.transAxes, clip_on=False)
+    ax.text(0.21, 1.0, 'cluster means', fontsize=5.8, color=MUTED, va='center', transform=ax.transAxes)
+    fig.savefig(out / 'f5_cluster_shift.png', facecolor='white')
     plt.close(fig)
 
 
@@ -631,7 +681,7 @@ def main(argv=None):
     if 'contrast' in panels:
         panel_contrast(plt, genes, out)
     if 'pathway_curves' in panels:
-        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'pathway_curves', PATHWAY_CURVES, sets)
+        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'pathway_curves', PATHWAY_CURVES, sets, ncols=2)
     if 'rises' in panels:
         panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'rises', RISES)
     if 'falls' in panels:
@@ -647,6 +697,8 @@ def main(argv=None):
     XRANGE.update(handoff_range(screen, hp, genes))
     if 'handoff_rows' in panels and H_PAIRS:
         panel_handoff_rows(plt, grid, curves, pos, hp, out, b12, b23)
+    if 'cluster_shift' in panels:
+        panel_cluster_shift(plt, genes, hp, out, b12, b23)
     if 'handoff_moves' in panels:
         panel_handoff_moves(plt, hp, out, b12, b23)
     if 'checks' in panels and (screen / 'interpret_genes.csv').exists():

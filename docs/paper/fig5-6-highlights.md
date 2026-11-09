@@ -188,3 +188,40 @@ None of these papers resolves S1/S2/S3, so the positional statements rest on our
 **Still open:**
 - Every Fig. 5 statement rests on one human donor.
 - The Fig. 6c legend overlaps its points (a pre-existing issue).
+
+## What the curve adds beyond clustering (post hoc, 2026-11-09)
+
+The user noted that reversals could also be found by clustering and asked for finer details, without forcing them.
+The earlier adversarial round on the species axis found no gene-level result that only the curve can see
+(`hvm-continuous-discovery-round.md`). Switch positions had not been checked against clustering, so they were checked
+here.
+
+**Method.**
+- Each section's three cluster means are joined by straight lines through the mouse segment centres. These are
+  Fig. 4's lines model, the clusters' best model.
+- The lines are scaled from 0 to 1, and the crossing is found exactly as for the curves.
+- The species shift is the human mean minus the mouse mean. All values are point estimates.
+- Code: `fig5_panels.cluster_switch_shift`; table: `panels/f5_cluster_shift.csv`.
+
+**Fig. 5: clustering loses most of the shift for 7 of the 13 shifted pairs.**
+
+| Pair | Curve | Cluster lines |
+|---|---|---|
+| SLC22A23 → URAT1 | +0.25 | +0.07 |
+| SLC22A23 → OCT2 | +0.24 | +0.06 |
+| SGLT2 → SGLT5 | +0.21 | +0.02 |
+| SGLT2 → SGLT1 | +0.30 | +0.10 |
+| SGLT2 → SMIT2, MCT1 → MCT5, MCT10 → MCT9 | shifted | no crossing in at least one section |
+| MCT1 → MCT9 | −0.49 | +0.25 (opposite sign) |
+
+- **Pairs that clustering reproduces:** y+LAT1 → AGT1, LAT2 → AGT1, B0AT1 → B0AT3 and OCTN2 → OAT2.
+- **Display:** Fig. 5d.
+- **Fairness caveat:** human cluster labels are unreliable (Fig. 5 protocol), which handicaps clustering in human.
+  That is also what clustering would face in practice.
+
+**Fig. 6: clustering sees most AKI handoff shifts, but only at segment resolution.**
+- The cluster-lines shift has the curve's sign for all 11 shifted pairs.
+- A step reading of the clusters moves every switch by a whole segment (±0.37). The curve gives −0.14 for
+  OAT1 → OCT2.
+- 4F2hc → rBAT is the one pair a step reading misses (0.00).
+- Not drawn: the AKI figure's continuous content is already the within-segment rows.

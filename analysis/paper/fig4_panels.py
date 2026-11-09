@@ -29,6 +29,10 @@ MICE = ['Ctrl1A2', 'Ctrl1A4']
 SEGS = ['PTS1', 'PTS2', 'PTS3']
 CLUSTER, BULK = '#555555', '#AAAAAA'
 LABEL_LOG2 = 0.5
+LINES = None                # straight lines through the clusters, set by load()
+# Fig. 4b examples, chosen by hand after fig4_linear_gain.py from its top 10 (ranks 1, 5, 8): one per shape the
+# straight lines miss, the cleanest in both mice. Peak at S2/S3; switch within S2; dip just past S2/S3.
+OVERLAY = ['Pigr', 'Slc22a7', 'Cyp4a12a']
 # panel boxes of make_fig4.py in SVG units (1 unit = 0.01 inch here)
 SIZE = {'gam': (1160, 250), 'ex': (540, 760), 'lines': (580, 760), 'a': (540, 292), 'b': (580, 967), 'c': (540, 282), 'd': (540, 282)}
 
@@ -63,6 +67,8 @@ def load(root: Path):
     genes.loc[chk.index, 'label_score'] = np.where(chk.category == 1, peak, within.abs().min(1))
     genes['cat1'] &= genes.label_ok
     genes['cat2'] &= genes.label_ok
+    global LINES
+    LINES = pd.read_csv(root / 'screen/linear_gain.csv').set_index('gene')    # fig4_linear_gain.py
     return genes, z['grid'], curves
 
 
@@ -86,8 +92,14 @@ def gene_axes(ax, gene, row, grid, curves, show=('bins', 'bulk', 'clusters', 'cu
         if 'clusters' in show:
             for (lo, hi), v in zip(edges, curves[m]['clusters'][gene]):
                 ax.plot([lo, hi], [v, v], color=CLUSTER, lw=1.3, zorder=2, solid_capstyle='butt')
+        if 'lines' in show:
+            lg = LINES.loc[gene]
+            yl = lg[f'lines_b0_{m}'] + lg[f'lines_b1_{m}'] * grid + lg[f'lines_b2_{m}'] * np.maximum(grid - lg.c2, 0)
+            ax.plot(grid, (yl + np.log(1e4)) / np.log(2), color=c, lw=0.9, ls=(0, (1.5, 1.2)), zorder=3)
         if 'curve' in show:
-            ax.plot(grid, curves[m]['curve'][gene], color=c, lw=1.4, zorder=4)
+            # stop at the last bin: past it the spline tail and the mislabelled end units take over (protocol doc)
+            k = grid <= np.nanmax(curves[m]['bin_x'][gene])
+            ax.plot(grid[k], curves[m]['curve'][gene][k], color=c, lw=1.4, zorder=4)
     lo, hi = ylim or ax.get_ylim()
     ax.set_ylim(lo, hi)
     pad = (hi - lo) * 0.06
@@ -386,16 +398,20 @@ def panel_overlay(plt, gene_list, genes, grid, curves, out):
     n = len(gene_list)
     h = 0.80 / n
     for i, g in enumerate(gene_list):
-        ax = fig.add_axes([0.13, 0.965 - (i + 1) * h - i * (0.17 / n) + 0.02, 0.84, h])
-        gene_axes(ax, g, genes.loc[g], grid, curves, ('bins', 'bulk', 'clusters', 'curve'), ylim_of(g, curves))
-        ax.set_title(g, fontsize=8, style='italic', color=INK, pad=3, loc='left')
+        ax = fig.add_axes([0.13, 0.95 - (i + 1) * h - i * (0.17 / n) + 0.02, 0.84, h])
+        gene_axes(ax, g, genes.loc[g], grid, curves, ('bins', 'bulk', 'clusters', 'lines', 'curve'), ylim_of(g, curves))
+        ax.set_title(f'{g}', fontsize=8, style='italic', color=INK, pad=3, loc='left')
+        ax.set_title(f'+{100 * LINES.loc[g, "gain"]:.0f}% deviance over straight lines', fontsize=6, color=INK, pad=3,
+                     loc='right')
         ax.set_ylabel('log2 counts per 10k')
-        if i == 0:
+        if i == 1:
             keys = [Line2D([], [], color=BULK, lw=1.0, ls=(0, (2, 1.5))), Line2D([], [], color=CLUSTER, lw=1.3),
+                    Line2D([], [], color=INK, lw=0.9, ls=(0, (1.5, 1.2))),
                     Line2D([], [], color=SECTION_COLOURS['Ctrl1A2'], lw=1.4),
                     Line2D([], [], color=SECTION_COLOURS['Ctrl1A4'], lw=1.4)]
-            ax.legend(keys, ['bulk', 'S1 / S2 / S3 clusters', 'pseudostructure, Ctrl1A2', 'pseudostructure, Ctrl1A4'],
-                      loc='upper right', fontsize=6, frameon=False, handlelength=1.8, labelspacing=0.25)
+            ax.legend(keys, ['bulk', 'S1 / S2 / S3 clusters', 'straight lines through clusters',
+                             'pseudostructure, Ctrl1A2', 'pseudostructure, Ctrl1A4'],
+                      loc='lower right', fontsize=6, frameon=False, handlelength=1.8, labelspacing=0.25)
     fig.savefig(out / 'f4_ex.png', facecolor='white')
     plt.close(fig)
 
@@ -413,7 +429,9 @@ def main(argv=None):
     c1, c2 = [g for g in c1 if g != a][:3], [g for g in c2 if g != a][:3]
     b = panel_b_lines(plt, genes, grid, curves, out)
     gam = panel_gam(plt, args, root, genes, grid, curves, a, out)
-    ex = [a, c2[0], c2[1]]          # one peak between segments, the two strongest changes within a segment
+    top10 = LINES.index[:10]
+    assert all(g in top10 and g in curves[MICE[0]]['curve'] for g in OVERLAY), 'Fig. 4b examples left the top 10'
+    ex = OVERLAY
     panel_overlay(plt, ex, genes, grid, curves, out)
     print('gam:', gam, '| overlay:', ex)
     if c1:

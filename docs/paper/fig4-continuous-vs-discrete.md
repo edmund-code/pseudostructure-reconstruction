@@ -260,3 +260,30 @@ Question (user): would straight lines joining the S1/S2/S3 cluster levels show t
   - Most share one shape: a sharp switch at x 0.40–0.46, partway into S2. Genes with it include Scd1, Slc22a13, Slc22a19,
     Ceacam2, Serpina1f, Higd1c, Mettl7a2, Hs6st2 and Mep1b.
 - **Fig. 4b rule:** examples must pass the test in both runs and depart by more than 1 log2.
+
+**Fig. 4b examples (2026-11-09, user: rank by the extra variance the curve explains).** `fig4_linear_gain.py` ranks every
+screened gene by (D_lines − D_curve) / D_intercept, taking the smaller value of the two mice. The median gene gains 0.2%.
+
+**Top 12:**
+
+| Rank | Gene | Gain |
+|---|---|---|
+| 1 | Pigr | 21% |
+| 2 | Ugt2b37 | 15% |
+| 3 | Serpina1d | 15% |
+| 4 | Serpina1f | 14% |
+| 5 | Slc22a7 | 14% |
+| 6 | Car5a | 14% |
+| 7 | Slc22a13 | 13% |
+| 8 | Cyp4a12a | 13% |
+| 9 | Inmt | 12% |
+| 10 | Higd1c | 12% |
+| 11 | Apoa4 | 12% |
+| 12 | Serpina1a | 12% |
+
+**Panel b shows Pigr, Slc22a7 and Cyp4a12a** (ranks 1, 5 and 8), with the straight lines drawn dotted.
+- One gene for each shape the straight lines miss: a peak at S2/S3, a switch within S2, a dip just past S2/S3.
+- Within each shape, the gene with the cleanest agreement between the two mice. Serpina1d/f and Slc22a13 dive in
+  Ctrl1A4 where counts are near zero.
+- Curves stop at the last bin.
+- Chosen by hand from the top 10. `fig4_panels.py` asserts they stay in the top 10.

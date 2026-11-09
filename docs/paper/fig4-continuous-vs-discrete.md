@@ -177,3 +177,42 @@ The 4 remaining calls (S1, and one rise within S3) form groups too small to plot
 - **Clipping:** each gene's curve is clipped to its own bin-mean range (±0.25), so spline dives where counts run
   out do not widen the gap.
 - **Edge effect:** the upturn in the last ~5% of PT in two groups is a spline edge effect plus the last bin.
+
+### Open issue: the uptick at the PT end (diagnosed 2026-11-08, not yet fixed)
+
+The upturn at the end of PT (for example *Pigr* rising after falling through S3) is not biology. It has two causes.
+
+**1. Mislabelled distal tubules.** The last 2% of control PT units on the gene axes are not late S3:
+- median read depth is 1,000–1,800, against about 7,000 for PT;
+- 49–89% are tubules the H&E segmentation called distal or collecting;
+- they are small (about 380 µm², against about 1,550 for PT and 550–720 for distal tubules labelled distal);
+- they sit among PT tubules (median 50–75% of the 8 nearest units are PT);
+- they express TAL markers near mTAL levels (Umod about 7 log2 cp10k, Slc12a1 about 4);
+- on the package curve they are placed in the TAL–DCT range (t up to 0.57–0.87, against the S3/mTAL cut at 0.28).
+
+Reading: small distal cross-sections inside the cortex pick up PT transcripts from neighbouring bins. Clustering labels them PT, and the curve places them past S3. Rank-scaling PT to (0, 1) squeezes them all into the last 2%.
+
+The same pattern holds on the hvm fit and in the AKI sections. Human seg_class uses other names, so the H&E check does not apply there.
+
+**2. Spline tail.** The last knot is at 0.75, so the end of the curve overshoots the last bin. For *Pigr*: +1.2 at x = 1 against +0.5 for the last bin.
+
+**Screen rerun without these units** (scratch only; 116 + 38 PT-labelled units whose H&E class is not tubule_proximal):
+
+| Quantity | Original | Rerun |
+|---|---|---|
+| Beyond both mice | 1,680 | 1,599 (1,557 shared) |
+| Category 1 | 5 | 6 (adds Cyp4a10) |
+| Category 2 | 77 | 89 (71 shared) |
+
+- **LR stability:** Spearman 0.98 and 0.99 by mouse; the median LR ratio is 0.96 and 0.99.
+- **Category 2 genes lost (6):**
+  - Alpl, Bcat1 and Dpep1 sit at the 1 log2 threshold;
+  - Nat8f5, Npl and Osr2 changed sign, so the end units drove their call.
+- **End hook** (|curve(1) − curve(0.95)| > 0.5 log2): 39% → 30% of beyond-both genes.
+- **Pigr:** the LR is unchanged (938 → 939). Its end value drops from +1.2 to −0.5.
+
+The remaining end units are still half-depth and small, but 49 of 54 are S3. The remaining hook is mostly the spline tail.
+
+**Candidate fix, to freeze before rerunning:**
+- drop PT-labelled units whose H&E class is not proximal; this rule uses neither depth nor position;
+- clip the drawn curves to the bin-supported range.

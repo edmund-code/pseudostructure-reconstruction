@@ -281,7 +281,7 @@ screened gene by (D_lines − D_curve) / D_intercept, taking the smaller value o
 | 11 | Apoa4 | 12% |
 | 12 | Serpina1a | 12% |
 
-**Panel b shows Pigr, Slc22a7 and Cyp4a12a** (ranks 1, 5 and 8), with the straight lines drawn dotted.
+**Panel b shows Pigr, Slc22a7 and Cyp4a12a** (ranks 1, 5 and 8). Each is drawn as one bulk bar, three cluster bars and the curve on top, all averaged over the two mice (user, 2026-11-09). The straight lines are used for ranking only.
 - One gene for each shape the straight lines miss: a peak at S2/S3, a switch within S2, a dip just past S2/S3.
 - Within each shape, the gene with the cleanest agreement between the two mice. Serpina1d/f and Slc22a13 dive in
   Ctrl1A4 where counts are near zero.

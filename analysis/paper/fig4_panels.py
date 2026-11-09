@@ -391,27 +391,41 @@ def panel_gam(plt, args, root, genes, grid, curves, gene, out, mouse='Ctrl1A2'):
 
 
 def panel_overlay(plt, gene_list, genes, grid, curves, out):
-    """Bulk, clusters and pseudostructure of each example gene on one plot, both mice."""
+    """Each example gene, both mice averaged: one bar for bulk, one bar per cluster, the curve on top."""
     from matplotlib.lines import Line2D
 
     fig = plt.figure(figsize=(SIZE['ex'][0] / 100, SIZE['ex'][1] / 100))
     n = len(gene_list)
     h = 0.80 / n
+    curve_c = SECTION_COLOURS['Ctrl1A2']
     for i, g in enumerate(gene_list):
         ax = fig.add_axes([0.13, 0.95 - (i + 1) * h - i * (0.17 / n) + 0.02, 0.84, h])
-        gene_axes(ax, g, genes.loc[g], grid, curves, ('bins', 'bulk', 'clusters', 'lines', 'curve'), ylim_of(g, curves))
-        ax.set_title(f'{g}', fontsize=8, style='italic', color=INK, pad=3, loc='left')
-        ax.set_title(f'+{100 * LINES.loc[g, "gain"]:.0f}% deviance over straight lines', fontsize=6, color=INK, pad=3,
-                     loc='right')
+        row = genes.loc[g]
+        mean = lambda part: np.mean([curves[m][part][g] for m in MICE], 0)
+        bulk, clusters, curve = mean('bulk'), mean('clusters'), mean('curve')
+        ax.scatter(mean('bin_x'), mean('bins'), s=6, color=MUTED, lw=0, alpha=0.7, zorder=3)
+        ax.plot([0, 1], [bulk, bulk], color=BULK, lw=6, alpha=0.45, solid_capstyle='butt', zorder=1)
+        for (lo, hi), v in zip(((0, row.b12), (row.b12, row.b23), (row.b23, 1)), clusters):
+            ax.plot([lo, hi], [v, v], color=CLUSTER, lw=3.5, solid_capstyle='butt', zorder=2)
+        # stop at the last bin: past it the spline tail and the mislabelled end units take over (protocol doc)
+        k = grid <= min(np.nanmax(curves[m]['bin_x'][g]) for m in MICE)
+        ax.plot(grid[k], curve[k], color=curve_c, lw=2, zorder=4)
+        v = np.r_[mean('bins'), clusters, curve[k]]
+        lo, hi = np.nanmin(v) - 0.4, np.nanmax(v) + 0.4
+        ax.set_ylim(lo, hi)
+        pad = (hi - lo) * 0.06
+        segment_band(ax, row.b12, row.b23, lo - 2.2 * pad, pad)
+        for x in (row.b12, row.b23):
+            ax.axvline(x, color='#CCCCCC', lw=0.5, zorder=0)
+        ax.set_xlim(0, 1)
+        ax.set_xticks([])
+        ax.set_title(g, fontsize=8, style='italic', color=INK, pad=3, loc='left')
         ax.set_ylabel('log2 counts per 10k')
         if i == 1:
-            keys = [Line2D([], [], color=BULK, lw=1.0, ls=(0, (2, 1.5))), Line2D([], [], color=CLUSTER, lw=1.3),
-                    Line2D([], [], color=INK, lw=0.9, ls=(0, (1.5, 1.2))),
-                    Line2D([], [], color=SECTION_COLOURS['Ctrl1A2'], lw=1.4),
-                    Line2D([], [], color=SECTION_COLOURS['Ctrl1A4'], lw=1.4)]
-            ax.legend(keys, ['bulk', 'S1 / S2 / S3 clusters', 'straight lines through clusters',
-                             'pseudostructure, Ctrl1A2', 'pseudostructure, Ctrl1A4'],
-                      loc='lower right', fontsize=6, frameon=False, handlelength=1.8, labelspacing=0.25)
+            keys = [Line2D([], [], color=BULK, lw=6, alpha=0.45), Line2D([], [], color=CLUSTER, lw=3.5),
+                    Line2D([], [], color=curve_c, lw=2)]
+            ax.legend(keys, ['bulk', 'S1 / S2 / S3 clusters', 'pseudostructure'], loc='lower right', fontsize=6.5,
+                      frameon=False, handlelength=2.2, labelspacing=0.4)
     fig.savefig(out / 'f4_ex.png', facecolor='white')
     plt.close(fig)
 

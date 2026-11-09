@@ -61,6 +61,17 @@ def gene_halves(var: pd.DataFrame) -> list[set]:
     return out
 
 
+def pattern_axis(axes: dict, pat: str):
+    """Rank-scaled mean of the half-axes that exclude a gene with this pattern; ok = units on >= MIN_AXES axes."""
+    pos = np.stack([axes[(k, pat[k])] for k in range(N_SPLITS)], 1)
+    ok = np.isfinite(pos).sum(1) >= MIN_AXES
+    mean = np.where(ok, np.nanmean(np.where(np.isfinite(pos), pos, np.nan), 1), np.nan)
+    x = np.full(len(pos), np.nan)
+    r = pd.Series(mean[ok]).rank(method='average').to_numpy()
+    x[ok] = (r - 0.5) / ok.sum()
+    return x, ok
+
+
 def boundary(x: np.ndarray, label: np.ndarray, lo: int) -> float:
     """Threshold on x misclassifying the fewest units between labels lo and lo + 1."""
     k = (label == lo) | (label == lo + 1)
@@ -200,12 +211,7 @@ def main(argv=None):
     axis_rows = []
     rng = np.random.default_rng(0)
     for pi, pat in enumerate(sorted(set(pattern))):
-        pos = np.stack([axes[(k, pat[k])] for k in range(N_SPLITS)], 1)
-        ok = np.isfinite(pos).sum(1) >= MIN_AXES
-        mean = np.where(ok, np.nanmean(np.where(np.isfinite(pos), pos, np.nan), 1), np.nan)
-        x = np.full(len(units), np.nan)
-        r = pd.Series(mean[ok]).rank(method='average').to_numpy()
-        x[ok] = (r - 0.5) / ok.sum()
+        x, ok = pattern_axis(axes, pat)
         b12, b23 = boundary(x[ok], label[ok], 0), boundary(x[ok], label[ok], 1)
         knots = gam_internal_knots(x[ok], BASIS_DF)
         axis_rows.append({'pattern': pat, 'n_units': int(ok.sum()), 'b12': b12, 'b23': b23})

@@ -339,36 +339,49 @@ def cluster_switch_shift(genes, hp, b12, b23):
     for _, r in hp[hp.shifted].iterrows():
         x = {m: crossing(lines(r.early, m), lines(r.late, m), grid) for m in SECTIONS}
         rows.append({'early': r.early, 'late': r.late, 'curve': r['shift'],
-                     'clusters': np.mean([x[m] for m in HUMAN]) - np.mean([x[m] for m in MOUSE])})
+                     'clusters': np.mean([x[m] for m in HUMAN]) - np.mean([x[m] for m in MOUSE]),
+                     'curve_mouse': np.mean([r[f'x_{m}'] for m in MOUSE]),
+                     'curve_human': np.mean([r[f'x_{m}'] for m in HUMAN]),
+                     'clusters_mouse': np.mean([x[m] for m in MOUSE]),
+                     'clusters_human': np.mean([x[m] for m in HUMAN])})
     return pd.DataFrame(rows).sort_values('curve')
 
 
+SLOPE_C = ['#222222', '#D95F02', '#7570B3', '#E7298A', '#1F78B4']
+
+
 def panel_cluster_shift(plt, genes, hp, out, b12, b23):
-    """Shifted handoffs: the curve's species shift (filled) against the shift the cluster means give (open)."""
+    """Slope graphs of the shifted handoffs: each pair's switch in mouse and in human, read from the curves (left)
+    and from straight lines through the cluster means (right). The pairs drawn in panel c are coloured."""
     d = cluster_switch_shift(genes, hp, b12, b23)
     d.to_csv(out / 'f5_cluster_shift.csv', index=False)
-    shown = {(e, l) for e, l, _ in H_PAIRS}
+    colour = {(e, l): c for (e, l, _), c in zip(H_PAIRS, SLOPE_C)}
     fig = figure(plt, 'cluster_shift')
-    ax = fig.add_axes([0.30, 0.15, 0.66, 0.81])
-    for y, (_, r) in enumerate(d.iterrows()):
-        col = INK if (r.early, r.late) in shown else MUTED
-        if np.isfinite(r.clusters):
-            ax.plot([r.clusters, r.curve], [y, y], color='#CCCCCC', lw=1, zorder=1)
-            ax.scatter([r.clusters], [y], s=16, facecolor='white', edgecolor=col, lw=0.9, zorder=3)
-        else:
-            ax.text(0.0, y, '×', color=col, fontsize=7, ha='center', va='center', zorder=3)
-        ax.scatter([r.curve], [y], s=16, color=col, lw=0, zorder=4)
-        ax.text(-0.04, y, f'{PROTEIN.get(r.early, r.early)} → {PROTEIN.get(r.late, r.late)}', fontsize=5.8, color=col,
-                ha='right', va='center', transform=ax.get_yaxis_transform())
-    ax.axvline(0, color='#BBBBBB', lw=0.6, zorder=0)
-    ax.set_ylim(-0.7, len(d) - 0.3)
-    ax.set_yticks([])
-    ax.spines['left'].set_visible(False)
-    ax.set_xlabel('switch shift, human − mouse', labelpad=1)
-    ax.scatter([0.03], [1.0], s=14, color=INK, lw=0, transform=ax.transAxes, clip_on=False)
-    ax.text(0.06, 1.0, 'curve', fontsize=5.8, color=MUTED, va='center', transform=ax.transAxes)
-    ax.scatter([0.18], [1.0], s=14, facecolor='white', edgecolor=INK, lw=0.9, transform=ax.transAxes, clip_on=False)
-    ax.text(0.21, 1.0, 'cluster means', fontsize=5.8, color=MUTED, va='center', transform=ax.transAxes)
+    for j, (src, title) in enumerate((('curve', 'curve'), ('clusters', 'cluster means'))):
+        ax = fig.add_axes([0.11 + j * 0.36, 0.10, 0.25, 0.78])
+        for lo, hi, seg in ((0, b12, 'PTS1'), (b12, b23, 'PTS2'), (b23, 1, 'PTS3')):
+            ax.add_patch(plt.Rectangle((-0.16, lo), 0.06, hi - lo, color=COLOURS[seg], lw=0, clip_on=False))
+        for _, r in d.sort_values('curve', key=lambda v: v.abs()).iterrows():
+            col = colour.get((r.early, r.late))
+            y0, y1 = r[f'{src}_mouse'], r[f'{src}_human']
+            if not (np.isfinite(y0) and np.isfinite(y1)):
+                continue
+            ax.plot([0, 1], [y0, y1], color=col or '#DDDDDD', lw=1.6 if col else 0.7, zorder=3 if col else 1,
+                    marker='o', ms=3 if col else 1.5)
+        ax.set_xlim(-0.16, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(['mouse', 'human'])
+        ax.set_yticks([0, 1] if j == 0 else [])
+        ax.set_yticklabels(['start', 'end'] if j == 0 else [], fontsize=6)
+        ax.spines['left'].set_visible(False)
+        ax.set_title(title, fontsize=7.5, color=INK, pad=3)
+        if j == 0:
+            ax.set_ylabel('switch along the PT', labelpad=1)
+    for i, (e, l, _) in enumerate(H_PAIRS):          # one legend for both panels
+        fig.text(0.84, 0.80 - i * 0.075, f'{PROTEIN.get(e, e)} → {PROTEIN.get(l, l)}', fontsize=6, color=SLOPE_C[i],
+                 va='center', weight='bold')
+    fig.text(0.84, 0.80 - len(H_PAIRS) * 0.075, 'other shifted pairs', fontsize=6, color='#AAAAAA', va='center')
     fig.savefig(out / 'f5_cluster_shift.png', facecolor='white')
     plt.close(fig)
 

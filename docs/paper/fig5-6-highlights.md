@@ -215,7 +215,7 @@ here.
 | MCT1 → MCT9 | −0.49 | +0.25 (opposite sign) |
 
 - **Pairs that clustering reproduces:** y+LAT1 → AGT1, LAT2 → AGT1, B0AT1 → B0AT3 and OCTN2 → OAT2.
-- **Display:** Fig. 5d.
+- **Display:** Fig. 5d, as slope graphs: each pair's mouse and human switch from the curves beside the same from the cluster lines.
 - **Fairness caveat:** human cluster labels are unreliable (Fig. 5 protocol), which handicaps clustering in human.
   That is also what clustering would face in practice.
 

@@ -78,3 +78,4 @@ for wording.
 The five references first left unread were read in full afterwards (`citation_checks/E_first_unread.md`).
 
 Results-section literature (Figs 5 and 6 verdicts) is checked separately in `citation_checks/D_results_literature.md`.
+Drug and disease hooks for the Figs 5–6 highlights: `citation_checks/G_fig56_clinical_hooks.md`.

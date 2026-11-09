@@ -139,8 +139,39 @@ within S2.
 - **Fig. 6:** Fgb and Serpina10 (control noise), Apob, Esr1 and Apoc3 (near the detection floor), and Slc5a9 → Slc5a3
   (neighbour signal).
 
-## Open before the figures are final
+## Literature checks (2026-11-09)
 
-- Read in full the sources for: B0AT1 inhibitors in PKU, CDK4/6 inhibition in AKI, 15-PGDH inhibitors, and urinary AGT
-  in AKI (full-text rule).
-- Every Fig. 5 statement is about one human donor.
+The four flagged sources and the ZIP8 claim were read; see `citation_checks/G_fig56_clinical_hooks.md`. Corrections
+to the tables above:
+- **B0AT1:** one inhibitor, JNT-517, now in Phase 3 for PKU (NCT06971731).
+- **CDK4/6:** the protection is short-lived. In cisplatin, OCT2 inhibition confounds it; longer dosing is pro-fibrotic.
+- **15-PGDH:** one preclinical tool compound; no human trial verified.
+- **Urinary AGT:** not localised to the PT by its sources.
+- **ZIP8:** loss of function protects (Cai 2025).
+
+None of these papers resolves S1/S2/S3, so the positional statements rest on our data alone.
+
+## Figures as drawn (2026-11-09)
+
+**Fig. 5:**
+- **a.** Reversals: Mme, Slc17a3, Hpgd, Slc5a11, Dcxr.
+- **b.** Contrast: every gene's S1→S3 gradient, mouse vs human. Ten conserved drug targets are in ink, the reversals
+  in orange.
+- **c.** Pathway curves: fatty-acid oxidation, gluconeogenesis, lysosome, MHC class II. These are **display only**:
+  the calibrated set screen called none, and human gradients are attenuated, so a flat human curve is not evidence of
+  a missing gradient. The user asked to show relevant pathways despite the null; keep this caveat beside any text.
+- **d.** Handoffs: MCT1 → MCT9 replaced by SLC22A23 → OCT2.
+- Human is drawn in magenta throughout.
+
+**Fig. 6:**
+- **a.** Built gradients: Havcr1, DNA replication, OXPHOS.
+- **b.** Erased gradients: Cyp24a1, Agt, Cyp4a14.
+- **c.** Gradients kept.
+- **d.** Segment response of XDH, CDK4, TYMS, 11β-HSD1, rBAT and HNF1B. This is the calibrated label-level read,
+  placed in the main figure as the clinical anchor.
+- **e.** Nine robust pathway calls, hand-picked one per family.
+- **f.** Handoffs: OAT1 → OCT2, 4F2hc → rBAT, B0AT1 → GAT2, SLC46A3 → PCFT, ZIP5 → ZIP8, plus the cystine control.
+
+**Still open:**
+- Every Fig. 5 statement rests on one human donor.
+- The Fig. 6c legend overlaps its points (a pre-existing issue).

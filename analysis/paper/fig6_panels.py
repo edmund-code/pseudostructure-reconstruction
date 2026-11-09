@@ -1,10 +1,13 @@
 """Fig. 6 panels (main) and their Extended Data companions, drawn from fig6_placement.py and fig6_screen.py.
 
 Main figure (make_fig6.py):
- programs       cell-cycle program and PT transporters: AKI response along the PT against the segment means
- pathways       distinct pathways whose AKI response changes inside a segment: response along the PT, S1/S2/S3
-                means, and the difference
- handoff_rows   five handoffs in the poster layout: early and late partner, control and IR, switches, AKI levels
+ made, erased   gradients injury builds or erases inside a segment (named examples)
+ retention      how much of a healthy within-segment gradient the IR mice keep
+ segment_response  drug targets whose injury response grows from S1 to S3 (calibrated label-level read,
+                docs/paper/fig5-6-highlights.md)
+ pathways_main  selected robust pathway calls: response along the PT, S1/S2/S3 means, and the difference
+ handoff_rows   handoffs with a drug or disease hook in the poster layout, plus the unshifted cystine control
+(programs and pathways, every distinct pathway call, are Extended Data.)
 Extended Data (make_ed_fig_aki.py):
  maps           one control and one IR section, PT tubules coloured by position on the shared axis
  coverage       where each section's PT tubules sit on the axis (density per section)
@@ -41,11 +44,12 @@ CTRL, IR = '#2F6DB5', '#D9692B'
 STEP = '#555555'
 UP, DOWN = '#B2182B', '#2166AC'     # direction of an AKI response, as in panel f's colour map
 # panel boxes of make_fig6.py in SVG units (1 unit = 0.01 inch here)
-SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 412),
+SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 480), 'pathways_main': (1160, 272),
+        'segment_response': (270, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'placement': (380, 242), 'genes': (580, 312),
-        'response_map': (560, 312), 'handoff_moves': (580, 312), 'made': (1160, 232), 'erased': (880, 232),
+        'response_map': (560, 312), 'handoff_moves': (580, 312), 'made': (880, 232), 'erased': (880, 232),
         'retention': (270, 232)}
-MAIN = ['made', 'erased', 'retention', 'handoff_rows']
+MAIN = ['made', 'erased', 'retention', 'segment_response', 'pathways_main', 'handoff_rows']
 EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'programs', 'pathways', 'response_map', 'handoff_moves']
 
 
@@ -336,8 +340,10 @@ def panel_f(plt, genes, grid, curves, out, b12, b23):
 
 # ---------------------------------------------------------------------------------------------------- h
 # h, poster layout: one row per transporter pair, control and AKI side by side, the switch marked in both
-G_PAIRS = [('Slc16a1', 'Slc16a4', 'Monocarboxylates'), ('Slc6a19', 'Slc6a13', 'Amino acids'),
-           ('Slc3a2', 'Slc3a1', 'Amino-acid carrier'), ('Slc39a5', 'Slc39a14', 'Zinc'), ('Slc7a9', 'Slc7a13', 'Cystine')]
+# 2026-11-09: shifted pairs with a drug or disease hook (docs/paper/fig5-6-highlights.md); cystine is the unshifted control
+G_PAIRS = [('Slc22a6', 'Slc22a2', 'Drug secretion'), ('Slc3a2', 'Slc3a1', 'Cystinuria carrier'),
+           ('Slc6a19', 'Slc6a13', 'Neutral amino acids'), ('Slc46a3', 'Slc46a1', 'Folate'),
+           ('Slc39a5', 'Slc39a8', 'Zinc'), ('Slc7a9', 'Slc7a13', 'Cystine')]
 PROTEIN = {'Slc16a1': 'MCT1', 'Slc16a4': 'MCT5', 'Slc6a19': 'B0AT1', 'Slc6a13': 'GAT2', 'Slc3a2': '4F2hc',
            'Slc3a1': 'rBAT', 'Slc39a5': 'ZIP5', 'Slc39a14': 'ZIP14', 'Slc7a9': 'b0,+AT', 'Slc7a13': 'AGT1',
            'Slc39a8': 'ZIP8', 'Slc16a9': 'MCT9', 'Slc16a12': 'MCT12', 'Slc22a6': 'OAT1', 'Slc22a2': 'OCT2',
@@ -494,7 +500,7 @@ def pathway_name(key, width=48):
     return name if len(name) <= width else name[:name.rfind(' ', 0, width)].rstrip(',') + ' …'
 
 
-def distinct_calls(calls, sets, screened):
+def distinct_calls(calls, sets, screened, jaccard=JACCARD):
     """One row per family of overlapping calls within a segment: candidates in library order (Hallmark, Reactome,
     KEGG), then by p; a call is kept unless it shares >= JACCARD of its genes with one already kept."""
     # KEGG "Human Diseases" sets (Alzheimer disease, small cell lung cancer, ...) are not drawn: in kidney PT they
@@ -506,7 +512,7 @@ def distinct_calls(calls, sets, screened):
         mine = []
         for _, r in grp.sort_values(['lib', 'p', 'n'], ascending=[True, True, False]).iterrows():
             m = {g for g in sets[r.set] if screened.get(g, False)}
-            if all(len(m & o) / len(m | o) < JACCARD for o in mine):
+            if all(len(m & o) / len(m | o) < jaccard for o in mine):
                 mine.append(m)
                 kept.append(r)
     kept = pd.DataFrame(kept)
@@ -516,7 +522,7 @@ def distinct_calls(calls, sets, screened):
     return out.sort_values(['first', 'W']).reset_index(drop=True)
 
 
-def panel_pathways(plt, root, screen, genes, out, b12, b23):
+def panel_pathways(plt, root, screen, genes, out, b12, b23, key='pathways', only=None):
     """Distinct pathway calls x position: the AKI response along the PT, the same pathways' S1/S2/S3 means, and the
     response centred within each segment (the change the segment means cannot show). Called segments are outlined."""
     from matplotlib.colors import TwoSlopeNorm
@@ -526,7 +532,13 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23):
     calls = pw[(pw.split == 'condition') & pw.call]
     sets = json.loads((root.parents[1] / 'pt_package_aki/tables/gene_sets.json').read_text())
     screened = genes.universe & genes.neighbour_ok & genes.converged
-    rows = distinct_calls(calls, sets, screened)
+    if only is None:
+        rows = distinct_calls(calls, sets, screened)
+    else:                 # a hand-picked subset, drawn in the given order (no overlap pruning)
+        missing = set(only) - set(calls.set)
+        assert not missing, f'not called: {missing}'
+        rows = distinct_calls(calls[calls.set.isin(only)], sets, screened, jaccard=1.01)
+        rows = rows.set_index('set').loc[only].reset_index()
     z = np.load(root / screen / 'all_curves.npz', allow_pickle=True)
     grid = z['grid']
     pos = {g: i for i, g in enumerate(z['genes'])}
@@ -545,8 +557,8 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23):
         k = (grid >= lo) & (grid <= hi)
         within[:, k] = resp[:, k] - resp[:, k].mean(1, keepdims=True)
     n = len(rows)
-    fig = figure(plt, 'pathways')
-    top, bottom = 0.90, 0.07
+    fig = figure(plt, key)
+    top, bottom = (0.84, 0.09) if key != 'pathways' else (0.90, 0.07)
     lim, mlim = 1.5, 0.5
     blocks = [('along the PT', resp, TwoSlopeNorm(0, -lim, lim), 'RdBu_r', 0.36, 0.30),
               ('S1/S2/S3 means', segv, TwoSlopeNorm(0, -lim, lim), 'RdBu_r', 0.675, 0.075),
@@ -576,7 +588,7 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23):
         ax.set_title(title, fontsize=7.5, color=MUTED, pad=2)
         for sp in ax.spines.values():
             sp.set_visible(False)
-        cax = fig.add_axes([x0 + w * 0.15, 0.955, w * 0.7, 0.012]) if not three else None
+        cax = fig.add_axes([x0 + w * 0.15, top + 0.075, w * 0.7, 0.02 if key != 'pathways' else 0.012]) if not three else None
         if cax is not None:
             cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation='horizontal')
             cb.set_ticks([norm.vmin, 0, norm.vmax])
@@ -594,8 +606,8 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23):
             y1 = top - (idx[-1] + 1) / (n + 0.75) * (top - bottom)
             fig.lines.append(plt.Line2D([0.352, 0.352], [y1 + 0.003, y0 - 0.003], transform=fig.transFigure,
                                         color=COLOURS[SEGS[seg - 1]], lw=3))
-    rows.assign(name=rows.set.map(pathway_name)).to_csv(out / 'f6_pathways_rows.csv', index=False)
-    fig.savefig(out / 'f6_pathways.png', facecolor='white')
+    rows.assign(name=rows.set.map(pathway_name)).to_csv(out / f'f6_{key}_rows.csv', index=False)
+    fig.savefig(out / f'f6_{key}.png', facecolor='white')
     plt.close(fig)
 
 
@@ -603,9 +615,42 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23):
 # made / erased: within-segment changes that injury creates or removes (fig6_interpret.py); examples are chosen after
 # the screen and the follow-up (presentation choice, recorded in the protocol doc). Each entry: (label, genes or a gene
 # set key, segment). A set is drawn as the mean of its supported members' curves.
+# 2026-11-09: Anpep and Cyp51 dropped (weak literature; docs/paper/fig5-6-highlights.md)
 MADE = [('Havcr1', ['Havcr1'], 2), ('DNA replication', 'Reactome_2022::DNA Strand Elongation R-HSA-69190', 2),
-        ('Oxidative phosphorylation', 'KEGG_2019_Mouse::Oxidative phosphorylation', 3), ('Anpep', ['Anpep'], 3)]
-ERASED = [('Cyp4a14', ['Cyp4a14'], 2), ('Agt', ['Agt'], 2), ('Cyp51', ['Cyp51'], 2), ('Cyp24a1', ['Cyp24a1'], 2)]
+        ('Oxidative phosphorylation', 'KEGG_2019_Mouse::Oxidative phosphorylation', 3)]
+ERASED = [('Cyp24a1', ['Cyp24a1'], 2), ('Agt', ['Agt'], 2), ('Cyp4a14', ['Cyp4a14'], 2)]
+# main pathway rows: robust calls (fig6_interpret.py), one per biological family, with a clinical or injury reading
+PATHWAYS_MAIN = ['MSigDB_Hallmark_2020::E2F Targets', 'KEGG_2019_Mouse::Proteasome',
+                 'MSigDB_Hallmark_2020::Oxidative Phosphorylation',
+                 'Reactome_2022::G1/S-Specific Transcription R-HSA-69205', 'Reactome_2022::DNA Strand Elongation R-HSA-69190',
+                 'KEGG_2019_Mouse::Mismatch repair', 'MSigDB_Hallmark_2020::Bile Acid Metabolism',
+                 'Reactome_2022::Respiratory Electron Transport, ATP Synthesis By Chemiosmotic Coupling, Heat Production '
+                 'By Uncoupling Proteins R-HSA-163200', 'KEGG_2019_Mouse::Oxidative phosphorylation']
+# drug targets among the segment-dependent calls (S3 response - S1 response >= 1 log2, 4/4 pairs, relabelings <= 0.25x)
+SEGMENT_TARGETS = [('Xdh', 'XDH'), ('Cdk4', 'CDK4'), ('Tyms', 'TYMS'), ('Hsd11b1', '11β-HSD1'), ('Slc3a1', 'rBAT'),
+                   ('Hnf1b', 'HNF1B')]
+
+
+def panel_segment_response(plt, genes, out):
+    """IR minus control cluster mean per segment (mean of the 4 IR x control pairs) for named drug targets."""
+    fig = figure(plt, 'segment_response')
+    ax = fig.add_axes([0.25, 0.17, 0.70, 0.79])
+    n = len(SEGMENT_TARGETS)
+    for i, (g, name) in enumerate(SEGMENT_TARGETS):
+        resp = [np.mean([genes.loc[g, f'cluster_S{s}_{ir}'] - genes.loc[g, f'cluster_S{s}_{c}']
+                         for ir in INJURED for c in CONTROLS]) for s in (1, 2, 3)]
+        y = n - 1 - i
+        ax.plot([min(resp), max(resp)], [y, y], color='#BBBBBB', lw=0.8, zorder=1)
+        for s, v in enumerate(resp):
+            ax.scatter([v], [y], s=18, color=COLOURS[SEGS[s]], lw=0, zorder=3)
+        ax.text(-0.04, y, name, transform=ax.get_yaxis_transform(), ha='right', va='center', fontsize=6.5, color=INK)
+    ax.axvline(0, color='#BBBBBB', lw=0.6, zorder=0)
+    ax.set_yticks([])
+    ax.set_ylim(-0.6, n - 0.4)
+    ax.set_xlabel('log2 AKI / control', labelpad=1)
+    ax.spines['left'].set_visible(False)
+    fig.savefig(out / 'f6_segment_response.png', facecolor='white')
+    plt.close(fig)
 
 
 def mean_curves(root, screen, genes, members, seg):
@@ -725,6 +770,10 @@ def main(argv=None):
         panel_retention(plt, root, args.screen, out)
     if 'pathways' in args.panels:
         panel_pathways(plt, root, args.screen, genes, out, b12, b23)
+    if 'pathways_main' in args.panels:
+        panel_pathways(plt, root, args.screen, genes, out, b12, b23, 'pathways_main', PATHWAYS_MAIN)
+    if 'segment_response' in args.panels:
+        panel_segment_response(plt, genes, out)
 
 
 if __name__ == '__main__':

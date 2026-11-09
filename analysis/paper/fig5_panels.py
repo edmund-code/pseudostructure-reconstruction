@@ -1,8 +1,10 @@
 """Fig. 5 panels (main) and their Extended Data companions, drawn from fig5_screen.py and fig5_interpret.py.
 
 Main figure (make_fig5.py):
- rises         reversed gradients that rise along the PT in mouse and fall in human (externally confirmed examples)
- falls         reversed gradients that fall in mouse and rise in human (externally confirmed examples)
+ reversals      reversed gradients, both limbs externally confirmed, ranked by clinical relevance (fig56_rank.py)
+ contrast       every gene's S1->S3 gradient, mouse against human: drug targets that keep their direction beside the
+                reversals
+ pathway_curves members' mean curves of clinically relevant pathways (display only: the set screen called none)
  handoff_rows   transporter handoffs in the poster layout, mouse and human side by side, with switch positions
 Extended Data (make_ed_fig_hvm.py):
  maps           one mouse and one human section, PT tubules coloured by position on the shared axis
@@ -40,14 +42,15 @@ from fig6_panels import BAND, LIBRARY_ORDER, PROTEIN, SEGS, covered, pathway_nam
 MOUSE, HUMAN = ['Ctrl1A2', 'Ctrl1A4'], ['HUK1_COR1', 'HUK1_MED1']
 SECTIONS = MOUSE + HUMAN
 PT = {'PT-S1': 0, 'PT-S2': 1, 'PT-S3': 2}
-MOUSE_C, HUMAN_C = '#2F6DB5', '#6A4BB0'
-EARLY = {'mouse': '#3A8DD0', 'human': '#9A7FD6'}
-LATE = {'mouse': '#1B3A5C', 'human': '#3B2470'}
-SIZE = {'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
+MOUSE_C, HUMAN_C = '#2F6DB5', '#C51B7D'
+EARLY = {'mouse': '#3A8DD0', 'human': '#E58BBE'}
+LATE = {'mouse': '#1B3A5C', 'human': '#7A0F4D'}
+REVERSED_C = '#D95F02'
+SIZE = {'reversals': (1160, 232), 'contrast': (400, 312), 'pathway_curves': (760, 312), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
         'pathway_null': (380, 242)}
-MAIN = ['rises', 'falls', 'handoff_rows']
+MAIN = ['reversals', 'contrast', 'pathway_curves', 'handoff_rows']
 EXTENDED = ['maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
@@ -56,15 +59,27 @@ MIN_FINITE_BINS = 16
 # docs/paper/fig5-human-vs-mouse-along-pt.md): rising in mouse and falling in human, and the reverse
 RISES = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Hpgd', 'Hpgd'), ('Lpar6', 'Lpar6')]
 FALLS = [('Dcxr', 'Dcxr'), ('Slc5a11', 'Slc5a11'), ('Pitpnc1', 'Pitpnc1'), ('Sorbs1', 'Sorbs1')]
+# main panel a (2026-11-09): the reversals with a drug, GWAS or disease hook, all both-limbs confirmed
+# (docs/paper/fig5-6-highlights.md); Lpar6 and Pitpnc1 stay in Extended Data (no kidney literature)
+REVERSED = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Hpgd', 'Hpgd'), ('Slc5a11', 'Slc5a11'), ('Dcxr', 'Dcxr')]
+# contrast panel: approved-drug or disease-panel genes whose gradient keeps its sign, |E| >= 0.5, in all four sections
+CONSERVED_TARGETS = ['Slc5a2', 'Slc22a12', 'Slc22a8', 'Ace', 'Folh1', 'Dpep1', 'Pah', 'Slc2a2', 'Slc4a4', 'Gatm']
+# pathway display (no call: the frozen set screen called none; human gradients are attenuated, so a flat human curve
+# is not evidence of a missing gradient)
+PATHWAY_CURVES = [('Fatty-acid oxidation', 'Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289'),
+                  ('Gluconeogenesis', 'Reactome_2022::Gluconeogenesis R-HSA-70263'),
+                  ('Lysosome', 'KEGG_2019_Mouse::Lysosome'),
+                  ('MHC class II', 'Reactome_2022::MHC Class II Antigen Presentation R-HSA-2132295')]
 RELOCATED: list = []          # (label, gene-set key); the frozen set screen called none
 H_PAIRS = [('Slc5a2', 'Slc5a1', 'Glucose'), ('Slc6a19', 'Slc6a18', 'Neutral amino acids'),
-           ('Slc7a7', 'Slc7a13', 'Cationic amino acids'), ('Slc22a23', 'Slc22a12', 'Organic anions'),
-           ('Slc16a1', 'Slc16a9', 'Monocarboxylates')]
+           ('Slc7a7', 'Slc7a13', 'Cationic amino acids'), ('Slc22a23', 'Slc22a12', 'Urate'),
+           ('Slc22a23', 'Slc22a2', 'Organic cations')]
 PROTEIN = {**PROTEIN, 'Slc5a12': 'SMCT2', 'Slc5a8': 'SMCT1', 'Slc5a2': 'SGLT2', 'Slc5a1': 'SGLT1',
            'Slc5a10': 'SGLT5', 'Slc5a11': 'SMIT2', 'Slc6a18': 'B0AT3', 'Slc7a8': 'LAT2', 'Slc7a7': 'y+LAT1',
            'Slc22a8': 'OAT3', 'Slc22a7': 'OAT2', 'Slc22a12': 'URAT1', 'Slc22a13': 'OAT10', 'Slc22a5': 'OCTN2',
            'Slc22a23': 'SLC22A23', 'Slc16a13': 'MCT13', 'Slc16a10': 'MCT10', 'Slc6a6': 'TauT', 'Slc17a3': 'NPT4',
-           'Slc10a2': 'ASBT', 'Slc17a1': 'NPT1', 'Abcc4': 'MRP4', 'Abcc2': 'MRP2', 'Slc12a1': 'NKCC2'}
+           'Slc10a2': 'ASBT', 'Mme': 'MME', 'Hpgd': '15-PGDH', 'Dcxr': 'DCXR', 'Ace': 'ACE', 'Folh1': 'PSMA',
+           'Dpep1': 'DPEP1', 'Pah': 'PAH', 'Slc2a2': 'GLUT2', 'Slc4a4': 'NBCe1', 'Gatm': 'GATM', 'Slc22a2': 'OCT2', 'Slc17a1': 'NPT1', 'Abcc4': 'MRP4', 'Abcc2': 'MRP2', 'Slc12a1': 'NKCC2'}
 
 
 def parse_args(argv=None):
@@ -115,7 +130,11 @@ def set_curves(members, genes, curves, pos, grid):
     ok = [g for g in members if g in genes.index and genes.loc[g, 'assessable'] and g in pos]
     out = {}
     for m in SECTIONS:
-        out[m] = np.nanmean([centred(g, m, curves, pos, grid)[0] for g in ok], 0)
+        c = np.array([centred(g, m, curves, pos, grid)[0] for g in ok])
+        # drawn only where >= 80% of members have a curve: past that, members' coverage ends one by one and the
+        # mean jumps
+        full = np.isfinite(c).mean(0) >= 0.8
+        out[m] = np.where(full, np.nanmean(np.where(np.isfinite(c), c, np.nan), 0) if full.any() else np.nan, np.nan)
     return out, len(ok)
 
 
@@ -149,6 +168,8 @@ def panel_examples(plt, genes, grid, curves, pos, out, b12, b23, key, examples, 
             ax.set_title(label, fontsize=7.5, style='italic', color=INK, pad=2)
         else:
             mc, k = set_curves(sets[what], genes, curves, pos, grid)
+            inner = (grid >= 0.03) & (grid <= 0.97)     # the free spline ends hook (fig4 doc, PT-end uptick)
+            mc = {m: np.where(inner, mc[m], np.nan) for m in SECTIONS}
             for m in SECTIONS:
                 ax.plot(grid, mc[m], color=SECTION_COLOURS[m], lw=1.2)
             v = np.concatenate([mc[m][np.isfinite(mc[m])] for m in SECTIONS])
@@ -160,6 +181,37 @@ def panel_examples(plt, genes, grid, curves, pos, out, b12, b23, key, examples, 
             ax.set_ylabel('log2, centred')
     fig.savefig(out / f'f5_{key}.png', facecolor='white')
     plt.close(fig)
+
+
+def panel_contrast(plt, genes, out):
+    """Every screened, assessable gene's S1->S3 gradient E, mouse mean against human mean; named drug targets that keep
+    their direction (ink) beside the reversed calls (orange). Axes differ: human gradients are about 0.6x mouse."""
+    fig = figure(plt, 'contrast')
+    ax = fig.add_axes([0.15, 0.14, 0.80, 0.80])
+    ok = genes.screened & genes.assessable
+    em = genes.loc[ok, [f'E_{m}' for m in MOUSE]].mean(1)
+    eh = genes.loc[ok, [f'E_{m}' for m in HUMAN]].mean(1)
+    ax.axhline(0, color='#CCCCCC', lw=0.6, zorder=0)
+    ax.axvline(0, color='#CCCCCC', lw=0.6, zorder=0)
+    ax.scatter(em, eh, s=3, color='#CFCFCF', lw=0, zorder=1, rasterized=True)
+    named = [(g, INK) for g in CONSERVED_TARGETS] + [(g, REVERSED_C) for g, _ in REVERSED]
+    for g, col in named:
+        assert g in em.index, f'{g} not screened and assessable'
+        x, y = em[g], eh[g]
+        ax.scatter([x], [y], s=16, color=col, lw=0, zorder=3)
+        dx, dy, ha = LABEL_SIDE.get(g, (3, 2, 'left'))
+        ax.annotate(PROTEIN.get(g, g.upper()), (x, y), xytext=(dx, dy), textcoords='offset points', fontsize=5.8,
+                    color=col, ha=ha, zorder=4)
+    ax.set_xlim(-7, 7)
+    ax.set_ylim(-2, 2)
+    ax.set_xlabel('mouse gradient (log2, S1 → S3)', labelpad=1)
+    ax.set_ylabel('human gradient', labelpad=1)
+    fig.savefig(out / 'f5_contrast.png', facecolor='white')
+    plt.close(fig)
+
+
+LABEL_SIDE = {'Pah': (-3, 2, 'right'), 'Slc22a8': (-3, -2, 'right'), 'Folh1': (3, -8, 'left'),
+              'Slc2a2': (3, -8, 'left'), 'Slc5a2': (3, -8, 'left'), 'Slc5a11': (3, -6, 'left')}
 
 
 # ---------------------------------------------------------------------------------------------------- handoffs
@@ -566,6 +618,12 @@ def main(argv=None):
         panel_conservation(plt, screen, out)
     if 'flattening' in panels:
         panel_flattening(plt, genes, summary, out)
+    if 'reversals' in panels:
+        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'reversals', REVERSED)
+    if 'contrast' in panels:
+        panel_contrast(plt, genes, out)
+    if 'pathway_curves' in panels:
+        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'pathway_curves', PATHWAY_CURVES, sets)
     if 'rises' in panels:
         panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'rises', RISES)
     if 'falls' in panels:

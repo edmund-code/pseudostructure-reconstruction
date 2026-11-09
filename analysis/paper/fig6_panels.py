@@ -45,11 +45,15 @@ STEP = '#555555'
 UP, DOWN = '#B2182B', '#2166AC'     # direction of an AKI response, as in panel f's colour map
 # panel boxes of make_fig6.py in SVG units (1 unit = 0.01 inch here)
 SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 480), 'pathways_main': (1160, 272),
-        'segment_response': (270, 232),
+        'segment_response': (270, 232), 'identity': (880, 232),
+        'prolif_curve': (290, 232), 'prolif_resp': (290, 232), 'prolif_pw': (580, 232),
+        'mito_curve': (290, 232), 'mito_resp': (290, 232), 'mito_pw': (580, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'placement': (380, 242), 'genes': (580, 312),
         'response_map': (560, 312), 'handoff_moves': (580, 312), 'made': (880, 232), 'erased': (880, 232),
         'retention': (270, 232)}
-MAIN = ['made', 'erased', 'retention', 'segment_response', 'pathways_main', 'handoff_rows']
+# main figure, one row per story (2026-11-09): S2 identity, proliferation, mitochondria, transport
+MAIN = ['identity', 'retention', 'prolif_curve', 'prolif_resp', 'prolif_pw', 'mito_curve', 'mito_resp', 'mito_pw',
+        'handoff_rows']
 EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'programs', 'pathways', 'response_map', 'handoff_moves']
 
 
@@ -539,6 +543,7 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23, key='pathways', only
         assert not missing, f'not called: {missing}'
         rows = distinct_calls(calls[calls.set.isin(only)], sets, screened, jaccard=1.01)
         rows = rows.set_index('set').loc[only].reset_index()
+    width = 48 if key == 'pathways' else 34      # story rows are narrow
     z = np.load(root / screen / 'all_curves.npz', allow_pickle=True)
     grid = z['grid']
     pos = {g: i for i, g in enumerate(z['genes'])}
@@ -563,6 +568,11 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23, key='pathways', only
     blocks = [('along the PT', resp, TwoSlopeNorm(0, -lim, lim), 'RdBu_r', 0.36, 0.30),
               ('S1/S2/S3 means', segv, TwoSlopeNorm(0, -lim, lim), 'RdBu_r', 0.675, 0.075),
               ('within each segment', within, TwoSlopeNorm(0, -mlim, mlim), 'PuOr_r', 0.77, 0.20)]
+    label_x = 0.345
+    if key != 'pathways':        # narrow story rows: more room for names, shorter block titles
+        label_x = 0.395
+        blocks = [('along the PT', *blocks[0][1:4], 0.41, 0.30), ('S1–S3', *blocks[1][1:4], 0.73, 0.075),
+                  ('within segment', *blocks[2][1:4], 0.825, 0.165)]
     for title, data, norm, cmap, x0, w in blocks:
         ax = fig.add_axes([x0, bottom, w, top - bottom])
         three = data.shape[1] == 3
@@ -598,13 +608,13 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23, key='pathways', only
             cb.outline.set_visible(False)
     for y, r in rows.iterrows():
         yy = top - (y + 0.5) / (n + 0.75) * (top - bottom)
-        fig.text(0.345, yy, pathway_name(r.set), fontsize=6.2, ha='right', va='center', color=INK)
+        fig.text(label_x, yy, pathway_name(r.set, width), fontsize=6.2, ha='right', va='center', color=INK)
     for seg in (1, 2, 3):
         idx = np.flatnonzero(rows['first'].to_numpy() == seg)
         if len(idx):
             y0 = top - idx[0] / (n + 0.75) * (top - bottom)
             y1 = top - (idx[-1] + 1) / (n + 0.75) * (top - bottom)
-            fig.lines.append(plt.Line2D([0.352, 0.352], [y1 + 0.003, y0 - 0.003], transform=fig.transFigure,
+            fig.lines.append(plt.Line2D([label_x + 0.007, label_x + 0.007], [y1 + 0.003, y0 - 0.003], transform=fig.transFigure,
                                         color=COLOURS[SEGS[seg - 1]], lw=3))
     rows.assign(name=rows.set.map(pathway_name)).to_csv(out / f'f6_{key}_rows.csv', index=False)
     fig.savefig(out / f'f6_{key}.png', facecolor='white')
@@ -629,14 +639,28 @@ PATHWAYS_MAIN = ['MSigDB_Hallmark_2020::E2F Targets', 'KEGG_2019_Mouse::Proteaso
 # drug targets among the segment-dependent calls (S3 response - S1 response >= 1 log2, 4/4 pairs, relabelings <= 0.25x)
 SEGMENT_TARGETS = [('Xdh', 'XDH'), ('Cdk4', 'CDK4'), ('Tyms', 'TYMS'), ('Hsd11b1', '11β-HSD1'), ('Slc3a1', 'rBAT'),
                    ('Hnf1b', 'HNF1B')]
+# story rows: each pairs a curve, the segment response of its drug targets and its robust pathway calls
+IDENTITY = [('Havcr1', ['Havcr1'], 2), ('Cyp24a1', ['Cyp24a1'], 2), ('Agt', ['Agt'], 2), ('Cyp4a14', ['Cyp4a14'], 2)]
+STORIES = {
+    'prolif': ([('DNA replication', 'Reactome_2022::DNA Strand Elongation R-HSA-69190', 2)],
+               [('Cdk4', 'CDK4'), ('Cdk2', 'CDK2'), ('E2f1', 'E2F1'), ('Tyms', 'TYMS')],
+               ['MSigDB_Hallmark_2020::E2F Targets', 'Reactome_2022::G1/S-Specific Transcription R-HSA-69205',
+                'Reactome_2022::DNA Strand Elongation R-HSA-69190', 'KEGG_2019_Mouse::Mismatch repair']),
+    'mito': ([('Oxidative phosphorylation', 'KEGG_2019_Mouse::Oxidative phosphorylation', 3)],
+             [('Xdh', 'XDH'), ('Hsd11b1', '11β-HSD1'), ('Slc3a1', 'rBAT'), ('Hnf1b', 'HNF1B')],
+             ['MSigDB_Hallmark_2020::Oxidative Phosphorylation',
+              'Reactome_2022::Respiratory Electron Transport, ATP Synthesis By Chemiosmotic Coupling, Heat Production '
+              'By Uncoupling Proteins R-HSA-163200', 'KEGG_2019_Mouse::Oxidative phosphorylation']),
+}
 
 
-def panel_segment_response(plt, genes, out):
+def panel_segment_response(plt, genes, out, key='segment_response', targets=None):
     """IR minus control cluster mean per segment (mean of the 4 IR x control pairs) for named drug targets."""
-    fig = figure(plt, 'segment_response')
-    ax = fig.add_axes([0.25, 0.17, 0.70, 0.79])
-    n = len(SEGMENT_TARGETS)
-    for i, (g, name) in enumerate(SEGMENT_TARGETS):
+    targets = targets or SEGMENT_TARGETS
+    fig = figure(plt, key)
+    ax = fig.add_axes([0.25, 0.17, 0.70, 0.72])
+    n = len(targets)
+    for i, (g, name) in enumerate(targets):
         resp = [np.mean([genes.loc[g, f'cluster_S{s}_{ir}'] - genes.loc[g, f'cluster_S{s}_{c}']
                          for ir in INJURED for c in CONTROLS]) for s in (1, 2, 3)]
         y = n - 1 - i
@@ -649,7 +673,7 @@ def panel_segment_response(plt, genes, out):
     ax.set_ylim(-0.6, n - 0.4)
     ax.set_xlabel('log2 AKI / control', labelpad=1)
     ax.spines['left'].set_visible(False)
-    fig.savefig(out / 'f6_segment_response.png', facecolor='white')
+    fig.savefig(out / f'f6_{key}.png', facecolor='white')
     plt.close(fig)
 
 
@@ -670,7 +694,7 @@ def panel_gradients(plt, root, screen, genes, curves, grid, out, b12, b23, key, 
     n = len(examples)
     cores = [(0, b12 - 0.06), (b12 + 0.06, b23 - 0.06), (b23 + 0.06, 1)]
     for i, (label, what, seg) in enumerate(examples):
-        ax = fig.add_axes([0.075 + i * (0.925 / n), 0.13, 0.925 / n - 0.065, 0.74])
+        ax = fig.add_axes([0.075 + i * (0.925 / n), 0.13, 0.925 / n - 0.065, 0.74] if n > 1 else [0.2, 0.13, 0.76, 0.74])
         if isinstance(what, list) and len(what) == 1:
             g = what[0]
             lo, hi = level_ylim(g, curves)
@@ -774,6 +798,15 @@ def main(argv=None):
         panel_pathways(plt, root, args.screen, genes, out, b12, b23, 'pathways_main', PATHWAYS_MAIN)
     if 'segment_response' in args.panels:
         panel_segment_response(plt, genes, out)
+    if 'identity' in args.panels:
+        panel_gradients(plt, root, args.screen, genes, curves, grid, out, b12, b23, 'identity', IDENTITY)
+    for story, (curve, targets, pws) in STORIES.items():
+        if f'{story}_curve' in args.panels:
+            panel_gradients(plt, root, args.screen, genes, curves, grid, out, b12, b23, f'{story}_curve', curve)
+        if f'{story}_resp' in args.panels:
+            panel_segment_response(plt, genes, out, f'{story}_resp', targets)
+        if f'{story}_pw' in args.panels:
+            panel_pathways(plt, root, args.screen, genes, out, b12, b23, f'{story}_pw', pws)
 
 
 if __name__ == '__main__':

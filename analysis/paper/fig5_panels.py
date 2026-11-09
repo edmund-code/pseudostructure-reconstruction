@@ -46,11 +46,11 @@ MOUSE_C, HUMAN_C = '#2F6DB5', '#C51B7D'
 EARLY = {'mouse': '#3A8DD0', 'human': '#E58BBE'}
 LATE = {'mouse': '#1B3A5C', 'human': '#7A0F4D'}
 REVERSED_C = '#D95F02'
-SIZE = {'reversals': (1160, 232), 'contrast': (400, 312), 'pathway_curves': (760, 312), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
+SIZE = {'reversals': (1160, 232), 'reversals_grid': (760, 352), 'contrast': (390, 352), 'pathway_curves': (1160, 232), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
         'pathway_null': (380, 242)}
-MAIN = ['reversals', 'contrast', 'pathway_curves', 'handoff_rows']
+MAIN = ['reversals_grid', 'contrast', 'pathway_curves', 'handoff_rows']
 EXTENDED = ['maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
@@ -149,12 +149,18 @@ def decorate(ax, b12, b23, lo, hi):
 
 
 # ---------------------------------------------------------------------------------------------------- curves
-def panel_examples(plt, genes, grid, curves, pos, out, b12, b23, key, examples, sets=None):
-    """Small multiples: each example's centred curves (mouse blues, human purples), bin means for single genes."""
+def panel_examples(plt, genes, grid, curves, pos, out, b12, b23, key, examples, sets=None, ncols=None):
+    """Small multiples: each example's centred curves (mouse blues, human magentas), bin means for single genes;
+    one row, or a grid of ncols columns."""
     fig = figure(plt, key)
     n = max(len(examples), 1)
+    ncols = ncols or n
+    nrows = -(-n // ncols)
+    rh = 0.87 / nrows
     for i, (label, what) in enumerate(examples):
-        ax = fig.add_axes([0.07 + i * (0.93 / n), 0.13, 0.93 / n - 0.06, 0.74])
+        r, ci = divmod(i, ncols)
+        ax = fig.add_axes([0.07 + ci * (0.93 / ncols), 0.13 / nrows + (nrows - 1 - r) * rh + (0.02 if nrows > 1 else 0),
+                           0.93 / ncols - 0.06, rh - 0.13])
         if isinstance(what, str) and what in pos:
             vals = []
             for m in SECTIONS:
@@ -177,7 +183,7 @@ def panel_examples(plt, genes, grid, curves, pos, out, b12, b23, key, examples, 
             ax.set_title(f'{label} ({k} genes)', fontsize=7.5, color=INK, pad=2)
         ax.axhline(0, color='#E2E2E2', lw=0.5, zorder=0)
         decorate(ax, b12, b23, lo, hi)
-        if i == 0:
+        if ci == 0:
             ax.set_ylabel('log2, centred')
     fig.savefig(out / f'f5_{key}.png', facecolor='white')
     plt.close(fig)
@@ -620,6 +626,8 @@ def main(argv=None):
         panel_flattening(plt, genes, summary, out)
     if 'reversals' in panels:
         panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'reversals', REVERSED)
+    if 'reversals_grid' in panels:   # rising in mouse on top, falling in mouse below
+        panel_examples(plt, genes, grid, curves, pos, out, b12, b23, 'reversals_grid', REVERSED, ncols=3)
     if 'contrast' in panels:
         panel_contrast(plt, genes, out)
     if 'pathway_curves' in panels:

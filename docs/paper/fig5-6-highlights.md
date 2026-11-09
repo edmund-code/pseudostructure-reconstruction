@@ -172,6 +172,19 @@ None of these papers resolves S1/S2/S3, so the positional statements rest on our
 - **e.** Nine robust pathway calls, hand-picked one per family.
 - **f.** Handoffs: OAT1 → OCT2, 4F2hc → rBAT, B0AT1 → GAT2, SLC46A3 → PCFT, ZIP5 → ZIP8, plus the cystine control.
 
+**Reorganised into stories (user, 2026-11-09).** Each row is one story under a grey heading.
+- **Fig. 5:**
+  - drug targets: the contrast scatter beside the five reversals;
+  - transporter handoffs;
+  - pathways: display only.
+- **Fig. 6:** each of the middle two rows pairs a curve, its drug targets' segment response and its robust pathway
+  calls.
+  - S2 identity: KIM-1 with the erased gradients, and gradients kept;
+  - proliferation: DNA replication; CDK4, CDK2, E2F1 and TYMS; E2F, G1/S, DNA strand elongation and mismatch repair;
+  - mitochondria: OXPHOS; XDH, 11β-HSD1, rBAT and HNF1B; the respiratory-chain calls;
+  - transport: the handoffs.
+- Proteasome and bile-acid metabolism left the main figure; they stay in the full heatmap in Extended Data.
+
 **Still open:**
 - Every Fig. 5 statement rests on one human donor.
 - The Fig. 6c legend overlaps its points (a pre-existing issue).

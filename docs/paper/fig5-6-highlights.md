@@ -215,7 +215,7 @@ here.
 | MCT1 → MCT9 | −0.49 | +0.25 (opposite sign) |
 
 - **Pairs that clustering reproduces:** y+LAT1 → AGT1, LAT2 → AGT1, B0AT1 → B0AT3 and OCTN2 → OAT2.
-- **Display:** Fig. 5d, as slope graphs: each pair's mouse and human switch from the curves beside the same from the cluster lines.
+- **Display:** Fig. 5d (one row per pair: curve shift filled, cluster-lines shift open; the slope-graph version was reverted at the user's request).
 - **Fairness caveat:** human cluster labels are unreliable (Fig. 5 protocol), which handicaps clustering in human.
   That is also what clustering would face in practice.
 
@@ -224,4 +224,6 @@ here.
 - A step reading of the clusters moves every switch by a whole segment (±0.37). The curve gives −0.14 for
   OAT1 → OCT2.
 - 4F2hc → rBAT is the one pair a step reading misses (0.00).
-- Not drawn: the AKI figure's continuous content is already the within-segment rows.
+- **Display:** Fig. 6j, in the same layout as Fig. 5d. Here the clusters keep the direction, and the size
+  differs by pair: OAT1 → OCT2 is −0.14 on the curve against −0.07 from the clusters; B0AT1 → GAT2 is −0.23
+  against −0.34.

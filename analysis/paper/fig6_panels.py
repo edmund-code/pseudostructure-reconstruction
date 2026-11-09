@@ -45,7 +45,7 @@ STEP = '#555555'
 UP, DOWN = '#B2182B', '#2166AC'     # direction of an AKI response, as in panel f's colour map
 # panel boxes of make_fig6.py in SVG units (1 unit = 0.01 inch here)
 SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 480), 'pathways_main': (1160, 272),
-        'segment_response': (270, 232), 'identity': (880, 232),
+        'segment_response': (270, 232), 'identity': (880, 232), 'cluster_shift': (560, 272),
         'prolif_curve': (290, 232), 'prolif_resp': (290, 232), 'prolif_pw': (580, 232),
         'mito_curve': (290, 232), 'mito_resp': (290, 232), 'mito_pw': (580, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'placement': (380, 242), 'genes': (580, 312),
@@ -53,7 +53,7 @@ SIZE = {'programs': (420, 452), 'pathways': (720, 452), 'handoff_rows': (1160, 4
         'retention': (270, 232)}
 # main figure, one row per story (2026-11-09): S2 identity, proliferation, mitochondria, transport
 MAIN = ['identity', 'retention', 'prolif_curve', 'prolif_resp', 'prolif_pw', 'mito_curve', 'mito_resp', 'mito_pw',
-        'handoff_rows']
+        'handoff_rows', 'cluster_shift']
 EXTENDED = ['maps', 'coverage', 'placement', 'genes', 'programs', 'pathways', 'response_map', 'handoff_moves']
 
 
@@ -449,6 +449,61 @@ def panel_h(plt, grid, curves, hp, out, b12, b23):
 
 
 # ---------------------------------------------------------------------------------------------------- g
+def cluster_switch_shift(genes, hp, b12, b23, base, other):
+    """Each shifted pair's shift (other arm - base arm) as clustering would read it: per section, straight lines
+    through its own three cluster means placed at the segment centres (Fig. 4's lines model), min-max scaled, crossing
+    found as for the curves. Post hoc (2026-11-09), point estimates; NaN where a section's lines do not cross."""
+    from pseudospace.handoffs import crossing, scaled_profile
+
+    grid = np.linspace(0, 1, 201)
+    centres = [b12 / 2, (b12 + b23) / 2, (b23 + 1) / 2]
+
+    def lines(g, m):
+        return scaled_profile(np.interp(grid, centres, [genes.loc[g, f'cluster_S{k}_{m}'] for k in (1, 2, 3)]))
+
+    rows = []
+    for _, r in hp[hp.shifted].iterrows():
+        x = {m: crossing(lines(r.early, m), lines(r.late, m), grid) for m in base + other}
+        rows.append({'early': r.early, 'late': r.late, 'curve': r['shift'],
+                     'clusters': np.mean([x[m] for m in other]) - np.mean([x[m] for m in base])})
+    return pd.DataFrame(rows).sort_values('curve')
+
+
+def draw_cluster_shift(fig, d, shown, protein, xlabel):
+    """One row per pair: curve shift (filled) and cluster-lines shift (open, x where the clusters give no switch);
+    the pairs drawn in the handoff panel in ink."""
+    ax = fig.add_axes([0.30, 0.15, 0.66, 0.81])
+    for y, (_, r) in enumerate(d.iterrows()):
+        col = INK if (r.early, r.late) in shown else MUTED
+        if np.isfinite(r.clusters):
+            ax.plot([r.clusters, r.curve], [y, y], color='#CCCCCC', lw=1, zorder=1)
+            ax.scatter([r.clusters], [y], s=16, facecolor='white', edgecolor=col, lw=0.9, zorder=3)
+        else:
+            ax.text(0.0, y, '×', color=col, fontsize=7, ha='center', va='center', zorder=3)
+        ax.scatter([r.curve], [y], s=16, color=col, lw=0, zorder=4)
+        ax.text(-0.04, y, f'{protein.get(r.early, r.early)} → {protein.get(r.late, r.late)}', fontsize=5.8, color=col,
+                ha='right', va='center', transform=ax.get_yaxis_transform())
+    ax.axvline(0, color='#BBBBBB', lw=0.6, zorder=0)
+    ax.set_ylim(-0.7, len(d) - 0.3)
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.set_xlabel(xlabel, labelpad=1)
+    ax.scatter([0.03], [1.0], s=14, color=INK, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(0.06, 1.0, 'curve', fontsize=5.8, color=MUTED, va='center', transform=ax.transAxes)
+    ax.scatter([0.18], [1.0], s=14, facecolor='white', edgecolor=INK, lw=0.9, transform=ax.transAxes, clip_on=False)
+    ax.text(0.21, 1.0, 'cluster means', fontsize=5.8, color=MUTED, va='center', transform=ax.transAxes)
+
+
+def panel_cluster_shift(plt, genes, hp, out, b12, b23):
+    """Shifted handoffs: the curve's AKI shift (filled) against the shift the cluster means give (open)."""
+    d = cluster_switch_shift(genes, hp, b12, b23, CONTROLS, INJURED)
+    d.to_csv(out / 'f6_cluster_shift.csv', index=False)
+    fig = figure(plt, 'cluster_shift')
+    draw_cluster_shift(fig, d, {(e, l) for e, l, _ in G_PAIRS}, PROTEIN, 'switch shift, AKI − control')
+    fig.savefig(out / 'f6_cluster_shift.png', facecolor='white')
+    plt.close(fig)
+
+
 def neighbour_free(hp, genes):
     """Handoff pairs whose partners both pass the screen's neighbour rule in both conditions (post hoc: the handoff
     screen had none; it drops Slc5a9 -> Slc5a3, whose late partner is 23x higher in thick limb)."""
@@ -798,6 +853,8 @@ def main(argv=None):
         panel_pathways(plt, root, args.screen, genes, out, b12, b23, 'pathways_main', PATHWAYS_MAIN)
     if 'segment_response' in args.panels:
         panel_segment_response(plt, genes, out)
+    if 'cluster_shift' in args.panels:
+        panel_cluster_shift(plt, genes, hp, out, b12, b23)
     if 'identity' in args.panels:
         panel_gradients(plt, root, args.screen, genes, curves, grid, out, b12, b23, 'identity', IDENTITY)
     for story, (curve, targets, pws) in STORIES.items():

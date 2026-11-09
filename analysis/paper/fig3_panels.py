@@ -1,6 +1,8 @@
 """Fig. 3 panels drawn from data, sized for the figure layout (make_fig3.py), plus the numbers behind them.
 
- a  UMAP of the control/AKI fit with the elastic curve, coloured by pseudostructure and by segment label
+ a  each fit (control/AKI, control/human) on its UMAP with the elastic curve, by pseudostructure and by segment label
+ r  per condition (control, AKI, human): marker heatmap along pseudostructure (b) with that condition's
+    segment-label densities on the same rows and rho per section (c)
  b  segment labels along pseudostructure (mouse filled, human outline) and rho per section with a permutation null
  c  one marker per segment, mean expression along pseudostructure: control, AKI, human
  d  robustness reruns (needs fig3_robustness.py output)
@@ -33,17 +35,17 @@ MARKERS = [('Slc5a2', 'PTS1'), ('Slc13a3', 'PTS2'), ('Slc7a13', 'PTS3'), ('Slc12
 SECTION_NAMES = {'Ctrl1A2': 'Ctrl1A2', 'Ctrl1A4': 'Ctrl1A4', 'IR2A2': 'IR2A2', 'IR2A4': 'IR2A4',
                  'HUK1_COR1': 'human 1', 'HUK1_MED1': 'human 2'}
 SECTION_COLOURS = {'Ctrl1A2': '#2F6DB5', 'Ctrl1A4': '#7FA7D9', 'IR2A2': '#D9692B', 'IR2A4': '#EFA36E',
-                   'HUK1_COR1': '#6A4BB0', 'HUK1_MED1': '#A893D6'}
+                   'HUK1_COR1': '#C51B7D', 'HUK1_MED1': '#E58BBE'}
 INK, MUTED = '#222222', '#777777'
 # panel boxes of make_fig3.py in SVG units (1 unit = 0.01 inch here)
-SIZE = {'a': (760, 345), 'b': (360, 345), 'c': (640, 610), 'd': (480, 170), 'e': (480, 170), 'f': (480, 170)}
+SIZE = {'a': (1160, 290), 'row': (1160, 205), 'a_old': (760, 345), 'b': (360, 345), 'c': (640, 610), 'd': (480, 170), 'e': (480, 170), 'f': (480, 170)}
 
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--results-root', default=os.environ.get('PSEUDOSPACE_RESULTS_ROOT', str(REPO / 'results')))
     p.add_argument('--out', default='paper_figures/fig3', help='relative to the results root')
-    p.add_argument('--panels', default='abcdef')
+    p.add_argument('--panels', default='ar', help='a, r (per-condition heatmap + label density); b-f are the earlier layout')
     p.add_argument('--permutations', type=int, default=1000)
     return p.parse_args(argv)
 
@@ -70,48 +72,54 @@ def pass2(results_root, run):
 
 
 # ---------------------------------------------------------------------------------------------------- a
+FITS = {'aki': 'mouse control + AKI', 'hvm': 'mouse control + human'}
+
+
 def panel_a(args, plt, out):
-    pos = load_positions(args.results_root, 'aki')
-    a = pass2(args.results_root, 'aki')
-    umap = pd.DataFrame(a.obsm['X_umap'], index=a.obs_names).reindex(pos.index).to_numpy()
-    emb = pd.DataFrame(a.obsm['X_harmony'][:, :50], index=a.obs_names).reindex(pos.index).to_numpy()
-    nodes = np.load(Path(args.results_root) / RUNS['aki'] / '04_pseudospace/curve_nodes.npz')
-    order = np.argsort(nodes['pseudospace'])
-    centres = nodes['nodes'][order]
-    nearest = np.argmin(((emb[:, None, :] - centres[None]) ** 2).sum(-1), axis=1)
-    node_xy = np.array([np.median(umap[nearest == k], 0) if (nearest == k).any() else [np.nan, np.nan]
-                        for k in range(len(centres))])
-    ok = np.isfinite(node_xy[:, 0])
-    node_xy = node_xy[ok]
-    rng = np.random.default_rng(0)
-    draw = rng.permutation(len(pos))
-    fig = figure(plt, 'a')
-    for i, mode in enumerate(('t', 'group')):
-        ax = fig.add_axes([0.01 + 0.5 * i, 0.04, 0.42, 0.92])
-        if mode == 't':
-            sc = ax.scatter(*umap[draw].T, c=pos.t.to_numpy()[draw], cmap='plasma', vmin=0, vmax=1, s=0.6, lw=0,
-                            rasterized=True)
-            cax = fig.add_axes([0.445, 0.25, 0.009, 0.5])
-            cb = fig.colorbar(sc, cax=cax, ticks=[0, 0.5, 1])
-            cb.outline.set_linewidth(0)
-            cb.set_label('pseudostructure', color=MUTED)
-        else:
-            ax.scatter(*umap[draw].T, c=pos.group.map(COLOURS).to_numpy()[draw], s=0.6, lw=0, rasterized=True)
-            for g in GROUP_ORDER:
-                k = (pos.group == g).to_numpy()
-                if k.any():
-                    x, y = np.median(umap[k], 0)
-                    ax.text(x, y, g, ha='center', va='center', fontsize=7, weight='bold', color=COLOURS[g],
-                            bbox=dict(boxstyle='round,pad=0.25', fc='white', ec=COLOURS[g], lw=0.8), zorder=6)
-        ax.plot(*node_xy.T, color='k', lw=1.1, zorder=3)
-        ax.scatter(*node_xy.T, s=7, facecolor='white', edgecolor='k', lw=0.6, zorder=4)
-        for j, lab in ((0, '0'), (-1, '1')):
-            ax.scatter(*node_xy[j], marker='*', s=90, color='#D7263D', edgecolor='k', lw=0.4, zorder=5)
-            ax.annotate(lab, node_xy[j], xytext=(6, -2), textcoords='offset points', fontsize=8, weight='bold')
-        ax.set_axis_off()
-    fig.savefig(out / 'f3_a.png', transparent=False, facecolor='white')
-    plt.close(fig)
-    return {'n_units': int(len(pos))}
+    """One row per fit: its UMAP with the elastic curve, coloured by pseudostructure and by segment label."""
+    res = {}
+    for run in FITS:
+        pos = load_positions(args.results_root, run)
+        a = pass2(args.results_root, run)
+        umap = pd.DataFrame(a.obsm['X_umap'], index=a.obs_names).reindex(pos.index).to_numpy()
+        emb = pd.DataFrame(a.obsm['X_harmony'][:, :50], index=a.obs_names).reindex(pos.index).to_numpy()
+        nodes = np.load(Path(args.results_root) / RUNS[run] / '04_pseudospace/curve_nodes.npz')
+        centres = nodes['nodes'][np.argsort(nodes['pseudospace'])]
+        nearest = np.argmin(((emb[:, None, :] - centres[None]) ** 2).sum(-1), axis=1)
+        node_xy = np.array([np.median(umap[nearest == k], 0) if (nearest == k).any() else [np.nan, np.nan]
+                            for k in range(len(centres))])
+        node_xy = node_xy[np.isfinite(node_xy[:, 0])]
+        draw = np.random.default_rng(0).permutation(len(pos))
+        fig = figure(plt, 'a')
+        for i, mode in enumerate(('t', 'group')):
+            ax = fig.add_axes([0.035 + 0.49 * i, 0.02, 0.42, 0.96])
+            if mode == 't':
+                sc = ax.scatter(*umap[draw].T, c=pos.t.to_numpy()[draw], cmap='plasma', vmin=0, vmax=1, s=0.5, lw=0,
+                                rasterized=True)
+                cax = fig.add_axes([0.468, 0.25, 0.007, 0.5])
+                cb = fig.colorbar(sc, cax=cax, ticks=[0, 0.5, 1])
+                cb.outline.set_linewidth(0)
+                cb.set_label('pseudostructure', color=MUTED)
+            else:
+                ax.scatter(*umap[draw].T, c=pos.group.map(COLOURS).to_numpy()[draw], s=0.5, lw=0, rasterized=True)
+                for g in GROUP_ORDER:
+                    k = (pos.group == g).to_numpy()
+                    if k.any():
+                        x, y = np.median(umap[k], 0)
+                        ax.text(x, y, g, ha='center', va='center', fontsize=7, weight='bold', color=COLOURS[g],
+                                bbox=dict(boxstyle='round,pad=0.25', fc='white', ec=COLOURS[g], lw=0.8), zorder=6)
+            ax.plot(*node_xy.T, color='k', lw=1.1, zorder=3)
+            ax.scatter(*node_xy.T, s=7, facecolor='white', edgecolor='k', lw=0.6, zorder=4)
+            for j, lab in ((0, '0'), (-1, '1')):
+                ax.scatter(*node_xy[j], marker='*', s=90, color='#D7263D', edgecolor='k', lw=0.4, zorder=5)
+                ax.annotate(lab, node_xy[j], xytext=(6, -2), textcoords='offset points', fontsize=8, weight='bold')
+            ax.set_aspect('equal', adjustable='datalim')
+            ax.set_axis_off()
+        fig.text(0.008, 0.5, FITS[run], rotation=90, ha='left', va='center', fontsize=8, weight='bold', color=INK)
+        fig.savefig(out / f'f3_a_{run}.png', facecolor='white')
+        plt.close(fig)
+        res[run] = int(len(pos))
+    return res
 
 
 # ---------------------------------------------------------------------------------------------------- b
@@ -380,12 +388,91 @@ def panel_f(args, plt, out):
     return stats
 
 
+# ---------------------------------------------------------------------------------------------------- rows
+CONDITIONS = [('Control', 'aki', ['Ctrl1A2', 'Ctrl1A4'], '#2F6DB5'),
+              ('AKI', 'aki', ['IR2A2', 'IR2A4'], '#D9692B'),
+              ('Human', 'hvm', ['HUK1_COR1', 'HUK1_MED1'], '#C51B7D')]
+
+
+def panel_rows(args, plt, out):
+    """b + c, one figure per condition: marker heatmap along pseudostructure, and beside it the density of
+    pseudostructure for each segment label, drawn on the marker row of that segment."""
+    from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+    from scipy.stats import gaussian_kde
+
+    stats = label_statistics(args).set_index('sample')
+    stats.to_csv(out / 'f3_b_rho.csv')
+    cmap = LinearSegmentedColormap.from_list('bwr', ['#3B4CC0', '#C9D3EE', '#FFFFFF', '#F4B6B0', '#D7263D'])
+    cmap.set_bad('#F2F2F2')
+    n = len(MARKERS)
+    grid = np.linspace(0, 1, 400)
+    for k, (name, run, samples, colour) in enumerate(CONDITIONS):
+        z, label = binned_markers(args.results_root, run, samples)
+        pos = load_positions(args.results_root, run)
+        pos = pos[pos['sample'].isin(samples)]
+        fig = figure(plt, 'row')
+        bottom, top = 0.17, 0.97
+        unit = (top - bottom) / (n + 1)
+        lab_ax = fig.add_axes([0.13, top - unit, 0.50, unit * 0.9])
+        codes = label.map({g: i for i, g in enumerate(GROUP_ORDER)}).to_numpy(float)
+        lab_ax.imshow(codes[None], aspect='auto', interpolation='nearest',
+                      cmap=ListedColormap([COLOURS[g] for g in GROUP_ORDER]), vmin=-0.5, vmax=len(GROUP_ORDER) - 0.5)
+        lab_ax.set_axis_off()
+        for g in GROUP_ORDER:
+            idx = np.flatnonzero(label.to_numpy() == g)
+            if len(idx) > 3:
+                lab_ax.text(np.median(idx), 0, g, ha='center', va='center', fontsize=5.5, color='white', weight='bold')
+        hax = fig.add_axes([0.13, bottom, 0.50, n * unit])
+        im = hax.imshow(np.clip(z, -3, 3), aspect='auto', interpolation='nearest', cmap=cmap, vmin=-3, vmax=3,
+                        extent=(0, 1, n, 0))
+        hax.set_yticks(np.arange(n) + 0.5)
+        hax.set_yticklabels([(g.upper() if run == 'hvm' else g) + f' ({s})' for g, s in MARKERS], fontsize=6,
+                            style='italic', color=INK)
+        hax.tick_params(axis='y', length=0)
+        for sp in hax.spines.values():
+            sp.set_visible(False)
+        hax.set_xticks([0, 0.5, 1])
+        hax.set_xticklabels(['0', '0.5', '1'])
+        hax.set_xlabel('pseudostructure', labelpad=1)
+        fig.text(0.012, bottom + n * unit / 2, name, rotation=90, ha='left', va='center', fontsize=9, weight='bold',
+                 color=colour)
+        if k == 0:
+            cax = fig.add_axes([0.645, bottom + 0.2 * n * unit, 0.006, 0.6 * n * unit])
+            cb = fig.colorbar(im, cax=cax, ticks=[-3, 0, 3])
+            cb.outline.set_linewidth(0)
+            cb.ax.tick_params(labelsize=5.5, length=2)
+        # label densities on the same rows
+        dax = fig.add_axes([0.72, bottom, 0.26, n * unit])
+        for i, (_, seg) in enumerate(MARKERS):
+            base = n - 1 - i
+            dax.axhline(base, color='#DDDDDD', lw=0.5, zorder=0)
+            t = pos.t[pos.group == seg].to_numpy()
+            if len(t) < 20:
+                continue
+            y = gaussian_kde(t)(grid)
+            y = 0.85 * y / y.max()
+            dax.fill_between(grid, base, base + y, color=COLOURS[seg], alpha=0.45, lw=0)
+            dax.plot(grid, base + y, color=COLOURS[seg], lw=0.9)
+        dax.set_xlim(0, 1)
+        dax.set_ylim(0, n)
+        dax.set_yticks([])
+        dax.spines['left'].set_visible(False)
+        dax.set_xticks([0, 0.5, 1])
+        dax.set_xticklabels(['0', '0.5', '1'])
+        dax.set_xlabel('pseudostructure', labelpad=1)
+        rho = '   '.join(f'{SECTION_NAMES[s]} {stats.loc[s, "rho"]:.2f}' for s in samples)
+        fig.text(0.85, top - unit / 2, f'ρ   {rho}', ha='center', va='center', fontsize=6.5, color=INK)
+        fig.savefig(out / f'f3_row_{name.lower()}.png', facecolor='white')
+        plt.close(fig)
+    return stats.reset_index()
+
+
 def main(argv=None):
     args = parse_args(argv)
     plt = style()
     out = Path(args.results_root) / args.out / 'panels'
     out.mkdir(parents=True, exist_ok=True)
-    draw = {'a': panel_a, 'b': panel_b, 'c': panel_c, 'd': panel_d, 'e': panel_e, 'f': panel_f}
+    draw = {'a': panel_a, 'r': panel_rows, 'b': panel_b, 'c': panel_c, 'd': panel_d, 'e': panel_e, 'f': panel_f}
     for k in args.panels:
         res = draw[k](args, plt, out)
         if isinstance(res, pd.DataFrame):

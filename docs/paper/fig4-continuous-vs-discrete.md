@@ -216,3 +216,47 @@ The remaining end units are still half-depth and small, but 49 of 54 are S3. The
 **Candidate fix, to freeze before rerunning:**
 - drop PT-labelled units whose H&E class is not proximal; this rule uses neither depth nor position;
 - clip the drawn curves to the bin-supported range.
+
+### Post-hoc test: does the curve beat straight lines between the clusters? (frozen 2026-11-09, before the fit)
+
+Question (user): would straight lines joining the S1/S2/S3 cluster levels show the same thing as the curve?
+
+- **Null model (`linear`):** NB on raw counts with log(lib) offset. Design [1, x, (x − c₂)₊], with c₂ the S2 centre
+  ((b12 + b23)/2 on the gene's own axis). This is the fitted piecewise-linear curve through the three segment centres,
+  extended linearly at both ends: 3 parameters.
+- **Alternative (`full`):** the null plus the screen's cubic B-spline design (BASIS_DF = 6). The null is nested in it.
+- **Dispersion:** per gene, under `full`, as in the screen.
+- **Statistics:**
+  - NB likelihood ratio;
+  - quasi-F, (LR/df₁)/(D_full/df₂).
+- **Null calibration:** parametric bootstrap. Each gene is simulated once from its fitted `linear` NB model, with the
+  same lib and dispersion. Dispersion is re-estimated and both models refitted. The pooled replicates set a 5% FDR
+  threshold per mouse (decoy rule as in the screen). A gene passes if it clears the threshold in both mice.
+- **Units:** two runs.
+  - The screen's units, so the result matches the current figure.
+  - The H&E-concordant units (open issue above).
+- **Keeping it:** a gene is a Fig. 4b example only if it passes in both runs.
+
+**Result (2026-11-09, scratch run; screen code unchanged).**
+- **Calibration:** bootstrap replicate LRs average 5.0, matching the 5 added degrees of freedom, so the null behaves as
+  designed. But the median real gene has LR 7.0, above that null mean, and the bootstrap trusts the NB model, so it is
+  permissive.
+- **Passing (quasi-F, 5% FDR, both mice):**
+
+  | Units | Genes |
+  |---|---|
+  | Screen units | 906 |
+  | H&E-concordant units | 828 |
+  | Both runs | 809 |
+  | Both runs, neighbour filter passed | 572 |
+
+  76 of the 79 Fig. 4c calls pass.
+- **Significance does not pick examples:**
+  - Slc6a19 passes (rank 60) although straight lines reproduce its decline to within the bins.
+  - For 319 of the 572, the largest departure lies at x 0.80–0.95, the S3 tail.
+  - Adding effect size leaves 35 genes that pass and whose bins depart by more than 1 log2 in both mice. 15 of these
+    sit in the interior (x 0.3–0.8).
+- **Largest departures:** Cyp4a12a, Pigr, Dpys, Ceacam2, Scd1, Hs6st2, Slc22a13, Slc22a19.
+  - Most share one shape: a sharp switch at x 0.40–0.46, partway into S2. Genes with it include Scd1, Slc22a13, Slc22a19,
+    Ceacam2, Serpina1f, Higd1c, Mettl7a2, Hs6st2 and Mep1b.
+- **Fig. 4b rule:** examples must pass the test in both runs and depart by more than 1 log2.

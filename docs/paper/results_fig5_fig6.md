@@ -8,48 +8,54 @@ analyses are marked as such in the text.
 
 ---
 
-### COAST reveals where transporter switch points differ between mouse and human
+### COAST reveals that drug transporters occupy different stretches of the mouse and human proximal tubule
 
-The proximal tubule (PT) handles most drugs and solutes that the kidney reabsorbs or secretes. Much of what is known
-about where this happens along the PT comes from mice. We therefore asked whether genes keep their position along
-the PT in human. We placed PT cross-sections from two mouse kidneys and two sections of one human kidney on a
-shared pseudostructure axis, and compared each gene's expression along it (Methods).
+The proximal tubule (PT) reabsorbs glucose and secretes most renally cleared drugs, and much of what we know about
+where along the PT this happens comes from mice. We therefore asked whether transporters occupy the same stretch of
+the PT in human. We placed PT cross-sections from two mouse kidneys and two sections of one human kidney on a shared
+pseudostructure axis and followed each gene from the start to the end of the PT (Methods). Human gradients were
+consistently shallower than mouse gradients, for reasons we could not separate in this cohort (Methods). We therefore
+compared where genes are expressed, not how much.
 
-**Gradients that reverse.** Human gradients were consistently shallower than mouse gradients. We could not tell
-whether this reflects biology, the donor or the measurement (Methods). We therefore compared only the direction
-and position of gradients, not their size. For 28 genes, expression rose along the PT in both mice and fell in
-both human sections, or the reverse. No gene passed the same test when we swapped one mouse and one human section
-between the groups, so these reversals are not explained by section-to-section variation. Eleven of the 28
-reproduced in independent data: microdissected mouse PT segments [Chen 2021] and a human single-cell atlas
-[Lake 2023]. Among them were the drug target neprilysin (MME, inhibited by sacubitril), the urate exporter NPT4
-(SLC17A3), the prostaglandin-degrading enzyme 15-PGDH (HPGD), the inositol transporter SMIT2 (SLC5A11) and DCXR
-(Fig. 5b). Many other drug targets kept their direction in both species, including SGLT2, URAT1, OAT3, ACE and PSMA
-(Fig. 5a). Reversals are strong enough to see by comparing the start and end of the PT, so clustering could also
-find them.
+**Transporters sit at different places.** We scaled each gene's curve in each section from its lowest to its highest
+value and asked where it is high (Fig. 5a). SGLT2, the target of gliflozins, stayed above half its maximum through
+0.66–0.71 of the human PT, against 0.38–0.39 in mouse. GLUT2, which carries glucose out of the same cells, ended at
+the same place in both species (0.55–0.58). The anion transporters OAT1 and OAT3 peaked at the start of the human PT
+(0.06–0.16) but in early-to-mid PT in mouse (0.24–0.47). The cation transporter OCT2 started later in human
+(0.51–0.57 against 0.32–0.36), and the efflux pump MRP2 started at the beginning of the human PT but past its
+middle in mouse. The urate transporter URAT1 peaked late in human (0.84) and mid-PT in mouse (0.54). Each of these
+differences was at least four times larger than when we swapped one mouse and one human section between the groups.
+In mouse, SGLT2, GLUT2, OAT1 and OAT3 were lost from the end of the PT more steeply than the overall flattening of
+human gradients could explain. Many drug targets nonetheless kept the direction of their gradient in both species,
+including SGLT2, OAT3, URAT1, ACE and PSMA. A few reversed, including neprilysin (MME, the target of sacubitril) and
+15-PGDH (HPGD) (Fig. 5b).
 
-**Switch points that move.** Many transporters work in pairs along the PT: one member is high early and is replaced
-by a related member later on. We call the point where the two cross the switch point. Of 53 such pairs with a switch
-in all four sections, 13 switched at a different position in human (Methods), and none did when sections were
-swapped between species. Eight switched later in human, including SGLT2 → SGLT1 (+0.30 of the PT length), the urate
+**Switch points move.** Many transporters work in pairs: one member is high early in the PT and is replaced by a
+related member later on. We call the point where the two cross the switch point. Of 53 pairs with a switch in all
+four sections, 13 switched at a different position in human, and none did when sections were swapped between
+species. Eight switched later in human, including the sugar pair SGLT2 → SGLT5 (+0.21 of the PT length), the urate
 pair SLC22A23 → URAT1 (+0.25), SLC22A23 → OCT2 (+0.24) and the amino-acid pairs y+LAT1 → AGT1 (+0.24) and
-B0AT1 → B0AT3 (+0.18) (Fig. 5c). These pairs include the targets of gliflozins and uricosuric drugs, the metformin transporter
-OCT2, and the genes behind Hartnup disorder and lysinuric protein intolerance. All seven later-in-human pairs
-we could check in the human atlas reproduced.
+B0AT1 → B0AT3 (+0.18) (Fig. 5c). In each, the early human partner stayed on further along the tubule. All seven
+later-in-human pairs we could check in a human single-cell atlas [Lake 2023] reproduced, including SGLT2 → SGLT1,
+whose SGLT1 partner our human sections detect too rarely to measure.
 
 **Detail that clustering misses.** We next asked whether these shifts could be read from the S1, S2 and S3 cluster
-means alone. Straight lines through the three cluster means placed most switches almost where the mouse did. They
-recovered +0.07 of the +0.25 URAT1 shift, +0.06 of the +0.24 OCT2 shift and +0.10 of the +0.30 SGLT1 shift. One
-monocarboxylate pair even moved the wrong way (Fig. 5d; post hoc). Several of these switches move within S2, which
-three cluster means cannot resolve.
+means alone. Straight lines through the three cluster means placed most human switches close to where the mouse
+switched. They recovered +0.07 of the +0.25 URAT1 shift, +0.06 of the +0.24 OCT2 shift and +0.02 of the +0.21 SGLT5
+shift, and one monocarboxylate pair moved the wrong way (Fig. 5d; post hoc). Several of these switches move within
+S2, which three cluster means cannot resolve.
 
-**Pathways.** No pathway differed between species by more than the variation between sections. For context, we
-show the mean curves of four pathways (Fig. 5e). Some, such as fatty-acid oxidation, rise along the mouse PT and
-are flat in human. Because human gradients are shallower overall, this is not evidence that the human gradient is
-missing.
+**Gene families the one-to-one comparison cannot see.** Comparing species gene by gene uses only genes with one copy
+in each species. Some PT genes instead belong to families that expanded in mouse, such as the CYP4A, CYP2D, UGT2B and
+SLCO1A families. We asked whether these genes carry PT zonation of their own. In mouse, 9.9% of genes from families
+with more mouse than human copies, and 14.2% from families expanded in both, were strongly zonated, against 3.8% of
+one-to-one genes (odds ratio 2.2, P < 10⁻⁵) (Fig. 5e). Mouse genes whose human counterpart had expanded showed no
+excess (1.7%). Part of the mouse PT's zonation therefore sits in mouse-specific gene copies, which a one-to-one
+comparison silently drops.
 
-Thus, COAST identifies transporter switch points that sit later along the human PT, a level of detail that
-segment-level clustering largely misses. All human results come from one donor and should be confirmed in more
-donors.
+Thus, COAST shows that the human PT is not a scaled copy of the mouse PT: transporters for glucose, drugs and urate
+occupy different stretches, and their switch points sit later, at a resolution that segment-level clustering largely
+misses. All human results come from one donor and should be confirmed in more donors.
 
 ---
 

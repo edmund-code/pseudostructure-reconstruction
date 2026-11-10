@@ -227,3 +227,16 @@ here.
 - **Display:** Fig. 6j, in the same layout as Fig. 5d. Here the clusters keep the direction, and the size
   differs by pair: OAT1 → OCT2 is −0.14 on the curve against −0.07 from the clusters; B0AT1 → GAT2 is −0.23
   against −0.34.
+
+## Fig. 5 revised (2026-11-10)
+
+Rebuilt from the strongest human-vs-mouse results of `question-bank.md` and notebook 86.
+- **a (new): domain strips.** Each section's scaled curve, PT ends trimmed. The strong readouts are SGLT2's domain
+  end, the OAT1 and OAT3 peaks, the OCT2 and MRP2 starts, and the URAT1 peak. GLUT2 is the unmoved comparator.
+- **b:** contrast, unchanged.
+- **c:** handoff rows. The glucose row is now SGLT2 → SGLT5. SGLT1 is detected in only 6–7% of human PT units and
+  sits outside the screened universe; the SGLT2 → SGLT1 crossing is kept in the text through its atlas replication.
+- **d:** cluster-mean comparison. Pairs with a partner outside the universe are dropped.
+- **e (new): orthology.** The strongly zonated share by orthology class, from notebook 86 on the same elastic curve
+  (`h1_by_class.csv`).
+- **Moved to Extended Data:** the reversals grid and the pathway curves.

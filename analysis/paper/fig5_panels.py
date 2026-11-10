@@ -1,12 +1,15 @@
 """Fig. 5 panels (main) and their Extended Data companions, drawn from fig5_screen.py and fig5_interpret.py.
 
-Main figure (make_fig5.py):
- reversals      reversed gradients, both limbs externally confirmed, ranked by clinical relevance (fig56_rank.py)
+Main figure (make_fig5.py; revised 2026-11-10 after docs/paper/question-bank.md):
+ domains        where drug transporters sit along the PT: each section's min-max scaled curve as a strip (PT ends trimmed)
  contrast       every gene's S1->S3 gradient, mouse against human: drug targets that keep their direction beside the
                 reversals
- pathway_curves members' mean curves of clinically relevant pathways (display only: the set screen called none)
  handoff_rows   transporter handoffs in the poster layout, mouse and human side by side, with switch positions
+ cluster_shift  each shifted handoff's species shift from the curves against straight lines through the cluster means
+ orthology      share of PT-expressed genes strongly zonated, by orthology class (notebook 86, same elastic curve)
 Extended Data (make_ed_fig_hvm.py):
+ reversals_grid the five reversals with a drug, GWAS or disease hook
+ pathway_curves members' mean curves of clinically relevant pathways (display only: the set screen called none)
  maps           one mouse and one human section, PT tubules coloured by position on the shared axis
  coverage       where each section's PT tubules sit on the axis (density per section)
  conservation   how much of a gradient chosen in one section each other section keeps
@@ -50,9 +53,9 @@ REVERSED_C = '#D95F02'
 SIZE = {'reversals': (1160, 232), 'reversals_grid': (760, 352), 'cluster_shift': (560, 300), 'contrast': (390, 352), 'pathway_curves': (600, 300), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
-        'pathway_null': (380, 242)}
-MAIN = ['reversals_grid', 'contrast', 'pathway_curves', 'handoff_rows', 'cluster_shift']
-EXTENDED = ['maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
+        'pathway_null': (380, 242), 'domains': (760, 372), 'orthology': (580, 300)}
+MAIN = ['domains', 'contrast', 'handoff_rows', 'cluster_shift', 'orthology']
+EXTENDED = ['reversals_grid', 'pathway_curves', 'maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
 # examples are chosen after the screen and the follow-up (presentation choice, recorded in the protocol doc)
@@ -72,7 +75,9 @@ PATHWAY_CURVES = [('Fatty-acid oxidation', 'Reactome_2022::Mitochondrial Fatty A
                   ('Lysosome', 'KEGG_2019_Mouse::Lysosome'),
                   ('MHC class II', 'Reactome_2022::MHC Class II Antigen Presentation R-HSA-2132295')]
 RELOCATED: list = []          # (label, gene-set key); the frozen set screen called none
-H_PAIRS = [('Slc5a2', 'Slc5a1', 'Glucose'), ('Slc6a19', 'Slc6a18', 'Neutral amino acids'),
+# SGLT1 (Slc5a1) is detected in 6-7% of human PT units and sits outside the screened universe, so the glucose row uses
+# SGLT5, a sugar transporter of the same family detected in 72% (question-bank.md, 2026-11-10)
+H_PAIRS = [('Slc5a2', 'Slc5a10', 'Sugars'), ('Slc6a19', 'Slc6a18', 'Neutral amino acids'),
            ('Slc7a7', 'Slc7a13', 'Cationic amino acids'), ('Slc22a23', 'Slc22a12', 'Urate'),
            ('Slc22a23', 'Slc22a2', 'Organic cations')]
 PROTEIN = {**PROTEIN, 'Slc5a12': 'SMCT2', 'Slc5a8': 'SMCT1', 'Slc5a2': 'SGLT2', 'Slc5a1': 'SGLT1',
@@ -325,12 +330,100 @@ def panel_handoff_rows(plt, grid, curves, pos, hp, out, b12, b23):
 
 
 def panel_cluster_shift(plt, genes, hp, out, b12, b23):
-    """Shifted handoffs: the curve's species shift (filled) against the shift the cluster means give (open)."""
+    """Shifted handoffs: the curve's species shift (filled) against the shift the cluster means give (open). Pairs
+    with a partner outside the screened universe (SGLT1) are left out."""
     d = cluster_switch_shift(genes, hp, b12, b23, MOUSE, HUMAN)
+    inside = set(genes.index[genes.universe.astype(bool)])
+    d = d[d.early.isin(inside) & d.late.isin(inside)]
     d.to_csv(out / 'f5_cluster_shift.csv', index=False)
     fig = figure(plt, 'cluster_shift')
     draw_cluster_shift(fig, d, {(e, l) for e, l, _ in H_PAIRS}, PROTEIN, 'switch shift, human − mouse')
     fig.savefig(out / 'f5_cluster_shift.png', facecolor='white')
+    plt.close(fig)
+
+
+# drug transporters by role (question-bank.md: OAT1 and OAT3 peaks, OCT2 and MRP2 starts, SGLT2's domain end and URAT1's
+# peak are strong; GLUT2 is the unmoved comparator)
+DOMAIN_GENES = [('Glucose', ['Slc5a2', 'Slc2a2']), ('Organic anions', ['Slc22a6', 'Slc22a8', 'Abcc2']),
+                ('Organic cations', ['Slc22a2']), ('Urate', ['Slc22a12'])]
+DOMAIN_TRIM = 0.05
+
+
+def panel_domains(plt, grid, curves, pos, out, b12, b23):
+    """Each section's curve min-max scaled over x in [0.05, 0.95] (the spline ends overshoot) as one strip, mouse
+    sections in blue and human in magenta, darkest where the gene peaks; a tick marks each section's peak."""
+    from matplotlib.colors import LinearSegmentedColormap
+    from pseudospace.handoffs import scaled_profile
+
+    fig = figure(plt, 'domains')
+    k = (grid >= DOMAIN_TRIM) & (grid <= 1 - DOMAIN_TRIM)
+    cmaps = {sp: LinearSegmentedColormap.from_list(sp, ['#FFFFFF', c]) for sp, c in (('mouse', MOUSE_C), ('human', HUMAN_C))}
+    genes = [(grp, g) for grp, gs in DOMAIN_GENES for g in gs]
+    x0, w, top, row, gap, ggap = 0.20, 0.77, 0.88, 0.0205, 0.013, 0.028
+    y = top
+    seg_ax = fig.add_axes([x0, top + 0.01, w, 0.035])
+    for (lo, hi), seg in zip(((0, b12), (b12, b23), (b23, 1)), SEGS):
+        seg_ax.axvspan(lo, hi, color=COLOURS[seg], lw=0)
+        seg_ax.text((lo + hi) / 2, 0.5, seg, ha='center', va='center', fontsize=6.5, weight='bold', color='white')
+    seg_ax.set_xlim(0, 1)
+    seg_ax.axis('off')
+    last = None
+    for grp, g in genes:
+        if grp != last:
+            y -= ggap if last else 0.02
+            fig.text(0.005, y, grp, fontsize=7.5, weight='bold', color=INK, va='top')
+            last = grp
+        y -= 4 * row + gap
+        fig.text(0.02, y + 2 * row, PROTEIN.get(g, g), fontsize=7, color=INK, va='center')
+        fig.text(0.11, y + 2 * row, g, fontsize=6, style='italic', color=MUTED, va='center')
+        ax = fig.add_axes([x0, y, w, 4 * row])
+        for j, m in enumerate(SECTIONS):
+            sp = species_of(m)
+            prof = scaled_profile(np.where(k, curves[m]['curve'][pos[g]].astype(float), np.nan))
+            yy = 3 - j
+            ax.imshow(prof[None, :], extent=(grid[0], grid[-1], yy - 0.45, yy + 0.45), aspect='auto',
+                      cmap=cmaps[sp], vmin=0, vmax=1, interpolation='nearest')
+            ax.plot([grid[np.nanargmax(prof)]] * 2, [yy - 0.45, yy + 0.45], color=INK, lw=1.0)
+        for b in (b12, b23):
+            ax.axvline(b, color='#9A9A9A', lw=0.5, ls=(0, (2, 2)))
+        ax.axhline(1.5, color='white', lw=1.2)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(-0.5, 3.5)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spn in ax.spines.values():
+            spn.set_visible(False)
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(['start of PT', 'end'], fontsize=6.5)
+    fig.savefig(out / 'f5_domains.png', facecolor='white')
+    plt.close(fig)
+
+
+ORTHO_CLASSES = ['1:1', '1:many', 'many:1', 'many:many']
+
+
+def panel_orthology(plt, rroot, out):
+    """Notebook 86 (same elastic curve): share of PT-expressed genes that are strongly zonated, by orthology class
+    (human : mouse copies), mouse and human, with Wilson 95% intervals."""
+    from statsmodels.stats.proportion import proportion_confint
+
+    t = pd.read_csv(rroot / 'pt_non_one_to_one_package/tables/h1_by_class.csv').set_index(['species', 'class_support3'])
+    fig = figure(plt, 'orthology')
+    ax = fig.add_axes([0.13, 0.17, 0.84, 0.76])
+    for i, sp in enumerate(('mouse', 'human')):
+        col = MOUSE_C if sp == 'mouse' else HUMAN_C
+        for j, c in enumerate(ORTHO_CLASSES):
+            n, s = t.loc[(sp, c), 'expressed'], t.loc[(sp, c), 'strong']
+            lo, hi = proportion_confint(s, n, method='wilson')
+            x = j + (i - 0.5) * 0.36
+            ax.bar(x, s / n * 100, width=0.34, color=col, lw=0, label=sp if j == 0 else None)
+            ax.plot([x, x], [lo * 100, hi * 100], color=INK, lw=0.7)
+    ax.set_xticks(range(len(ORTHO_CLASSES)))
+    ax.set_xticklabels(ORTHO_CLASSES)
+    ax.set_xlabel('gene copies, human : mouse', labelpad=2)
+    ax.set_ylabel('strongly zonated (% of PT genes)', labelpad=2)
+    ax.legend(frameon=False, fontsize=7, loc='upper left')
+    fig.savefig(out / 'f5_orthology.png', facecolor='white')
     plt.close(fig)
 
 
@@ -660,6 +753,10 @@ def main(argv=None):
         panel_handoff_rows(plt, grid, curves, pos, hp, out, b12, b23)
     if 'cluster_shift' in panels:
         panel_cluster_shift(plt, genes, hp, out, b12, b23)
+    if 'domains' in panels:
+        panel_domains(plt, grid, curves, pos, out, b12, b23)
+    if 'orthology' in panels:
+        panel_orthology(plt, rroot, out)
     if 'handoff_moves' in panels:
         panel_handoff_moves(plt, hp, out, b12, b23)
     if 'checks' in panels and (screen / 'interpret_genes.csv').exists():

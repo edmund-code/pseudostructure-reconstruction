@@ -688,6 +688,34 @@ PMC. Queries contained only gene, pathway and generic terms. Each finding was as
 
 "Not found" means not found at the abstract level. It is not proof of novelty.
 
+## Positions along the PT in mouse and human (Fig. 5)
+
+**Coverage.** Positions are expressed on the mouse control quantile scale of the shared pseudostructure coordinate (0 at
+the start and 1 at the end of the mouse PT). Human PT tubules spanned the full coordinate (2.5th–97.5th percentile
+0.07–0.98 in both sections), but 48–50% lay below the mouse S1/S2 boundary, against 32–34% of mouse tubules
+(Extended Data Fig. X).
+
+**Positional readouts.** For each gene and section, the fitted negative binomial curve (log2 counts per 10,000) was
+restricted to pseudostructure 0.05–0.95, because the spline ends overshoot, and min-max scaled over that range. From the
+scaled curve we read the peak (position of the maximum) and the domain (first and last positions at which the scaled
+curve is at least 0.5). Panels show the unscaled curves in log2(counts per 10,000 + 0.5).
+
+**Species calls.** For each readout, the species contrast is the mean of the two human sections minus the mean of the
+two mouse sections. It was compared with the two balanced relabelings that each swap one mouse and one human section. A
+readout was called when all four human–mouse section pairs agreed in sign and both relabelings were no more than a
+quarter of the contrast in absolute value.
+
+**Shallower human gradients.** Across 95 well-measured genes, the median human gradient amplitude was 0.63 of the mouse
+amplitude, and human curves were flatter for 76% of genes. Normalization to counts per 10,000 corrects each tubule's
+sequencing depth, a single factor per tubule. Because a gradient compares tubules within one section, that factor and
+any per-gene difference in probe capture between the two panels cancel from it. The flattening therefore reflects
+either an additive signal that compresses fold changes in the human data (for example, ambient RNA, off-target probe
+binding or signal from neighbouring tubules), a smaller share of late-PT tubules in the human sections, or genuinely
+shallower zonation of the human PT. A blurred human coordinate was excluded: blurring lowers rough curves more than
+smooth ones, whereas the observed attenuation correlated positively with roughness (Spearman ρ = +0.30). The remaining
+causes are confounded with species in a design with one human donor, so we report positions and not magnitudes for all
+species comparisons.
+
 ## Statistics and multiple testing
 
 **Replication.** Two mouse specimens and two sections from one human donor provide no estimate of

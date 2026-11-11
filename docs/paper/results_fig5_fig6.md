@@ -11,18 +11,12 @@ analyses are marked as such in the text.
 
 ### COAST enables comparison of positional gene expression along the mouse and human proximal tubule
 
-The proximal tubule (PT) is the main site of solute and drug uptake in the kidney, and much of what is known about how
-it divides this work along its length comes from mice. However, human kidney atlases resolve the PT into only two or
-three discrete segments [Lake 2023], and cross-species comparisons have quantified how much of each transporter is
-present rather than where along the PT it is expressed [human cortex proteomics, PMC5118637; cross-species proteomics,
-PMID 31123036]. As such, whether transporters occupy the same positions along the mouse and human PT remains an open
-question. We therefore applied COAST to two mouse kidney sections and two cortical sections from one human kidney
-assayed by Visium HD, placing PT cross-sections from both species onto a shared pseudostructure coordinate (Fig. 5a,
-Methods). Human PT tubules spanned the full coordinate, although about half lay in the range that mouse segment labels
-assign to S1, compared to a third of mouse tubules (Extended Data Fig. X). Because human gradients were consistently
-shallower than mouse gradients, for reasons we could not separate in this cohort (Methods), we read each gene's
-positions (its peak and where it rises above or falls below half of its range) from each section's fitted curve after
-min-max scaling, so as to compare where genes are expressed rather than how much.
+Much of what is known about how the proximal tubule (PT) divides its work along its length comes from mice, whereas
+human kidney atlases resolve the PT into only two or three segments [Lake 2023]. We therefore applied COAST to two mouse
+kidney sections and two cortical sections from one human kidney assayed by Visium HD, placing PT tubules from both
+species on a shared pseudostructure coordinate (Fig. 5a, Methods). Human gradients were consistently shallower than
+mouse gradients, which normalization for sequencing depth cannot correct because a gradient compares tubules within the
+same section (Methods). We therefore compared where genes are expressed rather than how much.
 
 As a first example, we focused on *Slc5a2*, which encodes the sodium–glucose cotransporter SGLT2 targeted by gliflozins.
 In mouse, *Slc5a2* expression was restricted to PT tubules early along the pseudostructure coordinate, whereas in human

@@ -2,7 +2,7 @@
 methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zonation):
  a  one mouse and one human section, PT tubules coloured by pseudostructure
  b  Slc5a2 (SGLT2) expression in the same tubules
- c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines), each section min-max scaled
+ c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines) in log2(CP10k + 0.5)
  d  the same for five more transporters (Slc2a2, GLUT2, is the unmoved comparator); the sixth slot is the section key
  e  two transporter switches, mouse and human, with each species' switch point
  f  each shifted switch's species shift from the curves against straight lines through the S1/S2/S3 cluster means
@@ -65,19 +65,6 @@ def sym(g, sp):
     return g if sp == 'mouse' else g.upper()
 
 
-def scaled_with_bins(gene, m, curves, pos, grid, lo_x=TRIM, hi_x=1 - TRIM):
-    """Curve and bin means of one section, both scaled by the curve's min and max over [lo_x, hi_x] (and the
-    section's bin range)."""
-    i = pos[gene]
-    c, bx, bm = (curves[m][k][i].astype(float) for k in ('curve', 'bin_x', 'bins'))
-    fin = np.isfinite(bm)
-    k = (grid >= max(lo_x, bx[fin].min())) & (grid <= min(hi_x, bx[fin].max()))
-    c = np.where(k, c, np.nan)
-    lo, hi = np.nanmin(c), np.nanmax(c)
-    keep = fin & (bx >= lo_x) & (bx <= hi_x)
-    return (c - lo) / (hi - lo), bx[keep], (bm[keep] - lo) / (hi - lo)
-
-
 def segments(ax, b12, b23, top=True):
     for b in (b12, b23):
         ax.axvline(b, color=GREY, lw=0.5, ls=(0, (2, 2)), zorder=0)
@@ -86,24 +73,41 @@ def segments(ax, b12, b23, top=True):
             ax.text(x, 1.0, s, transform=ax.get_xaxis_transform(), ha='center', va='bottom', fontsize=5.5, color=GREY)
 
 
+def log_with_bins(gene, m, curves, pos, grid, lo_x=TRIM, hi_x=1 - TRIM):
+    """Curve and bin means of one section in log2(counts per 10k + 0.5), the floor the question bank uses (the
+    screen's curves are unfloored log2 per 10k), on [lo_x, hi_x] and the section's bin range."""
+    i = pos[gene]
+    c, bx, bm = (curves[m][k][i].astype(float) for k in ('curve', 'bin_x', 'bins'))
+    fin = np.isfinite(bm)
+    k = (grid >= max(lo_x, bx[fin].min())) & (grid <= min(hi_x, bx[fin].max()))
+    keep = fin & (bx >= lo_x) & (bx <= hi_x)
+    floor = lambda v: np.log2(2 ** v + 0.5)  # noqa: E731
+    return np.where(k, floor(c), np.nan), bx[keep], floor(bm[keep])
+
+
 def curve_axis(ax, gene, curves, pos, grid, b12, b23, title=True, ylabel=False, xlabel=False, seglabels=True, inside=False):
+    """Expression in log2(CP10k + 0.5) on one axis for all four sections. Levels are not comparable across species
+    (different probe panels); positions are."""
+    vals = []
     for m in SECTIONS:
-        c, bx, bm = scaled_with_bins(gene, m, curves, pos, grid)
+        c, bx, bm = log_with_bins(gene, m, curves, pos, grid)
         ax.scatter(bx, bm, s=4, color=SHADE[m], lw=0, zorder=3)
         ax.plot(grid, c, color=SHADE[m], lw=0.9, zorder=4)
+        vals += [bm, c[np.isfinite(c)]]
+    v = np.concatenate(vals)
+    lo, hi = np.floor(v.min()), np.ceil(v.max())
     segments(ax, b12, b23, top=seglabels)
     ax.set_xlim(0, 1)
-    ax.set_ylim(-0.15, 1.2)
-    ax.set_yticks([0, 0.5, 1])
+    ax.set_ylim(lo - 0.05 * (hi - lo), hi + 0.22 * (hi - lo))
+    from matplotlib.ticker import MaxNLocator
+    ax.yaxis.set_major_locator(MaxNLocator(4, integer=True))
     ax.set_xticks([0, 0.5, 1])
     ax.set_xticklabels(['0', '0.5', '1'])
     if title:
         ax.text(0.03, 0.97 if inside else 1.04, gene, transform=ax.transAxes, fontsize=6.5, style='italic',
                 va='top' if inside else 'bottom', color=INK)
     if ylabel:
-        ax.set_ylabel('Scaled expression', labelpad=1.5)
-    else:
-        ax.set_yticklabels([])
+        ax.set_ylabel('log2(CP10k + 0.5)', labelpad=1.5)
     if xlabel:
         ax.set_xlabel('Pseudostructure', labelpad=1.5)
     else:
@@ -277,7 +281,6 @@ def main(argv=None):
     # row 2: curves
     ax = fig.add_axes([0.065, 0.455, 0.25, 0.215])
     curve_axis(ax, 'Slc5a2', curves, pos, grid, b12, b23, ylabel=True, xlabel=True, inside=True)
-    ax.axhline(0.5, color=GREY, lw=0.4, ls=':', zorder=0)
     label(fig, 0.01, 0.715, 'c')
     boxes['c'] = (0.01, 0.42, 0.34, 0.715)
     gx0, gw, gh = 0.405, 0.17, 0.095

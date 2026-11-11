@@ -80,9 +80,10 @@ donors would be needed to confirm these differences.
 **Fig. 5 | COAST enables comparison of positional gene expression along the mouse and human proximal tubule.**
 **a** One mouse and one human kidney section assayed by Visium HD. PT tubules are coloured by their position on the
 shared pseudostructure coordinate; other tubules are grey. **b** *Slc5a2* (SGLT2) expression in the same PT tubules.
-**c** Scaled *Slc5a2* expression against pseudostructure for each mouse (blue) and human (magenta) section. Points are
-binned means of tubules; lines are fitted curves. Each section is min-max scaled over pseudostructure 0.05–0.95. Dashed
-lines mark the S1/S2 and S2/S3 boundaries of the mouse segment labels, and the dotted line marks half-maximum.
+**c** *Slc5a2* expression, in log2(counts per 10,000 + 0.5), against pseudostructure for each mouse (blue) and human
+(magenta) section over pseudostructure 0.05–0.95. Points are binned means of tubules; lines are fitted curves. Levels
+are not comparable between species because the two probe panels differ; positions are. Dashed lines mark the S1/S2 and
+S2/S3 boundaries of the mouse segment labels.
 **d** As in c for *Slc2a2* (GLUT2), *Slc22a6* (OAT1), *Slc22a8* (OAT3), *Slc22a2* (OCT2) and *Slc22a12* (URAT1).
 **e** Two transporter switches in mouse (left) and human (right): the early (light) and late (dark) partner, scaled over
 the range used to locate the switch. Solid vertical lines mark each species' switch point, averaged over its two

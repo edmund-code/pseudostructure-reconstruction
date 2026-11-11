@@ -90,13 +90,11 @@ boundaries of the mouse segment labels. **d** As in c for *Slc2a2* (GLUT2), *Slc
 *Slc22a2* (OCT2) and *Slc22a12* (URAT1). **e** Five transporter switches that move later in human. For each species, the
 early (light) and late (dark) partner are shown as the mean of the two sections' min-max scaled curves (thick, shaded)
 and each section's curve (thin), over the range used to locate the switch. Background shading marks S1, S2 and S3.
-Dashed blue and dotted magenta lines mark the mouse and human switch points. Right, each section's switch point with its
-bootstrap 95% interval (mouse blue, human magenta). **f** Shift in switch point (human − mouse) for the 12 pairs that
-switched at a different position in human and whose partners are both measured, from COAST curves (filled) and from
-straight lines through the S1, S2 and S3 cluster means (open; × where the cluster means give no switch). **g**
-Percentage of PT-expressed genes strongly zonated along pseudostructure in mouse and human, by orthology class (human :
-mouse gene copies). Error bars are Wilson 95% confidence intervals.
-
+Dashed blue and dotted magenta lines mark the mouse and human switch points. **f** Shift in switch point (human − mouse)
+for the 12 pairs that switched at a different position in human and whose partners are both measured, from COAST curves
+(filled) and from straight lines through the S1, S2 and S3 cluster means (open; × where the cluster means give no
+switch). **g** Percentage of PT-expressed genes strongly zonated along pseudostructure in mouse and human, by orthology
+class (human : mouse gene copies). Error bars are Wilson 95% confidence intervals.
 ---
 
 ### COAST resolves where acute injury reshapes the proximal tubule

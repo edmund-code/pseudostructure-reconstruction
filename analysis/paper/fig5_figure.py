@@ -4,7 +4,7 @@ methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zon
  b  Slc5a2 (SGLT2) expression in the same tubules
  c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines) in log2(CP10k + 0.5)
  d  the same for five more transporters (Slc2a2, GLUT2, is the unmoved comparator); the sixth slot is the section key
- e  transporter switches in the earlier handoff-rows style: mean scaled curves per species, switch lines and intervals
+ e  transporter switches in the earlier handoff-rows style: mean scaled curves per species and switch lines
  f  each shifted switch's species shift from the curves against straight lines through the S1/S2/S3 cluster means
  g  share of PT genes strongly zonated, by orthology class
 Panel letters only; claims live in the legend and text. Gene symbols are italic (mouse Slc5a2, human SLC5A2).
@@ -160,19 +160,17 @@ def panel_maps(fig, root, rect_a, rect_b):
 def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
     """The earlier handoff-rows panel (fig5_panels.panel_handoff_rows) on the journal canvas: per pair, mouse and
     human side by side, each species' mean scaled curve (thick, shaded) over its two sections (thin), the mouse switch
-    (dashed blue) and human switch (dotted magenta), and each section's switch with its bootstrap 95% interval."""
+    (dashed blue) and human switch (dotted magenta)."""
     from pseudospace.handoffs import scaled_profile
 
     edges = ((0, b12), (b12, b23), (b23, 1))
-    cols = {'mouse': (40, 52), 'human': (97, 52)}          # x (mm) and width of the two curve columns
-    sx0, sw = 156, 20
+    cols = {'mouse': (40, 66), 'human': (112, 66)}         # x (mm) and width of the two curve columns
     rh, gap = 9.5, 2.2
     for name, (x0, w) in cols.items():
         fig.text(*R(x0 + w / 2, top), name, ha='center', va='top', fontsize=6.5, weight='bold',
                  color=MOUSE_C if name == 'mouse' else HUMAN_C)
         for (lo, hi), seg in zip(edges, ('S1', 'S2', 'S3')):
             fig.text(*R(x0 + w * (lo + hi) / 2, top + 3.6), seg, ha='center', va='top', fontsize=5.5, color=GREY)
-    fig.text(*R(sx0 + sw / 2, top), 'Switch (95% interval)', ha='center', va='top', fontsize=5.5, color=INK)
     for k, (txt, ls, col) in enumerate((('Mouse switch', (0, (3, 1.5)), MOUSE_C), ('Human switch', (0, (1, 1.2)), HUMAN_C))):
         y = top + 0.6 + k * 2.6
         fig.lines.append(plt_line(fig, R(6, y), R(11, y), col, ls))
@@ -218,22 +216,6 @@ def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
                 ax.set_xlabel('Pseudostructure', labelpad=1)
             if name == 'mouse' and r == len(H_PAIRS) // 2:
                 ax.set_ylabel('Scaled expression', labelpad=1)
-        sx = fig.add_axes(R(sx0, yt + 0.8, sw, rh - 1.6, rect=True))
-        for (lo, hi), seg in zip(edges, SEGS):
-            sx.axvspan(lo, hi, color=BAND[seg], lw=0, zorder=0)
-        for j, m in enumerate(SECTIONS):
-            yy = 3 - j
-            v, a, b = row[f'x_{m}'], row[f'x_lo_{m}'], row[f'x_hi_{m}']
-            col = MOUSE_C if m in MOUSE else HUMAN_C
-            if np.isfinite(v):
-                sx.plot([a, b], [yy, yy], color=col, lw=0.7, zorder=2)
-                sx.scatter([v], [yy], s=5, color=col, lw=0, zorder=3)
-        sx.set_xlim(0, 1)
-        sx.set_ylim(-0.7, 3.7)
-        sx.set_yticks([])
-        sx.set_xticks([0, 0.5, 1])
-        sx.set_xticklabels(['0', '0.5', '1'] if r == len(H_PAIRS) - 1 else [])
-        sx.spines['left'].set_visible(False)
     return y0 + len(H_PAIRS) * (rh + gap)
 
 

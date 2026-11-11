@@ -12,7 +12,11 @@ FULL; the others were checked for section structure and legends only.
 | GASTON, Chitra 2025 *Nat Methods* (PMC12370209) | PMC HTML, author manuscript | FULL (Results, legends, Fig. 3 image) |
 | Genes2Genes, Sumanaweera 2025 *Nat Methods* (PMC11725504) | Europe PMC XML | headings and legends, Fig. 5 image |
 | Halpern 2017 *Nature* liver zonation (PMC5321580) | Europe PMC XML | Fig. 2 image and legend |
-| MERINGUE, tradeSeq, condiments, CellRank, Belayer, Seurat spatial | Europe PMC XML / PMC HTML | downloaded, not yet read |
+| MERINGUE, Miller 2021 *Genome Res* (PMC8494224) | Europe PMC XML | FULL (Results) |
+| tradeSeq, Van den Berge 2020 *Nat Commun* (PMC7058077) | Europe PMC XML | FULL (Results) |
+| condiments, Roux de Bézieux 2024 *Nat Commun* (PMC10821945) | Europe PMC XML | FULL (workflow, simulations, TGF-β case) |
+| Belayer, Ma 2022 *Cell Syst* (PMC9814896) | PMC HTML, author manuscript | FULL (Results to DLPFC genes) |
+| CellRank, Lange 2022 *Nat Methods* (PMC8828480); Seurat spatial, Satija 2015 *Nat Biotechnol* (PMC4430369) | Europe PMC XML | headings and openings only (less related) |
 
 ## Text
 
@@ -37,3 +41,15 @@ FULL; the others were checked for section structure and legends only.
 - Several genes as small multiples on shared, normalized axes (Halpern Fig. 2b; Genes2Genes Fig. 5).
 - Benchmarks against existing approaches as one simple quantitative panel (GASTON AUPRC bars; STcompare volcano).
 - Legends: bold title sentence, then one descriptive phrase per panel with n, normalization and statistics.
+
+## Edits these papers prompted (2026-11-11)
+
+- condiments separates where cells sit along a shared trajectory (differential progression) from how genes change
+  along it, and argues for one common trajectory when conditions share topology. Added a sentence on where human PT
+  tubules sit along the shared axis (they span 0.07–0.98, but half lie in the mouse-S1 range, against a third of mouse
+  tubules), pointing to the coverage panel in Extended Data.
+- Belayer flags when its comparison is generous to itself; tradeSeq says signal "might be diluted in cluster-based
+  DE". Added that straight lines through three cluster means are one simple baseline and finer clustering may recover
+  more of each shift.
+- MERINGUE and Genes2Genes state the expected result before reporting it ("As expected", "Indeed"); the text already
+  does this for the swap control and the clustering comparison.

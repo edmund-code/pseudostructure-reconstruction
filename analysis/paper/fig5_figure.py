@@ -4,7 +4,7 @@ methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zon
  b  Slc5a2 (SGLT2) expression in the same tubules
  c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines) in log2(CP10k + 0.5)
  d  the same for five more transporters (Slc2a2, GLUT2, is the unmoved comparator); the sixth slot is the section key
- e  two transporter switches, mouse and human, with each species' switch point
+ e  transporter switches in the earlier handoff-rows style: mean scaled curves per species, switch lines and intervals
  f  each shifted switch's species shift from the curves against straight lines through the S1/S2/S3 cluster means
  g  share of PT genes strongly zonated, by orthology class
 Panel letters only; claims live in the legend and text. Gene symbols are italic (mouse Slc5a2, human SLC5A2).
@@ -24,8 +24,9 @@ REPO = next(p for p in Path(__file__).resolve().parents if (p / 'pseudospace').i
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fig3_common import RUNS  # noqa: E402
-from fig5_panels import (HUMAN, HUMAN_C, MOUSE, MOUSE_C, ORTHO_CLASSES, PT, SECTIONS, XRANGE, handoff_range,  # noqa: E402
-                         load, reference_x)
+from fig5_panels import (EARLY, H_PAIRS, HUMAN, HUMAN_C, LATE, MOUSE, MOUSE_C, ORTHO_CLASSES, PROTEIN, SECTIONS,  # noqa: E402
+                         XRANGE, handoff_range, load, reference_x)
+from fig6_panels import BAND, SEGS  # noqa: E402
 from fig6_panels import cluster_switch_shift  # noqa: E402
 
 MM = 1 / 25.4
@@ -33,7 +34,6 @@ INK, GREY = '#222222', '#8A8A8A'
 TRIM = 0.05                      # spline ends overshoot (question-bank.md); curves and bins shown on [0.05, 0.95]
 # Abcc2 (MRP2) is a strong call but its two human curves disagree in shape; it is shown in Extended Data
 GENES_D = ['Slc2a2', 'Slc22a6', 'Slc22a8', 'Slc22a2', 'Slc22a12']
-SWITCHES = [('Slc5a2', 'Slc5a10'), ('Slc22a23', 'Slc22a12')]
 EXPR_CMAP = None
 SHADE = {'Ctrl1A2': MOUSE_C, 'Ctrl1A4': '#7FA8D8', 'HUK1_COR1': HUMAN_C, 'HUK1_MED1': '#E58BBE'}
 
@@ -55,10 +55,6 @@ def style():
                          'ytick.major.size': 2, 'axes.spines.top': False, 'axes.spines.right': False,
                          'pdf.fonttype': 42, 'savefig.dpi': 400})
     return plt
-
-
-def label(fig, x, y, s):
-    fig.text(x, y, s, fontsize=8, weight='bold', ha='left', va='top', color=INK)
 
 
 def sym(g, sp):
@@ -161,47 +157,89 @@ def panel_maps(fig, root, rect_a, rect_b):
             cb.set_label('Expression (log)', fontsize=5.5, labelpad=1)
 
 
-def panel_switch(fig, rect, curves, pos, grid, hp, b12, b23):
+def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
+    """The earlier handoff-rows panel (fig5_panels.panel_handoff_rows) on the journal canvas: per pair, mouse and
+    human side by side, each species' mean scaled curve (thick, shaded) over its two sections (thin), the mouse switch
+    (dashed blue) and human switch (dotted magenta), and each section's switch with its bootstrap 95% interval."""
     from pseudospace.handoffs import scaled_profile
 
-    x0, y0, w, h = rect
-    cols = {'mouse': (MOUSE, ('#7FB3E6', '#173A63')), 'human': (HUMAN, ('#F0A3CB', '#7A0F4D'))}
-    gw, gh = w / 2 - 0.012, h / 2 - 0.03
-    for r, (e, l) in enumerate(SWITCHES):
+    edges = ((0, b12), (b12, b23), (b23, 1))
+    cols = {'mouse': (40, 52), 'human': (97, 52)}          # x (mm) and width of the two curve columns
+    sx0, sw = 156, 20
+    rh, gap = 9.5, 2.2
+    for name, (x0, w) in cols.items():
+        fig.text(*R(x0 + w / 2, top), name, ha='center', va='top', fontsize=6.5, weight='bold',
+                 color=MOUSE_C if name == 'mouse' else HUMAN_C)
+        for (lo, hi), seg in zip(edges, ('S1', 'S2', 'S3')):
+            fig.text(*R(x0 + w * (lo + hi) / 2, top + 3.6), seg, ha='center', va='top', fontsize=5.5, color=GREY)
+    fig.text(*R(sx0 + sw / 2, top), 'Switch (95% interval)', ha='center', va='top', fontsize=5.5, color=INK)
+    for k, (txt, ls, col) in enumerate((('Mouse switch', (0, (3, 1.5)), MOUSE_C), ('Human switch', (0, (1, 1.2)), HUMAN_C))):
+        y = top + 0.6 + k * 2.6
+        fig.lines.append(plt_line(fig, R(6, y), R(11, y), col, ls))
+        fig.text(*R(12, y), txt, fontsize=5.5, va='center', color=INK)
+    y0 = top + 6.5
+    for r, (e, l, substrate) in enumerate(H_PAIRS):
+        yt = y0 + r * (rh + gap)
         row = hp[(hp.early == e) & (hp.late == l)].iloc[0]
-        for c, (sp, (secs, (ce, cl))) in enumerate(cols.items()):
-            ax = fig.add_axes([x0 + c * (gw + 0.024), y0 + (1 - r) * (gh + 0.06), gw, gh])
-            for gene, col in ((e, ce), (l, cl)):
+        xs = {sp: np.nanmean([row[f'x_{m}'] for m in secs]) for sp, secs in (('mouse', MOUSE), ('human', HUMAN))}
+        fig.text(*R(1.5, yt + 1.0), substrate, fontsize=6, weight='bold', color=INK, va='center')
+        t = fig.text(*R(1.5, yt + 4.2), e, fontsize=5.8, style='italic', color=EARLY['mouse'], va='center')
+        fig.canvas.draw_idle()
+        right = t.get_window_extent(fig.canvas.get_renderer()).transformed(fig.transFigure.inverted()).x1
+        fig.text(right + 0.003, R(0, yt + 4.2)[1], f' → {l}', fontsize=5.8, style='italic', color=LATE['mouse'],
+                 va='center')
+        fig.text(*R(1.5, yt + 7.3), f'{PROTEIN.get(e, e)} → {PROTEIN.get(l, l)}', fontsize=5.2, color=GREY,
+                 va='center')
+        for name, (x0, w) in cols.items():
+            ax = fig.add_axes(R(x0, yt, w, rh, rect=True))
+            for (lo, hi), seg in zip(edges, SEGS):
+                ax.axvspan(lo, hi, color=BAND[seg], lw=0, zorder=0)
+            secs = MOUSE if name == 'mouse' else HUMAN
+            for gene, col in ((e, EARLY[name]), (l, LATE[name])):
+                per = []
                 for m in secs:
                     lo_x, hi_x = XRANGE[m]
-                    raw = np.where((grid >= lo_x) & (grid <= hi_x), curves[m]['curve'][pos[gene]], np.nan)
-                    prof = scaled_profile(raw)
-                    lo, hi = np.nanmin(raw), np.nanmax(raw)
-                    bx, bm = curves[m]['bin_x'][pos[gene]], curves[m]['bins'][pos[gene]].astype(float)
-                    k = np.isfinite(bm) & (bx >= lo_x) & (bx <= hi_x)
-                    ax.scatter(bx[k], (bm[k] - lo) / (hi - lo), s=3, color=col, lw=0, zorder=3)
-                    ax.plot(grid, prof, color=col, lw=0.8, zorder=4)
-            xs = np.nanmean([row[f'x_{m}'] for m in secs])
-            ax.axvline(xs, color=MOUSE_C if sp == 'mouse' else HUMAN_C, lw=0.8, zorder=5)
-            if sp == 'human':
-                ax.axvline(np.nanmean([row[f'x_{m}'] for m in MOUSE]), color=MOUSE_C, lw=0.8, ls=(0, (2, 1.5)), zorder=5)
-            segments(ax, b12, b23, top=r == 0)
+                    per.append(scaled_profile(np.where((grid >= lo_x) & (grid <= hi_x), curves[m]['curve'][pos[gene]],
+                                                       np.nan)))
+                mean = np.mean(per, 0)          # drawn only where both sections of the species have tubules
+                for c in per:
+                    ax.plot(grid, np.where(np.isfinite(mean), c, np.nan), color=col, lw=0.4, alpha=0.6, zorder=2)
+                ax.fill_between(grid, 0, mean, color=col, alpha=0.12, lw=0, zorder=1)
+                ax.plot(grid, mean, color=col, lw=1.1, zorder=3)
+            ax.axvline(xs['mouse'], color=MOUSE_C, lw=0.8, ls=(0, (3, 1.5)), zorder=4)
+            if name == 'human':
+                ax.axvline(xs['human'], color=HUMAN_C, lw=0.9, ls=(0, (1, 1.2)), zorder=4)
             ax.set_xlim(0, 1)
-            ax.set_ylim(-0.15, 1.2)
+            ax.set_ylim(0, 1.08)
+            ax.set_yticks([0, 1] if name == 'mouse' else [])
             ax.set_xticks([0, 0.5, 1])
-            ax.set_xticklabels(['0', '0.5', '1'])
-            ax.set_yticks([0, 1])
-            if c:
-                ax.set_yticklabels([])
-            else:
-                ax.set_ylabel('Scaled expr.', labelpad=1)
-            if r == 0:
-                ax.set_xticklabels([])
-            else:
-                ax.set_xlabel('Pseudostructure', labelpad=1.5)
-            t = ax.text(0.02, 1.13, sym(e, sp), transform=ax.transAxes, fontsize=6, style='italic', color=ce,
-                        va='bottom')
-            ax.annotate(f' → {sym(l, sp)}', xycoords=t, xy=(1, 0), va='bottom', fontsize=6, style='italic', color=cl)
+            ax.set_xticklabels(['0', '0.5', '1'] if r == len(H_PAIRS) - 1 else [])
+            if r == len(H_PAIRS) - 1:
+                ax.set_xlabel('Pseudostructure', labelpad=1)
+            if name == 'mouse' and r == len(H_PAIRS) // 2:
+                ax.set_ylabel('Scaled expression', labelpad=1)
+        sx = fig.add_axes(R(sx0, yt + 0.8, sw, rh - 1.6, rect=True))
+        for (lo, hi), seg in zip(edges, SEGS):
+            sx.axvspan(lo, hi, color=BAND[seg], lw=0, zorder=0)
+        for j, m in enumerate(SECTIONS):
+            yy = 3 - j
+            v, a, b = row[f'x_{m}'], row[f'x_lo_{m}'], row[f'x_hi_{m}']
+            col = MOUSE_C if m in MOUSE else HUMAN_C
+            if np.isfinite(v):
+                sx.plot([a, b], [yy, yy], color=col, lw=0.7, zorder=2)
+                sx.scatter([v], [yy], s=5, color=col, lw=0, zorder=3)
+        sx.set_xlim(0, 1)
+        sx.set_ylim(-0.7, 3.7)
+        sx.set_yticks([])
+        sx.set_xticks([0, 0.5, 1])
+        sx.set_xticklabels(['0', '0.5', '1'] if r == len(H_PAIRS) - 1 else [])
+        sx.spines['left'].set_visible(False)
+    return y0 + len(H_PAIRS) * (rh + gap)
+
+
+def plt_line(fig, p0, p1, col, ls):
+    from matplotlib.lines import Line2D
+    return Line2D([p0[0], p1[0]], [p0[1], p1[1]], transform=fig.transFigure, color=col, lw=0.9, ls=ls)
 
 
 def panel_shift(fig, rect, genes, hp, b12, b23):
@@ -267,57 +305,63 @@ def main(argv=None):
     b12, b23 = float(genes.b12.median()), float(genes.b23.median())
     XRANGE.update(handoff_range(screen, hp, genes))
 
-    W, H = 180 * MM, 196 * MM
-    fig = plt.figure(figsize=(W, H))
+    W, H = 180, 228                                       # mm
+    fig = plt.figure(figsize=(W * MM, H * MM))
+
+    def R(x, y, w=0, h=0, rect=False):
+        """mm from the top-left corner to figure fractions; rect=True gives [x0, y0, w, h] for add_axes."""
+        if rect:
+            return [x / W, 1 - (y + h) / H, w / W, h / H]
+        return x / W, 1 - y / H
+
     boxes = {}
 
+    def panel(letter, x0, y0, x1, y1):
+        fig.text(*R(x0, y0), letter, fontsize=8, weight='bold', ha='left', va='top', color=INK)
+        boxes[letter] = (x0, y0, x1, y1)
+
     # row 1: tissue
-    ra, rb = [0.045, 0.775, 0.43, 0.19], [0.545, 0.775, 0.43, 0.19]
-    panel_maps(fig, rroot, ra, rb)
-    label(fig, 0.01, 0.99, 'a')
-    label(fig, 0.51, 0.99, 'b')
-    boxes['a'], boxes['b'] = (0.01, 0.745, 0.49, 0.99), (0.51, 0.745, 0.99, 0.99)
+    panel('a', 1, 1, 89, 50)
+    panel('b', 91, 1, 179, 50)
+    panel_maps(fig, rroot, R(8, 7, 78, 34, rect=True), R(98, 7, 78, 34, rect=True))
 
     # row 2: curves
-    ax = fig.add_axes([0.065, 0.455, 0.25, 0.215])
+    panel('c', 1, 52, 62, 104)
+    ax = fig.add_axes(R(12, 60, 46, 34, rect=True))
     curve_axis(ax, 'Slc5a2', curves, pos, grid, b12, b23, ylabel=True, xlabel=True, inside=True)
-    label(fig, 0.01, 0.715, 'c')
-    boxes['c'] = (0.01, 0.42, 0.34, 0.715)
-    gx0, gw, gh = 0.405, 0.17, 0.095
+    panel('d', 64, 52, 179, 104)
+    gw, gh = 30, 15
     for k, g in enumerate(GENES_D):
         r, c = divmod(k, 3)
-        ax = fig.add_axes([gx0 + c * (gw + 0.025), 0.565 - r * (gh + 0.025), gw, gh])
+        ax = fig.add_axes(R(75 + c * (gw + 6.5), 59 + r * (gh + 6), gw, gh, rect=True))
         curve_axis(ax, g, curves, pos, grid, b12, b23, ylabel=c == 0, xlabel=r == 1 or c == 2, seglabels=False)
-    key = fig.add_axes([gx0 + 2 * (gw + 0.025), 0.565 - (gh + 0.025), gw, gh])
+    key = fig.add_axes(R(75 + 2 * (gw + 6.5), 59 + gh + 9, gw, gh, rect=True))
     key.axis('off')
     for m, nm in zip(SECTIONS, ('Mouse section 1', 'Mouse section 2', 'Human section 1', 'Human section 2')):
         key.plot([], [], color=SHADE[m], lw=0.9, marker='o', ms=2, label=nm)
     key.plot([], [], color=GREY, lw=0.5, ls=(0, (2, 2)), label='S1/S2/S3 boundaries')
-    key.legend(frameon=False, fontsize=5.5, loc='center left', handlelength=1.6, handletextpad=0.4, labelspacing=0.5)
-    label(fig, 0.36, 0.715, 'd')
-    boxes['d'] = (0.36, 0.42, 0.99, 0.715)
+    key.legend(frameon=False, fontsize=5.3, loc='center left', handlelength=1.6, handletextpad=0.4, labelspacing=0.4)
 
-    # row 3: switches, shift, orthology
-    panel_switch(fig, [0.065, 0.075, 0.30, 0.29], curves, pos, grid, hp, b12, b23)
-    label(fig, 0.01, 0.395, 'e')
-    boxes['e'] = (0.01, 0.01, 0.39, 0.395)
-    panel_shift(fig, [0.53, 0.075, 0.16, 0.29], genes, hp, b12, b23)
-    label(fig, 0.40, 0.395, 'f')
-    boxes['f'] = (0.40, 0.01, 0.70, 0.395)
-    panel_orthology(fig, [0.765, 0.075, 0.225, 0.27], rroot)
-    label(fig, 0.71, 0.395, 'g')
-    boxes['g'] = (0.71, 0.01, 0.99, 0.395)
+    # row 3: transporter switches (earlier handoff-rows style)
+    panel('e', 1, 106, 179, 172)
+    draw_handoffs(fig, R, 107, curves, pos, grid, hp, b12, b23)
+
+    # row 4: what clustering recovers, orthology
+    panel('f', 1, 175, 99, 227)
+    panel_shift(fig, R(33, 183, 50, 36, rect=True), genes, hp, b12, b23)
+    panel('g', 101, 175, 179, 227)
+    panel_orthology(fig, R(115, 181, 62, 36, rect=True), rroot)
 
     fig.savefig(root / 'fig5.png', facecolor='white', dpi=400)
     fig.savefig(root / 'fig5.pdf', facecolor='white')
     plt.close(fig)
 
     from matplotlib.patches import Rectangle
-    wf = plt.figure(figsize=(W, H))
+    wf = plt.figure(figsize=(W * MM, H * MM))
     for k, (x0, y0, x1, y1) in boxes.items():
-        wf.patches.append(Rectangle((x0, y0), x1 - x0, y1 - y0, transform=wf.transFigure, fc='#E6E6E6', ec='#9A9A9A',
-                                    lw=0.6))
-        wf.text(x0 + 0.01, y1 - 0.01, k, fontsize=9, weight='bold', va='top')
+        wf.patches.append(Rectangle((x0 / W, 1 - y1 / H), (x1 - x0) / W, (y1 - y0) / H, transform=wf.transFigure,
+                                    fc='#E6E6E6', ec='#9A9A9A', lw=0.6))
+        wf.text(x0 / W + 0.01, 1 - y0 / H - 0.01, k, fontsize=9, weight='bold', va='top')
     wf.savefig(root / 'fig5_wireframe.png', facecolor='white', dpi=200)
     plt.close(wf)
 

@@ -14,9 +14,8 @@ analyses are marked as such in the text.
 Much of what is known about how the proximal tubule (PT) divides its work along its length comes from mice, whereas
 human kidney atlases resolve the PT into only two or three segments [Lake 2023]. We therefore applied COAST to two mouse
 kidney sections and two cortical sections from one human kidney assayed by Visium HD, placing PT tubules from both
-species on a shared pseudostructure coordinate (Fig. 5a, Methods). Human gradients were consistently shallower than
-mouse gradients, which normalization for sequencing depth cannot correct because a gradient compares tubules within the
-same section (Methods). We therefore compared where genes are expressed rather than how much.
+species on a shared pseudostructure coordinate (Fig. 5a, Methods). Because human gradients were consistently shallower than mouse gradients (Methods), we
+compared where genes are expressed rather than how much.
 
 As a first example, we focused on *Slc5a2*, which encodes the sodium–glucose cotransporter SGLT2 targeted by gliflozins.
 In mouse, *Slc5a2* expression was restricted to PT tubules early along the pseudostructure coordinate, whereas in human

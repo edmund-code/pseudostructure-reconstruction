@@ -1,81 +1,96 @@
 # Results: Figs. 5 and 6 (draft, 2026-11-09)
 
-Written in the style of the Fan lab's Results sections (STalign, STdeconvolve). Headings are claims, each paragraph
-reports one result, and each subsection closes with a "Thus" sentence. Numbers come from
+Written in the style of the Fan lab's Results sections (STalign, STdeconvolve, STcompare; read in full 2026-11-11, notes in
+`citation_checks/H_results_figure_style.md`). Headings name what COAST enables, paragraphs run without bullets, genes are
+italic symbols with the protein named once, and each subsection closes with a "Taken together" or "Thus" sentence. Numbers come from
 `fig5-human-vs-mouse-along-pt.md`, `fig6-aki-along-pt.md` and `fig5-6-highlights.md`. Citations are given as
 [Author year], with sources in `citation_checks/G_fig56_clinical_hooks.md` and `D_results_literature.md`. Post-hoc
 analyses are marked as such in the text.
 
 ---
 
-### COAST reveals that drug transporters occupy different stretches of the mouse and human proximal tubule
+### COAST enables comparison of positional gene expression along the mouse and human proximal tubule
 
-Much of what is known about how the proximal tubule (PT) divides its work along its length comes from mice, and this
-knowledge underpins renal pharmacology. Human kidney atlases resolve the PT into two or three segments [Lake 2023], and
-comparisons between species have measured how much of each transporter is present rather than where it sits [human
-cortex proteomics, PMC5118637; cross-species proteomics, PMID 31123036]. We therefore asked three questions that need a
-continuous position along the tubule. Do transporters occupy the same stretch of the PT in both species? Do paired
-transporters hand over at the same place? And does a gene-by-gene comparison miss part of the picture? We placed PT
-cross-sections from two mouse kidneys and two sections of one human kidney on a shared pseudostructure axis and
-followed each gene from the start to the end of the PT (Methods). Human gradients were consistently shallower than
-mouse gradients, for reasons we could not separate in this cohort (Methods), so we compared where genes are
-expressed, not how much.
+The proximal tubule (PT) is the main site of solute and drug uptake in the kidney, and much of what is known about how
+it divides this work along its length comes from mice. However, human kidney atlases resolve the PT into only two or
+three discrete segments [Lake 2023], and cross-species comparisons have quantified how much of each transporter is
+present rather than where along the PT it is expressed [human cortex proteomics, PMC5118637; cross-species proteomics,
+PMID 31123036]. As such, whether transporters occupy the same positions along the mouse and human PT remains an open
+question. We therefore applied COAST to two mouse kidney sections and two cortical sections from one human kidney
+assayed by Visium HD, placing PT cross-sections from both species onto a shared pseudostructure coordinate (Fig. 5a,
+Methods). Because human gradients were consistently shallower than mouse gradients, for reasons we could not separate in
+this cohort (Methods), we min-max scaled each gene's fitted expression within each section in order to compare where
+genes are expressed rather than how much.
 
-**Transporters sit at different places.** We scaled each gene's curve in each section from its lowest to its highest
-value and asked where it is high (Fig. 5a).
-- **Glucose.** SGLT2, the target of gliflozins, stayed above half its maximum through 0.66–0.71 of the human PT,
-  against 0.38–0.39 in mouse. GLUT2, which carries the same glucose out of the cell, ended at the same place in both
-  species (0.55–0.58).
-- **Organic anions.** OAT1 and OAT3 peaked at the start of the human PT (0.06–0.16) but in early-to-mid PT in mouse
-  (0.24–0.47). The efflux pump MRP2 started at the beginning of the human PT but past its middle in mouse.
-- **Organic cations and urate.** OCT2 started later in human (0.51–0.57 against 0.32–0.36). The urate transporter
-  URAT1 peaked late in human (0.84) and mid-PT in mouse (0.54).
+As a first example, we focused on *Slc5a2*, which encodes the sodium–glucose cotransporter SGLT2 targeted by
+gliflozins. In mouse, *Slc5a2* expression was restricted to PT tubules early along the pseudostructure coordinate,
+whereas in human it extended across most PT tubules (Fig. 5b). Quantifying this along pseudostructure, *Slc5a2*
+remained above half of its maximum through 0.38–0.39 of the mouse PT but through 0.66–0.71 of the human PT (Fig. 5c).
+In contrast, *Slc2a2*, which encodes GLUT2, the basolateral transporter that carries the same glucose out of the cell,
+ended at a similar position in both species (0.55–0.58) (Fig. 5d). To evaluate whether such differences could arise
+from variability between sections, we swapped one mouse and one human section between the groups. The difference for
+*Slc5a2* was more than four times larger than under either swap (Methods).
 
-Each of these differences was at least four times larger than when we swapped one mouse and one human section between
-the groups. In mouse, SGLT2, GLUT2, OAT1 and OAT3 were lost from the end of the PT more steeply than the overall
-flattening of human gradients could explain. Many drug targets nonetheless kept the direction of their gradient in both
-species, including SGLT2, OAT3, URAT1, ACE and PSMA, while a few reversed, including neprilysin (MME, the target of
-sacubitril) and 15-PGDH (HPGD) (Fig. 5b).
+We next applied the same analysis to transporters that mediate renal drug secretion. *Slc22a6* and *Slc22a8*, which
+encode the organic anion transporters OAT1 and OAT3, peaked at the start of the human PT (0.06–0.16) but in the
+early-to-mid PT in mouse (0.24–0.47) (Fig. 5d). Likewise, *Abcc2*, which encodes the efflux pump MRP2, was expressed
+from the start of the human PT but only past the middle of the mouse PT (Extended Data Fig. X). In contrast, *Slc22a2*,
+which encodes the organic cation transporter OCT2, rose later along the human PT (0.51–0.57 versus 0.32–0.36), and
+*Slc22a12*, which encodes the urate transporter URAT1, peaked late in the human PT (0.84) but mid-PT in mouse (0.54)
+(Fig. 5d). Each of these differences again exceeded both section swaps at least four-fold. Because OAT1, OAT3 and OCT2
+mediate the basolateral uptake of many renally cleared drugs [OCT/MATE review, PMC3675737; to verify], we speculate
+that these positional differences may change which PT cells first encounter a given drug in human compared to mouse.
 
-These differences bear on how mouse results transfer to human. A longer SGLT2 zone would put more of the human PT under
-gliflozin action. OAT1, OAT3 and OCT2 bring many drugs into PT cells from the blood [OCT/MATE review, PMC3675737; to
-verify], so where they sit determines which cells meet a drug first.
+Many PT transporters act in pairs, in which one family member is expressed early along the PT and is replaced by a
+related member later on. We reasoned that the position at which the two cross, which we refer to as the switch point,
+could differ between species even when both genes are expressed in both. Of 53 transporter pairs with a switch point
+in all four sections, 13 (25%) switched at a different position in human than in mouse, whereas none did when sections
+were swapped between species (Methods). Eight of these 13 pairs switched later in human, including *Slc5a2* →
+*Slc5a10* (SGLT2 → SGLT5; +0.21 of the PT length) and *Slc22a23* → *Slc22a12* (+0.25) (Fig. 5e), as well as *Slc22a23*
+→ *Slc22a2* (+0.24), *Slc7a7* → *Slc7a13* (y+LAT1 → AGT1; +0.24) and *Slc6a19* → *Slc6a18* (B0AT1 → B0AT3; +0.18)
+(Fig. 5f). In each, the early partner was maintained further along the human PT. All seven later-in-human pairs that
+could be evaluated in an independent human single-cell atlas [Lake 2023] reproduced. These included *Slc5a2* →
+*Slc5a1* (SGLT2 → SGLT1), whose *Slc5a1* partner is detected in too few of our human tubules to be shown here.
 
-**Switch points move.** Many transporters work in pairs: one member is high early in the PT and is replaced by a
-related member later on. We call the point where the two cross the switch point. Of 53 pairs with a switch in all
-four sections, 13 switched at a different position in human, and none did when sections were swapped between species.
-Eight switched later in human. They include:
-- the sugar pair SGLT2 → SGLT5 (+0.21 of the PT length);
-- the urate pair SLC22A23 → URAT1 (+0.25);
-- SLC22A23 → OCT2 (+0.24);
-- the amino-acid pairs y+LAT1 → AGT1 (+0.24) and B0AT1 → B0AT3 (+0.18) (Fig. 5c).
+We next sought to evaluate whether these shifts could be recovered by clustering analysis alone. To this end, for each
+section we fit straight lines through the S1, S2 and S3 cluster means, as a segment-level analysis would, and located
+where each pair crossed (Methods). If the shifts were apparent at segment resolution, we would expect the cluster means
+to give shifts similar to those from COAST. However, the cluster means recovered only +0.07 of the +0.25 shift for
+*Slc22a23* → *Slc22a12*, +0.06 of the +0.24 shift for *Slc22a23* → *Slc22a2* and +0.02 of the +0.21 shift for
+*Slc5a2* → *Slc5a10* (Fig. 5f; post hoc). They gave no switch point for three pairs and moved one monocarboxylate
+transporter pair in the opposite direction. Several of these switch points lie within S2, which three cluster means
+cannot resolve. Thus, these species differences are visible only along a continuous coordinate.
 
-In each, the early human partner stayed on further along the tubule. All seven later-in-human pairs we could check in a
-human single-cell atlas [Lake 2023] reproduced. One of them is SGLT2 → SGLT1; its SGLT1 partner is detected too rarely
-in our human sections to measure.
+Finally, cross-species comparisons typically restrict analysis to genes with one-to-one orthologs. However, several PT
+gene families, such as *Cyp4a*, *Cyp2d*, *Ugt2b* and *Slco1a*, expanded in mouse. We therefore asked whether genes
+without a one-to-one human counterpart carry positional information of their own. In mouse, 9.9% of genes from
+families with more mouse than human copies and 14.2% of genes from families expanded in both species were strongly
+zonated along the PT, compared to 3.8% of one-to-one orthologs (Mantel–Haenszel odds ratio 2.24, P = 8 × 10⁻⁷)
+(Fig. 5g). In contrast, mouse genes whose human counterpart had expanded showed no such excess (1.7%). As such, part of
+the positional organization of the mouse PT resides in gene copies without a single human counterpart and would be
+omitted by a one-to-one comparison.
 
-**Detail that clustering misses.** We next asked whether these shifts could be read from the S1, S2 and S3 cluster means
-alone. Straight lines through the three cluster means placed most human switches close to where the mouse switched.
-They recovered only +0.07 of the +0.25 URAT1 shift, +0.06 of the +0.24 OCT2 shift and +0.02 of the +0.21 SGLT5 shift,
-and one monocarboxylate pair moved the wrong way (Fig. 5d; post hoc). Several of these switches move within S2, which
-three cluster means cannot resolve, so these species differences are visible only on a continuous axis.
+Taken together, these results demonstrate that COAST can compare positional gene expression across species on a shared
+continuous coordinate. Applied to the PT, it reveals that transporters for glucose, drugs and urate occupy different
+positions in mouse and human, and that their switch points shift in a manner largely missed by segment-level
+clustering. We note that all human data derive from two cortical sections of one donor and that transcript position
+need not reflect protein position. Antibody staining for SGLT2, OAT1, OCT2 and URAT1 along the human PT in additional
+donors would be needed to confirm these differences.
 
-**Gene families the one-to-one comparison cannot see.** Species comparisons usually keep only genes with one copy in each
-species. Some PT genes instead belong to families that expanded in mouse, such as CYP4A, CYP2D, UGT2B and SLCO1A. We
-asked whether these genes carry PT zonation of their own.
-- In mouse, 9.9% of genes from families with more mouse than human copies were strongly zonated, and 14.2% from
-  families expanded in both species. Only 3.8% of one-to-one genes were (odds ratio 2.2, P < 10⁻⁵) (Fig. 5e).
-- Mouse genes whose human counterpart had expanded showed no excess (1.7%).
-
-Part of the mouse PT's positional organisation therefore lives in gene copies that have no single human counterpart,
-and a one-to-one comparison silently drops it.
-
-Thus, COAST shows that the human PT is not a scaled copy of the mouse PT. Transporters for glucose, drugs and urate
-occupy different stretches, and their switch points sit later, at a resolution that segment-level clustering largely
-misses. Mouse findings about where a transporter works in the PT should therefore be checked by position before they
-are carried to human. All human results come from one donor and two cortical sections, and transcript position need
-not match protein position. Antibody staining for SGLT2, OAT1, OCT2 and URAT1 along the human PT in more donors would
-test these conclusions directly.
+**Fig. 5 | COAST enables comparison of positional gene expression along the mouse and human proximal tubule.**
+**a** One mouse and one human kidney section assayed by Visium HD. PT tubules are coloured by their position on the
+shared pseudostructure coordinate; other tubules are grey. **b** *Slc5a2* (SGLT2) expression in the same PT tubules.
+**c** Scaled *Slc5a2* expression against pseudostructure for each mouse (blue) and human (magenta) section. Points are
+binned means of tubules; lines are fitted curves. Each section is min-max scaled over pseudostructure 0.05–0.95. Dashed
+lines mark the S1/S2 and S2/S3 boundaries of the mouse segment labels, and the dotted line marks half-maximum.
+**d** As in c for *Slc2a2* (GLUT2), *Slc22a6* (OAT1), *Slc22a8* (OAT3), *Slc22a2* (OCT2) and *Slc22a12* (URAT1).
+**e** Two transporter switches in mouse (left) and human (right): the early (light) and late (dark) partner, scaled over
+the range used to locate the switch. Solid vertical lines mark each species' switch point, averaged over its two
+sections; the dashed blue line in the human panels repeats the mouse switch point. **f** Shift in switch point (human −
+mouse) for the 12 pairs that switched at a different position in human and whose partners are both measured, from
+COAST curves (filled) and from straight lines through the S1, S2 and S3 cluster means (open; × where the cluster means
+give no switch). **g** Percentage of PT-expressed genes strongly zonated along pseudostructure in mouse and human, by
+orthology class (human : mouse gene copies). Error bars are Wilson 95% confidence intervals.
 
 ---
 

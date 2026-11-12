@@ -164,8 +164,10 @@ def panel_maps(fig, root, rect_a, rect_b, run='hvm', shown=(('Ctrl1A2', 'mouse')
             ax.set_aspect('equal')
             ax.invert_yaxis()
             ax.axis('off')
-            fig.text(x0 + i * w / 2 + w / 4, y0 + h + 0.004, sp if what == 'x' else sym(gene, sp), fontsize=6.5,
-                     ha='center', va='bottom', color=INK, style='normal' if what == 'x' else 'italic')
+            one_species = sym(gene, shown[0][1]) == sym(gene, shown[-1][1])
+            lab = sp if what == 'x' or one_species else sym(gene, sp)
+            fig.text(x0 + i * w / 2 + w / 4, y0 + h + 0.004, lab, fontsize=6.5, ha='center', va='bottom', color=INK,
+                     style='normal' if what == 'x' or one_species else 'italic')
         cax = fig.add_axes([x0 + w * 0.3, y0 - 0.012, w * 0.4, 0.006])
         cb = fig.colorbar(sc, cax=cax, orientation='horizontal')
         cb.outline.set_visible(False)
@@ -177,7 +179,8 @@ def panel_maps(fig, root, rect_a, rect_b, run='hvm', shown=(('Ctrl1A2', 'mouse')
         else:
             cb.set_ticks([0, vmax])
             cb.set_ticklabels(['0', 'max'])
-            cb.set_label('Expression (log)', fontsize=5.5, labelpad=1)
+            cb.set_label(f'{gene} expression (log)' if one_species else 'Expression (log)', fontsize=5.5,
+                         labelpad=1)
 
 
 def draw_handoffs(fig, R, top, curves, pos, grid, b12, b23, pairs=None, groups=None, protein=None, shared_y=False):
@@ -240,7 +243,8 @@ def draw_handoffs(fig, R, top, curves, pos, grid, b12, b23, pairs=None, groups=N
     return y0 + len(pairs) * (rh + gap)
 
 
-def panel_shift(fig, rect, genes, hp, b12, b23, groups=None, protein=None, title='Switch point, mouse → human'):
+def panel_shift(fig, rect, genes, hp, b12, b23, groups=None, protein=None, title='Switch point, mouse → human',
+                keep=None):
     """Each shifted pair (both partners in the screened set) on the PT axis: an arrow from the first arm's switch to
     the second's (mean of the two sections) from the COAST curves (ink), and the same from straight lines through
     each section's S1/S2/S3 cluster means (grey, dashed; post hoc), as fig6_panels.cluster_switch_shift locates them."""
@@ -249,7 +253,7 @@ def panel_shift(fig, rect, genes, hp, b12, b23, groups=None, protein=None, title
 
     groups, protein = groups or GROUPS, protein or PROTEIN
     (sa, _, _, _), (sb, _, _, _) = groups.values()
-    inside = set(genes.index[genes.universe.astype(bool)])
+    inside = set(genes.index[genes.universe.astype(bool)]) if keep is None else set(keep)
     d = hp[hp.shifted & hp.early.isin(inside) & hp.late.isin(inside)].sort_values('shift').reset_index(drop=True)
     centres = [b12 / 2, (b12 + b23) / 2, (b23 + 1) / 2]
     g = np.linspace(0, 1, 201)

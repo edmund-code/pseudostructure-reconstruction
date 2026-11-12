@@ -94,3 +94,11 @@ Drug and disease hooks for the Figs 5–6 highlights: `citation_checks/G_fig56_c
 | McMurray JJV et al. 2014 NEJM (PARADIGM-HF) | PMID 25176015 | N (403, not in PMC) | not read | cited beside Jhund 2015; read before submission or drop |
 | Vio CP et al. 2018 Front Physiol (rat renal NEP) | PMC6297360, PMID 30618804 | Y | supported (rat) | NEP "located in proximal tubules, being more concentrated in the S3 segment"; matches our mouse limb. Not yet cited in text |
 | Edwards 1999 Pharmacology (NEP activity, rat vs rabbit) | PMID 10352425 | N (abstract only) | removed from text | inaccessible; full-text rule not met |
+
+## Fig. 6 drug-context sources (read 2026-11-12)
+
+| Citation | ID | Full text | Verdict | Supporting text (verbatim) |
+|---|---|---|---|---|
+| Cai Z et al. 2025 PNAS, SLC39A8-mediated zinc dyshomeostasis potentiates kidney disease | PMC12478044 | Y | supported | "kidney-specific Slc39a8 knockout (KKO) mice by crossing Slc39a8 flox/flox mice with Six2-Cre mice"; KKO "had significantly lower levels of renal zinc"; serum BUN, creatinine, LDH, AST and renal Havcr1/Lcn2 measured "following I/R surgery"; "EDTA-mediated zinc chelation ameliorated both ischemia/reperfusion-induced AKI and obstructive CKD in mice"; ZIP8 "predominantly localized in the renal proximal tubular cells". Replaces the earlier "Cai 2025" note that said the knockout protects; the paper's own knockout is kidney-specific |
+| Zhang et al. 2026 (phytochemical OCT2 inhibitors), J/PMC record | PMC13119655 | Y | supported | "Organic cation transporter 2 (OCT2) mediates the renal uptake of cisplatin and is a principal contributor to its dose-limiting nephrotoxicity"; OCT2 "a transporter located in the basolateral membrane of proximal tubule cells, has been repeatedly implicated as the primary entry route for cisplatin into these cells". Used only for the OCT2–cisplatin background; the paper's own screen is not cited |
+| KIM-1 as a shed urinary injury biomarker | — | not read | TO READ | the Fig. 6 sentence "shed into urine, where it is measured as a tubular injury biomarker" needs Ichimura 1998 / Vaidya 2010 or an equivalent read in full |

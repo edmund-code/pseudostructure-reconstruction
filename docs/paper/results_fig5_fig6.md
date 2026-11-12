@@ -159,47 +159,100 @@ lines through the S1, S2 and S3 cluster means (grey, dashed; post hoc). Backgrou
 
 ### COAST resolves where acute injury reshapes the proximal tubule
 
-Acute kidney injury damages the PT unevenly. The S3 segment, the last part of the PT, is usually hit hardest
-[Ransick 2019]. We compared two control mouse kidneys with two kidneys after ischemia–reperfusion injury (IRI) on one
-shared axis. To check that injury did not distort the axis, we rebuilt it without 3,812 injury-responsive genes.
-Injured tubules kept their order nearly as well as control tubules (Methods).
+Ischaemic acute kidney injury (AKI) damages the PT unevenly, and the S3 segment is usually hit hardest
+[Ransick 2019]. What is not known is how injury is distributed inside a segment, because the segment is the finest
+unit at which injury is usually scored. We therefore applied COAST to two control mouse kidneys and two kidneys after
+ischaemia–reperfusion injury (IRI), placing all four on one shared pseudostructure coordinate (Fig. 6a). A shared axis
+is only meaningful if injured tubules are placed by their position rather than by their injury, so we rebuilt the axis
+without the 3,812 injury-responsive genes; injured tubules kept their order nearly as well as control tubules did
+(Spearman ρ 0.90 and 0.91 against 0.94 and 0.97; Methods).
 
-**Healthy gradients flatten inside S2.** Within S2, expression of the injury biomarker KIM-1 (HAVCR1) climbed along
-the tubule after injury (+1.0 log2 from the start to the end of S2, against −0.3 in controls) (Fig. 6a). At the same time, healthy S2
-gradients of the vitamin D enzyme CYP24A1, angiotensinogen (AGT) and CYP4A14 flattened. These single-gene changes
-did not meet our false-call threshold (Methods), so we show them as examples. To ask whether flattening is general,
-we chose gradients in one control mouse and measured how much of each the other mice kept. The second control kept
-most of each gradient (0.84–1.16 of it in S2), while each injured mouse kept about half (0.49–0.56). Injured mice
-kept less in all 12 comparisons across the three segments (Fig. 6b).
+Injury itself was graded along the axis. KIM-1, encoded by *Havcr1*, is the standard marker of PT injury and is shed
+into urine, where it is measured as a tubular injury biomarker. In our data *Havcr1* rose by 10.6, 12.3 and 9.3 log2
+in S1, S2 and S3, so it marks the whole PT, but within S2 it climbed along the tubule after injury (+1.0 log2 from the
+start to the end of S2, against −0.2 in controls) (Fig. 6c). A single number per segment therefore understates how
+much KIM-1 varies between neighbouring parts of the same segment.
 
-**Proliferation rises toward S3.** Cell-cycle genes rose after injury in every segment, and most in S3: CDK4 rose
-+0.9 log2 in S1 and +1.9 in S3 (Fig. 6d). In all, the injury response of 268 genes differed by at least 1 log2 between S3 and S1, against 0 and 4 genes
-when control and injured sections were swapped. Within S2, the DNA replication programme climbed
-along the tubule (Fig. 6c). Among 122 pathways whose injury response changed within a segment (none in either swap, after a
-correction described in Methods), DNA replication, G1/S transcription and mismatch repair rose through S2 (Fig. 6e). CDK4/6 inhibitors given
-before injury reduce early AKI in mice [DiRocco 2014; Pabla 2015], although longer treatment promoted fibrosis
-[Zhou 2024].
+Loss of mature transport was positional, and each segment lost its own specialised carrier (Fig. 6d). *Slc34a1*
+(NaPi-IIa, phosphate) fell 1.5 and 1.9 log2 in S1 and S2 but not in S3; *Slc7a13* (AGT1, cystine) fell about 4 log2
+throughout; and *Acadm*, which encodes the medium-chain acyl-CoA dehydrogenase of fatty acid oxidation, fell most in S3
+(−2.8 against −0.6 in S1). *Slc22a6* (OAT1) was the exception: it was unchanged in S1 and S2 but 4.9 log2 higher in
+injured S3. Because KIM-1 peaks in S3, the segments that lose the most transport are not the segments where the
+injury marker is highest.
 
-**Mitochondrial loss concentrates in S3.** Oxidative phosphorylation fell along S3 after injury (Fig. 6f), and the
-respiratory-chain pathways were among the S3 pathway calls (Fig. 6h). Other drug targets also responded most in S3
-(Fig. 6g):
-- xanthine oxidase (XDH, the target of allopurinol and febuxostat) rose +1.3 log2 in S1 and +2.6 in S3;
-- 11β-HSD1 fell −3.1 in S3;
-- the cystine transporter rBAT fell −1.8 in S3;
-- HNF1B, a transcription factor that maintains PT identity, fell −1.5 in S3.
+### COAST identifies healthy gradients that injury erases
 
-**Switch points move upstream.** Of 52 transporter pairs, 11 switched at a different position after injury, and
-none did when sections were swapped (post hoc). Most moved toward the start of the PT (Fig. 6i). They included:
-- OAT1 → OCT2, the main uptake transporters for many renally cleared drugs (−0.14 of the PT length);
-- 4F2hc → rBAT, where rBAT is mutated in cystinuria (−0.20);
-- B0AT1 → GAT2 (−0.23);
-- the folate pair SLC46A3 → PCFT (−0.22).
+Several PT functions are graded along the tubule in health, and that grading is itself a target of injury. CYP24A1
+degrades active vitamin D and so sets how much of it leaves the PT; angiotensinogen, encoded by *Agt*, is the
+precursor of the intrarenal renin–angiotensin system; and the *Cyp4a* enzymes are part of the PPARα fatty-acid
+programme. Each is expressed unevenly along the healthy PT. We asked whether injury moves these genes up or down as a
+block, or whether it changes their distribution along the tubule.
 
-The zinc pair ZIP5 → ZIP8 moved the other way (+0.17); loss of ZIP8 protects mice from ischemic injury [Cai 2025].
-The cystine pair b0,+AT → AGT1 kept its position, although AGT1 fell about 20-fold. This shows that a switch point
-can stay put while expression levels change. Here, unlike between species, straight lines through the cluster means
-recovered the direction of every shift. The sizes differed: clustering gave −0.07 for OAT1 → OCT2 (Fig. 6j).
+It changed the distribution. In controls, *Cyp4a14*, *Agt* and *Cyp24a1* each changed by more than 2-fold from the
+start to the end of S2 (+1.3, +1.6 and −2.1 log2), whereas after injury all three were nearly flat there (−0.4, +0.4
+and +0.1) (Fig. 6e). To ask whether this flattening is general rather than a property of three genes, we chose
+gradients in one control mouse and measured how much of each the other mice kept. The second control kept most of each
+gradient within S2 (0.84–1.16 of it), while each injured mouse kept about half (0.49–0.56), and the injured mice kept
+less in all 12 comparisons across the three segments. Noisier positions in injured tissue would flatten every gene
+equally; genes whose overall level barely changed kept 0.66–0.68 of their S2 gradient, against 0.45–0.54 for
+injury-responsive genes, so about a quarter of the flattening is attributable to placement noise and the rest tracks
+the injury response. As such, injury does not simply raise or lower these genes in each segment: it erases the
+positional organization that the healthy PT maintains inside a segment.
 
-Thus, COAST shows that injury does more than raise or lower genes in each segment. It flattens healthy gradients,
-shifts transporter switch points toward the start of the PT, and concentrates proliferation and mitochondrial loss
-in S3. With two mice per group, these comparisons are descriptive and need confirmation in larger cohorts.
+### COAST locates where paired transporters hand over after injury
+
+Paired transporters hand over along the PT, and where that handover sits determines which cells take up a given
+substrate. Two of these pairs carry drugs. OCT2, encoded by *Slc22a2*, sits on the basolateral membrane of PT cells
+and is the main entry route for cisplatin, which makes it a principal contributor to the dose-limiting kidney toxicity
+of that drug [Zhang 2026]. ZIP8, encoded by *Slc39a8*, carries zinc into PT cells; mice lacking *Slc39a8* in the
+kidney accumulate less renal zinc and are protected against ischaemia–reperfusion injury, and zinc chelation
+reproduces that protection, which makes renal zinc handling a candidate therapeutic target [Cai 2025].
+
+We located each pair's switch point as in Fig. 5, on curves scaled to their own range and only where both partners
+changed at least two-fold (Methods; post hoc). Of 31 pairs with a switch point in all four mice, 4 moved after injury,
+and none moved when control and injured sections were swapped between the groups. Three moved toward the start of the
+PT: *Slc6a19* → *Slc6a13* (B0AT1 → GAT2, −0.23 of the PT length), *Slc6a8* → *Slc6a13* (CRT1 → GAT2, −0.19) and
+*Slc22a6* → *Slc22a2* (OAT1 → OCT2, −0.14) (Fig. 6f,g). In each, the late partner lost its rise toward S3 rather than
+the early partner retreating: GAT2 fell 2.9 log2 in injured S3 and OCT2 1.8 log2, while OAT1 was retained. The fourth
+pair moved the other way: *Slc39a5* → *Slc39a8* (ZIP5 → ZIP8, +0.17), because ZIP5 stayed on further into S2. A pair
+can also keep its position while its level collapses: the cystine pair *Slc7a9* → *Slc7a13* (b0,+AT → AGT1) did not
+move although AGT1 fell about 20-fold, which shows the switch point is not simply reporting expression loss.
+
+For cisplatin, the OAT1 → OCT2 switch marks where anion uptake gives way to cation uptake. Its move toward the start
+of the PT after injury comes from OCT2 being lost in S3, so we speculate that an injured kidney takes up cisplatin
+over a different stretch of the PT than a healthy one, which may matter when a second dose follows an episode of
+injury.
+
+### Segment-level clustering recovers the direction but not the size of the shifts
+
+As for the species comparison, we asked what a segment-level analysis would show, fitting straight lines through the
+S1, S2 and S3 cluster means and locating where each pair crossed. Unlike the species comparison, the cluster means
+recovered the direction of every shift. The sizes differed: clustering gave −0.07 for OAT1 → OCT2 against −0.14 from
+the curves, and −0.34 for B0AT1 → GAT2 against −0.23 (Fig. 6g). Thus, segment-level clustering detects that these
+handovers move after injury, but it does not place them, and it does not see the within-segment flattening of
+Fig. 6e at all, because three cluster means give one value per segment.
+
+Taken together, these results demonstrate that COAST resolves injury inside the segment. Applied to IRI, it shows that
+KIM-1 climbs along S2, that each segment loses its own specialised transport while OAT1 is retained in S3, that the
+healthy positional organization inside segments is about half erased, and that transporter handovers move toward the
+start of the PT as their late partners are lost. With two mice per condition these comparisons are descriptive, and
+they describe one early time point (about 12 h–2 d after reperfusion), so whether these positions recover with repair
+is untested.
+
+**Fig. 6 | COAST resolves where acute injury reshapes the proximal tubule.** **a** One control and one injured (IRI)
+mouse kidney section assayed by Visium HD. PT tubules are coloured by their position on the shared pseudostructure
+coordinate; other tubules are grey. **b** *Havcr1* (KIM-1) expression in the same PT tubules. **c** *Havcr1*
+expression, in log2(counts per 10,000 + 0.5), against pseudostructure for each control (blue) and injured (orange)
+mouse over pseudostructure 0.05–0.95. Points are binned means of tubules; lines are fitted curves. Dashed lines mark
+the S1/S2 and S2/S3 boundaries of the control segment labels. **d** As in c for *Slc34a1* (NaPi-IIa), *Slc7a13*
+(AGT1), *Slc22a6* (OAT1) and *Acadm*. **e** Three genes whose within-segment gradient injury erases: *Cyp4a14*, *Agt*
+and *Cyp24a1*. **f** Three transporter pairs whose switch point moves after injury, in log2(1 + counts per 10,000).
+For each condition, the early (light) and late (dark) partner are shown as the mean of the two mice's curves (thick)
+and each mouse's curve (thin); both conditions are measured on one probe panel, so each row shares a y axis. Background
+shading marks S1, S2 and S3. **g** Switch point in control (start of arrow) and after injury (arrowhead) for the four
+shifted pairs whose partners both pass the neighbour filter, from COAST curves (black) and from straight lines through
+the S1, S2 and S3 cluster means (grey, dashed; post hoc).
+
+> Fig. 6 rewritten 2026-11-12 to the Fig. 5 structure (same canvas, biology first, one drug story per section).
+> The earlier version, with the pathway and program panels, is docs/paper/results_fig6_v1_segment_rows.md.
+> Sources read in full: Cai 2025 (PMC12478044), Zhang 2026 (PMC13119655). KIM-1 biomarker sentence still needs one.

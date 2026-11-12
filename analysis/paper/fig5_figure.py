@@ -3,11 +3,10 @@ methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zon
  a  one mouse and one human section, PT tubules coloured by pseudostructure
  b  Slc5a2 (SGLT2) expression in the same tubules
  c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines) in log2(CP10k + 0.5)
- d  the same for four more transporters (Slc2a2, GLUT2, is the unmoved comparator); the last slot is the section key
+ d  the same for one transporter from each gene shape cluster; the last slot is the section key
  e  three genes whose gradient reverses between species (Mme, Slc17a3, Dcxr), as in c
- f  transporter pairs in the poster style: mean log2(1 + CP10k) curves per species, axis from 0, no switch lines
- g  each shifted switch as an arrow from its mouse to its human position, from the curves and from straight lines
-    through the S1/S2/S3 cluster means
+ f  the four gene shape clusters of shape_clusters.py: mean z-scored shape per section and per species
+ g  one called pathway per pathway group, drawn as in f
 Panel letters only; claims live in the legend and text. Gene symbols are italic (mouse Slc5a2, human SLC5A2).
 The drawing functions take the two groups as arguments, so fig6_figure.py draws control against AKI with them.
 Writes fig5.png, fig5.pdf and fig5_wireframe.png to <results-root>/paper_figures/fig5/.
@@ -34,9 +33,15 @@ MM = 1 / 25.4
 INK, GREY = '#222222', '#8A8A8A'
 TRIM = 0.05                      # spline ends overshoot (question-bank.md); curves and bins shown on [0.05, 0.95]
 # d: OCT2 and MRP2 change < 3.5-fold along the PT in either species, too little to place (Results text, 2026-11-12)
-GENES_D = ['Slc2a2', 'Slc22a6', 'Slc22a8', 'Slc22a12']
+# d: one transporter from each gene shape cluster (shape_clusters.py), in cluster order
+GENES_D = ['Slc7a7', 'Slc22a6', 'Slc10a2', 'Slc22a12']
 GENES_E = ['Mme', 'Slc17a3', 'Dcxr']           # reversals whose both limbs reproduce externally
 EXPR_CMAP = None
+# f: genes named on each shape cluster; g: per pathway group, the called set with the smallest competitive p,
+# replaced by the next where that set is a broad Hallmark with no PT meaning (Adipogenesis -> Bile Acid Metabolism)
+EXAMPLES = {1: ['Slc5a2', 'Slc7a7'], 2: ['Slc22a6', 'Slc13a3'], 3: ['Mme', 'Slc17a3'], 4: ['Dcxr', 'Miox']}
+HIGHLIGHT = ['KEGG_2019_Mouse::Lysosome', 'MSigDB_Hallmark_2020::Bile Acid Metabolism',
+             'MSigDB_Hallmark_2020::Fatty Acid Metabolism', 'Reactome_2022::Peroxisomal Protein Import R-HSA-9033241']
 # f: the shifted pairs whose handover is visible in counts; urate (SLC22A23 -> URAT1) is left out because URAT1 is
 # the more abundant transcript along the whole PT in both species
 E_PAIRS = H_PAIRS[:3]
@@ -349,6 +354,55 @@ def curve_rows(fig, R, panel, curves, pos, grid, b12, b23, lead, genes_d, genes_
                    sections=sections, shade=shade)
 
 
+def short_set(name):
+    """'Reactome_2022::Lysosome Vesicle Biogenesis R-HSA-432720' -> 'Lysosome vesicle biogenesis'."""
+    import re
+    words = re.sub(r'\s+R-HSA-\d+$', '', name.split('::', 1)[-1]).split()
+    # sentence case, keeping symbols such as E2F, V1 or TCA
+    keep = lambda w: sum(c.isupper() for c in w) > 1 or any(c.isdigit() for c in w)
+    return ' '.join(w if k == 0 or keep(w) else w.lower() for k, w in enumerate(words))
+
+
+def shape_rows(fig, R, panel, out, groups, shade, b12, b23, highlight, examples, top_f=140, top_g=191):
+    """f: the gene shape clusters from shape_clusters.py; g: one called pathway per pathway group. Each small axis
+    shows the mean z-scored shape (unit variance per section) of its genes, per section (thin) and per arm (thick)."""
+    s = np.load(out / 'shapes.npz', allow_pickle=True)
+    x, names = s['x'], list(s['genes'])
+    gi = {g: i for i, g in enumerate(names)}
+    tab = pd.read_csv(out / 'genes.csv')
+    pw = pd.read_csv(out / 'pathways.csv').set_index('set')
+    items_f = [(f'{(tab.cluster == c).sum()} genes', tab.gene[tab.cluster == c].tolist(), examples.get(c, []))
+               for c in sorted(set(tab.cluster) - {0})]
+    items_g = [(short_set(h), pw.loc[h, 'genes'].split(','), []) for h in highlight]
+
+    def row(letter, top, items):
+        panel(letter, 1, top, 179, top + 44)
+        w, gap = 35, 8
+        for k, (title, genes, ex) in enumerate(items):
+            ax = fig.add_axes(R(13 + k * (w + gap), top + 7, w, 28, rect=True))
+            for (lo, hi), seg in zip(((0, b12), (b12, b23), (b23, 1)), SEGS):
+                ax.axvspan(lo, hi, color=BAND[seg], lw=0, zorder=0)
+            idx = [gi[g] for g in genes if g in gi]
+            for name, (secs, col, _, _) in groups.items():
+                per = [s[f'z|{m}'][idx].mean(0) for m in secs]
+                for m, p in zip(secs, per):
+                    ax.plot(x, p, color=shade[m], lw=0.5, alpha=0.8, zorder=2)
+                ax.plot(x, np.mean(per, 0), color=col, lw=1.3, zorder=3)
+            ax.axhline(0, color=GREY, lw=0.3, zorder=1)
+            ax.set_xlim(0, 1)
+            ax.set_xticks([0, 0.5, 1])
+            ax.set_xticklabels(['0', '0.5', '1'])
+            ax.set_xlabel('Pseudostructure', labelpad=1)
+            if k == 0:
+                ax.set_ylabel('Mean shape (z)', labelpad=1)
+            ax.set_title(title, fontsize=6, pad=3, loc='left')
+            if ex:
+                ax.set_title(', '.join(ex), fontsize=5.5, pad=3, loc='right', style='italic')
+
+    row('f', top_f, items_f)
+    row('g', top_g, items_g)
+
+
 def main(argv=None):
     args = parse_args(argv)
     rroot = Path(args.results_root)
@@ -369,10 +423,7 @@ def main(argv=None):
     panel('b', 91, 1, 179, 50)
     panel_maps(fig, rroot, R(8, 7, 78, 34, rect=True), R(98, 7, 78, 34, rect=True))
     curve_rows(fig, R, panel, curves, pos, grid, b12, b23, 'Slc5a2', GENES_D, GENES_E, SECTIONS, SHADE, KEY)
-    panel('f', 1, 140, 179, 188)
-    draw_handoffs(fig, R, 141, curves, pos, grid, b12, b23)
-    panel('g', 1, 191, 179, 237)
-    panel_shift(fig, R(40, 198, 95, 32, rect=True), genes, hp, b12, b23)
+    shape_rows(fig, R, panel, root / 'shape_clusters', GROUPS, SHADE, b12, b23, HIGHLIGHT, EXAMPLES)
     fig.savefig(root / 'fig5.png', facecolor='white', dpi=400)
     fig.savefig(root / 'fig5.pdf', facecolor='white')
     plt.close(fig)

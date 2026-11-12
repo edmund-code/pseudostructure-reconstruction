@@ -16,7 +16,7 @@ human kidney atlases resolve the PT into only two or three segments [Lake 2023].
 the same positions along the human PT as along the mouse PT remains largely unknown. We therefore applied COAST to two
 mouse kidney sections and two cortical sections from one human kidney assayed by Visium HD, placing PT tubules from both
 species on a shared pseudostructure coordinate (Fig. 5a, Methods). Human gradients were about half as steep as mouse
-gradients, a difference also seen between independent human and mouse single-nucleus atlases (Extended Data Fig. X).
+gradients, a difference also seen between independent human and mouse single-nucleus atlases (Methods).
 Because this could reflect species, donor age or tissue source, we compared where genes are expressed rather than how
 much, and evaluated each difference against swaps of one mouse and one human section between the groups (Methods).
 
@@ -28,15 +28,15 @@ which encodes GLUT2, the basolateral transporter that carries the same glucose o
 position in both species (0.55–0.58) (Fig. 5d). The difference for *Slc5a2* was more than four times larger than under
 either section swap (Methods).
 
-Where SGLT2 ends matters for how gliflozins act. Gliflozins are approved for type 2 diabetes, heart failure and chronic
-kidney disease [sotagliflozin review, PMC11462946]. SGLT2 reabsorbs about 97% of filtered glucose, and when it is
+Where SGLT2 ends matters for how gliflozins act. Empagliflozin and dapagliflozin are approved for type 2 diabetes, heart
+failure and chronic kidney disease [Tran 2024]. SGLT2 reabsorbs about 97% of filtered glucose, and when it is
 inhibited, SGLT1 further along the PT reabsorbs part of the glucose that escapes, so that only 50–60% of filtered glucose
 is excreted in mice [Rieg 2014]. Modelling in the rat further suggests that SGLT2 inhibition shifts sodium reabsorption
 downstream and roughly doubles oxygen consumption in S3 [Layton 2015]. Both effects depend on how much of the PT lies
 beyond SGLT2. Because SGLT2 extends further along the human PT, we speculate that the stretch available for SGLT1
 compensation, and the segment that takes on the extra workload, may be shorter in human than in mouse. As such, mouse
 estimates of SGLT1 compensation and of late-PT workload under gliflozins may need to be adjusted for the position of
-SGLT2 in human, which may also bear on dual SGLT1 and SGLT2 inhibition with sotagliflozin.
+SGLT2 in human, which may also bear on dual SGLT1 and SGLT2 inhibition with sotagliflozin, approved for heart failure [Tran 2024].
 
 We next applied the same analysis to transporters that carry drugs and urate across the PT. *Slc22a8*, which encodes
 the organic anion transporter OAT3, peaked at the start of the human PT (0.06–0.07) but further along the mouse PT
@@ -46,16 +46,19 @@ OAT1, varied 48- to 289-fold along the mouse PT, peaking at 0.47, but only 1.6- 
 contrast, *Slc22a2* (OCT2) and *Abcc2* (MRP2) varied less than 3.5-fold along the PT of either species, too little to
 assign them a position (Methods).
 
-These positions bear on where drugs enter PT cells. OAT1 and OAT3 take up many anionic drugs from the blood into PT
-cells for secretion into urine, and are among the transporters assessed for drug–drug interactions during drug
-development [Nigam 2015]. The antiviral tenofovir enters PT cells through OAT1 and damages their mitochondria
-[Kohler 2011]. In mouse, OAT1 is concentrated around the middle of the PT, whereas in human it is spread nearly evenly
-and OAT3 is concentrated at the start. We speculate that the PT cells exposed to OAT substrates, and therefore the cells
-first injured by drugs such as tenofovir, may differ between mouse models and patients. Similarly, URAT1 reabsorbs
-filtered urate and is the target of uricosuric drugs that lower serum urate in gout, such as benzbromarone and
-lesinurad [PMC11811179]. Its later position suggests that these drugs act further along the PT in human than in
-mouse. Thus, COAST can test whether the position of a drug target along the PT transfers from mouse to human before
-mouse data are used to predict where a drug acts or injures.
+These positions bear on where drugs enter PT cells. OAT1 and OAT3 sit on the basolateral membrane of PT cells, where
+they take up many anionic drugs, among them antibiotics, non-steroidal anti-inflammatory drugs, diuretics and
+antivirals, from the blood for secretion into urine; regulatory agencies highlight both as key transporters for drug
+excretion and drug–drug interactions [Nigam 2015]. Uptake on the basolateral side is loosely coupled to efflux into
+urine by the apical pumps MRP2 and MRP4 [Nigam 2015]. The antiviral tenofovir is one such substrate: in mice given
+tenofovir, PT mitochondria took on an irregular shape with sparse cristae, and mice lacking OAT1 were spared, placing
+OAT1 uptake upstream of the change [Kohler 2011]. In mouse, OAT1 was concentrated around the middle of the PT, whereas
+in human it was spread nearly evenly and OAT3 was concentrated at the start. We speculate that the PT cells that take
+up OAT substrates may therefore sit at different positions in mouse and in human. Similarly, URAT1 sits on the apical
+membrane of PT cells and reabsorbs filtered urate; it is the target of the uricosuric drugs benzbromarone and
+lesinurad, which are approved to lower serum urate in gout [Guo 2025]. Its later position in human suggests that these
+drugs act on a later stretch of the PT in human than in mouse. Thus, COAST can test whether the position of a drug
+target along the PT transfers from mouse to human.
 
 ### COAST identifies genes whose positional gradient reverses between species
 
@@ -67,22 +70,23 @@ either section swap. To evaluate whether these reversals reproduce in independen
 microdissected mouse segments from both sexes [Chen 2021; Chen 2023] and with human single-nucleus profiles of PT
 segments [Lake 2023]. For 11 of the 28 genes, both directions reproduced (Fig. 5e). Of the remainder, four had a mouse
 gradient that weakens or reverses in female mice [Chen 2023; Xiong 2023], and the others either did not reproduce in one species or were
-detected by few probes (Extended Data Table X).
+detected by few probes.
 
 For example, *Mme*, which encodes the peptidase neprilysin, rose 2.7–3.5 log2 from S1 to S3 in
 mouse, peaking at 0.82–0.83, but fell 0.8–1.0 log2 in human, peaking at 0.10–0.11 (Fig. 5e). Conversely, *Dcxr*, which
 encodes the uronate-pathway enzyme dicarbonyl/L-xylulose reductase, peaked at the start of the mouse PT (0.06) and at the
-end of the human PT (0.90–0.95), and *Slc17a3*, which encodes the urate exporter NPT4, followed *Mme*. Consistent with
-our result, the direction of neprilysin activity along the PT already differs between rodent species: activity is
-confined to the straight tubule in rat but is highest in the convoluted tubule in rabbit [Edwards 1999, abstract].
+end of the human PT (0.90–0.95), and *Slc17a3*, which encodes the urate exporter NPT4, followed *Mme*. The mouse direction
+agrees with rat, in which neprilysin protein is most concentrated in the S3 segment [Vio 2018]; the human direction
+has not been described.
 
-Neprilysin degrades natriuretic peptides, and its inhibitor sacubitril, combined with valsartan, is used to treat heart
-failure [TO READ: PARADIGM-HF, McMurray 2014]. In the kidney, neprilysin on the PT brush border breaks down filtered
-peptides [TO READ]. In mouse, neprilysin is concentrated at the end of the PT, whereas in human it is concentrated at
-the start. We speculate that the PT cells in which sacubitril acts may therefore differ between species, so that the
-renal effects of neprilysin inhibition measured in mice may not localize to the same cells in patients. More generally,
-genes whose gradients reverse cannot be placed on the human PT by transferring their mouse segment, and each such
-gene requires positional measurement in human tissue.
+Neprilysin is the main enzyme that degrades natriuretic peptides, and it also processes bradykinin, substance P,
+angiotensin II and endothelin; outside the heart and vasculature it is most abundant on the brush border of PT cells
+[Judge 2015]. Its inhibitor sacubitril, given with valsartan, lowered cardiovascular death and heart failure
+hospitalization in patients with reduced ejection fraction [McMurray 2014; Jhund 2015]. In mouse, neprilysin was
+concentrated at the end of the PT, whereas in human it was concentrated at the start. We speculate that the PT cells in
+which sacubitril acts may therefore differ between species, so that renal effects of neprilysin inhibition measured in
+mice may not arise in the same cells in patients. More generally, a gene whose gradient reverses cannot be placed on
+the human PT by transferring its mouse segment, and each such gene calls for positional measurement in human tissue.
 
 ### COAST locates where paired transporters hand over along the proximal tubule
 
@@ -95,7 +99,7 @@ least two-fold along the section (Methods; post hoc). Of 12 transporter pairs th
 sections, 7 switched later in human and none earlier, whereas none did when sections were swapped between species
 (Methods). Most of the other pairs failed the criterion in human, where gradients are shallower. The seven included
 *Slc5a2* → *Slc5a10* (SGLT2 → SGLT5; +0.21 of the PT length), *Slc6a19* → *Slc6a18* (B0AT1 → B0AT3; +0.18) and
-*Slc7a7* → *Slc7a13* (y+LAT1 → AGT1; +0.24) (Fig. 5f,g; Extended Data Fig. X). In each, the early partner was maintained
+*Slc7a7* → *Slc7a13* (y+LAT1 → AGT1; +0.24) (Fig. 5f,g). In each, the early partner was maintained
 further along the human PT; human *SLC6A19* remained the more abundant transcript through S3 (Fig. 5f), as it did in an
 independent human single-nucleus atlas [Lake 2023]. All six later-in-human pairs that could be evaluated in that atlas
 reproduced. These included *Slc5a2* → *Slc5a1* (SGLT2 → SGLT1; +0.30), whose *Slc5a1* partner is detected in too few of
@@ -123,12 +127,6 @@ straight lines through three cluster means are one simple segment-level baseline
 more of each shift. Thus, a map of drug targets built from segment-level clusters would miss half of these
 differences, including the later handover from SGLT2 to its downstream partners.
 
-Finally, cross-species comparisons typically restrict analysis to genes with one-to-one orthologs. In mouse, genes
-from families with more copies than in human were more often strongly zonated along the PT than one-to-one orthologs
-(9.9% and 14.2% against 3.8%; Mantel–Haenszel odds ratio 2.24, P = 8 × 10⁻⁷), and this held after removing male-biased
-genes (Extended Data Fig. X; post hoc). Human genes followed the same ordering but did not reach significance (odds ratio
-1.57, P = 0.17). As such, a one-to-one comparison omits part of the positional organization of the mouse PT.
-
 Taken together, these results demonstrate that COAST can compare positional gene expression across species on a shared
 continuous coordinate. Applied to the PT, it reveals that the targets of gliflozins, uricosurics and B0AT1 inhibitors
 occupy different positions in mouse and human, that neprilysin, the target of sacubitril, reverses its gradient, and
@@ -149,12 +147,12 @@ and *Dcxr*. **f** Three transporter pairs whose switch point moves later in huma
 each species, the early (light) and late (dark) partner are shown as the mean of the two sections' curves (thick) and
 each section's curve (thin), over the range used to locate the switch; each species has its own y axis, so heights
 compare the two partners within a species, not mouse with human. Background shading marks S1, S2 and S3. Switch points
-are located on scaled curves (Extended Data Fig. X). **g** Switch point in mouse (start of arrow) and human (arrowhead)
+are located on scaled curves (Methods). **g** Switch point in mouse (start of arrow) and human (arrowhead)
 for the six shifted pairs whose partners are both in the screened gene set, from COAST curves (black) and from straight
 lines through the S1, S2 and S3 cluster means (grey, dashed; post hoc). Background shading marks S1, S2 and S3.
 
 
-> Fig. 5 section restructured 2026-11-12 by capability (setup; positions of drug targets; reversed gradients; handovers; what clustering misses), each with one drug story. Figure changes this text assumes: d drops OCT2 (changes < 3.5-fold in both species); new e = reversals (*Mme*, *Slc17a3*, *Dcxr*); old e, f become f, g. [TO READ] marks claims whose source has not been read in full.
+> Fig. 5 section restructured 2026-11-12 by capability (setup; positions of drug targets; reversed gradients; handovers; what clustering misses), each with one drug story. Figure changes this text assumes: d drops OCT2 (changes < 3.5-fold in both species); new e = reversals (*Mme*, *Slc17a3*, *Dcxr*); old e, f become f, g. Drug sources read in full 2026-11-12 (citation_ledger.md); McMurray 2014 still unread (paywalled).
 
 ---
 
@@ -204,21 +202,3 @@ recovered the direction of every shift. The sizes differed: clustering gave −0
 Thus, COAST shows that injury does more than raise or lower genes in each segment. It flattens healthy gradients,
 shifts transporter switch points toward the start of the PT, and concentrates proliferation and mitochondrial loss
 in S3. With two mice per group, these comparisons are descriptive and need confirmation in larger cohorts.
-
-**Extended Data (human gradient steepness) | Human PT gradients are about half as steep as mouse gradients in
-independent atlases too.** Ratio of S3 − S1 amplitude (standard deviation of per-gene log2 fold changes across shared,
-well-expressed genes), first dataset over second. Magenta, human over mouse: our sections; the Lake et al. human
-single-nucleus atlas (normal donors) over the CELLxGENE census mouse atlas, with S3 nuclei from cortex or from medulla.
-Black, same-species calibration: our sections over the atlas of the same species, and the mouse atlas over mouse
-microdissection (Chen et al.). The dashed line marks equal steepness.
-
-**Extended Data (switch points) | Switch points located on scaled curves.** The four shifted pairs with both partners in
-the screened gene set and a visible handover, each curve min–max scaled over the range used to locate the switch. Thick
-lines are species means and thin lines sections. Dashed blue and dotted magenta lines mark the mouse and human switch
-points; at right, each section's switch point with its 95% bootstrap interval. A switch point is counted only where both
-partners change at least two-fold along the section.
-
-**Extended Data (orthology) | Mouse genes without a one-to-one human counterpart are more often zonated.** Share of
-PT-expressed genes strongly zonated along pseudostructure in each orthology class (human : mouse gene copies), for mouse
-and human separately. Grey bars and dashed lines mark the one-to-one share of the same species. Error bars are Wilson 95%
-confidence intervals; n is the number of PT-expressed genes per class.

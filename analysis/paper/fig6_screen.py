@@ -39,6 +39,9 @@ SPECIFIC = 0.25
 MIN_SUPPORT = 25
 MAX_FALSE_SHARE = 0.10
 SHIFT_MIN, N_BOOT = 0.05, 200
+# post hoc (2026-11-12, as Fig. 5 on 2026-11-11): a mouse's crossing counts only if both partners change at least 2-fold
+# (1 log2) on its curve over the mouse's x range; min-max scaling otherwise stretches a near-flat curve into a switch
+AMP_LOG2 = 1.0
 MIN_SET, N_RANDOM_SETS, SET_Q = 10, 1000, 0.05
 GRID = fs.GRID
 
@@ -48,6 +51,9 @@ def parse_args(argv=None):
     p.add_argument('--results-root', default=os.environ.get('PSEUDOSPACE_RESULTS_ROOT', str(REPO / 'results')))
     p.add_argument('--out', default='paper_figures/fig6/screen', help='relative to the results root')
     p.add_argument('--jobs', type=int, default=8)
+    p.add_argument('--handoffs-only', action='store_true',
+                   help='fit only the handoff genes and stop after handoffs.csv (the fits are deterministic, so the '
+                        'handoff rows match a full run; use a separate --out)')
     p.add_argument('--smoke', action='store_true', help='two axes, few bootstraps and random sets (code check only)')
     return p.parse_args(argv)
 
@@ -272,7 +278,7 @@ def main(argv=None):
     if missing:
         print('handoff genes missing from the panel:', missing)
     handoff_genes = [g for g in handoff_genes if g in qc.var_names]
-    fit_mask = universe.copy()
+    fit_mask = np.zeros_like(universe) if args.handoffs_only else universe.copy()
     fit_mask[[qc.var_names.get_loc(g) for g in handoff_genes]] = True
 
     halves = fs.gene_halves(qc.var)
@@ -381,8 +387,11 @@ def main(argv=None):
     df['in_map'] = screened & ((np.abs(delta) >= CHANGE_LOG2) & agree & in_core).any(1)
 
     # ---------------------------------------------------------------------------------------------- handoffs
-    def xstar(cv, xr):
-        e, l = (scaled_profile(np.where((GRID >= xr[0]) & (GRID <= xr[1]), c, np.nan)) for c in cv)
+    def xstar(cv, xr, amp_rule=True):
+        inr = [np.where((GRID >= xr[0]) & (GRID <= xr[1]), c, np.nan) for c in cv]
+        if amp_rule and min(float(np.nanmax(c) - np.nanmin(c)) for c in inr) < AMP_LOG2:
+            return np.nan
+        e, l = (scaled_profile(c) for c in inr)
         return crossing(e, l, GRID)
 
     # the 2.5-97.5 % range of x in each mouse (on each gene's own axis the quantiles are nearly identical; the
@@ -393,24 +402,25 @@ def main(argv=None):
     x0 = control_quantile(np.where(ok0, np.nanmean(np.where(np.isfinite(pos0), pos0, np.nan), 1), np.nan), sample, ok0)
     xrange_ = {m: tuple(np.quantile(x0[ok0 & (sample == m)], [0.025, 0.975])) for m in MICE}
 
-    def pair_positions(get_curve):
+    def pair_positions(get_curve, amp_rule=True):
         out = np.full((len(handoff_pairs), len(MICE)), np.nan)
         for i, (e, l) in enumerate(zip(handoff_pairs.early, handoff_pairs.late)):
             if e not in store or l not in store:
                 continue
             for j, m in enumerate(MICE):
-                out[i, j] = xstar((get_curve(e, m), get_curve(l, m)), xrange_[m])
+                out[i, j] = xstar((get_curve(e, m), get_curve(l, m)), xrange_[m], amp_rule)
         return out
 
     xs_obs = pair_positions(lambda g, m: store[g][m][0])
+    xs_noamp = pair_positions(lambda g, m: store[g][m][0], amp_rule=False)
     # bootstrap: resample units within each mouse, refit the handoff genes' curves at their fitted dispersion
     from pseudospace.nb_gam import nb_fit
     from pseudospace.stats_gam import make_gam_design
     brng = np.random.default_rng(6)
-    boot = np.full((N_BOOT, len(handoff_pairs), len(MICE)), np.nan)
-    for b in range(N_BOOT):
+    all_draws = [{m: brng.integers(0, 1 << 31) for m in MICE} for _ in range(N_BOOT)]   # same draws as the serial loop
+
+    def one_boot(draws):
         bcurve = {}
-        draws = {m: brng.integers(0, 1 << 31) for m in MICE}
         for pat, per in boot_inputs.items():
             for m, d in per.items():
                 # the same draw of units for every axis of a mouse (each axis holds nearly the same units)
@@ -420,13 +430,15 @@ def main(argv=None):
                 cv = fs.log2_cp10k(fit['beta'] @ make_gam_design(GRID, d['knots']).T)
                 for j, g in enumerate(d['genes']):
                     bcurve[(g, m)] = cv[j]
-        boot[b] = pair_positions(lambda g, m: bcurve[(g, m)])
-        if (b + 1) % 50 == 0:
-            print(f'bootstrap {b + 1}/{N_BOOT}', flush=True)
+        return pair_positions(lambda g, m: bcurve[(g, m)])
+
+    from joblib import Parallel, delayed
+    boot = np.stack(Parallel(n_jobs=args.jobs, verbose=5)(delayed(one_boot)(d) for d in all_draws))
 
     hp = handoff_pairs.copy()
     for j, m in enumerate(MICE):
         hp[f'x_{m}'] = xs_obs[:, j]
+        hp[f'x_noamp_{m}'] = xs_noamp[:, j]
         hp[f'x_lo_{m}'] = np.nanpercentile(boot[:, :, j], 2.5, 0)
         hp[f'x_hi_{m}'] = np.nanpercentile(boot[:, :, j], 97.5, 0)
         hp[f'boot_present_{m}'] = np.isfinite(boot[:, :, j]).mean(0)
@@ -457,6 +469,9 @@ def main(argv=None):
         hp[f'level_{role}'] = lv
     hp.to_csv(out / 'handoffs.csv', index=False)
     np.save(out / 'handoff_bootstrap.npy', boot)
+    if args.handoffs_only:
+        print(hp[['early', 'late', 'shift', 'shifted', 'lost']].to_string())
+        return
 
     # ---------------------------------------------------------------------------------------------- programs, sets
     sets = json.loads((root / 'pt_package_aki/tables/gene_sets.json').read_text())
@@ -513,7 +528,7 @@ def main(argv=None):
                         **{f'{part}|{m}': np.stack([store[g][m][i] for g in keep])
                            for m in MICE for i, part in enumerate(('curve', 'decoy', 'clusters', 'bulk', 'bins', 'bin_x'))},
                         **{f'program|{k}': v for k, v in prog_profiles.items()})
-    summary = {'n_units': {m: int((sample == m).sum()) for m in MICE}, 'n_screened': int(screened.sum()),
+    summary = {'amp_log2': AMP_LOG2, 'n_units': {m: int((sample == m).sum()) for m in MICE}, 'n_screened': int(screened.sum()),
                'n_neighbour_dropped': int((df.universe & ~df.neighbour_ok).sum()), 'n_axes': len(axis_rows),
                'category_A': {'calls': n_real, 'genes': int(df.catA.sum()),
                               'by_segment': {f'S{s + 1}': int(calls['condition'][:, s].sum()) for s in range(3)},

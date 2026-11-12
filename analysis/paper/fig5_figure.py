@@ -4,8 +4,8 @@ methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zon
  b  Slc5a2 (SGLT2) expression in the same tubules
  c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines) in log2(CP10k + 0.5)
  d  the same for five more transporters (Slc2a2, GLUT2, is the unmoved comparator); the sixth slot is the section key
- e  transporter switches in the earlier handoff-rows style: mean scaled curves per species and switch lines
- f  each shifted switch's species shift from the curves against straight lines through the S1/S2/S3 cluster means
+ e  transporter switches in the earlier handoff-rows style: mean log2(CP10k + 0.5) curves per species and switch lines
+ f  each shifted switch's species shift, from the curves and from straight lines through the S1/S2/S3 cluster means
  g  share of PT genes strongly zonated in each orthology class relative to the same species' one-to-one genes
 Panel letters only; claims live in the legend and text. Gene symbols are italic (mouse Slc5a2, human SLC5A2).
 Writes fig5.png, fig5.pdf and fig5_wireframe.png to <results-root>/paper_figures/fig5/.
@@ -160,9 +160,8 @@ def panel_maps(fig, root, rect_a, rect_b):
 def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
     """The earlier handoff-rows panel (fig5_panels.panel_handoff_rows) on the journal canvas: per pair, mouse and
     human side by side, each species' mean scaled curve (thick, shaded) over its two sections (thin), the mouse switch
-    (dashed blue) and human switch (dotted magenta)."""
-    from pseudospace.handoffs import scaled_profile
-
+    (dashed blue) and human switch (dotted magenta). Expression is log2(CP10k + 0.5), as in c and d, with a y axis per species and
+    row; the switch lines come from the normalized crossing, so they need not fall where the drawn curves cross."""
     edges = ((0, b12), (b12, b23), (b23, 1))
     cols = {'mouse': (40, 66), 'human': (112, 66)}         # x (mm) and width of the two curve columns
     rh, gap = 9.5, 2.2
@@ -193,29 +192,34 @@ def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
             for (lo, hi), seg in zip(edges, SEGS):
                 ax.axvspan(lo, hi, color=BAND[seg], lw=0, zorder=0)
             secs = MOUSE if name == 'mouse' else HUMAN
+            drawn = []
             for gene, col in ((e, EARLY[name]), (l, LATE[name])):
                 per = []
                 for m in secs:
                     lo_x, hi_x = XRANGE[m]
-                    per.append(scaled_profile(np.where((grid >= lo_x) & (grid <= hi_x), curves[m]['curve'][pos[gene]],
-                                                       np.nan)))
+                    c = np.where((grid >= lo_x) & (grid <= hi_x), curves[m]['curve'][pos[gene]], np.nan)
+                    per.append(np.log2(2.0 ** c + 0.5))       # log2(CP10k + 0.5), as in c and d
                 mean = np.mean(per, 0)          # drawn only where both sections of the species have tubules
                 for c in per:
                     ax.plot(grid, np.where(np.isfinite(mean), c, np.nan), color=col, lw=0.4, alpha=0.6, zorder=2)
-                ax.fill_between(grid, 0, mean, color=col, alpha=0.12, lw=0, zorder=1)
                 ax.plot(grid, mean, color=col, lw=1.1, zorder=3)
+                drawn += [mean, *per]
             ax.axvline(xs['mouse'], color=MOUSE_C, lw=0.8, ls=(0, (3, 1.5)), zorder=4)
             if name == 'human':
                 ax.axvline(xs['human'], color=HUMAN_C, lw=0.9, ls=(0, (1, 1.2)), zorder=4)
+            v = np.concatenate([d[np.isfinite(d)] for d in drawn])
+            lo_y, hi_y = v.min(), v.max()
+            pad = 0.08 * max(hi_y - lo_y, 0.5)
+            ax.set_ylim(lo_y - pad, hi_y + pad)
             ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1.08)
-            ax.set_yticks([0, 1] if name == 'mouse' else [])
+            from matplotlib.ticker import MaxNLocator
+            ax.yaxis.set_major_locator(MaxNLocator(3, integer=True))
             ax.set_xticks([0, 0.5, 1])
             ax.set_xticklabels(['0', '0.5', '1'] if r == len(H_PAIRS) - 1 else [])
             if r == len(H_PAIRS) - 1:
                 ax.set_xlabel('Pseudostructure', labelpad=1)
             if name == 'mouse' and r == len(H_PAIRS) // 2:
-                ax.set_ylabel('Scaled expression', labelpad=1)
+                ax.set_ylabel('log$_2$(CP10k + 0.5)', labelpad=1)
     return y0 + len(H_PAIRS) * (rh + gap)
 
 
@@ -229,24 +233,24 @@ def panel_shift(fig, rect, genes, hp, b12, b23):
     inside = set(genes.index[genes.universe.astype(bool)])
     d = d[d.early.isin(inside) & d.late.isin(inside)].reset_index(drop=True)
     ax = fig.add_axes(rect)
+    bh = 0.34
     for y, r in d.iterrows():
+        ax.barh(y - bh / 2 - 0.02, r.curve, height=bh, color=INK, lw=0, zorder=2)
         if np.isfinite(r.clusters):
-            ax.plot([r.clusters, r.curve], [y, y], color='#C8C8C8', lw=0.8, zorder=1)
-            ax.scatter([r.clusters], [y], s=9, facecolor='white', edgecolor=INK, lw=0.6, zorder=3)
+            ax.barh(y + bh / 2 + 0.02, r.clusters, height=bh, facecolor='white', edgecolor=INK, lw=0.5, zorder=2)
         else:
-            ax.text(0, y, '×', fontsize=6, ha='center', va='center', color=INK, zorder=3)
-        ax.scatter([r.curve], [y], s=9, color=INK, lw=0, zorder=4)
+            ax.text(0.008, y + bh / 2 + 0.02, 'no switch', fontsize=4.6, ha='left', va='center', color=GREY, zorder=3)
         ax.text(-0.03, y, f'{r.early} → {r.late}', fontsize=5, style='italic', ha='right', va='center',
                 transform=ax.get_yaxis_transform())
-    ax.axvline(0, color=GREY, lw=0.5, zorder=0)
-    ax.set_ylim(-0.8, len(d) - 0.2)
+    ax.axvline(0, color=INK, lw=0.5, zorder=3)
+    ax.set_ylim(len(d) - 0.4, -0.6)
     ax.set_yticks([])
     ax.spines['left'].set_visible(False)
     ax.set_xlabel('Switch shift, human − mouse', labelpad=1.5)
-    ax.scatter([], [], s=9, color=INK, label='COAST curve')
-    ax.scatter([], [], s=9, facecolor='white', edgecolor=INK, lw=0.6, label='Cluster means')
-    ax.legend(frameon=False, fontsize=5, loc='lower left', bbox_to_anchor=(-0.02, 1.0), ncol=2, handletextpad=0.2,
-              borderaxespad=0.1, columnspacing=0.8)
+    ax.bar(0, 0, color=INK, lw=0, label='COAST curve')
+    ax.bar(0, 0, facecolor='white', edgecolor=INK, lw=0.5, label='Cluster means')
+    ax.legend(frameon=False, fontsize=5, loc='lower left', bbox_to_anchor=(-0.02, 1.0), ncol=2, handletextpad=0.3,
+              borderaxespad=0.1, columnspacing=0.8, handlelength=1.1)
     ax.set_xticks([-0.5, -0.25, 0, 0.25])
     ax.set_xticklabels(['−0.5', '', '0', '0.25'])
     return d
@@ -269,12 +273,16 @@ def panel_orthology(fig, rect, rroot):
             se = np.sqrt(1 / ss - 1 / n + 1 / ss0 - 1 / n0)
             lo, hi = (ss / n) / (ss0 / n0) * np.exp(-1.96 * se), (ss / n) / (ss0 / n0) * np.exp(1.96 * se)
             x = j + (i - 0.5) * 0.36
-            ax.plot([x, x], [lo, hi], color=col, lw=0.8, zorder=2)
-            if s == 0:      # no strongly zonated gene: open triangle at the axis floor, interval from the 0.5 correction
-                ax.scatter([x], [0.115], s=14, marker='v', facecolor='white', edgecolor=col, lw=0.8, zorder=3)
+            if s == 0:      # no strongly zonated gene: open bar at the 0.5-corrected estimate
+                rr = (ss / n) / (ss0 / n0)
+                ax.bar(x, rr - 1, width=0.3, bottom=1, facecolor='white', edgecolor=col, lw=0.6, zorder=2)
                 hi = min(hi, 12)
-            else:
-                ax.scatter([x], [rr], s=14, color=col, lw=0, zorder=3, label=sp if j == 0 else None)
+            else:           # bars grow from the 1:1 reference, so the dashed line is the baseline
+                ax.bar(x, rr - 1, width=0.3, bottom=1, color=col, lw=0, zorder=2,
+                       label=sp if j == 0 else None)
+            ax.plot([x, x], [lo, hi], color=INK, lw=0.6, zorder=4)
+            ax.plot([x - 0.07, x + 0.07], [lo, lo], color=INK, lw=0.6, zorder=4)
+            ax.plot([x - 0.07, x + 0.07], [hi, hi], color=INK, lw=0.6, zorder=4)
     ax.axhline(1, color=GREY, lw=0.5, ls=(0, (2, 2)), zorder=0)
     ax.set_yscale('log')
     ax.set_ylim(0.1, 12)

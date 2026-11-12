@@ -78,9 +78,9 @@ PATHWAY_CURVES = [('Fatty-acid oxidation', 'Reactome_2022::Mitochondrial Fatty A
 RELOCATED: list = []          # (label, gene-set key); the frozen set screen called none
 # SGLT1 (Slc5a1) is detected in 6-7% of human PT units and sits outside the screened universe, so the glucose row uses
 # SGLT5, a sugar transporter of the same family detected in 72% (question-bank.md, 2026-11-10)
+# shifted pairs with both partners in the screened universe (SGLT2 -> SGLT1 is shifted but SLC5A1 is not screened)
 H_PAIRS = [('Slc5a2', 'Slc5a10', 'Sugars'), ('Slc6a19', 'Slc6a18', 'Neutral amino acids'),
-           ('Slc7a7', 'Slc7a13', 'Cationic amino acids'), ('Slc22a23', 'Slc22a12', 'Urate'),
-           ('Slc22a23', 'Slc22a2', 'Organic cations')]
+           ('Slc7a7', 'Slc7a13', 'Cationic amino acids'), ('Slc22a23', 'Slc22a12', 'Urate')]
 PROTEIN = {**PROTEIN, 'Slc5a12': 'SMCT2', 'Slc5a8': 'SMCT1', 'Slc5a2': 'SGLT2', 'Slc5a1': 'SGLT1',
            'Slc5a10': 'SGLT5', 'Slc5a11': 'SMIT2', 'Slc6a18': 'B0AT3', 'Slc7a8': 'LAT2', 'Slc7a7': 'y+LAT1',
            'Slc22a8': 'OAT3', 'Slc22a7': 'OAT2', 'Slc22a12': 'URAT1', 'Slc22a13': 'OAT10', 'Slc22a5': 'OCTN2',

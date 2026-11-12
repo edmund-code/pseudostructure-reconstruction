@@ -4,7 +4,7 @@ methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zon
  b  Slc5a2 (SGLT2) expression in the same tubules
  c  Slc5a2 against pseudostructure: binned means (points) and fitted curves (lines) in log2(CP10k + 0.5)
  d  the same for five more transporters (Slc2a2, GLUT2, is the unmoved comparator); the sixth slot is the section key
- e  transporter switches in the earlier handoff-rows style: mean log2(CP10k + 0.5) curves per species and switch lines
+ e  transporter pairs in the poster style: mean log2(1 + CP10k) curves per species, axis from 0, no switch lines
  f  each shifted switch's species shift, from the curves and from straight lines through the S1/S2/S3 cluster means
  g  share of PT genes strongly zonated in each orthology class relative to the same species' one-to-one genes
 Panel letters only; claims live in the legend and text. Gene symbols are italic (mouse Slc5a2, human SLC5A2).
@@ -35,6 +35,9 @@ TRIM = 0.05                      # spline ends overshoot (question-bank.md); cur
 # Abcc2 (MRP2) is a strong call but its two human curves disagree in shape; it is shown in Extended Data
 GENES_D = ['Slc2a2', 'Slc22a6', 'Slc22a8', 'Slc22a2', 'Slc22a12']
 EXPR_CMAP = None
+# main e: the shifted pairs whose handover is visible in counts; urate (SLC22A23 -> URAT1) is in the Extended Data
+# scaled rows only, because URAT1 is the more abundant transcript along the whole PT in both species
+E_PAIRS = H_PAIRS[:3]
 SHADE = {'Ctrl1A2': MOUSE_C, 'Ctrl1A4': '#7FA8D8', 'HUK1_COR1': HUMAN_C, 'HUK1_MED1': '#E58BBE'}
 
 
@@ -158,10 +161,10 @@ def panel_maps(fig, root, rect_a, rect_b):
 
 
 def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
-    """The earlier handoff-rows panel (fig5_panels.panel_handoff_rows) on the journal canvas: per pair, mouse and
-    human side by side, each species' mean scaled curve (thick, shaded) over its two sections (thin), the mouse switch
-    (dashed blue) and human switch (dotted magenta). Expression is log2(CP10k + 0.5), as in c and d, with a y axis per species and
-    row; the switch lines come from the normalized crossing, so they need not fall where the drawn curves cross."""
+    """Transporter pairs in the poster layout: per pair, mouse and human side by side, each species' mean curve (thick)
+    over its two sections (thin) in log2(1 + CP10k), one y axis from 0 per species and row, shared by the two partners.
+    No switch lines: the switch is defined on min-max scaled curves (Extended Data), which this scale does not show.
+    Heights compare the two partners within a species, never mouse with human (different probe panels)."""
     edges = ((0, b12), (b12, b23), (b23, 1))
     cols = {'mouse': (40, 66), 'human': (112, 66)}         # x (mm) and width of the two curve columns
     rh, gap = 9.5, 2.2
@@ -170,15 +173,9 @@ def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
                  color=MOUSE_C if name == 'mouse' else HUMAN_C)
         for (lo, hi), seg in zip(edges, ('S1', 'S2', 'S3')):
             fig.text(*R(x0 + w * (lo + hi) / 2, top + 3.6), seg, ha='center', va='top', fontsize=5.5, color=GREY)
-    for k, (txt, ls, col) in enumerate((('Mouse switch', (0, (3, 1.5)), MOUSE_C), ('Human switch', (0, (1, 1.2)), HUMAN_C))):
-        y = top + 0.6 + k * 2.6
-        fig.lines.append(plt_line(fig, R(6, y), R(11, y), col, ls))
-        fig.text(*R(12, y), txt, fontsize=5.5, va='center', color=INK)
     y0 = top + 6.5
-    for r, (e, l, substrate) in enumerate(H_PAIRS):
+    for r, (e, l, substrate) in enumerate(E_PAIRS):
         yt = y0 + r * (rh + gap)
-        row = hp[(hp.early == e) & (hp.late == l)].iloc[0]
-        xs = {sp: np.nanmean([row[f'x_{m}'] for m in secs]) for sp, secs in (('mouse', MOUSE), ('human', HUMAN))}
         fig.text(*R(1.5, yt + 1.0), substrate, fontsize=6, weight='bold', color=INK, va='center')
         t = fig.text(*R(1.5, yt + 4.2), e, fontsize=5.8, style='italic', color=EARLY['mouse'], va='center')
         fig.canvas.draw_idle()
@@ -192,40 +189,29 @@ def draw_handoffs(fig, R, top, curves, pos, grid, hp, b12, b23):
             for (lo, hi), seg in zip(edges, SEGS):
                 ax.axvspan(lo, hi, color=BAND[seg], lw=0, zorder=0)
             secs = MOUSE if name == 'mouse' else HUMAN
-            drawn = []
+            hi_y = 0.0
             for gene, col in ((e, EARLY[name]), (l, LATE[name])):
                 per = []
                 for m in secs:
                     lo_x, hi_x = XRANGE[m]
                     c = np.where((grid >= lo_x) & (grid <= hi_x), curves[m]['curve'][pos[gene]], np.nan)
-                    per.append(np.log2(2.0 ** c + 0.5))       # log2(CP10k + 0.5), as in c and d
+                    per.append(np.log2(1 + 2.0 ** c))         # stored curves are log2 CP10k
                 mean = np.mean(per, 0)          # drawn only where both sections of the species have tubules
                 for c in per:
                     ax.plot(grid, np.where(np.isfinite(mean), c, np.nan), color=col, lw=0.4, alpha=0.6, zorder=2)
                 ax.plot(grid, mean, color=col, lw=1.1, zorder=3)
-                drawn += [mean, *per]
-            ax.axvline(xs['mouse'], color=MOUSE_C, lw=0.8, ls=(0, (3, 1.5)), zorder=4)
-            if name == 'human':
-                ax.axvline(xs['human'], color=HUMAN_C, lw=0.9, ls=(0, (1, 1.2)), zorder=4)
-            v = np.concatenate([d[np.isfinite(d)] for d in drawn])
-            lo_y, hi_y = v.min(), v.max()
-            pad = 0.08 * max(hi_y - lo_y, 0.5)
-            ax.set_ylim(lo_y - pad, hi_y + pad)
+                hi_y = max(hi_y, *(np.nanmax(c) for c in per))
+            ax.set_ylim(0, hi_y * 1.08)
             ax.set_xlim(0, 1)
             from matplotlib.ticker import MaxNLocator
             ax.yaxis.set_major_locator(MaxNLocator(3, integer=True))
             ax.set_xticks([0, 0.5, 1])
-            ax.set_xticklabels(['0', '0.5', '1'] if r == len(H_PAIRS) - 1 else [])
-            if r == len(H_PAIRS) - 1:
+            ax.set_xticklabels(['0', '0.5', '1'] if r == len(E_PAIRS) - 1 else [])
+            if r == len(E_PAIRS) - 1:
                 ax.set_xlabel('Pseudostructure', labelpad=1)
-            if name == 'mouse' and r == len(H_PAIRS) // 2:
-                ax.set_ylabel('log$_2$(CP10k + 0.5)', labelpad=1)
-    return y0 + len(H_PAIRS) * (rh + gap)
-
-
-def plt_line(fig, p0, p1, col, ls):
-    from matplotlib.lines import Line2D
-    return Line2D([p0[0], p1[0]], [p0[1], p1[1]], transform=fig.transFigure, color=col, lw=0.9, ls=ls)
+            if name == 'mouse' and r == len(E_PAIRS) // 2:
+                ax.set_ylabel('log$_2$(1 + CP10k)', labelpad=1)
+    return y0 + len(E_PAIRS) * (rh + gap)
 
 
 def panel_shift(fig, rect, genes, hp, b12, b23):
@@ -247,12 +233,12 @@ def panel_shift(fig, rect, genes, hp, b12, b23):
     ax.set_yticks([])
     ax.spines['left'].set_visible(False)
     ax.set_xlabel('Switch shift, human − mouse', labelpad=1.5)
-    ax.bar(0, 0, color=INK, lw=0, label='COAST curve')
-    ax.bar(0, 0, facecolor='white', edgecolor=INK, lw=0.5, label='Cluster means')
-    ax.legend(frameon=False, fontsize=5, loc='lower left', bbox_to_anchor=(-0.02, 1.0), ncol=2, handletextpad=0.3,
+    from matplotlib.patches import Patch
+    ax.legend(handles=[Patch(color=INK, lw=0, label='COAST curve'),
+                       Patch(facecolor='white', edgecolor=INK, lw=0.5, label='Cluster means')], frameon=False, fontsize=5, loc='lower left', bbox_to_anchor=(-0.02, 1.0), ncol=2, handletextpad=0.3,
               borderaxespad=0.1, columnspacing=0.8, handlelength=1.1)
-    ax.set_xticks([-0.5, -0.25, 0, 0.25])
-    ax.set_xticklabels(['−0.5', '', '0', '0.25'])
+    ax.set_xlim(-0.01, 0.3)          # every shifted pair switches later in human
+    ax.set_xticks([0, 0.1, 0.2, 0.3])
     return d
 
 
@@ -310,7 +296,7 @@ def main(argv=None):
     b12, b23 = float(genes.b12.median()), float(genes.b23.median())
     XRANGE.update(handoff_range(screen, hp, genes))
 
-    W, H = 180, 228                                       # mm
+    W, H = 180, 210                                       # mm
     fig = plt.figure(figsize=(W * MM, H * MM))
 
     def R(x, y, w=0, h=0, rect=False):
@@ -348,14 +334,14 @@ def main(argv=None):
     key.legend(frameon=False, fontsize=5.3, loc='center left', handlelength=1.6, handletextpad=0.4, labelspacing=0.4)
 
     # row 3: transporter switches (earlier handoff-rows style)
-    panel('e', 1, 106, 179, 172)
+    panel('e', 1, 106, 179, 154)
     draw_handoffs(fig, R, 107, curves, pos, grid, hp, b12, b23)
 
     # row 4: what clustering recovers, orthology
-    panel('f', 1, 175, 99, 227)
-    panel_shift(fig, R(33, 183, 50, 36, rect=True), genes, hp, b12, b23)
-    panel('g', 101, 175, 179, 227)
-    panel_orthology(fig, R(115, 181, 62, 36, rect=True), rroot)
+    panel('f', 1, 157, 99, 209)
+    panel_shift(fig, R(33, 165, 50, 36, rect=True), genes, hp, b12, b23)
+    panel('g', 101, 157, 179, 209)
+    panel_orthology(fig, R(115, 163, 62, 36, rect=True), rroot)
 
     fig.savefig(root / 'fig5.png', facecolor='white', dpi=400)
     fig.savefig(root / 'fig5.pdf', facecolor='white')

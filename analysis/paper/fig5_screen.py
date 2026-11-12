@@ -42,6 +42,9 @@ SPECIFIC = 0.25
 MIN_SUPPORT = 25
 MAX_FALSE_SHARE = 0.10
 SHIFT_MIN, N_BOOT = 0.05, 200
+# post hoc (2026-11-11): a section's crossing counts only if both partners change at least 2-fold (1 log2) on its curve
+# over the section's x range; min-max scaling otherwise stretches a near-flat curve into a full-range "switch"
+AMP_LOG2 = 1.0
 MIN_SET, N_RANDOM_SETS, SET_Q = 10, 1000, 0.05
 SELECT_LOG2 = 0.75
 GRID = fs.GRID
@@ -376,16 +379,25 @@ def main(argv=None):
     pat0 = pattern[qc.var_names.get_loc(handoff_genes[0])]
     xrange_ = xranges[pat0]
 
-    def prof(c, m):
-        return scaled_profile(np.where((GRID >= xrange_[m][0]) & (GRID <= xrange_[m][1]), c, np.nan))
+    def in_range(c, m):
+        return np.where((GRID >= xrange_[m][0]) & (GRID <= xrange_[m][1]), c, np.nan)
 
-    def pair_positions(get_curve):
+    def prof(c, m):
+        return scaled_profile(in_range(c, m))
+
+    def amplitude(c, m):
+        return float(np.nanmax(in_range(c, m)) - np.nanmin(in_range(c, m)))
+
+    def pair_positions(get_curve, amp_rule=True):
         o = np.full((len(handoff_pairs), len(SECTIONS)), np.nan)
         for i, (e, l) in enumerate(zip(handoff_pairs.early, handoff_pairs.late)):
             if e not in store or l not in store:
                 continue
             for j, m in enumerate(SECTIONS):
-                o[i, j] = crossing(prof(get_curve(e, m), m), prof(get_curve(l, m), m), GRID)
+                ce, cl = get_curve(e, m), get_curve(l, m)
+                if amp_rule and min(amplitude(ce, m), amplitude(cl, m)) < AMP_LOG2:
+                    continue
+                o[i, j] = crossing(prof(ce, m), prof(cl, m), GRID)
         return o
 
     xs_obs = pair_positions(lambda g, m: store[g][m][0])
@@ -419,6 +431,11 @@ def main(argv=None):
 
     hp = handoff_pairs.copy()
     q = {m: xs_obs[:, j] for j, m in enumerate(SECTIONS)}
+    xs_noamp = pair_positions(lambda g, m: store[g][m][0], amp_rule=False)
+    for j, m in enumerate(SECTIONS):
+        hp[f'x_noamp_{m}'] = xs_noamp[:, j]
+        for role in ('early', 'late'):
+            hp[f'amp_{role}_{m}'] = [amplitude(store[g][m][0], m) if g in store else np.nan for g in hp[role]]
     for j, m in enumerate(SECTIONS):
         hp[f'x_{m}'] = xs_obs[:, j]
         hp[f'x_lo_{m}'] = np.nanpercentile(boot[:, :, j], 2.5, 0)
@@ -481,6 +498,7 @@ def main(argv=None):
                'pathways': {'sets': len(members), 'calls': n_set_calls, 'calibration_share': set_share,
                             'calibrated': set_share <= MAX_FALSE_SHARE},
                'handoffs': {'pairs': int(len(hp)), 'in_mouse': int(in_mouse.sum()), 'in_human': int(in_human.sum()),
+                            'amp_log2': AMP_LOG2,
                             'eligible': int(hp.eligible.sum()), 'shifted': int(hp.shifted.sum()),
                             'beyond_warp': int(hp.beyond_warp.sum()), 'mouse_only': int(hp.mouse_only.sum()),
                             'human_only': int(hp.human_only.sum()),

@@ -219,6 +219,28 @@ MCT9), none in human only.
   crossing is unstable); cystine b0,+AT → AGT1, +0.14, not specific. The poster's "no handoff in human" for lactate
   and B0AT1 does not hold on this axis: both cross, B0AT1 → B0AT3 later.
 
+**Amendment (post hoc, 2026-11-11): two-fold amplitude rule.** Min–max scaling stretches a near-flat curve to the full
+range, so two barely changing partners always "cross". A section's crossing now counts only if both partners change at
+least 2-fold on their curve over the section's x range (`AMP_LOG2 = 1.0` in `fig5_screen.py`; applied to the bootstrap
+curves too). The rerun reproduces every earlier crossing exactly (max difference 0 against the 2026-11-03 output, kept
+as `screen_2026-11-03_before_amplitude/`); only the rule changes the calls.
+- Pairs crossing in both human sections 54 → 13; eligible 53 → 12; shifted 13 → **7, all later in human**; the same rule
+  on each relabeling calls 0 and 0. The 31 new "mouse-only" pairs mean a partner changes < 2-fold in human (shallower
+  human gradients), not that no handover exists.
+- Kept: SGLT2 → SGLT1 +0.30, SGLT2 → SMIT2 +0.26, SLC22A23 → URAT1 +0.25 (human amplitudes 2.5 and 2.1-fold, the
+  closest to the cut), y+LAT1 → AGT1 +0.24, SGLT2 → SGLT5 +0.21, LAT2 → AGT1 +0.19, B0AT1 → B0AT3 +0.18.
+- Dropped: SLC22A23 → OCT2 (human 1.6- and 1.3-fold), the three MCT pairs (MCT1 → MCT5 is 1.2–1.3-fold in human) and the
+  two OCTN2 pairs; the MCT and OCTN2 pairs were already read as a reversal and as unreproduced in Lake.
+- Clustering lines (Fig. 5f) now recover most of the shift for the three amino-acid pairs (0.14/0.18, 0.17/0.19,
+  0.19/0.24) and miss SGLT5 (0.02/0.21), URAT1 (0.07/0.25) and SMIT2 (no switch).
+- Display: main Fig. 5e shows counts, log2(1 + CP10k) from 0 with one axis per species, and no switch lines; the scaled
+  rows with switch points are Extended Data. Counts and scaled curves answer different questions (which transcript
+  dominates; where each gene changes). Gene levels agree with external data far less than gene changes do (human vs
+  Lake 2023 snRNA r = 0.33 for levels, 0.67 for S3 − S1; mouse vs Chen 2021 r = 0.68 and 0.86), so the switch stays on
+  scaled curves. The early-minus-late S3 gap agrees in sign with Lake/Chen for every displayed pair (human B0AT1 − B0AT3
+  +1.5 ours, +1.0 Lake), so the count view of e is supported for B0AT1 staying dominant in human.
+- Not yet applied to the Fig. 6 (injury) handoff screen, which uses the same crossing without the rule.
+
 **Checks (post hoc where marked).**
 - **Admixture (reformulated post hoc).** The named ρ with a distal-identity score turned out uninformative: the
   distal signal rises along the PT in both species, so ρ restates each gene's direction. The replacement is a bound.

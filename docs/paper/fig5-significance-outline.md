@@ -40,9 +40,10 @@ Sources were read in full text; quotes are in `citation_ledger.md`. "Speculate" 
 
 ## R3. Switch points move later along the human PT
 
-- **Our data.** 53 pairs with a switch in all four sections; 13 (25%) shifted, 0 under swaps; 8 later in human.
-  SGLT2 -> SGLT5 +0.21; SLC22A23 -> URAT1 +0.25; SLC22A23 -> OCT2 +0.24; y+LAT1 -> AGT1 +0.24; B0AT1 -> B0AT3 +0.18.
-  7/7 checkable pairs reproduce in Lake 2023, including SGLT2 -> SGLT1.
+- **Our data (2-fold amplitude rule, 2026-11-11).** 12 pairs with a switch in all four sections; 7 shifted, all later
+  in human, 0 under swaps. SGLT2 -> SGLT1 +0.30, SGLT2 -> SMIT2 +0.26, SLC22A23 -> URAT1 +0.25, y+LAT1 -> AGT1 +0.24,
+  SGLT2 -> SGLT5 +0.21, LAT2 -> AGT1 +0.19, B0AT1 -> B0AT3 +0.18. 6/6 checkable pairs reproduce in Lake 2023. OCT2 pair
+  dropped (human partner changes < 2-fold). Human B0AT1 stays the more abundant transcript through S3 (ours and Lake).
 - **Significance.** A later switch = the early partner carries more of the length in human. Matters when the early
   partner is a drug target. B0AT1 (*Slc6a19*) is a phenylketonuria target: *Slc6a19*-null mice excrete >100-fold more
   phenylalanine and the mouse model improves [Belanger 2018, PMC6124451].
@@ -54,9 +55,9 @@ Sources were read in full text; quotes are in `citation_ledger.md`. "Speculate" 
 
 ## R4. Segment-level clustering misses most of the shift
 
-- **Our data.** Straight lines through S1/S2/S3 cluster means recover +0.07 of +0.25 (URAT1), +0.06 of +0.24 (OCT2),
-  +0.02 of +0.21 (SGLT5); no switch for 3 pairs; one monocarboxylate pair moves the wrong way. Post hoc.
-- **Significance.** Several switches move inside S2, which three means cannot resolve.
+- **Our data (after the amplitude rule).** Cluster-mean lines recover most of the three amino-acid shifts but only
+  +0.02 of +0.21 (SGLT5) and +0.07 of +0.25 (URAT1), and no switch for SMIT2. Post hoc. Weaker than before: half missed.
+- **Significance.** Every human switch lies inside S2 (0.53-0.60), where three means give one value.
 - **Implication (to write).** Drug-target maps built from segment-resolved atlases would place these handovers at
   similar positions in both species and miss the differences in R1-R3. One caveat already in the text: three cluster
   means are a simple baseline; finer clustering may recover more.

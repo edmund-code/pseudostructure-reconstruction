@@ -50,24 +50,28 @@ these positional differences may change which PT cells first encounter a given d
 
 Many PT transporters act in pairs, in which one family member is expressed early along the PT and is replaced by a
 related member later on. We reasoned that the position at which the two cross, which we refer to as the switch point,
-could differ between species even when both genes are expressed in both. Of 53 transporter pairs with a switch point in
-all four sections, 13 (25%) switched at a different position in human than in mouse, whereas none did when sections were
-swapped between species (Methods). Eight of these 13 pairs switched later in human, including *Slc5a2* → *Slc5a10*
-(SGLT2 → SGLT5; +0.21 of the PT length), *Slc22a23* → *Slc22a12* (+0.25), *Slc22a23* → *Slc22a2* (+0.24), *Slc7a7* →
-*Slc7a13* (y+LAT1 → AGT1; +0.24) and *Slc6a19* → *Slc6a18* (B0AT1 → B0AT3; +0.18) (Fig. 5e). In each, the early partner
-was maintained further along the human PT. All seven later-in-human pairs that could be evaluated in an independent
-human single-cell atlas [Lake 2023] reproduced. These included *Slc5a2* → *Slc5a1* (SGLT2 → SGLT1), whose *Slc5a1*
-partner is detected in too few of our human tubules to be shown here.
+could differ between species even when both genes are expressed in both. We located the switch point on each gene's
+curve scaled to its own range, so that it does not depend on how efficiently each probe detects its gene. Because this
+scaling stretches a nearly flat curve to the full range, we counted a switch point only where both partners changed at
+least two-fold along the section (Methods; post hoc). Of 12 transporter pairs that met this criterion in all four
+sections, 7 switched later in human and none earlier, whereas none did when sections were swapped between species
+(Methods). Most of the other pairs failed the criterion in human, where gradients are shallower. The seven included
+*Slc5a2* → *Slc5a10* (SGLT2 → SGLT5; +0.21 of the PT length), *Slc6a19* → *Slc6a18* (B0AT1 → B0AT3; +0.18), *Slc7a7* →
+*Slc7a13* (y+LAT1 → AGT1; +0.24) and *Slc22a23* → *Slc22a12* (+0.25) (Fig. 5e, Extended Data Fig. X). In each, the early
+partner was maintained further along the human PT; human *SLC6A19* remained the more abundant transcript through S3
+(Fig. 5e), as it did in an independent human single-cell atlas [Lake 2023]. All six later-in-human pairs that could be
+evaluated in that atlas reproduced. These included *Slc5a2* → *Slc5a1* (SGLT2 → SGLT1), whose *Slc5a1* partner is
+detected in too few of our human tubules to be shown here.
 
 We next sought to evaluate whether these shifts could be recovered by clustering analysis alone. To this end, for each
 section we fit straight lines through the S1, S2 and S3 cluster means, as a segment-level analysis would, and located
 where each pair crossed (Methods). If the shifts were apparent at segment resolution, we would expect the cluster means
-to give shifts similar to those from COAST. However, the cluster means recovered only +0.07 of the +0.25 shift for
-*Slc22a23* → *Slc22a12*, +0.06 of the +0.24 shift for *Slc22a23* → *Slc22a2* and +0.02 of the +0.21 shift for *Slc5a2* →
-*Slc5a10* (Fig. 5f; post hoc). They gave no switch point for three pairs and moved one monocarboxylate transporter pair
-in the opposite direction. Several of these switch points lie within S2, which three cluster means cannot resolve. We
-note that straight lines through three cluster means are one simple segment-level baseline, and finer clustering may
-recover more of each shift. Thus, these species differences are visible only along a continuous coordinate.
+to give shifts similar to those from COAST. The cluster means recovered most of the shift for the three amino acid
+pairs (Fig. 5f; post hoc). In contrast, they recovered only +0.02 of the +0.21 shift for *Slc5a2* → *Slc5a10* and +0.07
+of the +0.25 shift for *Slc22a23* → *Slc22a12*, and gave no switch point for *Slc5a2* → *Slc5a11* (SGLT2 → SMIT2). Every
+human switch point lies within S2 (0.53–0.60), where three cluster means place a single value. We note that straight
+lines through three cluster means are one simple segment-level baseline, and finer clustering may recover more of each
+shift. Thus, segment-level clustering recovers some of these shifts but misses half of them.
 
 Finally, cross-species comparisons typically restrict analysis to genes with one-to-one orthologs. However, several PT
 gene families, such as *Cyp4a*, *Cyp2d*, *Ugt2b* and *Slco1a*, expanded in mouse. We therefore asked whether genes
@@ -81,7 +85,8 @@ by a one-to-one comparison.
 
 Taken together, these results demonstrate that COAST can compare positional gene expression across species on a shared
 continuous coordinate. Applied to the PT, it reveals that transporters for glucose, drugs and urate occupy different
-positions in mouse and human, and that their switch points shift in a manner largely missed by segment-level clustering.
+positions in mouse and human, and that their switch points move later in human, half of which segment-level clustering
+misses.
 We note that all human data derive from two cortical sections of one donor and that transcript position need not reflect
 protein position. Antibody staining for SGLT2, OAT1, OCT2 and URAT1 along the human PT in additional donors would be
 needed to confirm these differences.
@@ -93,13 +98,14 @@ pseudostructure coordinate; other tubules are grey. **b** *Slc5a2* (SGLT2) expre
 section over pseudostructure 0.05–0.95. Points are binned means of tubules; lines are fitted curves. Levels are not
 comparable between species because the two probe panels differ; positions are. Dashed lines mark the S1/S2 and S2/S3
 boundaries of the mouse segment labels. **d** As in c for *Slc2a2* (GLUT2), *Slc22a6* (OAT1), *Slc22a8* (OAT3),
-*Slc22a2* (OCT2) and *Slc22a12* (URAT1). **e** Five transporter switches that move later in human. For each species, the
-early (light) and late (dark) partner are shown as the mean of the two sections' min-max scaled curves (thick, shaded)
-and each section's curve (thin), over the range used to locate the switch. Background shading marks S1, S2 and S3.
-Dashed blue and dotted magenta lines mark the mouse and human switch points. **f** Shift in switch point (human − mouse)
-for the 12 pairs that switched at a different position in human and whose partners are both measured, from COAST curves
-(filled) and from straight lines through the S1, S2 and S3 cluster means (open; × where the cluster means give no
-switch). **g** Share of PT-expressed genes strongly zonated along pseudostructure in each orthology class (human : mouse
+*Slc22a2* (OCT2) and *Slc22a12* (URAT1). **e** Three transporter pairs whose switch point moves later in human, in
+log2(1 + counts per 10,000). For each species, the early (light) and late (dark) partner are shown as the mean of the
+two sections' curves (thick) and each section's curve (thin), over the range used to locate the switch; each species
+has its own y axis, so heights compare the two partners within a species, not mouse with human. Background shading
+marks S1, S2 and S3. Switch points are located on scaled curves (Extended Data Fig. X). **f** Shift in switch point
+(human − mouse) for the six shifted pairs whose partners are both in the screened gene set, from COAST curves (filled)
+and from straight lines through the S1, S2 and S3 cluster means (open; "no switch" where the cluster means do not
+cross). **g** Share of PT-expressed genes strongly zonated along pseudostructure in each orthology class (human : mouse
 gene copies), relative to the share among one-to-one orthologs of the same species. Error bars are Katz 95% confidence
 intervals; the open triangle marks a class with no strongly zonated gene.
 ---
@@ -157,3 +163,9 @@ well-expressed genes), first dataset over second. Magenta, human over mouse: our
 single-nucleus atlas (normal donors) over the CELLxGENE census mouse atlas, with S3 nuclei from cortex or from medulla.
 Black, same-species calibration: our sections over the atlas of the same species, and the mouse atlas over mouse
 microdissection (Chen et al.). The dashed line marks equal steepness.
+
+**Extended Data (switch points) | Switch points located on scaled curves.** The four shifted pairs with both partners in
+the screened gene set and a visible handover, each curve min–max scaled over the range used to locate the switch. Thick
+lines are species means and thin lines sections. Dashed blue and dotted magenta lines mark the mouse and human switch
+points; at right, each section's switch point with its 95% bootstrap interval. A switch point is counted only where both
+partners change at least two-fold along the section.

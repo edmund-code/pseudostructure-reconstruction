@@ -80,7 +80,7 @@ agrees with rat, in which neprilysin protein is most concentrated in the S3 segm
 has not been described.
 
 Neprilysin is the main enzyme that degrades natriuretic peptides, and it also processes bradykinin, substance P,
-angiotensin II and endothelin; outside the heart and vasculature it is most abundant on the brush border of PT cells
+angiotensin II and endothelin; of all tissues, it is most abundant on the brush border of PT cells
 [Judge 2015]. Its inhibitor sacubitril, given with valsartan, lowered cardiovascular death and heart failure
 hospitalization in patients with reduced ejection fraction [McMurray 2014; Jhund 2015]. In mouse, neprilysin was
 concentrated at the end of the PT, whereas in human it was concentrated at the start. We speculate that the PT cells in

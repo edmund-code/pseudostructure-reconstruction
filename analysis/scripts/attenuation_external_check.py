@@ -75,7 +75,10 @@ except Exception as e:
     print('census mouse failed:', e); sn_fc = sn_lvl = None
 
 
-def amp(h, m, name, n_min=30):
+ROWS = []
+
+
+def amp(h, m, name, n_min=30, group=None, key=None):
     ok = h.notna() & m.notna()
     h, m = h[ok], m[ok]
     sd = h.std() / m.std()
@@ -86,12 +89,14 @@ def amp(h, m, name, n_min=30):
     tls = v[1] / v[0]
     from scipy.stats import spearmanr
     print(f'{name:58s} n={len(h):5d}  SD ratio h/m={sd:5.2f}  TLS slope={tls:5.2f}  rho={spearmanr(h, m).statistic:5.2f}')
+    if key:
+        ROWS.append({'key': key, 'group': group, 'label': name.strip(), 'n': len(h), 'sd_ratio': sd})
 
 
 print('S3 - S1 log2 fold change, human against mouse, on genes in our assessable universe\n')
 base = pd.Index(assess)
 ourok = fc.loc[base]
-amp(ourok['ours human'], ourok['ours mouse'], 'OURS: human sections vs mouse sections')
+amp(ourok['ours human'], ourok['ours mouse'], 'OURS: human sections vs mouse sections', group='human vs mouse', key='ours')
 
 common = base.intersection(c.index[c.chev_ok])
 amp(c.loc[common, 'chev_human'], c.loc[common, 'chev_mouse'], 'CHEVAL 2012 (SAGE, microdissection): human vs mouse')
@@ -129,7 +134,8 @@ lvl = cpm[['PT-S1|C', 'PT-S3|C', 'PT-S3|M']].max(1)
 print('\nLake 2023 by region (normal donors), against census mouse snRNA S3 - S1:')
 common = base.intersection(cpm.index[lvl >= 4]).intersection(sn_lvl.index[sn_lvl >= 4])
 for late in ('PT-S3|C', 'PT-S3|C-M', 'PT-S3|M'):
-    amp(cpm.loc[common, late] - cpm.loc[common, 'PT-S1|C'], sn_fc[common], f'  human {late:10s} - S1 cortex vs mouse')
+    amp(cpm.loc[common, late] - cpm.loc[common, 'PT-S1|C'], sn_fc[common], f'  human {late:10s} - S1 cortex vs mouse',
+        group='human vs mouse', key={'PT-S3|C': 'atlas_cortex', 'PT-S3|M': 'atlas_medulla'}.get(late))
 amp(fc.loc[common, 'ours human'], fc.loc[common, 'ours mouse'], '  ours on the same genes')
 k = z.intersection(common)
 for late in ('PT-S3|C', 'PT-S3|M'):
@@ -139,13 +145,20 @@ for late in ('PT-S3|C', 'PT-S3|M'):
 
 print('\nCalibration, same species in different datasets (should be ~1 if datasets agree on steepness):')
 common = base.intersection(sn_lvl.index[sn_lvl >= 4]).intersection(chen_lvl.index[chen_lvl >= 3])
-amp(sn_fc[common], chen_fc[common], '  census mouse snRNA vs Chen mouse microdissection')
-amp(fc.loc[common, 'ours mouse'], sn_fc[common], '  ours mouse vs census mouse snRNA')
+amp(sn_fc[common], chen_fc[common], '  census mouse snRNA vs Chen mouse microdissection', group='same species',
+    key='mouse_atlas_vs_micro')
+amp(fc.loc[common, 'ours mouse'], sn_fc[common], '  ours mouse vs census mouse snRNA', group='same species',
+    key='ours_mouse_vs_atlas')
 amp(fc.loc[common, 'ours mouse'], chen_fc[common], '  ours mouse vs Chen mouse microdissection')
 common = base.intersection(lake.index[lake_lvl >= 4])
-amp(fc.loc[common, 'ours human'], lake_fc[common], '  ours human vs Lake human cortex')
+amp(fc.loc[common, 'ours human'], lake_fc[common], '  ours human vs Lake human cortex', group='same species',
+    key='ours_human_vs_atlas')
 k = z.intersection(common).intersection(sn_lvl.index[sn_lvl >= 4])
 for name, h, m in (('census mouse / Chen', sn_fc, chen_fc), ('ours mouse / census mouse', fc['ours mouse'], sn_fc),
                    ('ours human / Lake cortex', fc['ours human'], lake_fc)):
     hh, mm = h[k], m[k]; same = np.sign(hh) == np.sign(mm)
     print(f'  Chen-zonated genes, {name:26s}: n={len(k)} same dir={same.mean():.2f} median ratio={(hh.abs()/mm.abs().clip(lower=.25))[same].median():.2f}')
+
+out = repo / 'results/human_gradient_attenuation'
+out.mkdir(parents=True, exist_ok=True)
+pd.DataFrame(ROWS).to_csv(out / 'amplitude_ratios.csv', index=False)

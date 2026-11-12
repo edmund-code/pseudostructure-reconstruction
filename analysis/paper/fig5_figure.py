@@ -6,7 +6,7 @@ methods figures (GASTON, Genes2Genes, STcompare, STalign, Halpern 2017 liver zon
  d  the same for five more transporters (Slc2a2, GLUT2, is the unmoved comparator); the sixth slot is the section key
  e  transporter switches in the earlier handoff-rows style: mean scaled curves per species and switch lines
  f  each shifted switch's species shift from the curves against straight lines through the S1/S2/S3 cluster means
- g  share of PT genes strongly zonated, by orthology class
+ g  share of PT genes strongly zonated in each orthology class relative to the same species' one-to-one genes
 Panel letters only; claims live in the legend and text. Gene symbols are italic (mouse Slc5a2, human SLC5A2).
 Writes fig5.png, fig5.pdf and fig5_wireframe.png to <results-root>/paper_figures/fig5/.
 """
@@ -253,24 +253,39 @@ def panel_shift(fig, rect, genes, hp, b12, b23):
 
 
 def panel_orthology(fig, rect, rroot):
-    from statsmodels.stats.proportion import proportion_confint
-
+    """Each orthology class's share of strongly zonated PT genes relative to the one-to-one share of the same species
+    (so the flatter human gradients do not enter the comparison), with Katz log 95% intervals (0.5 added to empty
+    cells)."""
     t = pd.read_csv(rroot / 'pt_non_one_to_one_package/tables/h1_by_class.csv').set_index(['species', 'class_support3'])
     ax = fig.add_axes(rect)
+    classes = [c for c in ORTHO_CLASSES if c != '1:1']
     for i, sp in enumerate(('mouse', 'human')):
         col = MOUSE_C if sp == 'mouse' else HUMAN_C
-        for j, c in enumerate(ORTHO_CLASSES):
+        n0, s0 = t.loc[(sp, '1:1'), 'expressed'], t.loc[(sp, '1:1'), 'strong']
+        for j, c in enumerate(classes):
             n, s = t.loc[(sp, c), 'expressed'], t.loc[(sp, c), 'strong']
-            lo, hi = proportion_confint(s, n, method='wilson')
-            x = j + (i - 0.5) * 0.38
-            ax.bar(x, s / n * 100, width=0.36, color=col, lw=0, label=sp if j == 0 else None)
-            ax.plot([x, x], [lo * 100, hi * 100], color=INK, lw=0.5)
-    ax.set_xticks(range(len(ORTHO_CLASSES)))
-    ax.set_xticklabels(ORTHO_CLASSES)
+            ss, ss0 = (s + 0.5, s0 + 0.5) if s == 0 else (s, s0)
+            rr = (s / n) / (s0 / n0)
+            se = np.sqrt(1 / ss - 1 / n + 1 / ss0 - 1 / n0)
+            lo, hi = (ss / n) / (ss0 / n0) * np.exp(-1.96 * se), (ss / n) / (ss0 / n0) * np.exp(1.96 * se)
+            x = j + (i - 0.5) * 0.36
+            ax.plot([x, x], [lo, hi], color=col, lw=0.8, zorder=2)
+            if s == 0:      # no strongly zonated gene: open triangle at the axis floor, interval from the 0.5 correction
+                ax.scatter([x], [0.115], s=14, marker='v', facecolor='white', edgecolor=col, lw=0.8, zorder=3)
+                hi = min(hi, 12)
+            else:
+                ax.scatter([x], [rr], s=14, color=col, lw=0, zorder=3, label=sp if j == 0 else None)
+    ax.axhline(1, color=GREY, lw=0.5, ls=(0, (2, 2)), zorder=0)
+    ax.set_yscale('log')
+    ax.set_ylim(0.1, 12)
+    ax.set_yticks([0.1, 0.3, 1, 3, 10])
+    ax.set_yticklabels(['0.1', '0.3', '1', '3', '10'])
+    ax.set_xticks(range(len(classes)))
+    ax.set_xticklabels(classes)
+    ax.set_xlim(-0.6, len(classes) - 0.4)
     ax.set_xlabel('Orthology (human : mouse copies)', labelpad=1.5)
-    ax.set_ylabel('Strongly zonated (%)', labelpad=1.5)
-    ax.set_yticks([0, 5, 10, 15, 20])
-    ax.legend(frameon=False, fontsize=5.5, loc='upper left', handlelength=0.8, handletextpad=0.3)
+    ax.set_ylabel('Strongly zonated, relative to 1:1', labelpad=1.5)
+    ax.legend(frameon=False, fontsize=5.5, loc='upper left', handletextpad=0.2)
 
 
 def main(argv=None):

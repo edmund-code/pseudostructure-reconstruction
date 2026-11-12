@@ -8,6 +8,7 @@ Main figure (make_fig5.py; revised 2026-11-10 after docs/paper/question-bank.md)
  cluster_shift  each shifted handoff's species shift from the curves against straight lines through the cluster means
  orthology      share of PT-expressed genes strongly zonated, by orthology class (notebook 86, same elastic curve)
 Extended Data (make_ed_fig_hvm.py):
+ attenuation    human/mouse S3-S1 amplitude in our data and in independent atlases, with same-species calibration
  reversals_grid the five reversals with a drug, GWAS or disease hook
  pathway_curves members' mean curves of clinically relevant pathways (display only: the set screen called none)
  maps           one mouse and one human section, PT tubules coloured by position on the shared axis
@@ -53,9 +54,9 @@ REVERSED_C = '#D95F02'
 SIZE = {'reversals': (1160, 232), 'reversals_grid': (760, 352), 'cluster_shift': (560, 300), 'contrast': (390, 352), 'pathway_curves': (600, 300), 'rises': (1160, 232), 'falls': (1160, 232), 'relocated': (870, 232), 'handoff_rows': (1160, 412), 'steeper': (1160, 232),
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
-        'pathway_null': (380, 242), 'domains': (760, 372), 'orthology': (580, 300)}
+        'pathway_null': (380, 242), 'domains': (760, 372), 'orthology': (580, 300), 'attenuation': (420, 200)}
 MAIN = ['domains', 'contrast', 'handoff_rows', 'cluster_shift', 'orthology']
-EXTENDED = ['reversals_grid', 'pathway_curves', 'maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
+EXTENDED = ['attenuation', 'reversals_grid', 'pathway_curves', 'maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
 # examples are chosen after the screen and the follow-up (presentation choice, recorded in the protocol doc)
@@ -481,6 +482,33 @@ def reference_x(root: Path) -> pd.DataFrame:
     return pt
 
 
+def panel_attenuation(plt, rroot, out):
+    """S3 - S1 amplitude ratio (SD of per-gene log2 fold changes, first dataset over second) from
+    analysis/scripts/attenuation_external_check.py: human over mouse in our sections and in independent atlases, and
+    same-species pairs as calibration."""
+    t = pd.read_csv(rroot / 'human_gradient_attenuation/amplitude_ratios.csv').set_index('key')
+    rows = [('ours', 'Our sections, human / mouse', HUMAN_C),
+            ('atlas_cortex', 'Atlases, human / mouse (cortical S3)', HUMAN_C),
+            ('atlas_medulla', 'Atlases, human / mouse (medullary S3)', HUMAN_C),
+            ('ours_human_vs_atlas', 'Human: ours / atlas', INK),
+            ('ours_mouse_vs_atlas', 'Mouse: ours / atlas', INK),
+            ('mouse_atlas_vs_micro', 'Mouse: atlas / microdissection', INK)]
+    fig = figure(plt, 'attenuation')
+    ax = fig.add_axes([0.47, 0.2, 0.5, 0.76])
+    for y, (k, lab, col) in enumerate(rows[::-1]):
+        ax.scatter([t.loc[k, 'sd_ratio']], [y], s=18, color=col, lw=0, zorder=3)
+        ax.text(-0.03, y, lab, transform=ax.get_yaxis_transform(), ha='right', va='center', fontsize=6.5, color=INK)
+    ax.axhline(2.5, color='#DDDDDD', lw=0.6)
+    ax.axvline(1, color=MUTED, lw=0.6, ls=(0, (2, 2)))
+    ax.set_xlim(0, 1.1)
+    ax.set_ylim(-0.6, len(rows) - 0.4)
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.set_xlabel('S3 − S1 amplitude ratio', labelpad=2)
+    fig.savefig(out / 'f5_attenuation.png', facecolor='white', dpi=300)
+    plt.close(fig)
+
+
 def panel_maps(plt, root, out):
     import anndata as ad
 
@@ -720,6 +748,8 @@ def main(argv=None):
     sets = json.loads((rroot / 'pt_package_aki/tables/gene_sets.json').read_text())
     hp = pd.read_csv(screen / 'handoffs.csv')
     b12, b23 = float(genes.b12.median()), float(genes.b23.median())
+    if 'attenuation' in panels and (rroot / 'human_gradient_attenuation/amplitude_ratios.csv').exists():
+        panel_attenuation(plt, rroot, out)
     if 'maps' in panels:
         panel_maps(plt, rroot, out)
     if 'coverage' in panels:

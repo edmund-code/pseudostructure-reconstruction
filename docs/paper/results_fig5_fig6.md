@@ -14,8 +14,10 @@ analyses are marked as such in the text.
 Much of what is known about how the proximal tubule (PT) divides its work along its length comes from mice, whereas
 human kidney atlases resolve the PT into only two or three segments [Lake 2023]. We therefore applied COAST to two mouse
 kidney sections and two cortical sections from one human kidney assayed by Visium HD, placing PT tubules from both
-species on a shared pseudostructure coordinate (Fig. 5a, Methods). Because human gradients were consistently shallower than mouse gradients (Methods), we
-compared where genes are expressed rather than how much.
+species on a shared pseudostructure coordinate (Fig. 5a, Methods). Human gradients were about half as steep as mouse
+gradients, a difference also seen between independent human and mouse single-nucleus atlases (Extended Data Fig. X).
+Because this could reflect species, donor age or tissue source, we compared where genes are expressed rather than how
+much.
 
 As a first example, we focused on *Slc5a2*, which encodes the sodium–glucose cotransporter SGLT2 targeted by gliflozins.
 In mouse, *Slc5a2* expression was restricted to PT tubules early along the pseudostructure coordinate, whereas in human
@@ -62,9 +64,10 @@ gene families, such as *Cyp4a*, *Cyp2d*, *Ugt2b* and *Slco1a*, expanded in mouse
 without a one-to-one human counterpart carry positional information of their own. In mouse, 9.9% of genes from families
 with more mouse than human copies and 14.2% of genes from families expanded in both species were strongly zonated along
 the PT, compared to 3.8% of one-to-one orthologs (Mantel–Haenszel odds ratio 2.24, P = 8 × 10⁻⁷) (Fig. 5g). In contrast,
-mouse genes whose human counterpart had expanded showed no such excess (1.7%). As such, part of the positional
-organization of the mouse PT resides in gene copies without a single human counterpart and would be omitted by a
-one-to-one comparison.
+mouse genes whose human counterpart had expanded showed no such excess (1.7%). Human genes followed the same ordering
+relative to human one-to-one orthologs but did not reach significance (odds ratio 1.57, P = 0.17). As such, part of the
+positional organization of the mouse PT resides in gene copies without a single human counterpart and would be omitted
+by a one-to-one comparison.
 
 Taken together, these results demonstrate that COAST can compare positional gene expression across species on a shared
 continuous coordinate. Applied to the PT, it reveals that transporters for glucose, drugs and urate occupy different
@@ -86,8 +89,9 @@ and each section's curve (thin), over the range used to locate the switch. Backg
 Dashed blue and dotted magenta lines mark the mouse and human switch points. **f** Shift in switch point (human − mouse)
 for the 12 pairs that switched at a different position in human and whose partners are both measured, from COAST curves
 (filled) and from straight lines through the S1, S2 and S3 cluster means (open; × where the cluster means give no
-switch). **g** Percentage of PT-expressed genes strongly zonated along pseudostructure in mouse and human, by orthology
-class (human : mouse gene copies). Error bars are Wilson 95% confidence intervals.
+switch). **g** Share of PT-expressed genes strongly zonated along pseudostructure in each orthology class (human : mouse
+gene copies), relative to the share among one-to-one orthologs of the same species. Error bars are Katz 95% confidence
+intervals; the open triangle marks a class with no strongly zonated gene.
 ---
 
 ### COAST resolves where acute injury reshapes the proximal tubule
@@ -136,3 +140,10 @@ recovered the direction of every shift. The sizes differed: clustering gave −0
 Thus, COAST shows that injury does more than raise or lower genes in each segment. It flattens healthy gradients,
 shifts transporter switch points toward the start of the PT, and concentrates proliferation and mitochondrial loss
 in S3. With two mice per group, these comparisons are descriptive and need confirmation in larger cohorts.
+
+**Extended Data (human gradient steepness) | Human PT gradients are about half as steep as mouse gradients in
+independent atlases too.** Ratio of S3 − S1 amplitude (standard deviation of per-gene log2 fold changes across shared,
+well-expressed genes), first dataset over second. Magenta, human over mouse: our sections; the Lake et al. human
+single-nucleus atlas (normal donors) over the CELLxGENE census mouse atlas, with S3 nuclei from cortex or from medulla.
+Black, same-species calibration: our sections over the atlas of the same species, and the mouse atlas over mouse
+microdissection (Chen et al.). The dashed line marks equal steepness.

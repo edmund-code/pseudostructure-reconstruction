@@ -56,8 +56,8 @@ OAT1 uptake upstream of the change [Kohler 2011]. In mouse, OAT1 was concentrate
 in human it was spread nearly evenly and OAT3 was concentrated at the start. We speculate that the PT cells that take
 up OAT substrates may therefore sit at different positions in mouse and in human. Similarly, URAT1 sits on the apical
 membrane of PT cells and reabsorbs filtered urate; it is the target of the uricosuric drugs benzbromarone and
-lesinurad, which are approved to lower serum urate in gout [Guo 2025]. Its later position in human suggests that these
-drugs act on a later stretch of the PT in human than in mouse. Thus, COAST can test whether the position of a drug
+lesinurad, which are approved to lower serum urate in gout [Guo 2025]. Previous work places most urate reabsorption in the
+proximal convoluted tubule [Guo 2025], whereas we find human URAT1 peaking late along the PT. Thus, COAST can test whether the position of a drug
 target along the PT transfers from mouse to human.
 
 ### COAST identifies genes whose positional gradient reverses between species

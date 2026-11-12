@@ -2,8 +2,10 @@
 # his reference v4fix_* files hold 64,080). segmentation_path is relative to the data root. The mouse Visium HD
 # bins live outside the data root (data/README.md); the package expands $PSEUDOSPACE_VISIUM_ROOT, which notebook
 # 70 sets from --visium-root or the environment.
+# 2026-11-12 (user): mouse segmentations are the v4fix files (64,080 polygons over the four mice, the reference
+# run's set); the earlier local v4 files are archived under data/archive/segmentations_2026-11-12/.
 sample,group,bins_dir,segmentation_path
-Ctrl1A2,Control,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A2/square_002um,Ctrl_1A2_v4.geojson
-Ctrl1A4,Control,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A4,Ctrl_1A4_v4.geojson
-IR2A2,IR,$PSEUDOSPACE_VISIUM_ROOT/IR_2A2/square_002um,IR_2A2_v4.geojson
-IR2A4,IR,$PSEUDOSPACE_VISIUM_ROOT/IR_2A4/square_002um,IR_2A4_v4.geojson
+Ctrl1A2,Control,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A2/square_002um,segmentations/v4fix/Ctrl1A2_v4fix.geojson
+Ctrl1A4,Control,$PSEUDOSPACE_VISIUM_ROOT/Ctrl1A4,segmentations/v4fix/Ctrl1A4_v4fix.geojson
+IR2A2,IR,$PSEUDOSPACE_VISIUM_ROOT/IR_2A2/square_002um,segmentations/v4fix/IR2A2_v4fix.geojson
+IR2A4,IR,$PSEUDOSPACE_VISIUM_ROOT/IR_2A4/square_002um,segmentations/v4fix/IR2A4_v4fix.geojson

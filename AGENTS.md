@@ -69,8 +69,10 @@ publication readiness. `legacy/` is provenance only; never mix it with current r
   set's mean statistic with the background mean, corrects across all tested pairs (pooled and
   specimen-balanced rankings together), and estimates variance inflation from residual correlations
   given the fitted design. With two mice and one human donor, specimens are the replication units.
-- Only `*_kept_tubules_labeled_fine.geojson` mouse segmentations are valid. They are quality
-  controlled upstream, so mouse workflows do no tubule-level **gene-count** QC. They apply a
+- Mouse segmentations: use only `data/segmentations/v4fix/<sample>_v4fix.geojson` (user, 2026-11-12).
+  Every older mouse segmentation is archived under `data/archive/`, and results built on it predate
+  the switch. Notebooks 01–14 were built on the retired `*_kept_tubules_labeled_fine.geojson` files,
+  which were quality controlled upstream, so those workflows do no tubule-level **gene-count** QC and apply a
   structure filter: a per-species `n_spots` quantile floor (`MIN_SPOTS_PER_SPECIES_QUANTILE = 0.05`
   in 03, `MIN_SPOTS_QUANTILE` in 02). Use the quantile floor, not an absolute threshold, to preserve
   species balance and nephron ordering. Centroid verification is mandatory; see

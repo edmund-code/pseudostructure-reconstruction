@@ -9,16 +9,16 @@ The active analysis expects the following layout beneath the path supplied as `-
 tubule_by_gene/<sample>_tubule_by_gene_caleb.h5ad
 human_mouse_hcop_fifteen_column.txt.gz
 mouse_vs_human/pathway_gene_sets/<library>.json
-Ctrl1A2_kept_tubules_labeled_fine.geojson, Ctrl1A4_kept_tubules_labeled_fine.geojson,
-IR2A2_kept_tubules_labeled_fine.geojson, IR2A4_kept_tubules_labeled_fine.geojson
+segmentations/v4fix/{Ctrl1A2,Ctrl1A4,IR2A2,IR2A4}_v4fix.geojson
 HUK1_COR1_v2.geojson, HUK1_MED1_v2.geojson
+archive/segmentations_2026-11-12/   (retired segmentations; do not use)
 ```
 
-Use only the `*_kept_tubules_labeled_fine.geojson` mouse segmentations. These are already
-quality controlled upstream: each feature carries `kept_tubule`, `doublet_tier1_flag`,
-`coarse_class` and `segment_class`, and low-support structures have been removed. Notebook 1
-consumes their geometry only. The retired `*_v4.geojson` and older processed segmentations are
-not index-compatible even when their feature indices appear valid.
+**Mouse segmentations (from 2026-11-12):** use only `segmentations/v4fix/<sample>_v4fix.geojson`, the v4fix
+panoptic segmentations (64,080 polygons over the four mice; QuPath export with `classification` and a `Score`
+measurement). Every earlier mouse segmentation (`*_v4.geojson`, `*_kept_tubules_labeled_fine.geojson`, the
+`*_caleb` filtered and processed files) is retired and kept only in `archive/segmentations_2026-11-12/`. Results
+built on them predate the switch. The package configs in `analysis/package_configs/` point at the v4fix files.
 
 The mouse Visium HD outputs are not under this data root: they live in their own project
 directory, passed through `PSEUDOSPACE_VISIUM_ROOT`. That directory must contain one subdirectory

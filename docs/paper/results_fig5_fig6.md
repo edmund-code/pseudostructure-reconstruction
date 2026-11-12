@@ -28,6 +28,16 @@ position in both species (0.55–0.58) (Fig. 5d). To evaluate whether such diffe
 between sections, we swapped one mouse and one human section between the groups. The difference for *Slc5a2* was more
 than four times larger than under either swap (Methods).
 
+Where SGLT2 ends matters for how gliflozins act. Gliflozins are approved for type 2 diabetes, heart failure and chronic
+kidney disease [sotagliflozin review, PMC11462946]. SGLT2 reabsorbs about 97% of filtered glucose, and when it is
+inhibited, SGLT1 further along the PT reabsorbs part of the glucose that escapes, so that only 50–60% of filtered glucose
+is excreted in mice [Rieg 2014]. Modelling in the rat further suggests that SGLT2 inhibition shifts sodium reabsorption
+downstream and roughly doubles oxygen consumption in S3 [Layton 2015]. Both effects depend on how much of the PT lies
+beyond SGLT2. Because SGLT2 extends further along the human PT, we speculate that the stretch available for SGLT1
+compensation, and the segment that takes on the extra workload, may be shorter in human than in mouse. As such, mouse
+estimates of SGLT1 compensation and of late-PT workload under gliflozins may need to be adjusted for the position of
+SGLT2 in human, which may also bear on dual SGLT1 and SGLT2 inhibition with sotagliflozin.
+
 We next applied the same analysis to transporters that mediate renal drug secretion. *Slc22a6* and *Slc22a8*, which
 encode the organic anion transporters OAT1 and OAT3, peaked at the start of the human PT (0.06–0.16) but in the
 early-to-mid PT in mouse (0.24–0.47) (Fig. 5d). Likewise, *Abcc2*, which encodes the efflux pump MRP2, was expressed

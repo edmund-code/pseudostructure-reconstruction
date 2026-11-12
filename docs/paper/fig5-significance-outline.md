@@ -73,7 +73,9 @@ Sources were read in full text; quotes are in `citation_ledger.md`. "Speculate" 
   drug-transporting families [TO VERIFY - no source read yet].
 - **Implication (to write).** Positional drug handling measured in the mouse PT may partly sit in gene copies with no
   single human counterpart; a one-to-one comparison drops them silently.
-- **Status.** To write; needs one source for the "these families handle drugs" claim.
+- **Status (2026-11-11).** Moved to Extended Data; one sentence stays in Results. Sex check (post hoc): 10 of 41
+  strongly zonated mouse non-1:1 genes are male-biased (Xiong 2023) against 63/380 of 1:1; dropping those 10 still gives
+  OR 2.04, P = 7e-4 (Fisher, denominators kept). The drug-family significance claim is dropped unless a source is read.
 
 ---
 

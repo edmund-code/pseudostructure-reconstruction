@@ -73,15 +73,11 @@ human switch point lies within S2 (0.53–0.60), where three cluster means place
 lines through three cluster means are one simple segment-level baseline, and finer clustering may recover more of each
 shift. Thus, segment-level clustering recovers some of these shifts but misses half of them.
 
-Finally, cross-species comparisons typically restrict analysis to genes with one-to-one orthologs. However, several PT
-gene families, such as *Cyp4a*, *Cyp2d*, *Ugt2b* and *Slco1a*, expanded in mouse. We therefore asked whether genes
-without a one-to-one human counterpart carry positional information of their own. In mouse, 9.9% of genes from families
-with more mouse than human copies and 14.2% of genes from families expanded in both species were strongly zonated along
-the PT, compared to 3.8% of one-to-one orthologs (Mantel–Haenszel odds ratio 2.24, P = 8 × 10⁻⁷) (Fig. 5g). In contrast,
-mouse genes whose human counterpart had expanded showed no such excess (1.7%). Human genes followed the same ordering
-relative to human one-to-one orthologs but did not reach significance (odds ratio 1.57, P = 0.17). As such, part of the
-positional organization of the mouse PT resides in gene copies without a single human counterpart and would be omitted
-by a one-to-one comparison.
+Finally, cross-species comparisons typically restrict analysis to genes with one-to-one orthologs. In mouse, genes
+from families with more copies than in human were more often strongly zonated along the PT than one-to-one orthologs
+(9.9% and 14.2% against 3.8%; Mantel–Haenszel odds ratio 2.24, P = 8 × 10⁻⁷), and this held after removing male-biased
+genes (Extended Data Fig. X; post hoc). Human genes followed the same ordering but did not reach significance (odds ratio
+1.57, P = 0.17). As such, a one-to-one comparison omits part of the positional organization of the mouse PT.
 
 Taken together, these results demonstrate that COAST can compare positional gene expression across species on a shared
 continuous coordinate. Applied to the PT, it reveals that transporters for glucose, drugs and urate occupy different
@@ -102,12 +98,9 @@ boundaries of the mouse segment labels. **d** As in c for *Slc2a2* (GLUT2), *Slc
 log2(1 + counts per 10,000). For each species, the early (light) and late (dark) partner are shown as the mean of the
 two sections' curves (thick) and each section's curve (thin), over the range used to locate the switch; each species
 has its own y axis, so heights compare the two partners within a species, not mouse with human. Background shading
-marks S1, S2 and S3. Switch points are located on scaled curves (Extended Data Fig. X). **f** Shift in switch point
-(human − mouse) for the six shifted pairs whose partners are both in the screened gene set, from COAST curves (filled)
-and from straight lines through the S1, S2 and S3 cluster means (open; "no switch" where the cluster means do not
-cross). **g** Share of PT-expressed genes strongly zonated along pseudostructure in each orthology class (human : mouse
-gene copies), relative to the share among one-to-one orthologs of the same species. Error bars are Katz 95% confidence
-intervals; the open triangle marks a class with no strongly zonated gene.
+marks S1, S2 and S3. Switch points are located on scaled curves (Extended Data Fig. X). **f** Switch point in mouse (start of arrow) and human (arrowhead) for the six shifted pairs whose partners are both in
+the screened gene set, from COAST curves (black) and from straight lines through the S1, S2 and S3 cluster means (grey,
+dashed; post hoc). Background shading marks S1, S2 and S3.
 ---
 
 ### COAST resolves where acute injury reshapes the proximal tubule
@@ -169,3 +162,8 @@ the screened gene set and a visible handover, each curve min–max scaled over t
 lines are species means and thin lines sections. Dashed blue and dotted magenta lines mark the mouse and human switch
 points; at right, each section's switch point with its 95% bootstrap interval. A switch point is counted only where both
 partners change at least two-fold along the section.
+
+**Extended Data (orthology) | Mouse genes without a one-to-one human counterpart are more often zonated.** Share of
+PT-expressed genes strongly zonated along pseudostructure in each orthology class (human : mouse gene copies), for mouse
+and human separately. Grey bars and dashed lines mark the one-to-one share of the same species. Error bars are Wilson 95%
+confidence intervals; n is the number of PT-expressed genes per class.

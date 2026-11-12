@@ -55,8 +55,8 @@ SIZE = {'reversals': (1160, 232), 'reversals_grid': (760, 352), 'cluster_shift':
         'maps': (360, 242), 'coverage': (380, 242), 'conservation': (380, 242), 'flattening': (380, 312),
         'pathways': (780, 312), 'handoff_moves': (580, 252), 'checks': (560, 252), 'all_calls': (760, 612),
         'pathway_null': (380, 242), 'domains': (760, 372), 'orthology': (580, 300), 'attenuation': (420, 200)}
-MAIN = ['domains', 'contrast', 'handoff_rows', 'cluster_shift', 'orthology']
-EXTENDED = ['attenuation', 'reversals_grid', 'pathway_curves', 'maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
+MAIN = ['domains', 'contrast', 'cluster_shift']
+EXTENDED = ['handoff_rows', 'orthology', 'attenuation', 'reversals_grid', 'pathway_curves', 'maps', 'coverage', 'conservation', 'flattening', 'all_calls', 'pathway_null', 'handoff_moves', 'checks']
 MIN_FINITE_BINS = 16
 
 # examples are chosen after the screen and the follow-up (presentation choice, recorded in the protocol doc)
@@ -405,25 +405,32 @@ ORTHO_CLASSES = ['1:1', '1:many', 'many:1', 'many:many']
 
 def panel_orthology(plt, rroot, out):
     """Notebook 86 (same elastic curve): share of PT-expressed genes that are strongly zonated, by orthology class
-    (human : mouse copies), mouse and human, with Wilson 95% intervals."""
+    (human : mouse copies), one panel per species so each class is read against its own species' one-to-one share
+    (grey bar, dashed line); Wilson 95% intervals, genes per class below."""
     from statsmodels.stats.proportion import proportion_confint
 
     t = pd.read_csv(rroot / 'pt_non_one_to_one_package/tables/h1_by_class.csv').set_index(['species', 'class_support3'])
     fig = figure(plt, 'orthology')
-    ax = fig.add_axes([0.13, 0.17, 0.84, 0.76])
     for i, sp in enumerate(('mouse', 'human')):
         col = MOUSE_C if sp == 'mouse' else HUMAN_C
+        ax = fig.add_axes([0.10 + i * 0.47, 0.24, 0.38, 0.66])
         for j, c in enumerate(ORTHO_CLASSES):
-            n, s = t.loc[(sp, c), 'expressed'], t.loc[(sp, c), 'strong']
-            lo, hi = proportion_confint(s, n, method='wilson')
-            x = j + (i - 0.5) * 0.36
-            ax.bar(x, s / n * 100, width=0.34, color=col, lw=0, label=sp if j == 0 else None)
-            ax.plot([x, x], [lo * 100, hi * 100], color=INK, lw=0.7)
-    ax.set_xticks(range(len(ORTHO_CLASSES)))
-    ax.set_xticklabels(ORTHO_CLASSES)
-    ax.set_xlabel('gene copies, human : mouse', labelpad=2)
-    ax.set_ylabel('strongly zonated (% of PT genes)', labelpad=2)
-    ax.legend(frameon=False, fontsize=7, loc='upper left')
+            n, s_ = t.loc[(sp, c), 'expressed'], t.loc[(sp, c), 'strong']
+            lo, hi = proportion_confint(s_, n, method='wilson')
+            ax.bar(j, s_ / n * 100, width=0.7, color='#BDBDBD' if c == '1:1' else col, lw=0, zorder=2)
+            ax.plot([j, j], [lo * 100, hi * 100], color=INK, lw=0.7, zorder=3)
+            ax.text(j, hi * 100 + 0.6, f'{s_ / n * 100:.1f}', ha='center', va='bottom', fontsize=6)
+            ax.text(j, -1.0, f'n = {n}', ha='center', va='top', fontsize=5.5, color=MUTED)
+        ref = t.loc[(sp, '1:1'), 'strong'] / t.loc[(sp, '1:1'), 'expressed'] * 100
+        ax.axhline(ref, color=MUTED, lw=0.6, ls=(0, (2, 2)), zorder=1)
+        ax.set_xticks(range(len(ORTHO_CLASSES)))
+        ax.set_xticklabels(ORTHO_CLASSES)
+        ax.tick_params(axis='x', pad=9)
+        ax.set_ylim(0, 25)
+        ax.set_title(sp, fontsize=8, weight='bold', color=col)
+        if i == 0:
+            ax.set_ylabel('strongly zonated (% of PT genes)', labelpad=2)
+    fig.text(0.53, 0.02, 'gene copies, human : mouse', ha='center', va='bottom', fontsize=7)
     fig.savefig(out / 'f5_orthology.png', facecolor='white')
     plt.close(fig)
 

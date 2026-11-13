@@ -9,7 +9,7 @@ EXT = Path('data/external')
 f5 = pd.read_csv(R / 'paper_figures/fig5/screen/genes.csv'); f6 = pd.read_csv(R / 'paper_figures/fig6/screen/genes.csv')
 h5 = pd.read_csv(R / 'paper_figures/fig5/screen/handoffs.csv'); h6 = pd.read_csv(R / 'paper_figures/fig6/screen/handoffs.csv')
 mouse = sorted(set(f5.gene) | set(f6.gene) | set(h5.early) | set(h5.late) | set(h6.early) | set(h6.late))
-var = ad.read_h5ad(R / 'package_pseudospace/runs/aki/02_qc/units_qc.h5ad', backed='r').var
+var = ad.read_h5ad(R / 'coast_runs/aki/02_qc/units_qc.h5ad', backed='r').var
 mid = var['gene_ids'].reindex(mouse)
 comp = pd.read_csv(EXT / 'ensembl_compara_human_mouse/Compara.98.protein_default.homologies.human_mouse.tsv.gz', sep='\t',
                    usecols=['gene_stable_id', 'homology_type', 'homology_gene_stable_id', 'identity'])

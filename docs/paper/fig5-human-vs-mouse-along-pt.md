@@ -353,3 +353,25 @@ mouse arm than a species relocation. Not a finding, as the screen said.
    figure compares directions and switch positions, which flattening cannot create.
 4. **No pathway moves as a whole.** The calibrated set screen calls nothing, and its top set (lysosome) is likely
    our mouse arm. The abstract should say genes, not pathways.
+
+## COAST fits on the v4fix segmentations (2026-11-12)
+
+The frozen screen rerun unchanged on the COAST human/mouse fit (`fig3-validation-experiments.md`). Inputs not rebuilt:
+notebook 101's handoff pairs, notebook 76's gene sets and notebook 86's orthology table (frozen lists, user 2026-11-12).
+
+| | package on v4 | COAST on v4fix |
+|---|---|---|
+| PT units (Ctrl1A2 / Ctrl1A4 / HUK1_COR1 / HUK1_MED1) | 2,644 / 2,650 / 3,194 / 3,459 | 2,712 / 2,740 / 3,140 / 3,392 |
+| screened / assessable genes | 3,872 / 3,869 | 3,868 / 2,843 |
+| category R (reversed) / H (steeper in human) | 28 / 7 | 39 / 15 |
+| relabeling calls (R, H) | 0, 0 | 0, 0 |
+| set screen calls | 0 | 0 |
+| handoffs: in human / eligible / shifted | 13 / 12 / 7 | 18 / 16 / 9 |
+
+Fewer genes are assessable because 1,564 genes have no count in the first or last third of an S1 or S3 core in some
+section (the frozen `core_zero` rule); COAST's S2/S3 boundary is later (b23 0.67 against 0.645), so the S3 cores hold
+fewer units. Slc5a11 (SMIT2) and Sorbs1 left the named reversal panels (not assessable / not screened); Mme, Slc17a3,
+Hpgd, Lpar6, Dcxr and Pitpnc1 remain category R. Shape-difference screen (`shape_clusters.py`): 1,593 eligible genes,
+666 called (4 under each swap), classes of 110 / 200 / 256 / 100 genes; 364 sets tested, 97 changed (0 under the
+swaps), 2 with q ≤ 0.05 (Hallmark Protein Secretion, KEGG Protein processing in ER). Results text:
+`results_fig5_fig6.md` v4.

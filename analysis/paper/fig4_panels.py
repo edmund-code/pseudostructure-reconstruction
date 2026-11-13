@@ -30,8 +30,8 @@ SEGS = ['PTS1', 'PTS2', 'PTS3']
 CLUSTER, BULK = '#555555', '#AAAAAA'
 LABEL_LOG2 = 0.5
 LINES = None                # straight lines through the clusters, set by load()
-# Fig. 4b examples, chosen by hand after fig4_linear_gain.py from its top 10 (ranks 1, 5, 8): one per shape the
-# straight lines miss, the cleanest in both mice. Peak at S2/S3; switch within S2; dip just past S2/S3.
+# Fig. 4b examples, chosen by hand after fig4_linear_gain.py from its top 10 (COAST fit: ranks 1, 5, 9): one per shape
+# the straight lines miss, the cleanest in both mice. Peak at S2/S3; switch within S2; dip just past S2/S3.
 OVERLAY = ['Pigr', 'Slc22a7', 'Cyp4a12a']
 # panel boxes of make_fig4.py in SVG units (1 unit = 0.01 inch here)
 SIZE = {'gam': (1160, 250), 'ex': (540, 760), 'lines': (580, 760), 'a': (540, 292), 'b': (580, 967), 'c': (540, 282), 'd': (540, 282)}

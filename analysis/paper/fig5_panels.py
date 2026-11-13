@@ -63,10 +63,10 @@ MIN_FINITE_BINS = 16
 # reversals whose two limbs both reproduce externally (mouse microdissection in both sexes, human atlas donors;
 # docs/paper/fig5-human-vs-mouse-along-pt.md): rising in mouse and falling in human, and the reverse
 RISES = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Hpgd', 'Hpgd'), ('Lpar6', 'Lpar6')]
-FALLS = [('Dcxr', 'Dcxr'), ('Slc5a11', 'Slc5a11'), ('Pitpnc1', 'Pitpnc1'), ('Sorbs1', 'Sorbs1')]
+FALLS = [('Dcxr', 'Dcxr'), ('Pitpnc1', 'Pitpnc1')]   # COAST fit: Slc5a11 not assessable, Sorbs1 not screened
 # main panel a (2026-11-09): the reversals with a drug, GWAS or disease hook, all both-limbs confirmed
 # (docs/paper/fig5-6-highlights.md); Lpar6 and Pitpnc1 stay in Extended Data (no kidney literature)
-REVERSED = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Hpgd', 'Hpgd'), ('Slc5a11', 'Slc5a11'), ('Dcxr', 'Dcxr')]
+REVERSED = [('Mme', 'Mme'), ('Slc17a3', 'Slc17a3'), ('Hpgd', 'Hpgd'), ('Dcxr', 'Dcxr')]   # COAST: Slc5a11 not assessable
 # contrast panel: approved-drug or disease-panel genes whose gradient keeps its sign, |E| >= 0.5, in all four sections
 CONSERVED_TARGETS = ['Slc5a2', 'Slc22a12', 'Slc22a8', 'Ace', 'Folh1', 'Dpep1', 'Pah', 'Slc2a2', 'Slc4a4', 'Gatm']
 # pathway display (no call: the frozen set screen called none; human gradients are attenuated, so a flat human curve

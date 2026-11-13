@@ -269,3 +269,31 @@ labels and checkpoint, which are not readable here. Mouse AKI and the human abla
   score the new blocks with D4 TTA. AKI sections were never in training, so every block is held out.
 - **Fig. 2d from the same work.** If a second person outlines the same AKI or human blocks, the annotator-vs-annotator
   error for Fig. 2d comes from those blocks too.
+
+## COAST fits on the v4fix segmentations (2026-11-12)
+
+The user replaced the mouse segmentations with v4fix and made COAST (github.com/edmundtsou/COAST, commit db5502c) the
+method. Both fits were rebuilt with `analysis/paper/coast_fit.py` (results/coast_runs/{aki,hvm}); `fig3_common.RUNS`
+points there. The current Fig. 3 has panels a and r only (`make_fig3.py`); the robustness, baseline and depth panels
+(3d–f above) are retired and were not rerun. Only the ten gene-half reruns per fit were redone, with COAST, because the
+Fig. 4–6 screens place genes on them.
+
+| | control/AKI | human/mouse |
+|---|---|---|
+| polygons / with bins / after QC | 64,080 / 43,761 / 36,610 | 51,176 / 31,524 / 27,614 |
+| units on the curve | 31,928 | 25,352 |
+| PT-S1 / S2 / S3 median t | 0.058 / 0.119 / 0.196 | 0.063 / 0.107 / 0.186 |
+| Spearman ρ with the package fit (all / PT) | 0.990 / 0.978 | 0.981 / 0.92–0.99 per section |
+| label agreement with the package fit | 84% | 92% |
+
+COAST's QC keeps exactly the units the package's stage 02 kept (36,610 and 27,614 vs 27,612). The labels differ: on
+the control/AKI fit COAST calls 1,373 package PT-S2 units PT-S1 and has no CNT cluster (package CNT units are DCT2 and
+package DCT2 units DCT1), because Leiden runs on COAST's own Harmony neighbour graph. Labels were assigned
+automatically and still need the per-cluster review.
+
+**Fig. 3r, ρ per section (p = 0.001 against 1,000 within-section shuffles in every section):** Ctrl1A2 0.950, Ctrl1A4
+0.947, IR2A2 0.939, IR2A4 0.971, HUK1_COR1 0.945, HUK1_MED1 0.944 (package on v4: 0.934, 0.946, 0.933, 0.972, 0.949,
+0.945).
+
+**Gene halves (COAST):** all ten control/AKI halves keep PT order; one (s1_A) runs the distal limb backwards
+(segment-order ρ 0.67) while its PT positions agree with the reference at ρ 0.96. The screens use PT positions only.

@@ -28,13 +28,16 @@ from fig6_panels import CONTROLS, CTRL, INJURED, IR, MICE, reference_x  # noqa: 
 
 LEAD = 'Havcr1'
 # d: one gene from each gene shape cluster (shape_clusters.py), in cluster order
-GENES_D = ['Hmox1', 'Slc6a13', 'Slc22a2', 'Slc6a8']
+# (COAST fit: the earlier gene of a cluster where it is still there, otherwise its transporter with the largest change)
+GENES_D = ['Slc26a1', 'Hmox1', 'Slc6a13', 'Slc6a8']
 # e: healthy within-segment gradients injury erases (Category A examples; the controls carry the gradient)
 GENES_E = ['Cyp4a14', 'Agt', 'Cyp24a1']
 # f: genes named on each shape cluster; g: per pathway group, the called set with the smallest competitive p
-EXAMPLES = {1: ['Hmox1', 'Tk1'], 2: ['Slc6a13', 'Slc22a12'], 3: ['Acadm', 'Cyp4a14'], 4: ['Havcr1', 'Cyp24a1']}
+# (COAST fit: f keeps the earlier named genes that are still in a cluster, otherwise its two largest changes)
+EXAMPLES = {1: ['Khk', 'Aamdc'], 2: ['Hmox1', 'Tk1'], 3: ['Slc6a13', 'Slc22a12'], 4: ['Acadm', 'Havcr1']}
 HIGHLIGHT = ['MSigDB_Hallmark_2020::E2F Targets', 'MSigDB_Hallmark_2020::Myc Targets V1',
-             'Reactome_2022::Mitochondrial Fatty Acid Beta-Oxidation R-HSA-77289', 'KEGG_2019_Mouse::Lysosome']
+             'Reactome_2022::Citric Acid (TCA) Cycle And Respiratory Electron Transport R-HSA-1428517',
+             'KEGG_2019_Mouse::Lysosome']
 SHADE = {'Ctrl1A2': CTRL, 'Ctrl1A4': '#7FA8D8', 'IR2A2': IR, 'IR2A4': '#F0A978'}
 KEY = {'Ctrl1A2': 'Control 1', 'Ctrl1A4': 'Control 2', 'IR2A2': 'AKI 1', 'IR2A4': 'AKI 2'}
 EARLY = {'control': '#3A8DD0', 'AKI': '#F0A978'}

@@ -682,15 +682,14 @@ def panel_pathways(plt, root, screen, genes, out, b12, b23, key='pathways', only
 # set key, segment). A set is drawn as the mean of its supported members' curves.
 # 2026-11-09: Anpep and Cyp51 dropped (weak literature; docs/paper/fig5-6-highlights.md)
 MADE = [('Havcr1', ['Havcr1'], 2), ('DNA replication', 'Reactome_2022::DNA Strand Elongation R-HSA-69190', 2),
-        ('Oxidative phosphorylation', 'KEGG_2019_Mouse::Oxidative phosphorylation', 3)]
+        ('Oxidative phosphorylation', 'MSigDB_Hallmark_2020::Oxidative Phosphorylation', 3)]
 ERASED = [('Cyp24a1', ['Cyp24a1'], 2), ('Agt', ['Agt'], 2), ('Cyp4a14', ['Cyp4a14'], 2)]
 # main pathway rows: robust calls (fig6_interpret.py), one per biological family, with a clinical or injury reading
-PATHWAYS_MAIN = ['MSigDB_Hallmark_2020::E2F Targets', 'KEGG_2019_Mouse::Proteasome',
-                 'MSigDB_Hallmark_2020::Oxidative Phosphorylation',
+PATHWAYS_MAIN = ['KEGG_2019_Mouse::Proteasome', 'MSigDB_Hallmark_2020::Oxidative Phosphorylation',
                  'Reactome_2022::G1/S-Specific Transcription R-HSA-69205', 'Reactome_2022::DNA Strand Elongation R-HSA-69190',
-                 'KEGG_2019_Mouse::Mismatch repair', 'MSigDB_Hallmark_2020::Bile Acid Metabolism',
-                 'Reactome_2022::Respiratory Electron Transport, ATP Synthesis By Chemiosmotic Coupling, Heat Production '
-                 'By Uncoupling Proteins R-HSA-163200', 'KEGG_2019_Mouse::Oxidative phosphorylation']
+                 'MSigDB_Hallmark_2020::Bile Acid Metabolism', 'Reactome_2022::Respiratory Electron Transport R-HSA-611105']
+# COAST fit: E2F Targets, Mismatch repair, KEGG Oxidative phosphorylation and Respiratory Electron Transport, ATP
+# Synthesis (R-HSA-163200) are no longer called; the last two are replaced by the called Hallmark and Reactome sets.
 # drug targets among the segment-dependent calls (S3 response - S1 response >= 1 log2, 4/4 pairs, relabelings <= 0.25x)
 SEGMENT_TARGETS = [('Xdh', 'XDH'), ('Cdk4', 'CDK4'), ('Tyms', 'TYMS'), ('Hsd11b1', '11β-HSD1'), ('Slc3a1', 'rBAT'),
                    ('Hnf1b', 'HNF1B')]
@@ -699,13 +698,12 @@ IDENTITY = [('Havcr1', ['Havcr1'], 2), ('Cyp24a1', ['Cyp24a1'], 2), ('Agt', ['Ag
 STORIES = {
     'prolif': ([('DNA replication', 'Reactome_2022::DNA Strand Elongation R-HSA-69190', 2)],
                [('Cdk4', 'CDK4'), ('Cdk2', 'CDK2'), ('E2f1', 'E2F1'), ('Tyms', 'TYMS')],
-               ['MSigDB_Hallmark_2020::E2F Targets', 'Reactome_2022::G1/S-Specific Transcription R-HSA-69205',
-                'Reactome_2022::DNA Strand Elongation R-HSA-69190', 'KEGG_2019_Mouse::Mismatch repair']),
-    'mito': ([('Oxidative phosphorylation', 'KEGG_2019_Mouse::Oxidative phosphorylation', 3)],
+               ['Reactome_2022::G1/S-Specific Transcription R-HSA-69205',
+                'Reactome_2022::DNA Strand Elongation R-HSA-69190']),
+    'mito': ([('Oxidative phosphorylation', 'MSigDB_Hallmark_2020::Oxidative Phosphorylation', 3)],
              [('Xdh', 'XDH'), ('Hsd11b1', '11β-HSD1'), ('Slc3a1', 'rBAT'), ('Hnf1b', 'HNF1B')],
              ['MSigDB_Hallmark_2020::Oxidative Phosphorylation',
-              'Reactome_2022::Respiratory Electron Transport, ATP Synthesis By Chemiosmotic Coupling, Heat Production '
-              'By Uncoupling Proteins R-HSA-163200', 'KEGG_2019_Mouse::Oxidative phosphorylation']),
+              'Reactome_2022::Respiratory Electron Transport R-HSA-611105']),
 }
 
 

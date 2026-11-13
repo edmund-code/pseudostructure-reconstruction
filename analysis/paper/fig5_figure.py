@@ -34,14 +34,17 @@ INK, GREY = '#222222', '#8A8A8A'
 TRIM = 0.05                      # spline ends overshoot (question-bank.md); curves and bins shown on [0.05, 0.95]
 # d: OCT2 and MRP2 change < 3.5-fold along the PT in either species, too little to place (Results text, 2026-11-12)
 # d: one transporter from each gene shape cluster (shape_clusters.py), in cluster order
-GENES_D = ['Slc7a7', 'Slc22a6', 'Slc10a2', 'Slc22a12']
+# (COAST fit: the earlier gene of a cluster where it is still there, otherwise its transporter with the largest change)
+GENES_D = ['Slc7a7', 'Slc25a15', 'Slc10a2', 'Slc22a12']
 GENES_E = ['Mme', 'Slc17a3', 'Dcxr']           # reversals whose both limbs reproduce externally
 EXPR_CMAP = None
 # f: genes named on each shape cluster; g: per pathway group, the called set with the smallest competitive p,
 # replaced by the next where that set is a broad Hallmark with no PT meaning (Adipogenesis -> Bile Acid Metabolism)
-EXAMPLES = {1: ['Slc5a2', 'Slc7a7'], 2: ['Slc22a6', 'Slc13a3'], 3: ['Mme', 'Slc17a3'], 4: ['Dcxr', 'Miox']}
-HIGHLIGHT = ['KEGG_2019_Mouse::Lysosome', 'MSigDB_Hallmark_2020::Bile Acid Metabolism',
-             'MSigDB_Hallmark_2020::Fatty Acid Metabolism', 'Reactome_2022::Peroxisomal Protein Import R-HSA-9033241']
+# (COAST fit: f keeps the earlier named genes that are still in a cluster, otherwise its two largest changes)
+EXAMPLES = {1: ['Slc5a2', 'Slc7a7'], 2: ['Dcxr', 'Miox'], 3: ['Mme', 'Slc17a3'], 4: ['Selenbp2', 'Mlec']}
+HIGHLIGHT = ['KEGG_2019_Mouse::Oxidative phosphorylation', 'Reactome_2022::Ub-specific Processing Proteases R-HSA-5689880',
+             'Reactome_2022::Glyoxylate Metabolism And Glycine Degradation R-HSA-389661',
+             'MSigDB_Hallmark_2020::Protein Secretion']
 # f: the shifted pairs whose handover is visible in counts; urate (SLC22A23 -> URAT1) is left out because URAT1 is
 # the more abundant transcript along the whole PT in both species
 E_PAIRS = H_PAIRS[:3]
@@ -373,7 +376,8 @@ def shape_rows(fig, R, panel, out, groups, shade, b12, b23, highlight, examples,
     pw = pd.read_csv(out / 'pathways.csv').set_index('set')
     items_f = [(f'{(tab.cluster == c).sum()} genes', tab.gene[tab.cluster == c].tolist(), examples.get(c, []))
                for c in sorted(set(tab.cluster) - {0})]
-    items_g = [(short_set(h), pw.loc[h, 'genes'].split(','), []) for h in highlight]
+    import textwrap
+    items_g = [(textwrap.fill(short_set(h), 30), pw.loc[h, 'genes'].split(','), []) for h in highlight]
 
     def row(letter, top, items):
         panel(letter, 1, top, 179, top + 44)

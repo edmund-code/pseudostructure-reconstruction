@@ -93,6 +93,9 @@ publication readiness. `legacy/` is provenance only; never mix it with current r
   required for reported inference.
 - Public `obs` label contract: `segment_class` (fine), `coarse_class` (rollup),
   `broad_tubule_marker_call` (downstream alias). Keep scientific caveats beside result summaries.
+- Paper figures (`analysis/paper/`) read the COAST fits in `results/coast_runs/{aki,hvm}`, built by
+  `analysis/paper/coast_fit.py` with COAST (github.com/edmundtsou/COAST), the finalized method (user, 2026-11-12).
+  The package runs under `results/package_pseudospace/runs` remain for notebooks 70 onward.
 - Prefer reusable logic in `pseudospace/` with thin orchestration in `analysis/`.
 - Expensive stages cache by parameters, inputs, and code in `results/<workflow>/stage_cache/`.
   Unchanged notebooks print `[stage cache] hit`; `PSEUDOSPACE_STAGE_CACHE=0` forces rebuild, and

@@ -81,7 +81,7 @@ segment clustering obscures. Comparing species on a shared axis, it identifies g
 reverses between mouse and human, and paired solute transporters whose switch point sits at a different position
 along the human proximal tubule, later for glucose and amino-acid transporters. Finally, comparing control and acutely injured mouse kidneys, it identifies transporter switch
 points that move upstream as injured S3 loses its late transporters, and gradients within segments that injury
-creates or erases. Pseudostructure reconstruction is available as an open-source Python package at [URL].
+creates or erases. COAST is available as an open-source Python package at github.com/edmundtsou/COAST.
 
 ## Methods
 
@@ -93,8 +93,9 @@ its summed expression profile and a position t ∈ [0, 1] along the structure, s
 come from expression alone: segment labels and tissue coordinates never enter the placement of a unit, and a
 marker axis only orients the curve. t orders units along the structure; it is not physical length, because a
 section samples each part of the structure in proportion to the length it lays in the plane. Every step
-after segmentation is implemented in the pseudostructure reconstruction package (`pseudospace_reconstruction`
-0.1.0, commit 59da04b).
+after segmentation is implemented in COAST (Continuous Ordering of Anatomical Structures from Transcriptomics;
+github.com/edmundtsou/COAST, commit db5502c); the analyses of this paper call it through
+`analysis/paper/coast_fit.py`.
 
 **Tubule segmentation: annotations.** Tubules were segmented from H&E whole-slide images with a deep-learning model
 trained on partial manual annotations. Structures were outlined as polygons in QuPath [version] on seven mouse
@@ -150,7 +151,8 @@ families score high; flagged, not removed); a split test (the unit's bins are sp
 the halves are scored for identity, and the separation is tested against 99 label shuffles at α = 0.05; halves of
 different, non-adjacent identity were removed, while adjacent ones, likely genuine segment transitions, were kept);
 and morphology (solidity below 0.75, or a narrow neck between two lobes). Glomeruli were exempt from the merge
-tests. Counts were normalized to 10⁴ per unit and log-transformed for embedding; all gene models use raw counts.
+tests (`coast.pp.filter_units`, `coast.pp.doublets`). Counts were normalized to 10⁴ per unit and log-transformed for
+embedding; all gene models use raw counts.
 
 **Sections from two species.** Human genes were mapped to one-to-one mouse orthologs from HCOP[54]: pairs
 supported by at least three of its orthology resources, kept when each gene is the other's best-supported
@@ -161,36 +163,39 @@ enter the embedding with the same features. Because the two probe panels differ,
 compared across species, only patterns along the axis.
 
 **Embedding, section correction and labels.** The kept units of all sections were embedded jointly in two passes
-(Scanpy 1.11.5[55]; R harmony 2.0.5[44]). In each pass, highly variable genes (Scanpy's defaults: mean
-0.0125–3, normalized dispersion ≥ 0.5; intersected across sections) gave 50 principal components, corrected for
-section with Harmony (θ = 6, λ fixed at 1, at most 30 rounds). Units were clustered by Leiden[22] (resolution 2, 30 nearest neighbours, 2,000
-highly variable genes), and each cluster was labelled from curated marker panels (PT-S1, PT-S2, PT-S3, thin limb,
-thick ascending limb, macula densa, DCT, CNT and collecting-duct segments; best panel score ≥ 0.5 and margin ≥ 0.1
-over the runner-up). Non-tubule clusters were dropped and the nephron units re-embedded (pass 2) with genes
-detected in at least 5% of units and with at least 20 counts. Labels were reviewed cluster by cluster and none was
-overridden. Labels are not inputs to the curve.
+(Scanpy 1.11.5[55]; harmonypy 2.1.0, the Python port of Harmony[44]). In each pass, genes detected in at least 5% of
+units and with at least 20 counts (plus the marker-panel genes) were kept, and highly variable genes (Scanpy's
+Seurat flavour: mean 0.0125–3, normalized dispersion ≥ 0.5; ranked within each section, and kept only when variable
+in every condition or species; mitochondrial and ribosomal genes excluded) gave 50 principal components, corrected
+for section with Harmony (θ = 6, λ fixed at 1, at most 30 rounds). Units were clustered by Leiden[22] (resolution 2)
+on the 25 exact nearest neighbours in the corrected space, and each cluster was labelled from curated marker panels
+(PT-S1, PT-S2, PT-S3, thin limb, thick ascending limb, macula densa, DCT, CNT and collecting-duct segments; best mean
+panel score ≥ 0.5, control genes drawn from 2,000 highly variable genes and the panel genes; the margin over the
+runner-up is reported, not thresholded). Non-tubule clusters were dropped and the nephron units re-embedded (pass 2)
+by the same steps. Labels are not inputs to the curve. [Labels were assigned automatically; cluster-by-cluster review
+pending.]
 
 **Elastic principal curve.** An elastic principal curve[46,47] was fitted through all pass-2 units in the 50
 corrected components. The curve is a chain of k nodes minimizing
 
 U = (1/N) Σᵢ ‖xᵢ − n(xᵢ)‖² + λ Σ_edges ‖nⱼ − nⱼ₊₁‖² + μ Σ_inner nodes ‖nⱼ − (nⱼ₋₁ + nⱼ₊₁)/2‖²,
 
-where n(xᵢ) is the node nearest to unit i; the terms measure fit, stretching and bending. The curve was initialized
+where n(xᵢ) is the node nearest to unit i; the terms measure fit, stretching and bending. COAST fits it with
+elpigraph-python 0.3.4. The curve was initialized
 as three nodes on the first principal component (the elpigraph-python default) and grown by bisecting the edge whose
 bisection gave the lowest energy[47], relaxing node positions after each addition, until k = 50 (λ = 0.01, μ = 0.1). Each unit was projected
 onto its nearest edge, and its position is the path length from the start of the curve to its projection (the projection index of
 principal curves[45]); units
 beyond an end node were placed on the straight continuation of the end edge, up to twice that edge's length
 (our addition to the curve projection). The
-start is the curve end nearest the root unit, the medoid of the proximal-tubule cluster lowest on a marker axis
-(mean score of early genes Cyp2e1, Gatm, Slc13a3, Slc22a6, Slc5a12, Slc5a2 minus that of late genes Aqp2, Aqp4,
-Atp6v0d2, Rhcg, Slc14a2, Wnt7b), which decides only which end is 0; positions were then scaled to [0, 1]. The fit is
-deterministic (seed 0). The curve code is a port of elpigraph-python 0.3.4 reduced to the principal-curve case.
+direction was chosen so that position rises with a marker axis (mean score of late genes Aqp2, Aqp4, Atp6v0d2, Rhcg,
+Slc14a2, Wnt7b minus that of early genes Cyp2e1, Gatm, Slc13a3, Slc22a6, Slc5a12, Slc5a2; Spearman correlation),
+which decides only which end is 0; positions were then scaled to [0, 1]. The fit is deterministic (seed 0).
 
 ### Gene models along the structure
 
 **A position for each gene that the gene did not help build.** A gene that defines the axis could look graded
-along it by construction. The genes were therefore split at random into halves five times, and stages 03–04 were
+along it by construction. The genes were therefore split at random into halves five times, and both passes and the curve were
 rerun on each half alone, with the other half withdrawn from the highly-variable-gene pool. Each gene's position for
 a unit is the mean of the five axes built without that gene; a unit needs a position on at least three of the five.
 
@@ -281,11 +286,11 @@ or bilateral, time to harvest), fixation and embedding, animal protocol number.]
 Eif2s3y, Kdm5d and Uty are expressed). Sections were processed with the Visium HD [mouse probe set, version; 19,059
 genes], H&E-stained, imaged at [scanner, objective] and processed with Space Ranger [version] to 2-µm bins.
 
-**Reconstruction.** The four sections were reconstructed together. Of 64,272 segmented polygons, 43,984 contained
-bins, 36,445 passed quality control and 32,939 nephron units were placed on the curve; PT units numbered 2,780,
-2,745, 3,937 and 5,551 (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4).
+**Reconstruction.** The four sections were reconstructed together. Of 64,080 segmented polygons, 43,761 contained
+bins, 36,610 passed quality control and 31,928 nephron units were placed on the curve; PT units numbered 2,864,
+2,757, 3,385 and 5,104 (Ctrl1A2, Ctrl1A4, IR2A2, IR2A4).
 
-**Gene models.** The control mice are the reference group for x; fewer than 0.1% of IR units were clipped. The
+**Gene models.** The control mice are the reference group for x; at most 0.24% of IR units were clipped. The
 comparison of curve and clustering used the control sections only, screening genes detected in at least 10% of PT
 units in each control mouse. The control–AKI comparison screened genes detected in at least 10% of PT units in each
 mouse of at least one condition, so that genes switched on or off by injury are included, with the neighbour filter
@@ -293,8 +298,8 @@ applied within each condition. Pathway statistics were W per segment core.
 
 **Placement of injured tubules.** To test whether IR units are placed by injury genes rather than by position,
 injury-responsive genes were defined from whole-PT pseudobulk (all four IR × control pairs of the same sign and at
-least 0.5 log2; detected in at least 5% of PT units in some section), and the 3,812 such genes were withdrawn from
-the highly-variable-gene pool in a rerun of stages 03–04. Each section's PT positions on this injury-blind axis were
+least 0.5 log2; detected in at least 5% of PT units in some section), and the 3,635 such genes were withdrawn from
+the highly-variable-gene pool in a rerun of both passes and the curve. Each section's PT positions on this injury-blind axis were
 compared with the reference by Spearman ρ, over all PT units and within each label, against the ρ between the two
 halves of the gene-half splits.
 
@@ -305,12 +310,11 @@ cortex, the "MED" name does not denote medulla; DDX3Y, KDM5D, UTY and EIF1AY are
 Visium HD [human probe set, version; 18,132 genes]. [Source of the tissue, donor age, IRB protocol and consent.] They
 were analysed together with the two control mouse sections, whose bins were reprocessed in the ortholog space.
 
-**Reconstruction.** The ortholog space held 15,567 genes. Of 51,155 segmented polygons, 31,533 contained bins,
-27,395 passed quality control and 25,048 nephron units (13,539 mouse, 11,509 human) were placed on the curve; PT
-units numbered 2,644, 2,650, 3,194 and 3,459 (Ctrl1A2, Ctrl1A4, HUK1_COR1, HUK1_MED1).
+**Reconstruction.** The ortholog space held 15,567 genes. Of 51,176 segmented polygons, 31,524 contained bins,
+27,614 passed quality control and 25,352 nephron units (13,920 mouse, 11,432 human) were placed on the curve; PT
+units numbered 2,712, 2,740, 3,140 and 3,392 (Ctrl1A2, Ctrl1A4, HUK1_COR1, HUK1_MED1).
 
-**Gene models.** The mice are the reference group for x; up to 3.2% of human units, all at the start of the PT, were
-clipped. Boundaries come from the mouse units only, because most human units in the S2 range of x are labelled
+**Gene models.** The mice are the reference group for x; at most 0.06% of human units were clipped. Boundaries come from the mouse units only, because most human units in the S2 range of x are labelled
 PT-S1. Genes were screened when detected in at least 10% of PT units in all four sections (a comparison of
 patterns needs the gene in both species), with the neighbour filter applied within each species. The steeper-in-mouse
 category was counted but not called, because the human sections are flatter overall and the two cannot be told
@@ -361,7 +365,7 @@ stages 01–04 and the gene models.]
 
 ### Code availability
 
-[Pseudostructure reconstruction package and analysis code: GitHub URLs, Zenodo DOI and jef.works documentation.]
+[COAST: github.com/edmundtsou/COAST; analysis code: GitHub URL, Zenodo DOI and jef.works documentation.]
 
 ## References
 

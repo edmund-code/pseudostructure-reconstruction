@@ -34,7 +34,7 @@ from fig3_panels import COLOURS, MUTED, style  # noqa: E402
 SAMPLES = {'Ctrl1A2': ('aki', 'Ctrl_1A2', 'Control'), 'Ctrl1A4': ('aki', 'Ctrl_1A4', 'Control'),
            'IR2A2': ('aki', 'IR_2A2', 'AKI'), 'IR2A4': ('aki', 'IR_2A4', 'AKI'),
            'HUK1_COR1': ('human_vs_mouse', 'HUK1_COR_1', 'Human'), 'HUK1_MED1': ('human_vs_mouse', 'HUK1_MED_1', 'Human')}
-SEGMENTATION = {'Ctrl1A2': 'Ctrl_1A2_v4.geojson'}
+SEGMENTATION = {'Ctrl1A2': 'segmentations/v4fix/Ctrl1A2_v4fix.geojson'}
 CTRL, AKI, MOUSE, HUMAN = '#2F6DB5', '#D9692B', '#2F6DB5', '#C51B7D'   # human magenta: purple blurred into blue in the UMAPs
 GROUPS = ['PTS1', 'PTS2', 'PTS3', 'AL', 'DCT', 'CNT', 'CD']
 MARKERS = ['Slc5a2', 'Slc13a3', 'Slc7a13', 'Slc12a1', 'Slc12a3', 'Slc8a1', 'Aqp2']

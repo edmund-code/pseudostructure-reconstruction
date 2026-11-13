@@ -53,7 +53,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fig3_common import RUNS, load_positions, section_rho  # noqa: E402
 
-CONFIGS = {'aki': 'analysis/package_configs/aki', 'hvm': 'analysis/package_configs/human_vs_mouse'}
 OUT = 'paper_figures/fig3/robustness'
 FRACTIONS = (0.1, 0.2, 0.3, 0.5, 0.7, 1.0)
 SEEDS = (0, 1, 2)
@@ -146,51 +145,33 @@ def perturb(qc, spec: dict, target_sum: float) -> tuple[object, dict]:
 
 
 def run_job(args, name: str, out: Path, spec: dict | None = None) -> None:
+    """One rerun: perturb the QC units, then COAST's two passes and curve (coast_fit.two_pass), as the reference fit."""
     import anndata as ad
-    from pseudospace_reconstruction.config import RunPaths, load_config
-    from pseudospace_reconstruction.integrate import run_two_pass
-    from pseudospace_reconstruction.integrate.harmony import HVG_COL
-    from pseudospace_reconstruction.pipeline import ensure_r_home, run_stage04, stage03_arguments
+    import coast_fit
 
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(message)s')
     t0 = time.time()
     spec = spec or parse_job(name)
-    ensure_r_home()
-    config = load_config(REPO / CONFIGS[args.run], Path(args.data_root))
-    stage03 = stage03_arguments(config)
-    assert stage03['params'].backend == 'r', 'the protocol requires the R harmony backend'
+    P = coast_fit.panels(args.run)
     qc = ad.read_h5ad(Path(args.results_root) / RUNS[args.run] / '02_qc/units_qc.h5ad')
     n_qc = qc.n_obs
-    qc, info = perturb(qc, spec, float(qc.uns['qc_policy']['normalize_target_sum']))
-    tmp = Path(args.tmp) / f'fig3_robustness_{args.run}_{name}' if args.tmp else out / f'tmp_{name}'
+    qc, info = perturb(qc, spec, 1e4)
     try:
-        res = run_two_pass(qc, stage03['panels'], stage03['params'])
+        withdrawn = qc.var_names[qc.var[EXCLUDE_COL].to_numpy(bool)]
         n_input = qc.n_obs
+        p1, p2, _ = coast_fit.two_pass(qc, P, exclude_genes=withdrawn)
         del qc
-        paths = RunPaths(tmp)
-        paths.stage('03', create=True)
-        p2 = res.pass2   # stage 04 reads obs, the embedding and the lognorm layer (all genes: the marker-axis score
-        #                  draws its control genes from every gene), so the count matrices are not written
-        ad.AnnData(obs=p2.obs, var=p2.var, obsm={'X_harmony': p2.obsm['X_harmony']},
-                   layers={'lognorm': p2.layers['lognorm']}).write(paths.pass2)
-        paths.manifest('03').write_text(json.dumps({'stage': '03', 'fig3_robustness': name}))
-        run_stage04(config, paths)
-        table = pd.read_parquet(tmp / '04_pseudospace/pseudospace.parquet')
-        table = pd.DataFrame({'t': table['pseudospace'].astype(float), 'sample': table['sample'].astype(str),
-                              'segment_class': table['segment_class'].astype(str),
-                              'coarse_class': table['coarse_class'].astype(str)}, index=table.index)
-        table.index.name = 'obs_name'
-        om = pd.read_csv(tmp / '04_pseudospace/order_metrics.csv')
-        om = om[(om.coordinate == 'pseudospace') & (om.units == 'all')].iloc[0]
-        root = json.loads(paths.manifest('04').read_text())['summary']['root_unit']
-        meta = {'job': name, **spec, **info, 'n_qc_units': n_qc, 'n_input_units': n_input,
-                'n_units_pass2': int(p2.n_obs), 'n_units': int(len(table)),
-                'n_genes_pass2': int(p2.n_vars),
-                'n_integration_features_pass1': int(res.pass1.var[HVG_COL].sum()),
-                'n_integration_features_pass2': int(p2.var[HVG_COL].sum()),
-                'fingerprint_pass1': dict(res.fingerprint_pass1), 'fingerprint_pass2': dict(res.fingerprint_pass2),
+        stage04 = coast_fit.stage04_table(p2)
+        table = pd.DataFrame({'t': stage04['pseudospace'], 'sample': stage04['sample'],
+                              'segment_class': stage04['segment_class'], 'coarse_class': stage04['coarse_class']},
+                             index=stage04.index)
+        om = coast_fit.order_metrics(stage04, P['segment_order']).iloc[0]
+        meta = {'job': name, **spec, **info, 'method': 'COAST', 'n_qc_units': n_qc, 'n_input_units': n_input,
+                'n_units_pass2': int(p2.n_obs), 'n_units': int(len(table)), 'n_genes_pass2': int(p2.n_vars),
+                'n_integration_features_pass1': int(p1.var['coast_feature'].sum()),
+                'n_integration_features_pass2': int(p2.var['coast_feature'].sum()),
                 'segment_order_rho': float(om.segment_order_rho), 'n_inversions': int(om.n_inversions),
-                'root_unit': root, 'threads': args.threads, 'seconds': round(time.time() - t0)}
+                'root_unit': str(stage04['pseudospace'].idxmin()), 'threads': args.threads,
+                'seconds': round(time.time() - t0)}
         (out / f'{name}.json').write_text(json.dumps(meta, indent=1, default=str))
         table.to_parquet(out / f'{name}.parquet.part')
         (out / f'{name}.parquet.part').rename(out / f'{name}.parquet')     # the parquet marks a finished rerun
@@ -199,8 +180,6 @@ def run_job(args, name: str, out: Path, spec: dict | None = None) -> None:
         (out / f'{name}.error.json').write_text(json.dumps({'job': name, **spec, 'seconds': round(time.time() - t0),
                                                             'error': traceback.format_exc()}, indent=1))
         raise
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def launch(args, out: Path) -> None:

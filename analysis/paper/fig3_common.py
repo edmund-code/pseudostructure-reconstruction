@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-RUNS = {'aki': 'package_pseudospace/runs/aki', 'hvm': 'package_pseudospace/runs/hvm'}
+RUNS = {'aki': 'coast_runs/aki', 'hvm': 'coast_runs/hvm'}   # COAST fits (coast_fit.py)
 # the six sections of Fig. 3b: the four mouse sections from the control/AKI fit, the two human sections
 # from the human-vs-mouse fit (the controls also sit in that fit; they are scored once, in the AKI fit)
 SECTIONS = {'Ctrl1A2': 'aki', 'Ctrl1A4': 'aki', 'IR2A2': 'aki', 'IR2A4': 'aki', 'HUK1_COR1': 'hvm', 'HUK1_MED1': 'hvm'}

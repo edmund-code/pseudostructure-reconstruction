@@ -1,4 +1,4 @@
-# Discussion: clinical context for Figs. 5 and 6 (draft, 2026-11-12)
+# Discussion: clinical context for Figs. 5 and 6 (draft, 2026-11-12; positions from the COAST fits)
 
 Moved here from the Results at the user's request (2026-11-12): Results report findings, the Discussion interprets
 them. All sources were read in full and checked against the citing sentence (`citation_ledger.md`), except where marked.
@@ -20,8 +20,8 @@ with sotagliflozin, approved for heart failure [Tran 2024].
 OAT1, encoded by *Slc22a6*, takes up anionic drugs, among them antibiotics, non-steroidal anti-inflammatory drugs,
 diuretics and antivirals, across the basolateral membrane for secretion, and regulatory agencies highlight it as a key
 transporter for drug excretion and drug–drug interactions [Nigam 2015]. In mice given tenofovir, PT mitochondria took on
-an irregular shape with sparse cristae, and mice lacking OAT1 were spared [Kohler 2011]. OAT1 peaked mid-PT in mouse and
-early in human (Fig. 5d), so the cells that take up its substrates, and that would be exposed to tenofovir, may sit at
+an irregular shape with sparse cristae, and mice lacking OAT1 were spared [Kohler 2011]. OAT1 peaked mid-PT in mouse (0.46–0.47) and
+early in human (0.16–0.20; not shown in Fig. 5), so the cells that take up its substrates, and that would be exposed to tenofovir, may sit at
 different positions in the two species. URAT1, encoded by *Slc22a12*, reabsorbs filtered urate and is the target of the
 uricosurics benzbromarone and lesinurad [Guo 2025]. Previous work places most urate reabsorption in the proximal
 convoluted tubule [Guo 2025], whereas we find human URAT1 peaking late along the PT (Fig. 5d). [Interpretation to be
@@ -36,22 +36,24 @@ between mouse and patients, so renal effects of neprilysin inhibition measured i
 cells. More generally, a gene whose gradient reverses cannot be placed on the human PT by transferring its mouse
 segment, and each such gene calls for positional measurement in human tissue.
 
-**Lysosomal genes.** Lysosome genes peak late along the mouse PT and early along the human PT (Fig. 5g). An earlier
+**Lysosomal genes.** Lysosome genes peak late along the mouse PT (0.89) and early along the human PT (0.19); the set is one of the 97
+that change shape but is not drawn in Fig. 5g. An earlier
 check found that human early-PT tubules are also high in lysosome and integrated-stress genes and that the human
 lysosome gradient mostly disappears after correcting for mitochondrial fraction and depth, so this difference may
 reflect cell state in the donor tissue rather than anatomy (`hvm` notes, 2026-10-26).
 
 **Injury.** KIM-1, encoded by *Havcr1*, is the standard marker of PT injury and is shed into urine, where it is measured
-as a tubular injury biomarker [SOURCE TO READ: Ichimura 1998 or Vaidya 2010]. Its rise along S2 (Fig. 6c) means that a
-single value per segment understates how much injury varies between neighbouring parts of one segment.
+as a tubular injury biomarker [SOURCE TO READ: Ichimura 1998 or Vaidya 2010]. It rose in every segment after injury,
+most in S2 (Fig. 6c). On the COAST fits its rise within S2 is no larger than the spread of the near-zero control
+levels, so we no longer claim a gradient inside S2.
 
 OCT2, encoded by *Slc22a2*, sits on the basolateral membrane of PT cells and is the main entry route for cisplatin, which
 makes it a principal contributor to the dose-limiting nephrotoxicity of that drug [Zhang 2026]. After injury, OCT2
-expression peaked mid-PT rather than in S3 (Fig. 6d), so an injured kidney may take up cisplatin over a different
+expression peaked mid-PT rather than in S3 (third shape class, Fig. 6f), so an injured kidney may take up cisplatin over a different
 stretch of the PT than a healthy one, which may matter when a dose follows an episode of injury.
 
-The second and third shape classes after injury (Fig. 6f), together with the fatty acid oxidation, respiration and
-lysosome sets (Fig. 6g), show S3 losing its metabolic programmes while proliferation programmes rise there. This fits
+The third and fourth shape classes after injury (Fig. 6f), together with the respiration and lysosome sets (Fig. 6g)
+and mitochondrial fatty acid β-oxidation (one of the 70 sets that change), show S3 losing its metabolic programmes while proliferation programmes rise there. This fits
 S3 being the segment most damaged by ischaemia [Ransick 2019], and it places the loss along the tubule rather than per
 segment. CYP24A1 degrades active vitamin D, angiotensinogen (*Agt*) is the precursor of the intrarenal renin–angiotensin
 system, and the *Cyp4a* enzymes belong to the PPARα fatty acid programme; that their within-segment gradients are lost

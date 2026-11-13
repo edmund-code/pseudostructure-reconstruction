@@ -554,3 +554,25 @@ not the repo.
 **Figure.** Main Fig. 6 shows results 1–3: a, built gradients (Havcr1, the DNA-replication set, oxidative
 phosphorylation, Anpep); b, erased gradients (Cyp4a14, Agt, Cyp51, Cyp24a1); c, gradient retention; d, the handoff rows.
 Result 4 goes in the text and Extended Data.
+
+## COAST fits on the v4fix segmentations (2026-11-12)
+
+Placement check and screen rerun unchanged on the COAST control/AKI fit; the injury-blind axis is a COAST rerun
+without the injury-responsive genes (`fig3_robustness.run_job`).
+
+| | package on v4 | COAST on v4fix |
+|---|---|---|
+| injury-responsive genes withdrawn | 3,812 | 3,635 |
+| placement ρ, all PT: IR2A2 / IR2A4 (floor) | passes | 0.907 / 0.922 (0.854) |
+| placement ρ, PT-S3: IR2A2 / IR2A4 (floor) | passes | 0.850 / 0.737 (0.590) |
+| PT units (Ctrl1A2 / Ctrl1A4 / IR2A2 / IR2A4) | 2,780 / 2,745 / 3,937 / 5,551 | 2,864 / 2,757 / 3,385 / 5,104 |
+| category A calls (decoy / relabeling share) | 34 (0.12 / 0.06), not calibrated | 27 (0.26 / 0.07), not calibrated |
+| pathway calls (relabelings) | 122 (0, 0) | 61 (0, 0) |
+| handoffs eligible / shifted / lost | 52 / 11 / 0 | 46 / 7 / 3 |
+
+The Slc16a1 → Slc16a4 / Slc16a9 shifts are gone; Slc22a6 → Slc22a2, Slc6a19 → Slc6a13 and Slc39a5 → Slc39a8 still
+shift. Four named main-figure pathways are no longer called (Hallmark E2F Targets, KEGG Mismatch repair, KEGG
+Oxidative phosphorylation, Reactome Respiratory Electron Transport, ATP Synthesis…); `fig6_panels.py` now shows the
+called Hallmark Oxidative Phosphorylation and Reactome Respiratory Electron Transport (R-HSA-611105) instead.
+Shape-difference screen: 1,788 eligible, 668 called (0 under the swaps), classes of 37 / 180 / 206 / 245 genes; 447
+sets tested, 70 changed, 24 with q ≤ 0.05. Results text: `results_fig5_fig6.md` v4.

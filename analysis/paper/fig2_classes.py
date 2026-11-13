@@ -31,8 +31,8 @@ CLS = {'tubule_proximal': '#2F6FAE', 'tubule_distal': '#E3A21A', 'tubule_collect
        'glomerulus': '#D98BB6', 'tubule': '#3A3A3A'}
 MANUAL = {'Tubules': 'tubule_proximal', 'Tubules2': 'tubule_distal', 'Tubules3': 'tubule_collecting',
           'Glomeruli': 'glomerulus'}
-SEGMENTATION = {'Ctrl1A2': 'Ctrl_1A2_v4.geojson', 'Ctrl1A4': 'Ctrl_1A4_v4.geojson', 'IR2A2': 'IR_2A2_v4.geojson',
-                'IR2A4': 'IR_2A4_v4.geojson', 'HUK1_MED1': 'HUK1_MED1_v2.geojson'}
+SEGMENTATION = {'Ctrl1A2': 'segmentations/v4fix/Ctrl1A2_v4fix.geojson', 'Ctrl1A4': 'segmentations/v4fix/Ctrl1A4_v4fix.geojson', 'IR2A2': 'segmentations/v4fix/IR2A2_v4fix.geojson',
+                'IR2A4': 'segmentations/v4fix/IR2A4_v4fix.geojson', 'HUK1_MED1': 'HUK1_MED1_v2.geojson'}
 HE = {'Ctrl1A2': 'Ctrl_1A2', 'Ctrl1A4': 'Ctrl_1A4', 'IR2A2': 'IR_2A2', 'IR2A4': 'IR_2A4', 'HUK1_MED1': 'HUK1_MED_1'}
 # validation blocks of Ctrl1A2 (kidney_panoptic manifest_v4.csv, roi of Ctrl_1A2_val), full-resolution pixels
 VAL_BLOCKS = [(5613, 0, 7661, 2048), (9709, 2048, 11757, 4096), (5613, 4096, 7661, 6144),
@@ -236,7 +236,7 @@ def panel_maps(args, out, cache):
     import h5py
     from PIL import Image, ImageDraw
 
-    with h5py.File(Path(args.results_root) / 'package_pseudospace/runs/aki/02_qc/units_qc.h5ad', 'r') as h:
+    with h5py.File(Path(args.results_root) / 'coast_runs/aki/02_qc/units_qc.h5ad', 'r') as h:
         o = h['obs']
 
         def col(k):

@@ -287,3 +287,21 @@ screened gene by (D_lines − D_curve) / D_intercept, taking the smaller value o
   Ctrl1A4 where counts are near zero.
 - Curves stop at the last bin.
 - Chosen by hand from the top 10. `fig4_panels.py` asserts they stay in the top 10.
+
+### COAST fits on the v4fix segmentations (2026-11-12)
+
+Rerun unchanged on the COAST control/AKI fit and its COAST gene-half axes (`fig3-validation-experiments.md`).
+
+| | package on v4 | COAST on v4fix |
+|---|---|---|
+| PT units (Ctrl1A2 / Ctrl1A4) | 2,780 / 2,745 | 2,864 / 2,757 |
+| screened genes | 8,039 | 7,986 |
+| curve beyond clusters, each mouse / both | 2,374, 2,442 / 1,680 | 2,521, 2,571 / 1,789 |
+| category 1 (peak between segments) | 5 | 5 |
+| category 2 (change within a segment): all / S1 / S2 / S3 | 74 / 3 / 60 / 11 | 60 / 3 / 46 / 11 |
+| category 2 same sign within the label in both mice | 72 of 74 | 54 of 60 |
+
+Top category 1 genes: Pigr, Cyp4a14, Cyp2d9, Cyp4a10, Hpd (Pigr is again the panel-a gene). The category-2 drop sits
+in S2, where COAST's S1/S2 boundary falls later. Linear-gain top 10 (smaller gain of the two mice): Pigr 22%,
+Serpina1d, Serpina1f, Slc22a13, Slc22a7 (rank 5, 14%), Car5a, Ugt2b37, Higd1c, Cyp4a12a (rank 9, 13%), Serpina1a; panel
+b keeps Pigr, Slc22a7 and Cyp4a12a.

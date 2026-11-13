@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fig3_common import RUNS  # noqa: E402
 
 # sample -> (fit, H&E file, predicted-outline GeoJSON under the data root, labels whose units pick the window)
-TILES = {'IR2A4': ('aki', 'IR_2A4.tif', 'IR_2A4_v4.geojson', ['PT-S3']),
+TILES = {'IR2A4': ('aki', 'IR_2A4.tif', 'segmentations/v4fix/IR2A4_v4fix.geojson', ['PT-S3']),
          'HUK1_MED1': ('hvm', 'HUK1_MED_1.tif', 'HUK1_MED1_v2.geojson', ['PT-S1', 'PT-S2', 'PT-S3'])}
 UM_PER_PX = 0.4409   # full-resolution H&E of every section (Space Ranger scalefactors: 0.44074-0.44089)
 OUTLINE = (255, 212, 0)
